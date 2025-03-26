@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>网址导航管理</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>网址导航管理</h1>
+    
+    <!-- 操作栏 -->
+    <div class="action-bar">
+      <button onclick="showEditForm(-1)">➕ 新增链接</button>
+      <button onclick="exportConfig()">⤓ 导出配置</button>
+    </div>
+
+    <!-- 链接列表容器 -->
+    <div id="link-list" class="link-list"></div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
