@@ -334,18 +334,24 @@
             try {
                 const text = await readFileAsText(file);
                 const jsonData = JSON.parse(text);
-                
-                if (!Array.isArray(jsonData)) {
-                    throw new Error("文件内容必须是JSON数组");
+
+                // 如果不是数组，尝试取 data 属性
+                let arr = [];
+                if (Array.isArray(jsonData)) {
+                    arr = jsonData;
+                } else if (Array.isArray(jsonData.data)) {
+                    arr = jsonData.data;
+                } else {
+                    throw new Error("文件内容必须是JSON数组或包含data数组属性");
                 }
-                
+
                 // 文件内去重（保留最后出现的值）
                 const fileMap = new Map();
-                jsonData.forEach(item => {
+                arr.forEach(item => {
                     const [key, value] = extractKeyValue(item);
                     if (key) fileMap.set(key, value);
                 });
-                
+
                 return Array.from(fileMap.entries());
             } catch (error) {
                 console.error(`文件 ${file.name} 解析失败:`, error);
