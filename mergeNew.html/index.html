@@ -372,9 +372,17 @@
         // 下载合并后的文件
         function downloadMerged() {
             const merged = [
-                ...dataStore.original,
-                ...dataStore.additions
+            ...dataStore.original.map(item => ({ 
+                    ...item, 
+                    _source: 'original' 
+                })),
+                ...dataStore.additions.map(item => ({ 
+                    ...item, 
+                    _source: 'new' 
+                }))
             ];
+
+            
             
             const jsonStr = JSON.stringify(merged, null, 2);
             const blob = new Blob([jsonStr], { type: 'application/json' });
