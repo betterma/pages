@@ -1,14 +1,33 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>JSON合并工具</title>
+    <title>JSON合并工具（修复版）</title>
     <style>
-        /* 原有样式保持不变 */
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 0 20px; }
-        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
-        button { padding: 8px 15px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        
-        /* 新增JSON显示样式 */
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px 0;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
         #jsonViewer {
             padding: 15px;
             background: #f8f9fa;
@@ -16,16 +35,20 @@
             max-height: 500px;
             overflow: auto;
             white-space: pre-wrap;
+            font-family: Consolas, monospace;
         }
         .json-item { margin: 2px 0; }
         .new-item { background: #e3f2fd; padding: 2px 5px; border-left: 3px solid #2196F3; }
         .original-item { background: #f5f5f5; padding: 2px 5px; }
         .json-key { color: #d32f2f; }
         .json-number { color: #388e3c; }
+        .status { color: #666; margin: 10px 0; }
+        .loading { color: #2196F3; }
+        .error { color: #f44336; }
     </style>
 </head>
 <body>
-    <h1>JSON合并工具</h1>
+    <h1>JSON合并工具（修复版）</h1>
 
     <div class="section">
         <h3>基础数据状态</h3>
@@ -53,14 +76,25 @@
         let processedFilesData = [];
         let mergedData = { original: [], additions: [] };
 
-        // 自动加载基础JSON
+        // 自动加载基础JSON（修复加载逻辑）
         window.addEventListener('DOMContentLoaded', async () => {
             try {
                 const response = await fetch('../contract.json');
                 if (!response.ok) throw new Error(`HTTP错误 ${response.status}`);
-                baseData = await response.json();
-                mergedData.original = [...baseData];
+                const rawData = await response.json();
                 
+                // 清洗元数据字段
+                baseData = rawData.map(item => {
+                    const validKeys = Object.keys(item).filter(k => k !== '_source');
+                    if (validKeys.length !== 1) throw new Error("数据格式错误：应包含单个键值对");
+                    return { [validKeys[0]]: item[validKeys[0]] };
+                });
+
+                mergedData = {
+                    original: [...baseData],
+                    additions: []
+                };
+
                 document.getElementById('jsonStatus').className = 'status';
                 document.getElementById('jsonStatus').textContent = 
                     `✅ 已加载基础数据（共 ${baseData.length} 条）`;
@@ -69,6 +103,7 @@
                 document.getElementById('jsonStatus').className = 'status error';
                 document.getElementById('jsonStatus').textContent = 
                     `❌ 加载失败: ${error.message}`;
+                console.error('加载失败:', error);
             }
         });
 
@@ -89,23 +124,31 @@
                 }
             }
 
-            // 合并新增数据
-            mergedData.additions = [
-                ...mergedData.additions,
-                ...processedFilesData.flat()
-            ];
+            // 合并新增数据（增强去重）
+            const newAdditions = processedFilesData.flat();
+            const existingKeys = new Set([
+                ...mergedData.original.map(item => Object.keys(item)[0]),
+                ...mergedData.additions.map(item => Object.keys(item)[0])
+            ]);
+            
+            const uniqueAdditions = newAdditions.filter(item => {
+                const key = Object.keys(item)[0];
+                return !existingKeys.has(key);
+            });
+
+            mergedData.additions = [...mergedData.additions, ...uniqueAdditions];
 
             document.getElementById('processStatus').className = 
                 errorCount > 0 ? 'status error' : 'status';
             document.getElementById('processStatus').textContent = 
-                `已处理 ${files.length - errorCount} 个文件（失败 ${errorCount} 个）`;
+                `已处理 ${files.length - errorCount} 个文件（失败 ${errorCount} 个），新增 ${uniqueAdditions.length} 条数据`;
             
             document.getElementById('downloadBtn').disabled = false;
             updateJsonViewer();
         }
 
         async function readAndProcessFile(file) {
-            // 文件读取和验证逻辑保持不变
+            // 读取文件
             const text = await new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onload = () => resolve(reader.result);
@@ -113,16 +156,22 @@
                 reader.readAsText(file);
             });
 
+            // 解析验证
             const jsonData = JSON.parse(text);
-            if (!Array.isArray(jsonData)) throw new Error("JSON格式不符合要求");
+            if (!Array.isArray(jsonData)) {
+                throw new Error("JSON格式不符合要求");
+            }
 
-            // 去重和排序处理
+            // 去重处理（仅当前文件内）
             const uniqueMap = new Map();
             jsonData.forEach(item => {
-                const key = Object.keys(item)[0];
+                const validKeys = Object.keys(item).filter(k => k !== '_source');
+                if (validKeys.length !== 1) throw new Error("数据项应包含单个键值对");
+                const key = validKeys[0];
                 uniqueMap.set(key, item[key]);
             });
 
+            // 转换为数组并排序
             return Array.from(uniqueMap)
                 .map(([key, value]) => ({ [key]: value }))
                 .sort((a, b) => {
@@ -135,11 +184,10 @@
                 });
         }
 
-        // 更新JSON可视化显示
         function updateJsonViewer() {
             const combinedData = [
-                ...mergedData.original.map(item => ({ ...item, _source: 'original' })),
-                ...mergedData.additions.map(item => ({ ...item, _source: 'new' }))
+                ...mergedData.original.map(item => ({ ...item, _source: "original" })),
+                ...mergedData.additions.map(item => ({ ...item, _source: "new" }))
             ];
 
             const jsonHtml = combinedData.map(item => {
@@ -164,7 +212,6 @@
             ].join('\n');
         }
 
-        // 下载功能保持不变
         function downloadMerged() {
             const finalData = [
                 ...mergedData.original.map(item => ({...item, _source: "original"})),
@@ -177,7 +224,7 @@
             
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'merged-contract.json';
+            a.download = `merged-contract-${new Date().toISOString().slice(0,10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
         }
