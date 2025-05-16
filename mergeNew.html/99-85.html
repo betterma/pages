@@ -177,10 +177,12 @@
             filteredData = [];
             let count = 0;
             
-            originalData.forEach(item => {
+            // 兼容 originalData 既可能是数组，也可能是对象（含 data 属性为数组）
+            let dataArr = Array.isArray(originalData) ? originalData : (Array.isArray(originalData.data) ? originalData.data : []);
+            dataArr.forEach(item => {
                 const key = Object.keys(item)[0];
                 const scores = item[key];
-                
+
                 if (minScore === 99) {
                     // 筛选包含99的数据
                     if (scores.includes(99)) {
@@ -191,7 +193,7 @@
                     // 筛选85分以上但不包含99的数据
                     const allAbove85 = scores.find(score => score >= 85);
                     const no99 = !scores.includes(99);
-                    
+
                     if (allAbove85 && no99) {
                         filteredData.push(item);
                         count++;
