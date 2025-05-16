@@ -1,263 +1,391 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="zh-CN">
 <head>
-    <title>JSON合并工具（修复版）</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON合并工具（终极去重版）</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 20px auto;
-            padding: 0 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f7fa;
+            color: #333;
         }
-
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
         .section {
-            margin: 20px 0;
-            padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
         }
-
         button {
-            padding: 8px 15px;
-            background-color: #4CAF50;
+            background-color: #3498db;
             color: white;
             border: none;
+            padding: 10px 15px;
             border-radius: 4px;
             cursor: pointer;
-            margin: 5px 0;
+            font-size: 14px;
+            transition: background-color 0.3s;
         }
-
+        button:hover {
+            background-color: #2980b9;
+        }
         button:disabled {
-            background-color: #cccccc;
+            background-color: #95a5a6;
             cursor: not-allowed;
         }
-
-        #jsonViewer {
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 4px;
-            max-height: 500px;
-            overflow: auto;
-            white-space: pre-wrap;
-            font-family: Consolas, monospace;
-        }
-
-        .json-item {
-            margin: 2px 0;
-        }
-
-        .new-item {
-            background: #e3f2fd;
-            padding: 2px 5px;
-            border-left: 3px solid #2196F3;
-        }
-
-        .original-item {
-            background: #f5f5f5;
-            padding: 2px 5px;
-        }
-
-        .json-key {
-            color: #d32f2f;
-        }
-
-        .json-number {
-            color: #388e3c;
-        }
-
-        .status {
-            color: #666;
+        #fileUpload {
+            display: block;
             margin: 10px 0;
         }
-
-        .loading {
-            color: #2196F3;
+        #jsonViewer {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            max-height: 500px;
+            overflow-y: auto;
+            font-family: Consolas, Monaco, 'Andale Mono', monospace;
+            white-space: pre-wrap;
+            line-height: 1.5;
         }
-
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .loading {
+            background-color: #d6eaf8;
+            color: #2874a6;
+        }
+        .success {
+            background-color: #d5f5e3;
+            color: #27ae60;
+        }
         .error {
-            color: #f44336;
+            background-color: #fadbd8;
+            color: #e74c3c;
+        }
+        .json-item {
+            margin: 5px 0;
+            padding: 3px 0;
+        }
+        .original-item {
+            border-left: 3px solid #2ecc71;
+            padding-left: 10px;
+        }
+        .new-item {
+            border-left: 3px solid #e74c3c;
+            padding-left: 10px;
+            background-color: #fdedec;
+        }
+        .json-key {
+            color: #8e44ad;
+            font-weight: bold;
+        }
+        .json-number {
+            color: #16a085;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        .stat-box {
+            background: #ebf5fb;
+            padding: 8px;
+            border-radius: 4px;
+            flex: 1;
+            margin: 0 5px;
+            text-align: center;
         }
     </style>
 </head>
-
 <body>
-    <h1>JSON合并工具（修复版）</h1>
-
     <div class="section">
-        <h3>基础数据状态</h3>
-        <div id="jsonStatus" class="status loading">正在加载contract.json...</div>
+        <h1>JSON合并工具</h1>
+        <p>上传多个JSON文件，自动去重合并并保持排序</p>
     </div>
 
     <div class="section">
-        <h3>上传新JSON文件</h3>
+        <h2>数据源状态</h2>
+        <div id="jsonStatus" class="status loading">
+            ⏳ 正在加载基础数据...
+        </div>
+        <div class="stats">
+            <div class="stat-box">原始数据: <span id="originalCount">0</span> 条</div>
+            <div class="stat-box">新增数据: <span id="additionCount">0</span> 条</div>
+            <div class="stat-box">总数据量: <span id="totalCount">0</span> 条</div>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>上传新文件</h2>
         <input type="file" id="fileUpload" multiple accept=".json">
-        <button onclick="processFiles()">处理并合并文件</button>
+        <button id="processBtn" onclick="processFiles()">处理并合并文件</button>
         <div id="processStatus" class="status"></div>
     </div>
 
     <div class="section">
-        <h3>合并结果预览</h3>
-        <div id="jsonViewer"></div>
+        <h2>合并结果预览</h2>
+        <div id="jsonViewer">
+            [等待数据加载...]
+        </div>
     </div>
 
     <div class="section">
-        <button id="downloadBtn" onclick="downloadMerged()" disabled>下载合并后的JSON</button>
+        <button id="downloadBtn" onclick="downloadMerged()" disabled>⬇️ 下载合并后的JSON</button>
     </div>
 
     <script>
-        // 全局数据存储（增强版）
-        let dataStore = {
-            original: [],      // 初始数据（无_source标记）
-            additions: [],     // 新增数据
-            allKeys: new Set() // 全局键值索引
+        // 全局数据存储
+        const dataStore = {
+            original: [],
+            additions: [],
+            allKeys: new Set(),
+            version: "1.0.0"
         };
 
-        // 1. 初始化加载（严格去重）
+        // DOM加载完成后初始化
         window.addEventListener('DOMContentLoaded', async () => {
             try {
-                const response = await fetch('../contract.json');
-                const rawData = await response.json();
-
-                // 深度处理初始数据
-                dataStore.original = rawData.map(item => {
-                    const [key, value] = Object.entries(item)
-                        .find(([k]) => k !== '_source') || [];
-
-                    if (!key) throw new Error("无效数据格式");
-
-                    // 全局去重检查
-                    if (dataStore.allKeys.has(key)) {
-                        console.warn(`发现重复键已过滤: ${key}`);
-                        return null;
-                    }
-
-                    dataStore.allKeys.add(key);
-                    return { [key]: value };
-                }).filter(Boolean);
-
+                await initializeData();
                 updateUI();
             } catch (error) {
                 console.error("初始化失败:", error);
+                setStatus(`❌ 初始化失败: ${error.message}`, 'error');
             }
         });
 
-        // 2. 文件处理（三重去重）
-        async function processFiles() {
-            const files = [...document.getElementById('fileUpload').files];
-            if (files.length === 0) return;
-
-            let addedCount = 0;
-            let duplicateCount = 0;
-
-            // 第一阶段：并行解析文件
-            const fileResults = await Promise.all(
-                files.map(async file => {
-                    try {
-                        return await parseFile(file);
-                    } catch (error) {
-                        console.error(`文件解析失败: ${file.name}`, error);
-                        return [];
-                    }
-                })
-            );
-
-            // 第二阶段：全局去重
-            fileResults.flat().forEach(([key, value]) => {
-                if (!dataStore.allKeys.has(key)) {
-                    dataStore.additions.push({ [key]: value });
-                    dataStore.allKeys.add(key);
-                    addedCount++;
-                } else {
-                    duplicateCount++;
-                }
-            });
-
-            // 第三阶段：排序新增数据
-            dataStore.additions.sort((a, b) => {
-                const aVal = Object.values(a)[0];
-                const bVal = Object.values(b)[0];
-                for (let i = 0; i < aVal.length; i++) {
-                    if (aVal[i] !== bVal[i]) return bVal[i] - aVal[i];
-                }
-                return 0;
-            });
-
-            // 更新状态
-            document.getElementById('processStatus').innerHTML = `
-                新增数据: ${addedCount} 条 | 
-                过滤重复: ${duplicateCount} 条 |
-                总数据量: ${dataStore.allKeys.size} 条
-            `;
-
-            updateUI();
-        }
-
-        // 文件解析（带文件内去重）
-        async function parseFile(file) {
-            const text = await file.text();
-            const jsonData = JSON.parse(text);
-
-            if (!Array.isArray(jsonData)) {
-                throw new Error("必须为JSON数组");
+        // 初始化基础数据
+        async function initializeData() {
+            setStatus("⏳ 正在加载基础数据...", 'loading');
+            
+            const response = await fetch('../contract.json');
+            if (!response.ok) {
+                throw new Error(`HTTP错误 ${response.status}`);
+            }
+            
+            const rawData = await response.json();
+            if (!Array.isArray(rawData)) {
+                throw new Error("JSON数据必须是数组");
             }
 
-            // 文件内去重（保留最后出现的值）
-            const fileMap = new Map();
-            jsonData.forEach(item => {
-                const [key, value] = Object.entries(item)
-                    .find(([k]) => k !== '_source') || [];
+            // 处理初始数据
+            const uniqueOriginal = [];
+            const duplicates = new Set();
 
-                if (key) fileMap.set(key, value);
+            rawData.forEach(item => {
+                const [key, value] = extractKeyValue(item);
+                
+                if (dataStore.allKeys.has(key)) {
+                    duplicates.add(key);
+                    return;
+                }
+                
+                dataStore.allKeys.add(key);
+                uniqueOriginal.push({ [key]: value });
             });
 
-            return Array.from(fileMap.entries());
+            dataStore.original = uniqueOriginal;
+
+            if (duplicates.size > 0) {
+                console.warn(`发现并过滤了 ${duplicates.size} 条重复数据:`, [...duplicates]);
+            }
+
+            setStatus(`✅ 成功加载 ${dataStore.original.length} 条基础数据`, 'success');
         }
-        function updateJsonViewer() {
+
+        // 处理上传的文件
+        async function processFiles() {
+            const files = document.getElementById('fileUpload').files;
+            if (files.length === 0) {
+                setStatus("⚠️ 请先选择要上传的文件", 'error');
+                return;
+            }
+
+            const processBtn = document.getElementById('processBtn');
+            processBtn.disabled = true;
+            processBtn.textContent = "处理中...";
+
+            try {
+                setStatus(`⏳ 正在处理 ${files.length} 个文件...`, 'loading');
+                
+                // 1. 解析所有文件
+                const fileResults = await Promise.all(
+                    Array.from(files).map(file => parseFile(file))
+                );
+
+                // 2. 合并并去重
+                const { added, duplicates } = processNewData(fileResults.flat());
+                
+                // 3. 排序新增数据
+                dataStore.additions.sort(compareItems);
+
+                // 更新状态
+                setStatus(
+                    `✅ 处理完成: 新增 ${added} 条数据 | 过滤 ${duplicates} 条重复数据`,
+                    'success'
+                );
+                
+                updateUI();
+            } catch (error) {
+                console.error("文件处理失败:", error);
+                setStatus(`❌ 处理失败: ${error.message}`, 'error');
+            } finally {
+                processBtn.disabled = false;
+                processBtn.textContent = "处理并合并文件";
+                document.getElementById('downloadBtn').disabled = false;
+            }
+        }
+
+        // 解析单个文件
+        async function parseFile(file) {
+            try {
+                const text = await file.text();
+                const jsonData = JSON.parse(text);
+                
+                if (!Array.isArray(jsonData)) {
+                    throw new Error("文件内容必须是JSON数组");
+                }
+
+                // 文件内去重
+                const fileMap = new Map();
+                jsonData.forEach(item => {
+                    const [key, value] = extractKeyValue(item);
+                    if (key) fileMap.set(key, value);
+                });
+
+                return Array.from(fileMap.entries());
+            } catch (error) {
+                console.error(`文件 ${file.name} 解析失败:`, error);
+                throw new Error(`${file.name}: ${error.message}`);
+            }
+        }
+
+        // 处理新数据并去重
+        function processNewData(newEntries) {
+            let added = 0;
+            let duplicates = 0;
+
+            newEntries.forEach(([key, value]) => {
+                if (!dataStore.allKeys.has(key)) {
+                    dataStore.allKeys.add(key);
+                    dataStore.additions.push({ [key]: value });
+                    added++;
+                } else {
+                    duplicates++;
+                }
+            });
+
+            return { added, duplicates };
+        }
+
+        // 比较函数用于排序
+        function compareItems(a, b) {
+            const aVal = Object.values(a)[0];
+            const bVal = Object.values(b)[0];
+            
+            for (let i = 0; i < aVal.length; i++) {
+                if (aVal[i] !== bVal[i]) {
+                    return bVal[i] - aVal[i]; // 降序排序
+                }
+            }
+            return 0;
+        }
+
+        // 从对象中提取键值对（过滤元数据）
+        function extractKeyValue(item) {
+            if (!item || typeof item !== 'object') {
+                return [null, null];
+            }
+            
+            const entry = Object.entries(item)
+                .find(([k]) => k !== '_source' && k !== '__meta');
+            
+            return entry || [null, null];
+        }
+
+        // 更新UI显示
+        function updateUI() {
+            // 更新统计信息
+            document.getElementById('originalCount').textContent = dataStore.original.length;
+            document.getElementById('additionCount').textContent = dataStore.additions.length;
+            document.getElementById('totalCount').textContent = dataStore.allKeys.size;
+            
+            // 更新JSON预览
             const combinedData = [
-                ...mergedData.original.map(item => ({ ...item, _source: "original" })),
-                ...mergedData.additions.map(item => ({ ...item, _source: "new" }))
+                ...dataStore.original.map(item => ({ 
+                    ...item, 
+                    _source: 'original' 
+                })),
+                ...dataStore.additions.map(item => ({ 
+                    ...item, 
+                    _source: 'new' 
+                }))
             ];
+            
+            document.getElementById('jsonViewer').innerHTML = formatJSON(combinedData);
+        }
 
-            const jsonHtml = combinedData.map(item => {
-                const key = Object.keys(item)[0];
-                const values = item[key];
-                const sourceClass = item._source === 'new' ? 'new-item' : 'original-item';
-
-                return `
-                    <div class="json-item ${sourceClass}">
-                        <span class="json-key">"${key}"</span>: [
-                        ${values.map(v => `<span class="json-number">${v}</span>`).join(', ')}
-                        ],
-                        <em style="color:#666">// ${item._source}</em>
-                    </div>
-                `;
-            }).join('');
-
-            document.getElementById('jsonViewer').innerHTML = [
-                '[',
-                jsonHtml,
-                ']'
+        // 格式化JSON显示
+        function formatJSON(data) {
+            if (data.length === 0) return '<div class="json-item">[空数据]</div>';
+            
+            return [
+                '<div class="json-item">[</div>',
+                ...data.map(item => {
+                    const key = Object.keys(item)[0];
+                    const values = item[key];
+                    const isNew = item._source === 'new';
+                    
+                    return `
+                        <div class="json-item ${isNew ? 'new-item' : 'original-item'}">
+                            <span class="json-key">"${key}"</span>: [
+                            ${values.map(v => `<span class="json-number">${v}</span>`).join(', ')}
+                            ]${isNew ? ' <span style="color:#c0392b">// NEW</span>' : ''}
+                        </div>
+                    `;
+                }),
+                '<div class="json-item">]</div>'
             ].join('\n');
         }
 
-        function downloadMerged() {
-            const finalData = [
-                ...mergedData.original.map(item => ({ ...item, _source: "original" })),
-                ...mergedData.additions.map(item => ({ ...item, _source: "new" }))
-            ];
+        // 设置状态显示
+        function setStatus(message, type = '') {
+            const statusEl = document.getElementById('jsonStatus');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
 
-            const jsonStr = JSON.stringify(finalData, null, 2);
+        // 下载合并后的文件
+        function downloadMerged() {
+            const merged = [
+                ...dataStore.original,
+                ...dataStore.additions
+            ];
+            
+            const jsonStr = JSON.stringify(merged, null, 2);
             const blob = new Blob([jsonStr], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
-
+            
             const a = document.createElement('a');
             a.href = url;
-            a.download = `merged-contract-${new Date().toISOString().slice(0, 10)}.json`;
+            a.download = `merged_contract_${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(a);
             a.click();
+            document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
     </script>
 </body>
-
 </html>
