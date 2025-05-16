@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>固定集合管理器</title>
+    <style>
+        body { max-width: 800px; margin: 20px auto; padding: 20px; }
+        .container { margin: 10px 0; }
+        textarea { width: 100%; height: 100px; margin: 10px 0; 
+                  padding: 5px; font-family: monospace; }
+        button { padding: 8px 15px; background: #2185d0; color: white; 
+                border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #1678c2; }
+        .result { margin-top: 20px; }
+        label { display: block; margin: 10px 0; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>固定集合管理器</h1>
+    
+    <div class="container">
+        <label>初始集合：</label>
+        <textarea id="initialSet" readonly></textarea>
+    </div>
+
+    <div class="container">
+        <label>用户输入集合（每行一个条目）：</label>
+        <textarea id="userInput"></textarea>
+    </div>
+
+    <button onclick="calculate()">计算差异并合并</button>
+
+    <div class="result">
+        <label>新增集合：</label>
+        <textarea id="newSet" readonly></textarea>
+        
+        <label>合并后的完整集合：</label>
+        <textarea id="mergedSet" readonly></textarea>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
