@@ -167,6 +167,12 @@
     
     <div class="card">
         <h2>基础数据状态</h2>
+        <label for="baseFileSelect">选择基础数据文件：</label>
+        <select id="baseFileSelect" style="margin-bottom: 1rem;">
+            <option value="contract.json">contract.json</option>
+            <option value="99.json">99.json</option>
+            <option value="85.json">85.json</option>
+        </select>
         <div id="jsonStatus" class="status loading" style="display: none;">
             ⏳ 正在加载基础数据...
         </div>
@@ -213,40 +219,46 @@
             }
         };
 
-        // 初始化加载基础数据
+        // 初始化加载基础数据（改为选择加载）
         window.addEventListener('DOMContentLoaded', async () => {
+            const selectEl = document.getElementById('baseFileSelect');
+            selectEl.addEventListener('change', () => {
+                loadBaseData(selectEl.value);
+            });
+            // 默认加载第一个
+            loadBaseData(selectEl.value);
+        });
+
+        async function loadBaseData(filename) {
             const jsonStatusEl = document.getElementById('jsonStatus');
             try {
-                // 显示 #jsonStatus 节点
                 jsonStatusEl.style.display = 'block';
+                setStatus('', '');
+                // 清空数据
+                dataStore.original = [];
+                dataStore.additions = [];
+                dataStore.allKeys = new Set();
 
-                const response = await fetch('../contract.json?time='+new Date());
+                const response = await fetch(`../${filename}?time=` + new Date());
                 if (!response.ok) {
                     throw new Error(`HTTP错误 ${response.status}`);
                 }
-                
                 const rawData = await response.json();
                 if (!Array.isArray(rawData)) {
                     throw new Error("JSON数据必须是数组");
                 }
-                
-                // 处理初始数据（过滤标识）
                 processInitialData(rawData);
-                
                 updateUI();
                 setStatus('✅ 基础数据加载完成', 'success');
             } catch (error) {
                 console.error("初始化失败:", error);
                 setStatus(`❌ 加载失败: ${error.message}`, 'error');
             } finally {
-                // 确保隐藏 #jsonStatus 节点
                 if (jsonStatusEl) {
                     jsonStatusEl.style.display = 'none';
-                } else {
-                    console.warn("无法找到 #jsonStatus 节点");
                 }
             }
-        });
+        }
 
         // 处理初始数据（核心清洗逻辑）
         function processInitialData(rawData) {
