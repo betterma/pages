@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON数据筛选工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .upload-container {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        .result-container {
+            margin-top: 20px;
+            display: none;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 10px 2px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #fileInput {
+            display: none;
+        }
+        .file-label {
+            background-color: #2196F3;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: inline-block;
+        }
+        .file-label:hover {
+            background-color: #0b7dda;
+        }
+        .status {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .success {
+            color: #4CAF50;
+        }
+        .error {
+            color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <h1>JSON数据筛选工具</h1>
+    
+    <div class="upload-container">
+        <label for="fileInput" class="file-label">选择JSON文件</label>
+        <input type="file" id="fileInput" accept=".json">
+        <p>或将文件拖放到此处</p>
+        <div id="fileName" class="status"></div>
+    </div>
+    
+    <div id="processButtons" style="display: none;">
+        <button id="process99">筛选99分数据</button>
+        <button id="process85">筛选85分以上数据</button>
+    </div>
+    
+    <div id="resultContainer" class="result-container">
+        <div id="resultInfo" class="status"></div>
+        <button id="downloadBtn">下载筛选结果</button>
+    </div>
+
+    <script>
+        let originalData = null;
+        let filteredData = null;
+        let currentFilterType = '';
+        
+        // 文件选择处理
+        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+        
+        // 拖放区域处理
+        const dropZone = document.querySelector('.upload-container');
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#4CAF50';
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.borderColor = '#ccc';
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ccc';
+            
+            if (e.dataTransfer.files.length) {
+                document.getElementById('fileInput').files = e.dataTransfer.files;
+                handleFileSelect({ target: document.getElementById('fileInput') });
+            }
+        });
+        
+        // 处理文件选择
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            document.getElementById('fileName').textContent = `已选择文件: ${file.name}`;
+            document.getElementById('fileName').className = 'status';
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    originalData = JSON.parse(e.target.result);
+                    document.getElementById('processButtons').style.display = 'block';
+                    document.getElementById('fileName').textContent += ' - 已成功加载';
+                    document.getElementById('fileName').className = 'status success';
+                } catch (error) {
+                    document.getElementById('fileName').textContent = '错误: 不是有效的JSON文件';
+                    document.getElementById('fileName').className = 'status error';
+                }
+            };
+            reader.readAsText(file);
+        }
+        
+        // 处理99分筛选
+        document.getElementById('process99').addEventListener('click', () => {
+            filterData(99);
+            currentFilterType = '99';
+        });
+        
+        // 处理85分筛选
+        document.getElementById('process85').addEventListener('click', () => {
+            filterData(85);
+            currentFilterType = '85';
+        });
+        
+        // 下载处理
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            if (!filteredData) return;
+            
+            const dataStr = JSON.stringify(filteredData, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentFilterType}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+        
+        // 筛选数据
+        function filterData(minScore) {
+            if (!originalData) return;
+            
+            filteredData = [];
+            let count = 0;
+            
+            originalData.forEach(item => {
+                const key = Object.keys(item)[0];
+                const scores = item[key];
+                
+                if (minScore === 99) {
+                    // 筛选包含99的数据
+                    if (scores.includes(99)) {
+                        filteredData.push(item);
+                        count++;
+                    }
+                } else {
+                    // 筛选85分以上但不包含99的数据
+                    const allAbove85 = scores.every(score => score === '--' || score >= 85);
+                    const no99 = !scores.includes(99);
+                    
+                    if (allAbove85 && no99) {
+                        filteredData.push(item);
+                        count++;
+                    }
+                }
+            });
+            
+            document.getElementById('resultInfo').textContent = 
+                `找到 ${count} 条符合条件的数据`;
+            document.getElementById('resultInfo').className = 'status success';
+            document.getElementById('resultContainer').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
