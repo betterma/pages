@@ -189,7 +189,7 @@
                     }
                 } else {
                     // 筛选85分以上但不包含99的数据
-                    const allAbove85 = scores.every(score => score === '--' || score >= 85);
+                    const allAbove85 = scores.find(score => score >= 85);
                     const no99 = !scores.includes(99);
                     
                     if (allAbove85 && no99) {
