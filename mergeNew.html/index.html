@@ -239,8 +239,12 @@
                 console.error("初始化失败:", error);
                 setStatus(`❌ 加载失败: ${error.message}`, 'error');
             } finally {
-                // 隐藏 #jsonStatus 节点
-                jsonStatusEl.style.display = 'none';
+                // 确保隐藏 #jsonStatus 节点
+                if (jsonStatusEl) {
+                    jsonStatusEl.style.display = 'none';
+                } else {
+                    console.warn("无法找到 #jsonStatus 节点");
+                }
             }
         });
 
