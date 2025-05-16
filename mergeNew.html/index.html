@@ -244,10 +244,15 @@
                     throw new Error(`HTTP错误 ${response.status}`);
                 }
                 const rawData = await response.json();
-                if (!Array.isArray(rawData)) {
-                    throw new Error("JSON数据必须是数组");
+                let arr;
+                if (Array.isArray(rawData)) {
+                    arr = rawData;
+                } else if (Array.isArray(rawData.data)) {
+                    arr = rawData.data;
+                } else {
+                    throw new Error("JSON数据必须是数组或包含data数组属性");
                 }
-                processInitialData(rawData);
+                processInitialData(arr);
                 updateUI();
                 setStatus('✅ 基础数据加载完成', 'success');
             } catch (error) {
