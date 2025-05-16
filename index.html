@@ -2,21 +2,192 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>固定集合管理器</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据工具中心</title>
     <style>
-        body { max-width: 800px; margin: 20px auto; padding: 20px; }
-        .container { margin: 10px 0; }
-        textarea { width: 100%; height: 100px; margin: 10px 0; 
-                  padding: 5px; font-family: monospace; }
-        button { padding: 8px 15px; background: #2185d0; color: white; 
-                border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #1678c2; }
-        .result { margin-top: 20px; }
-        label { display: block; margin: 10px 0; font-weight: bold; }
+        :root {
+            --primary-color: #4361ee;
+            --hover-color: #3a56d4;
+            --active-color: #3f37c9;
+            --text-color: #2b2d42;
+            --bg-color: #f8f9fa;
+            --border-color: #e0e0e0;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        
+        header {
+            text-align: center;
+            padding: 2rem 0;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+        }
+        
+        h1 {
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .description {
+            color: #6c757d;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .tab-button {
+            padding: 0.8rem 1.5rem;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-color);
+            cursor: pointer;
+            transition: all 0.2s;
+            margin: 0 0.2rem;
+        }
+        
+        .tab-button:hover {
+            color: var(--primary-color);
+        }
+        
+        .tab-button.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+        }
+        
+        .tab-content {
+            display: none;
+            padding: 1rem;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+        
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        
+        .iframe-container {
+            position: relative;
+            width: 100%;
+            height: calc(100vh + 200px);
+            min-height: 500px;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+        
+        .iframe-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @media (max-width: 768px) {
+            .tabs {
+                flex-wrap: wrap;
+            }
+            
+            .tab-button {
+                flex: 1;
+                margin: 0.2rem;
+                padding: 0.8rem;
+                font-size: 0.9rem;
+            }
+            
+            .iframe-container {
+                height: 400px;
+            }
+        }
     </style>
 </head>
 <body>
-    <a href="./findNew.html/index.html">findNew</a>
-    <a href="./mergeNew.html/index.html">mergeNew</a>
+    <div class="container">
+        <header>
+            <h1>数据工具中心</h1>
+            <p class="description">一站式数据管理解决方案</p>
+        </header>
+        
+        <div class="tabs">
+            <button class="tab-button active" data-tab="url-viewer">资源中心</button>
+            <button class="tab-button" data-tab="data-comparison">数据对比</button>
+            <button class="tab-button" data-tab="json-merger">JSON合并</button>
+        </div>
+        
+        <div class="tab-content active" id="url-viewer">
+            <div class="iframe-container">
+                <iframe src="./url-viewer.html" title="资源链接中心"></iframe>
+            </div>
+        </div>
+        
+        <div class="tab-content" id="data-comparison">
+            <div class="iframe-container">
+                <iframe src="./findNew.html/index.html" title="数据对比工具"></iframe>
+            </div>
+        </div>
+        
+        <div class="tab-content" id="json-merger">
+            <div class="iframe-container">
+                <iframe src="./mergeNew.html/index.html" title="JSON合并工具"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabContents = document.querySelectorAll('.tab-content');
+            
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    // 移除所有active类
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    tabContents.forEach(content => content.classList.remove('active'));
+                    
+                    // 添加active类到当前选项卡
+                    button.classList.add('active');
+                    const tabId = button.getAttribute('data-tab');
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
+            
+            // 初始化第一个选项卡
+            tabButtons[0].click();
+        });
+    </script>
 </body>
 </html>

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL资源中心</title>
+    <style>
+        :root {
+            --primary-color: #4361ee;
+            --hover-color: #3a56d4;
+            --text-color: #2b2d42;
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        h1 {
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .description {
+            color: #6c757d;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .url-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+        
+        .url-card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s, box-shadow 0.2s;
+            overflow: hidden;
+        }
+        
+        .url-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .url-content {
+            padding: 1.5rem;
+        }
+        
+        .url-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-color);
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .url-link {
+            display: inline-block;
+            margin-top: 1rem;
+            padding: 0.6rem 1.2rem;
+            background-color: var(--primary-color);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        
+        .url-link:hover {
+            background-color: var(--hover-color);
+        }
+        
+        .url-domain {
+            display: block;
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-top: 0.5rem;
+            word-break: break-all;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            font-size: 1.2rem;
+            color: #6c757d;
+        }
+        
+        .error {
+            color: #e63946;
+            text-align: center;
+            padding: 2rem;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .url-list {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>资源链接中心</h1>
+            <p class="description">以下是可用的资源链接列表，点击按钮即可在新窗口打开</p>
+        </header>
+        
+        <div id="urlContainer">
+            <div class="loading">正在加载资源链接...</div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const urlContainer = document.getElementById('urlContainer');
+            
+            try {
+                const response = await fetch('../urls/urls.json');
+                if (!response.ok) {
+                    throw new Error(`HTTP错误 ${response.status}`);
+                }
+                
+                const urls = await response.json();
+                
+                if (!Array.isArray(urls) || urls.length === 0) {
+                    urlContainer.innerHTML = '<div class="error">没有找到可用的资源链接</div>';
+                    return;
+                }
+                
+                renderUrls(urls);
+            } catch (error) {
+                console.error('加载URL失败:', error);
+                urlContainer.innerHTML = `<div class="error">加载失败: ${error.message}</div>`;
+            }
+        });
+        
+        function renderUrls(urls) {
+            const urlContainer = document.getElementById('urlContainer');
+            
+            const urlList = document.createElement('div');
+            urlList.className = 'url-list';
+            
+            urls.forEach(urlObj => {
+                const url = typeof urlObj === 'string' ? urlObj : urlObj.url;
+                const title = urlObj.title || extractTitleFromUrl(url);
+                
+                const domain = new URL(url).hostname.replace('www.', '');
+                
+                const card = document.createElement('div');
+                card.className = 'url-card';
+                
+                card.innerHTML = `
+                    <div class="url-content">
+                        <h3 class="url-title">${title}</h3>
+                        <span class="url-domain">${domain}</span>
+                        <a href="${url}" target="_blank" rel="noopener noreferrer" class="url-link">访问资源</a>
+                    </div>
+                `;
+                
+                urlList.appendChild(card);
+            });
+            
+            urlContainer.innerHTML = '';
+            urlContainer.appendChild(urlList);
+        }
+        
+        function extractTitleFromUrl(url) {
+            try {
+                const parsed = new URL(url);
+                let title = parsed.pathname.split('/').pop();
+                title = title.replace(/[-_]/g, ' ');
+                return title.charAt(0).toUpperCase() + title.slice(1);
+            } catch {
+                return '未命名资源';
+            }
+        }
+    </script>
+</body>
+</html>
