@@ -220,7 +220,7 @@
                 // 显示 #jsonStatus 节点
                 jsonStatusEl.style.display = 'block';
 
-                const response = await fetch('../contract.json');
+                const response = await fetch('../contract.json?time='+new Date());
                 if (!response.ok) {
                     throw new Error(`HTTP错误 ${response.status}`);
                 }
