@@ -146,7 +146,7 @@
             const urlContainer = document.getElementById('urlContainer');
             
             try {
-                const response = await fetch('../urls/urls.json');
+                const response = await fetch('./urls.json');
                 if (!response.ok) {
                     throw new Error(`HTTP错误 ${response.status}`);
                 }
