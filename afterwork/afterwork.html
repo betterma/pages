@@ -77,7 +77,7 @@
 
         // 对比按钮事件
         document.getElementById('compareBtn').addEventListener('click', function() {
-            if (!uploadedData || uploadedData.length === 0) {
+            if (!uploadedData || !uploadedData.data || uploadedData.data.length === 0) {
                 alert('请先上传文件');
                 return;
             }
@@ -95,9 +95,12 @@
                 originalMap[key] = item[key];
             });
 
+            // 用上传数据的 data 字段
+            const uploadArr = uploadedData.data;
+
             if (currentType === '85') {
                 // 新旧数据都包含99的项
-                uploadedData.forEach(item => {
+                uploadArr.forEach(item => {
                     const key = Object.keys(item)[0];
                     const valuesNew = item[key];
                     const valuesOld = originalMap[key];
@@ -111,7 +114,7 @@
                 tip = '新旧数据都包含99的项数量：' + count;
             } else {
                 // 新旧数据都不包含99的项
-                uploadedData.forEach(item => {
+                uploadArr.forEach(item => {
                     const key = Object.keys(item)[0];
                     const valuesNew = item[key];
                     const valuesOld = originalMap[key];
