@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JSON 数据处理工具</title>
+    <style>
+        .container { padding: 20px; max-width: 800px; margin: auto; }
+        .section { border: 1px solid #ccc; padding: 20px; margin-bottom: 20px; }
+        textarea { width: 100%; height: 200px; margin-top: 10px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 上半部分 -->
+        <div class="section">
+            <h3>数据解析部分</h3>
+            <input type="radio" name="type" value="99" checked> 99
+            <input type="radio" name="type" value="85"> 85
+            <button onclick="parseJson()">解析数据</button>
+            <textarea id="output"></textarea>
+        </div>
+
+        <!-- 下半部分 -->
+        <div class="section">
+            <h3>数据比较下载</h3>
+            <input type="file" id="upload" accept=".json">
+            <button id="downloadBtn" class="hidden" onclick="download()">下载结果</button>
+        </div>
+    </div>
+
+    <script>
+        let originalData = []; // 存储上半部分解析的data数据
+
+        // 解析JSON数据
+        async function parseJson() {
+            const type = document.querySelector('input[name="type"]:checked').value;
+            const path = `../${type}.json`;
+            
+            try {
+                const response = await fetch(path);
+                const data = await response.json();
+                originalData = data.data;
+                
+                // 提取所有键并显示
+                const keys = [];
+                data.data.forEach(item => {
+                    Object.keys(item).forEach(key => {
+                        if(key !== '_source') keys.push(key)
+                    })
+                });
+                document.getElementById('output').value = keys.join('\n');
+            } catch (error) {
+                alert('解析失败，请检查文件路径和格式');
+            }
+        }
+
+        // 文件上传处理
+        document.getElementById('upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const newData = JSON.parse(e.target.result);
+                    compareData(newData);
+                } catch {
+                    alert('文件解析失败，请检查格式');
+                }
+            }
+            reader.readAsText(file);
+        });
+
+        // 数据比较逻辑
+        function compareData(newData) {
+            // 获取所有原始键
+            const originalKeys = new Set();
+            originalData.forEach(item => {
+                Object.keys(item).forEach(key => {
+                    if(key !== '_source') originalKeys.add(key)
+                })
+            });
+
+            // 筛选新数据
+            const result = newData.filter(item => {
+                const key = Object.keys(item)[0];
+                const values = item[key];
+                
+                return !originalKeys.has(key) && 
+                       values.includes(99);
+            });
+
+            // 创建下载数据
+            const blob = new Blob([JSON.stringify(result, null, 2)], {type: 'application/json'});
+            window.downloadURL = URL.createObjectURL(blob);
+            document.getElementById('downloadBtn').classList.remove('hidden');
+        }
+
+        // 下载功能
+        function download() {
+            const a = document.createElement('a');
+            a.href = window.downloadURL;
+            a.download = `comparison_result_${new Date().toISOString()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    </script>
+</body>
+</html>
