@@ -86,39 +86,59 @@
 
         // 对比逻辑
         function compareData() {
-            let result = [];
+            let count = 0;
             let tip = '';
+            // 构建原始数据的主键到值的映射
+            const originalMap = {};
+            originalData.forEach(item => {
+                const key = Object.keys(item)[0];
+                originalMap[key] = item[key];
+            });
+
             if (currentType === '85') {
-                // 找出新数据包含99的项
-                result = uploadedData.filter(item => {
-                    const values = Object.values(item)[0];
-                    return Array.isArray(values) && values.includes(99);
+                // 新旧数据都包含99的项
+                uploadedData.forEach(item => {
+                    const key = Object.keys(item)[0];
+                    const valuesNew = item[key];
+                    const valuesOld = originalMap[key];
+                    if (
+                        Array.isArray(valuesNew) && valuesNew.includes(99) &&
+                        Array.isArray(valuesOld) && valuesOld.includes(99)
+                    ) {
+                        count++;
+                    }
                 });
-                tip = '以下数据成功跻身99队列中：';
+                tip = '新旧数据都包含99的项数量：' + count;
             } else {
-                // 找出新数据没有包含99的项
-                result = uploadedData.filter(item => {
-                    const values = Object.values(item)[0];
-                    return !(Array.isArray(values) && values.includes(99));
+                // 新旧数据都不包含99的项
+                uploadedData.forEach(item => {
+                    const key = Object.keys(item)[0];
+                    const valuesNew = item[key];
+                    const valuesOld = originalMap[key];
+                    if (
+                        Array.isArray(valuesNew) && !valuesNew.includes(99) &&
+                        Array.isArray(valuesOld) && !valuesOld.includes(99)
+                    ) {
+                        count++;
+                    }
                 });
-                tip = '以下数据已经脱离出99队列中：';
+                tip = '新旧数据都不包含99的项数量：' + count;
             }
-            compareResultData = result;
-            if (result.length > 0) {
-                document.getElementById('compareResult').textContent = tip + '\n' + JSON.stringify(result, null, 2);
+            compareResultData = count; // 只存数量
+            document.getElementById('compareResult').textContent = tip;
+            if (count > 0) {
                 document.getElementById('downloadBtn').classList.remove('hidden');
             } else {
-                document.getElementById('compareResult').textContent = '未找到符合条件的数据。';
                 document.getElementById('downloadBtn').classList.add('hidden');
             }
         }
 
         // 下载功能
         function download() {
-            if (!compareResultData || compareResultData.length === 0) return;
+            if (!compareResultData || compareResultData === 0) return;
             const a = document.createElement('a');
-            a.href = URL.createObjectURL(new Blob([JSON.stringify(compareResultData, null, 2)], {type: 'application/json'}));
-            a.download = `${currentType}_filtered_${new Date().toISOString()}.json`;
+            a.href = URL.createObjectURL(new Blob([JSON.stringify({count: compareResultData}, null, 2)], {type: 'application/json'}));
+            a.download = `${currentType}_filtered_count_${new Date().toISOString()}.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
