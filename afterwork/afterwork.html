@@ -86,7 +86,7 @@
 
         // 对比逻辑
         function compareData() {
-            let count = 0;
+            let resultArr = [];
             let tip = '';
             // 构建原始数据的主键到值的映射
             const originalMap = {};
@@ -107,10 +107,10 @@
                         originalMap.hasOwnProperty(key) &&
                         Array.isArray(valuesNew) && valuesNew.includes(99)
                     ) {
-                        count++;
+                        resultArr.push(item);
                     }
                 });
-                tip = '新旧数据中主键相同且新数据包含99的项数量：' + count;
+                tip = '新旧数据中主键相同且新数据包含99的项数量：' + resultArr.length;
             } else {
                 // 只要新旧数据有相同主键，并且新数据的值里没有99
                 uploadArr.forEach(item => {
@@ -120,14 +120,14 @@
                         originalMap.hasOwnProperty(key) &&
                         Array.isArray(valuesNew) && !valuesNew.includes(99)
                     ) {
-                        count++;
+                        resultArr.push(item);
                     }
                 });
-                tip = '新旧数据中主键相同且新数据不包含99的项数量：' + count;
+                tip = '新旧数据中主键相同且新数据不包含99的项数量：' + resultArr.length;
             }
-            compareResultData = count; // 只存数量
+            compareResultData = resultArr; // 存储结果数组
             document.getElementById('compareResult').textContent = tip;
-            if (count > 0) {
+            if (resultArr.length > 0) {
                 document.getElementById('downloadBtn').classList.remove('hidden');
             } else {
                 document.getElementById('downloadBtn').classList.add('hidden');
@@ -136,10 +136,11 @@
 
         // 下载功能
         function download() {
-            if (!compareResultData || compareResultData === 0) return;
+            if (!compareResultData || compareResultData.length === 0) return;
+            const exportData = { data: compareResultData };
             const a = document.createElement('a');
-            a.href = URL.createObjectURL(new Blob([JSON.stringify({count: compareResultData}, null, 2)], {type: 'application/json'}));
-            a.download = `${currentType}_filtered_count_${new Date().toISOString()}.json`;
+            a.href = URL.createObjectURL(new Blob([JSON.stringify(exportData, null, 2)], {type: 'application/json'}));
+            a.download = `${currentType}_filtered_${new Date().toISOString()}.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
