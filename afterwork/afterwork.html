@@ -99,33 +99,31 @@
             const uploadArr = uploadedData.data;
 
             if (currentType === '85') {
-                // 新旧数据都包含99的项
+                // 只要新旧数据有相同主键，并且新数据的值里有99
                 uploadArr.forEach(item => {
                     const key = Object.keys(item)[0];
                     const valuesNew = item[key];
-                    const valuesOld = originalMap[key];
                     if (
-                        Array.isArray(valuesNew) && valuesNew.includes(99) &&
-                        Array.isArray(valuesOld) && valuesOld.includes(99)
+                        originalMap.hasOwnProperty(key) &&
+                        Array.isArray(valuesNew) && valuesNew.includes(99)
                     ) {
                         count++;
                     }
                 });
-                tip = '新旧数据都包含99的项数量：' + count;
+                tip = '新旧数据中主键相同且新数据包含99的项数量：' + count;
             } else {
-                // 新旧数据都不包含99的项
+                // 只要新旧数据有相同主键，并且新数据的值里没有99
                 uploadArr.forEach(item => {
                     const key = Object.keys(item)[0];
                     const valuesNew = item[key];
-                    const valuesOld = originalMap[key];
                     if (
-                        Array.isArray(valuesNew) && !valuesNew.includes(99) &&
-                        Array.isArray(valuesOld) && !valuesOld.includes(99)
+                        originalMap.hasOwnProperty(key) &&
+                        Array.isArray(valuesNew) && !valuesNew.includes(99)
                     ) {
                         count++;
                     }
                 });
-                tip = '新旧数据都不包含99的项数量：' + count;
+                tip = '新旧数据中主键相同且新数据不包含99的项数量：' + count;
             }
             compareResultData = count; // 只存数量
             document.getElementById('compareResult').textContent = tip;
