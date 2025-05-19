@@ -24,23 +24,27 @@
         <div class="section">
             <h3>数据比较下载</h3>
             <input type="file" id="upload" accept=".json">
+            <button id="compareBtn">对比数据</button>
             <button id="downloadBtn" class="hidden" onclick="download()">下载结果</button>
+            <div id="compareResult" style="margin-top:10px;white-space:pre-wrap;"></div>
         </div>
     </div>
 
     <script>
-        let originalData = []; // 存储上半部分解析的data数据
+        let originalData = [];
+        let uploadedData = [];
+        let compareResultData = [];
+        let currentType = '99';
 
         // 解析JSON数据
         async function parseJson() {
             const type = document.querySelector('input[name="type"]:checked').value;
+            currentType = type;
             const path = `../${type}.json`;
-            
             try {
                 const response = await fetch(path);
                 const data = await response.json();
                 originalData = data.data;
-                
                 // 提取所有键并显示
                 const keys = [];
                 data.data.forEach(item => {
@@ -58,12 +62,12 @@
         document.getElementById('upload').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
-
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
-                    const newData = JSON.parse(e.target.result);
-                    compareData(newData);
+                    uploadedData = JSON.parse(e.target.result);
+                    document.getElementById('compareResult').textContent = '文件上传成功，请点击“对比数据”按钮进行对比。';
+                    document.getElementById('downloadBtn').classList.add('hidden');
                 } catch {
                     alert('文件解析失败，请检查格式');
                 }
@@ -71,36 +75,50 @@
             reader.readAsText(file);
         });
 
-        // 数据比较逻辑
-        function compareData(newData) {
-            // 获取所有原始键
-            const originalKeys = new Set();
-            originalData.forEach(item => {
-                Object.keys(item).forEach(key => {
-                    if(key !== '_source') originalKeys.add(key)
-                })
-            });
+        // 对比按钮事件
+        document.getElementById('compareBtn').addEventListener('click', function() {
+            if (!uploadedData || uploadedData.length === 0) {
+                alert('请先上传文件');
+                return;
+            }
+            compareData();
+        });
 
-            // 筛选新数据
-            const result = newData.filter(item => {
-                const key = Object.keys(item)[0];
-                const values = item[key];
-                
-                return !originalKeys.has(key) && 
-                       values.includes(99);
-            });
-
-            // 创建下载数据
-            const blob = new Blob([JSON.stringify(result, null, 2)], {type: 'application/json'});
-            window.downloadURL = URL.createObjectURL(blob);
-            document.getElementById('downloadBtn').classList.remove('hidden');
+        // 对比逻辑
+        function compareData() {
+            let result = [];
+            let tip = '';
+            if (currentType === '85') {
+                // 找出新数据包含99的项
+                result = uploadedData.filter(item => {
+                    const values = Object.values(item)[0];
+                    return Array.isArray(values) && values.includes(99);
+                });
+                tip = '以下数据成功跻身99队列中：';
+            } else {
+                // 找出新数据没有包含99的项
+                result = uploadedData.filter(item => {
+                    const values = Object.values(item)[0];
+                    return !(Array.isArray(values) && values.includes(99));
+                });
+                tip = '以下数据已经脱离出99队列中：';
+            }
+            compareResultData = result;
+            if (result.length > 0) {
+                document.getElementById('compareResult').textContent = tip + '\n' + JSON.stringify(result, null, 2);
+                document.getElementById('downloadBtn').classList.remove('hidden');
+            } else {
+                document.getElementById('compareResult').textContent = '未找到符合条件的数据。';
+                document.getElementById('downloadBtn').classList.add('hidden');
+            }
         }
 
         // 下载功能
         function download() {
+            if (!compareResultData || compareResultData.length === 0) return;
             const a = document.createElement('a');
-            a.href = window.downloadURL;
-            a.download = `comparison_result_${new Date().toISOString()}.json`;
+            a.href = URL.createObjectURL(new Blob([JSON.stringify(compareResultData, null, 2)], {type: 'application/json'}));
+            a.download = `${currentType}_filtered_${new Date().toISOString()}.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
