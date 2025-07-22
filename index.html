@@ -96,7 +96,8 @@
         .iframe-container {
             position: relative;
             width: 100%;
-            height: calc(100vh + 200px);
+            /* 修改高度为更适合移动端的视口高度 */
+            height: 90vh;
             min-height: 500px;
             border-radius: 6px;
             overflow: hidden;
@@ -130,7 +131,9 @@
             }
             
             .iframe-container {
-                height: 400px;
+                /* 移动端也用更高的视口高度 */
+                height: 90vh;
+                min-height: 350px;
             }
         }
     </style>
