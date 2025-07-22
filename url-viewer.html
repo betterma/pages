@@ -168,18 +168,26 @@
         function renderUrls(urls) {
             const urlContainer = document.getElementById('urlContainer');
             
+            // 分组：普通资源和tools资源
+            const normalUrls = [];
+            const toolsUrls = [];
+            urls.forEach(urlObj => {
+                if (typeof urlObj === 'object' && urlObj.type === 'tools') {
+                    toolsUrls.push(urlObj);
+                } else {
+                    normalUrls.push(urlObj);
+                }
+            });
+
+            // 创建普通资源列表
             const urlList = document.createElement('div');
             urlList.className = 'url-list';
-            
-            urls.forEach(urlObj => {
+            normalUrls.forEach(urlObj => {
                 const url = typeof urlObj === 'string' ? urlObj : urlObj.url;
                 const title = urlObj.title || extractTitleFromUrl(url);
-                
                 const domain = new URL(url).hostname.replace('www.', '');
-                
                 const card = document.createElement('div');
                 card.className = 'url-card';
-                
                 card.innerHTML = `
                     <div class="url-content">
                         <h3 class="url-title">${title}</h3>
@@ -187,12 +195,47 @@
                         <a href="${url}" target="_blank" rel="noopener noreferrer" class="url-link">访问资源</a>
                     </div>
                 `;
-                
                 urlList.appendChild(card);
             });
-            
+
+            // 创建tools资源列表（如果有）
+            let toolsSection = null;
+            if (toolsUrls.length > 0) {
+                toolsSection = document.createElement('div');
+                toolsSection.style.marginTop = '3rem';
+                const toolsTitle = document.createElement('h2');
+                toolsTitle.textContent = '工具类资源';
+                toolsTitle.style.color = 'var(--primary-color)';
+                toolsTitle.style.fontSize = '1.2rem';
+                toolsTitle.style.marginBottom = '1rem';
+                toolsSection.appendChild(toolsTitle);
+
+                const toolsList = document.createElement('div');
+                toolsList.className = 'url-list';
+                toolsUrls.forEach(urlObj => {
+                    const url = urlObj.url;
+                    const title = urlObj.title || extractTitleFromUrl(url);
+                    const domain = new URL(url).hostname.replace('www.', '');
+                    const card = document.createElement('div');
+                    card.className = 'url-card';
+                    card.innerHTML = `
+                        <div class="url-content">
+                            <h3 class="url-title">${title}</h3>
+                            <span class="url-domain">${domain}</span>
+                            <a href="${url}" target="_blank" rel="noopener noreferrer" class="url-link">访问资源</a>
+                        </div>
+                    `;
+                    toolsList.appendChild(card);
+                });
+                toolsSection.appendChild(toolsList);
+            }
+
+            // 渲染到页面
             urlContainer.innerHTML = '';
             urlContainer.appendChild(urlList);
+            if (toolsSection) {
+                urlContainer.appendChild(toolsSection);
+            }
         }
         
         function extractTitleFromUrl(url) {
