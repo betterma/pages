@@ -163,7 +163,16 @@
             
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${currentFilterType}.json`;
+            // 修改下载文件名
+            let fileName = '';
+            if (currentFilterType === '99') {
+                fileName = '99_score.json';
+            } else if (currentFilterType === '85') {
+                fileName = '85_score.json';
+            } else {
+                fileName = 'result.json';
+            }
+            a.download = fileName;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);

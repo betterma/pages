@@ -480,9 +480,11 @@
             };
             
             const jsonStr = JSON.stringify(mergedData, null, 2);
+            // 获取基础数据文件名
+            const baseFile = document.getElementById('baseFileSelect').value || 'merged';
             downloadFile(
                 jsonStr,
-                `merged_${new Date().toISOString().slice(0,10)}.json`,
+                baseFile,
                 'application/json'
             );
         }
