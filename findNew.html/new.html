@@ -158,7 +158,7 @@
 
             const inputLines = document.getElementById('inputData').value
                 .split('\n')
-                .map(line => line.trim())
+                .map(line => line.trim().replace(/\.$/, '')) // 去除末尾英文句号
                 .filter(line => line);
 
             const newEntries = [];
@@ -188,7 +188,8 @@
                 document.getElementById('dedupStatus').innerHTML = '请先完成对比分析并确保有新增数据';
                 return;
             }
-            const lines = inputText.split(/\r?\n/).filter(line => line.trim() !== '');
+            // 去除每行末尾英文句号
+            const lines = inputText.split(/\r?\n/).map(line => line.trim().replace(/\.$/, '')).filter(line => line);
 
             // 数据统计
             const counter = new Map();
