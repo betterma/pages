@@ -192,16 +192,16 @@
                 const key = Object.keys(item)[0];
                 const scores = item[key];
 
-                if (minScore === 99) {
+                if (minScore == 99) {
                     // 筛选包含99的数据
-                    if (scores.includes(99)) {
+                    if (scores.includes(99) || scores.includes('99')) {
                         filteredData.push(item);
                         count++;
                     }
                 } else {
                     // 筛选85分以上但不包含99的数据
                     const allAbove85 = scores.find(score => score >= 80);
-                    const no99 = !scores.includes(99);
+                    const no99 = !scores.includes(99) && !scores.includes('99');
 
                     if (allAbove85 && no99) {
                         filteredData.push(item);
