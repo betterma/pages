@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>睡眠统计 - 我的睡眠记录</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js"></script>
+</head>
+<body>
+  <!-- 头部导航 -->
+  <header class="app-header">
+    <div class="container header-flex">
+      <h1 class="logo">睡眠统计</h1>
+      <div class="user-controls">
+        <div class="user-selector">
+          <label for="userSelect">选择用户：</label>
+          <select id="userSelect" class="user-select">
+            <option value="user1">用户1</option>
+            <option value="user2">用户2</option>
+          </select>
+        </div>
+        <div class="view-mode">
+          <label for="viewMode">视图模式：</label>
+          <select id="viewMode" class="view-select">
+            <option value="single">个人视图</option>
+            <option value="compare">对比视图</option>
+          </select>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="addSleepRecord" class="btn btn-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+          </svg>
+          添加记录
+        </button>
+        <div class="dropdown">
+          <div class="dropdown-menu" id="userMenu">
+            <button id="refresh">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="vertical-align:middle;margin-right:4px;"><path d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 1 1 .894-.448A4 4 0 1 0 8 4V1.5a.5.5 0 0 1 1 0v3A.5.5 0 0 1 8.5 5h-3a.5.5 0 0 1 0-1H8z"/></svg>
+              刷新数据
+            </button>
+            <button id="exportData">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="vertical-align:middle;margin-right:4px;"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
+              导出数据
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+  
+  <!-- 主内容区域 -->
+  <main class="container">
+    <!-- 统计概览卡片 -->
+    <div class="stats-overview">
+      <div class="stat-card">
+        <div class="stat-title">平均睡眠时长</div>
+        <div class="stat-value" id="avgSleepDuration">--</div>
+        <div class="stat-unit">小时</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">平均入睡时间</div>
+        <div class="stat-value" id="avgSleepTime">--</div>
+        <div class="stat-unit">点</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">平均起床时间</div>
+        <div class="stat-value" id="avgWakeTime">--</div>
+        <div class="stat-unit">点</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">平均上床时间</div>
+        <div class="stat-value" id="avgBedTime">--</div>
+        <div class="stat-unit">点</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">记录天数</div>
+        <div class="stat-value" id="totalDays">--</div>
+        <div class="stat-unit">天</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">平均身体状态</div>
+        <div class="stat-value" id="avgPhysicalScore">--</div>
+        <div class="stat-unit">分</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">平均心理状态</div>
+        <div class="stat-value" id="avgMentalScore">--</div>
+        <div class="stat-unit">分</div>
+      </div>
+    </div>
+
+    <!-- 主要趋势图表 -->
+    <div class="chart-container">
+      <div class="chart-header">
+        <h2>睡眠趋势分析</h2>
+        <div class="chart-controls">
+          <select id="chartType" class="chart-select">
+            <option value="duration">睡眠时长</option>
+            <option value="sleepTime">入睡时间</option>
+            <option value="wakeTime">起床时间</option>
+            <option value="efficiency">睡眠效率</option>
+            <option value="physicalScore">身体状态</option>
+            <option value="mentalScore">心理状态</option>
+          </select>
+          <select id="timeRange" class="chart-select">
+            <option value="7">最近7天</option>
+            <option value="30">最近30天</option>
+            <option value="90">最近90天</option>
+            <option value="all">全部记录</option>
+          </select>
+        </div>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="sleepChart"></canvas>
+      </div>
+    </div>
+
+    <!-- 多指标对比图表 -->
+    <div class="chart-container">
+      <div class="chart-header">
+        <h2>睡眠时间对比分析</h2>
+        <div class="chart-controls">
+          <select id="comparisonTimeRange" class="chart-select">
+            <option value="7">最近7天</option>
+            <option value="30">最近30天</option>
+            <option value="90">最近90天</option>
+            <option value="all">全部记录</option>
+          </select>
+        </div>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="comparisonChart"></canvas>
+      </div>
+    </div>
+
+    <!-- 上床时间趋势图表 -->
+    <div class="chart-container">
+      <div class="chart-header">
+        <h2>上床时间变化趋势</h2>
+        <div class="chart-controls">
+          <select id="bedTimeRange" class="chart-select">
+            <option value="7">最近7天</option>
+            <option value="30">最近30天</option>
+            <option value="90">最近90天</option>
+            <option value="all">全部记录</option>
+          </select>
+        </div>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="bedTimeChart"></canvas>
+      </div>
+    </div>
+
+    <!-- 用户对比图表 -->
+    <div class="chart-container compare-view" style="display: none;">
+      <div class="chart-header">
+        <h2>用户睡眠对比分析</h2>
+        <div class="chart-controls">
+          <select id="compareTimeRange" class="chart-select">
+            <option value="7">最近7天</option>
+            <option value="30">最近30天</option>
+            <option value="90">最近90天</option>
+            <option value="all">全部记录</option>
+          </select>
+        </div>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="userCompareChart"></canvas>
+      </div>
+    </div>
+
+    <!-- 最近记录 -->
+    <div class="recent-records">
+      <h2>最近记录</h2>
+      <div class="records-list" id="recentRecordsList">
+        <!-- 记录列表将通过JS填充 -->
+      </div>
+    </div>
+  </main>
+
+  <!-- 添加睡眠记录模态框 -->
+  <div id="addRecordModal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>添加睡眠记录</h3>
+        <span class="close">&times;</span>
+      </div>
+      <div class="modal-body">
+        <form id="sleepRecordForm">
+          <div class="form-group">
+            <label for="recordDate">记录日期</label>
+            <input type="date" id="recordDate" required>
+          </div>
+          <div class="form-group">
+            <label for="bedTime">上床时间</label>
+            <input type="time" id="bedTime" required>
+          </div>
+          <div class="form-group">
+            <label for="sleepTime">睡着时间</label>
+            <input type="time" id="sleepTime" required>
+          </div>
+          <div class="form-group">
+            <label for="wakeTime">起床时间</label>
+            <input type="time" id="wakeTime" required>
+          </div>
+          <div class="form-group">
+            <label for="physicalScore">身体状态评分</label>
+            <div class="score-input">
+              <input type="range" id="physicalScore" min="1" max="10" value="7" class="score-slider">
+              <span class="score-value" id="physicalScoreValue">7</span>
+              <div class="score-labels">
+                <span>1 (很差)</span>
+                <span>10 (很好)</span>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="mentalScore">心理状态评分</label>
+            <div class="score-input">
+              <input type="range" id="mentalScore" min="1" max="10" value="7" class="score-slider">
+              <span class="score-value" id="mentalScoreValue">7</span>
+              <div class="score-labels">
+                <span>1 (很差)</span>
+                <span>10 (很好)</span>
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="notes">备注</label>
+            <textarea id="notes" rows="3" placeholder="记录一下睡眠质量、感受等..."></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="cancelBtn">取消</button>
+            <button type="submit" class="btn btn-primary">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/js/auth.js"></script>
+  <script src="assets/js/storage.js"></script>
+  <script src="assets/js/sleep.js"></script>
+  <div id="globalLoading" class="loading-mask" style="display:none;">
+    <div class="loading-spinner"></div>
+    <span id="loadingText">加载中...</span>
+  </div>
+</body>
+</html>
