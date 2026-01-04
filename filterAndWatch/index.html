@@ -184,7 +184,7 @@
             <label for="minMarketCap">最小市值：</label>
             <input type="number" id="minMarketCap" value="10000000" style="margin-right: 1rem;">
             <label for="minVolume">最小交易量：</label>
-            <input type="number" id="minVolume" placeholder="0" style="margin-right: 1rem;">
+            <input type="number" id="minVolume" value="200000" style="margin-right: 1rem;">
             <button id="queryBtn" onclick="queryAndFilter()">查询并过滤</button>
         </div>
         <div id="queryStatus" class="status"></div>
@@ -205,7 +205,7 @@
             <table id="dataTable">
                 <thead>
                     <tr>
-                        <th>合约</th>
+                        <th>名称</th>
                         <th>市值</th>
                         <th>交易量</th>
                     </tr>
@@ -291,8 +291,8 @@
             if (filteredData.length > 0) {
                 tbody.innerHTML = filteredData.map(item => `
                     <tr>
-                        <td><span class="json-key">${item.address}</span></td>
-                        <td>${item.marketCap ? item.marketCap.toLocaleString() : 'N/A'}</td>
+                        <td><span class="json-key" onclick="copyToClipboard('${item.address}')">${item.name}</span></td>
+                        <td>${item.marketCap ? (item.marketCap / 1000000).toFixed(2) + 'M' : 'N/A'}</td>
                         <td>${item.volume ? item.volume.toLocaleString() : 'N/A'}</td>
                     </tr>
                 `).join('');
@@ -301,7 +301,7 @@
                     const key = Object.keys(item).find(k => !k.startsWith('_'));
                     return `
                         <tr>
-                            <td><span class="json-key">${key}</span></td>
+                            <td><span class="json-key" onclick="copyToClipboard('${key}')">未查询</span></td>
                             <td>未查询</td>
                             <td>未查询</td>
                         </tr>
@@ -332,7 +332,7 @@
             
             try {
                 const results = await queryTokens(currentData, minMarketCap, minVolume, updateProgress);
-                filteredData = results;
+                filteredData = results.sort((a, b) => b.marketCap - a.marketCap);
                 updateUI();
                 setStatus(`✅ 查询完成，过滤出 ${filteredData.length} 个合约`, 'success');
             } catch (error) {
@@ -344,7 +344,15 @@
             }
         }
 
-        // 查询代币数据
+        // 复制到剪贴板
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('合约地址已复制到剪贴板');
+            }).catch(err => {
+                console.error('复制失败:', err);
+                alert('复制失败，请手动复制');
+            });
+        }
         async function queryTokens(data, minMarketCap, minVolume, updateProgress) {
             const addresses = data.map(item => Object.keys(item).find(k => !k.startsWith('_')));
             const results = [];
@@ -372,8 +380,9 @@
                             const pair = data.pairs.reduce((max, p) => (p.fdv > max.fdv ? p : max), data.pairs[0]);
                             const marketCap = pair.fdv || 0;
                             const volume = pair.volume24h || 0;
+                            const name = pair.baseToken.name || 'Unknown';
                             if (marketCap >= minMarketCap && volume >= minVolume) {
-                                return { address, marketCap, volume };
+                                return { address, name, marketCap, volume };
                             }
                         }
                     } catch (error) {
