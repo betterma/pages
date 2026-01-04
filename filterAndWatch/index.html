@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据查看工具</title>
+    <style>
+        :root {
+            --primary: #4361ee;
+            --primary-dark: #3a56d4;
+            --secondary: #4cc9f0;
+            --success: #4ade80;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --light: #f8f9fa;
+            --dark: #2b2d42;
+            --gray: #6b7280;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--light);
+            color: var(--dark);
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        h1 {
+            color: var(--primary);
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .status {
+            padding: 1rem;
+            border-radius: 6px;
+            margin: 1rem 0;
+            font-weight: 500;
+        }
+        
+        .status.loading {
+            background-color: #dbeafe;
+            color: var(--primary);
+        }
+        
+        .status.success {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+        
+        .status.warning {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status.error {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        
+        #jsonViewer {
+            font-family: Consolas, Monaco, 'Andale Mono', monospace;
+            background-color: #f5f5f5;
+            padding: 1.5rem;
+            border-radius: 6px;
+            max-height: 500px;
+            overflow: auto;
+        }
+        
+        .json-item {
+            margin: 0.5rem 0;
+        }
+        
+        .json-key {
+            color: #7e22ce;
+            font-weight: bold;
+        }
+        
+        .json-value {
+            color: #065f46;
+        }
+
+        .json-value-99 {
+            background: #065f46;
+            color: white;
+        }
+        
+        .stats {
+            display: flex;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .stat-box {
+            flex: 1;
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: var(--gray);
+        }
+    </style>
+</head>
+<body>
+    <h1>数据查看工具</h1>
+    
+    <div class="card">
+        <h2>选择数据文件</h2>
+        <label for="baseFileSelect">选择数据文件：</label>
+        <select id="baseFileSelect" style="margin-bottom: 1rem;">
+            <option value="contract.json">contract.json</option>
+            <option value="99.json">99.json</option>
+            <option value="85.json">85.json</option>
+        </select>
+        <button onclick="window.location.href='../mergeNew.html/index.html'" style="margin-left: 1rem;">跳转到合并工具</button>
+        <div id="jsonStatus" class="status loading" style="display: none;">
+            ⏳ 正在加载数据...
+        </div>
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value" id="dataCount">0</div>
+                <div class="stat-label">数据条数</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h2>数据预览</h2>
+        <div id="jsonViewer">
+            [等待数据加载...]
+        </div>
+    </div>
+
+    <script>
+        // 数据存储
+        let currentData = [];
+
+        // 初始化加载数据
+        window.addEventListener('DOMContentLoaded', async () => {
+            const selectEl = document.getElementById('baseFileSelect');
+            selectEl.addEventListener('change', () => {
+                loadData(selectEl.value);
+            });
+            // 默认加载第一个
+            loadData(selectEl.value);
+        });
+
+        async function loadData(filename) {
+            const jsonStatusEl = document.getElementById('jsonStatus');
+            try {
+                jsonStatusEl.style.display = 'block';
+                setStatus('', '');
+                // 清空数据
+                currentData = [];
+
+                const response = await fetch(`../${filename}?time=` + new Date());
+                if (!response.ok) {
+                    throw new Error(`HTTP错误 ${response.status}`);
+                }
+                const rawData = await response.json();
+                let arr;
+                if (Array.isArray(rawData)) {
+                    arr = rawData;
+                } else if (Array.isArray(rawData.data)) {
+                    arr = rawData.data;
+                } else {
+                    throw new Error("JSON数据必须是数组或包含data数组属性");
+                }
+                processData(arr);
+                updateUI();
+                setStatus('✅ 数据加载完成', 'success');
+            } catch (error) {
+                console.error("加载失败:", error);
+                setStatus(`❌ 加载失败: ${error.message}`, 'error');
+            } finally {
+                if (jsonStatusEl) {
+                    jsonStatusEl.style.display = 'none';
+                }
+            }
+        }
+
+        // 处理数据
+        function processData(rawData) {
+            currentData = rawData.map(item => {
+                const [key, value] = Object.entries(item)
+                    .find(([k]) => !k.startsWith('_')) || [];
+                
+                if (!key) return null;
+                
+                return { [key]: value };
+            }).filter(Boolean);
+        }
+
+        // 更新UI显示
+        function updateUI() {
+            // 更新统计信息
+            document.getElementById('dataCount').textContent = currentData.length;
+            
+            // 更新JSON预览
+            document.getElementById('jsonViewer').innerHTML = generatePreview();
+        }
+
+        // 生成预览HTML
+        function generatePreview() {
+            if (currentData.length === 0) {
+                return '<div class="json-item">[空数据]</div>';
+            }
+            
+            return [
+                '<div class="json-item">[</div>',
+                ...currentData.map(item => {
+                    const key = Object.keys(item).find(k => !k.startsWith('_'));
+                    const values = item[key];
+                    
+                    return `
+                        <div class="json-item">
+                            <span class="json-key">"${key}"</span>: [
+                            ${values.map(v => `<span class="json-value json-value-${v}">${v}</span>`).join(', ')}
+                            ]
+                        </div>
+                    `;
+                }),
+                '<div class="json-item">]</div>'
+            ].join('\n');
+        }
+
+        // 设置状态显示
+        function setStatus(message, type = '') {
+            const statusEl = document.getElementById('jsonStatus');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+    </script>
+</body>
+</html>
