@@ -350,8 +350,16 @@
             const results = [];
             let processed = 0;
             
-            // 节流：每秒最多 10 个请求（DexScreener 免费API 限制）
-            const batchSize = 10;
+            const total = addresses.length;
+            let batchSize, delay;
+            if (total < 500) {
+                batchSize = 20;
+                delay = 500; // 0.5秒延迟
+            } else {
+                batchSize = 10;
+                delay = 1000; // 1秒延迟
+            }
+            
             for (let i = 0; i < addresses.length; i += batchSize) {
                 const batch = addresses.slice(i, i + batchSize);
                 const promises = batch.map(async (address) => {
@@ -377,9 +385,9 @@
                 results.push(...batchResults.filter(Boolean));
                 processed += batch.length;
                 updateProgress(processed, addresses.length);
-                // 等待1秒
+                // 等待指定延迟
                 if (i + batchSize < addresses.length) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    await new Promise(resolve => setTimeout(resolve, delay));
                 }
             }
             return results;
