@@ -270,12 +270,13 @@
         .watch-list-area {
             margin-top: 24px;
             padding: 20px;
-            background: #f5f3ff;
+            background: #f0f9ff;
+            border: 2px solid #0284c7;
             border-radius: 16px;
-            display: none;
-        }
-        .watch-list-area.show {
             display: block;
+        }
+        .watch-list-area.hide {
+            display: none;
         }
         .watch-list-header {
             display: flex;
@@ -877,12 +878,17 @@
         }
 
         viewWatchBtn.addEventListener('click', () => {
-            watchListArea.classList.add('show');
+            watchListArea.classList.remove('hide');
             loadAndDisplayWatch();
         });
 
         closeWatchBtn.addEventListener('click', () => {
-            watchListArea.classList.remove('show');
+            watchListArea.classList.add('hide');
+        });
+
+        // 页面加载时自动显示 toWatch 列表
+        window.addEventListener('load', () => {
+            loadAndDisplayWatch();
         });
 
         // ---------- 查询按钮点击 ----------
