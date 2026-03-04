@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        }
+        body {
+            background: #f0f2f5;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        h1 {
+            margin-top: 0;
+            color: #1a1a1a;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        h1 small {
+            font-size: 14px;
+            font-weight: 400;
+            color: #666;
+            margin-left: 12px;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-size: 14px;
+            color: #856404;
+        }
+        .upload-area {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            background: #f9fafc;
+            padding: 16px 20px;
+            border-radius: 16px;
+        }
+        .file-label {
+            background: #e8ecf2;
+            padding: 10px 18px;
+            border-radius: 40px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .file-label:hover {
+            background: #d9e0e8;
+        }
+        .file-label input {
+            display: none;
+        }
+        .or-divider {
+            color: #888;
+            font-weight: 500;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 16px;
+            border: 1px solid #d0d7de;
+            border-radius: 16px;
+            font-family: 'SF Mono', 'Menlo', monospace;
+            font-size: 14px;
+            resize: vertical;
+            margin-bottom: 20px;
+            background: #f9fafc;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99,102,241,0.2);
+        }
+        .actions {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+        }
+        .btn {
+            background: #6366f1;
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: 0 4px 6px rgba(99,102,241,0.2);
+        }
+        .btn:hover:not(:disabled) {
+            background: #4f52e0;
+            transform: translateY(-1px);
+        }
+        .btn:disabled {
+            background: #a5a8f0;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .status {
+            padding: 12px 16px;
+            background: #e8f4fe;
+            border-radius: 12px;
+            color: #0369a1;
+            font-size: 14px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status.error {
+            background: #fee9e7;
+            color: #b91c1c;
+        }
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.03);
+        }
+        th {
+            background: #f2f5f9;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            color: #2c3e50;
+            padding: 14px 12px;
+            text-align: left;
+        }
+        td {
+            padding: 14px 12px;
+            border-bottom: 1px solid #eef2f6;
+            font-size: 14px;
+            vertical-align: middle;
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        .numeric {
+            text-align: right;
+            font-family: 'SF Mono', monospace;
+        }
+        .address-cell {
+            font-family: 'SF Mono', monospace;
+            font-size: 13px;
+            color: #4b5563;
+            max-width: 150px;
+            cursor: pointer;
+            position: relative;
+        }
+        .address-cell:hover {
+            background-color: #f0f2f5;
+            border-radius: 4px;
+        }
+        .address-cell:active {
+            opacity: 0.7;
+        }
+        .address-cell span {
+            display: inline-block;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: bottom;
+            pointer-events: none; /* 点击事件由td处理 */
+        }
+        .success-row {
+            background-color: #ffffff;
+        }
+        .error-row {
+            background-color: #fff8f8;
+            color: #b91c1c;
+        }
+        .error-message {
+            color: #b91c1c;
+            font-weight: 500;
+        }
+        .toggle-row {
+            background-color: #f0f4f8;
+            cursor: pointer;
+            text-align: center;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+        .toggle-row:hover {
+            background-color: #e2e8f0;
+        }
+        .export-area {
+            margin: 24px 0;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .export-btn {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 40px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+            box-shadow: 0 4px 6px rgba(16,185,129,0.2);
+        }
+        .export-btn:hover:not(:disabled) {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+        .export-btn:disabled {
+            background: #6ee7b7;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        .footer-note {
+            margin-top: 24px;
+            font-size: 12px;
+            color: #888;
+            text-align: center;
+            border-top: 1px dashed #ccc;
+            padding-top: 20px;
+        }
+        .explain {
+            background: #f0f9ff;
+            padding: 10px 16px;
+            border-radius: 12px;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #0369a1;
+        }
+        /* 复制成功提示 */
+        .copy-toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 1000;
+            animation: fadeInOut 1.5s ease;
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
+            15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="upload-area">
+        <label class="file-label">
+            📁 选择 .txt 文件
+            <input type="file" id="fileInput" accept=".txt">
+        </label>
+        <span class="or-divider">或者</span>
+        <span style="color: #4b5563;">直接粘贴合约地址（一行一个）</span>
+    </div>
+
+    <textarea id="addresses" placeholder="例如：&#10;So11111111111111111111111111111111111111112&#10;EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&#10;# 支持注释行（以#开头会被忽略）"></textarea>
+
+    <div class="actions">
+        <button class="btn" id="queryBtn">开始查询</button>
+        <button class="btn" id="clearBtn" style="background: #e2e8f0; color: #1e293b; box-shadow: none;">清空</button>
+    </div>
+
+    <div id="status" class="status" style="display: none;"></div>
+
+    <div style="overflow-x: auto;">
+        <table id="resultsTable">
+            <thead>
+                <tr>
+                    <th>合约地址 (点击复制)</th>
+                    <th>符号</th>
+                    <th class="numeric">市值 (USD)</th>
+                    <th class="numeric">价格 (USD)</th>
+                    <th class="numeric">FDV</th>
+                    <th class="numeric">流动性</th>
+                    <th class="numeric">24h 交易量</th>
+                    <th class="numeric">持有者数</th>
+                </tr>
+            </thead>
+            <tbody id="resultsBody">
+                <!-- 动态渲染 -->
+            </tbody>
+        </table>
+    </div>
+
+    <div class="export-area" id="exportArea" style="display: none;">
+        <button class="export-btn" id="toWatchBtn">📋 To Watch (复制)</button>
+        <button class="export-btn" id="toAllBtn">📋 To All (复制)</button>
+    </div>
+
+    <div class="explain">
+        📘 字段说明：<br>
+        - <strong>市值</strong>：当前流通市值（marketCap）。<br>
+        - <strong>FDV</strong>：完全稀释估值（基于总供应量）。<br>
+        - <strong>流动性</strong>：DEX中代币的可交易资金池总额，流动性越高交易滑点越低。<br>
+        - <strong>24h交易量</strong>：过去24小时美元交易额（v24hUSD）。<br>
+        - <strong>排序规则</strong>：市值≥1000万且<1亿直接显示；500万≤市值<1000万折叠；<500万不显示；失败项始终显示。<br>
+        - <strong>复制地址</strong>：点击合约地址单元格即可复制完整地址。<br>
+        - <strong>导出功能</strong>：查询完成后可使用 To Watch (市值≥500万) 和 To All (此次+历史) 按钮导出数据。
+    </div>
+
+    <div class="footer-note">
+        ⚡ 数据来源：Birdeye API | 60 rpm → 1秒间隔 | 地址可点击复制
+    </div>
+</div>
+
+<script>
+    (function() {
+        // ---------- 配置 ----------
+        const API_KEY = '753abf2a5d134d8ea522138f22661d31';   // 您的Birdeye密钥
+        const BASE_URL = 'https://public-api.birdeye.so';
+        const PLATFORM = 'solana';
+        const REQUEST_DELAY = 1000; // 60 rpm → 1秒
+
+        // ---------- 全局数据集合 ----------
+        let L0 = [];  // toAll.json 中的数据
+        let L1 = [];  // 此次处理的所有合约集合
+        let L2 = [];  // 市值 > 500万 的集合
+
+        // ---------- DOM 元素 ----------
+        const fileInput = document.getElementById('fileInput');
+        const addressesTextarea = document.getElementById('addresses');
+        const queryBtn = document.getElementById('queryBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const statusDiv = document.getElementById('status');
+        const resultsBody = document.getElementById('resultsBody');
+        const exportArea = document.getElementById('exportArea');
+        const toWatchBtn = document.getElementById('toWatchBtn');
+        const toAllBtn = document.getElementById('toAllBtn');
+
+        // ---------- 工具函数 ----------
+        function showStatus(message, type = 'info') {
+            statusDiv.style.display = 'flex';
+            statusDiv.textContent = message;
+            statusDiv.className = 'status';
+            if (type === 'error') {
+                statusDiv.classList.add('error');
+            } else if (type === 'warning') {
+                statusDiv.classList.add('warning');
+            } else {
+                statusDiv.classList.remove('error', 'warning');
+            }
+        }
+
+        function hideStatus() {
+            statusDiv.style.display = 'none';
+        }
+
+        function formatNumber(num) {
+            if (num === null || num === undefined) return '-';
+            if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+            if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+            if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
+            return num.toFixed(2);
+        }
+
+        // 显示临时提示
+        function showToast(message, duration = 1500) {
+            const toast = document.createElement('div');
+            toast.className = 'copy-toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.remove();
+            }, duration);
+        }
+
+        function clearResults() {
+            resultsBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: #888; padding: 40px;">👆 输入地址后点击查询</td></tr>`;
+            exportArea.style.display = 'none';
+        }
+
+        // 从服务器读取 toAll.json
+        async function loadL0Data() {
+            try {
+                const response = await fetch('./toAll.json');
+                if (!response.ok) throw new Error('无法读取 toAll.json');
+                L0 = await response.json();
+                console.log('✓ 加载 L0 数据成功，共', L0.length, '个地址');
+            } catch (err) {
+                console.warn('⚠️ 无法加载 toAll.json:', err.message);
+                L0 = [];
+            }
+        }
+
+        // 页面加载时读取 L0
+        loadL0Data();
+
+        // ---------- 文件上传 ----------
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                addressesTextarea.value = event.target.result;
+            };
+            reader.readAsText(file);
+            fileInput.value = '';
+        });
+
+        // ---------- 清空按钮 ----------
+        clearBtn.addEventListener('click', () => {
+            addressesTextarea.value = '';
+            clearResults();
+            hideStatus();
+        });
+
+        // ---------- Birdeye API 调用 (单个地址，带重试) ----------
+        async function queryTokenWithRetry(address, retries = 3) {
+            const url = `${BASE_URL}/defi/token_overview?address=${encodeURIComponent(address)}`;
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        headers: { 'X-API-KEY': API_KEY }
+                    });
+                    
+                    if (response.status === 429) {
+                        const waitTime = Math.pow(2, i) * 2000; // 2s, 4s, 8s
+                        console.log(`⏳ 429 限流，等待 ${waitTime}ms 后重试 (${i+1}/${retries})`);
+                        await new Promise(resolve => setTimeout(resolve, waitTime));
+                        continue;
+                    }
+                    
+                    if (!response.ok) {
+                        if (response.status === 404) {
+                            throw new Error('未收录');
+                        } else {
+                            const errText = await response.text();
+                            throw new Error(`HTTP ${response.status}: ${errText.slice(0, 100)}`);
+                        }
+                    }
+
+                    const json = await response.json();
+                    const data = json.data || {};
+                    
+                    // 提取所需字段
+                    return {
+                        address,
+                        success: true,
+                        symbol: data.symbol || '-',
+                        market_cap: data.marketCap,          // 注意大小写
+                        price: data.price,
+                        fdv: data.fdv,
+                        liquidity: data.liquidity,
+                        volume_24h: data.v24hUSD,
+                        holders: data.holder,
+                    };
+                } catch (err) {
+                    if (i === retries - 1) throw err;
+                    await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+                }
+            }
+        }
+
+        // ---------- 批量查询（串行，固定延迟 + 重试）----------
+        async function batchQuery(addresses) {
+            const results = [];
+            let successCount = 0;
+            
+            for (let i = 0; i < addresses.length; i++) {
+                const addr = addresses[i];
+                showStatus(`正在查询 (${i+1}/${addresses.length}): ${addr.slice(0,8)}...`);
+
+                try {
+                    const result = await queryTokenWithRetry(addr);
+                    results.push(result);
+                    successCount++;
+                } catch (err) {
+                    results.push({
+                        address: addr,
+                        success: false,
+                        error: err.message
+                    });
+                }
+
+                if (i < addresses.length - 1) {
+                    await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY));
+                }
+            }
+            return { results, successCount };
+        }
+
+        // ---------- 渲染表格（排序+折叠）----------
+        function renderResults(results) {
+            if (!results || results.length === 0) {
+                resultsBody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 40px;">无数据</td></tr>`;
+                exportArea.style.display = 'none';
+                return;
+            }
+
+            // 初始化 L1 和 L2
+            L1 = [];
+            L2 = [];
+
+            // 分离成功(有市值)和失败
+            const successWithCap = [];
+            const failed = [];
+            for (const item of results) {
+                if (item.success) {
+                    L1.push(item.address);  // 将所有成功的地址加入 L1
+                }
+                if (item.success && typeof item.market_cap === 'number' && !isNaN(item.market_cap)) {
+                    successWithCap.push(item);
+                } else {
+                    failed.push(item);
+                }
+            }
+
+            // 过滤掉市值 < 5M 的代币
+            const filtered = successWithCap.filter(item => item.market_cap >= 5000000);
+            
+            // 构建 L2 (市值 > 500万)
+            for (const item of filtered) {
+                L2.push(item.address);
+            }
+
+            // 按市值降序排序
+            filtered.sort((a, b) => b.market_cap - a.market_cap);
+
+            // 分组：≥$1000万 并且 < $1亿，和 $500万-$1000万
+            const high = filtered.filter(item => item.market_cap >= 10000000 && item.market_cap < 100000000);   // ≥10M 且 < 1亿
+            const medium = filtered.filter(item => item.market_cap >= 5000000 && item.market_cap < 10000000); // 5M-10M
+
+            // 构建HTML
+            let highRows = '';
+            for (const item of high) {
+                highRows += `<tr class="success-row">
+                    <td class="address-cell" data-address="${item.address}" title="点击复制地址"><span>${item.address}</span></td>
+                    <td>${item.symbol}</td>
+                    <td class="numeric">$${formatNumber(item.market_cap)}</td>
+                    <td class="numeric">${item.price ? '$' + item.price.toFixed(6) : '-'}</td>
+                    <td class="numeric">${item.fdv !== undefined ? '$' + formatNumber(item.fdv) : '-'}</td>
+                    <td class="numeric">${item.liquidity !== undefined ? '$' + formatNumber(item.liquidity) : '-'}</td>
+                    <td class="numeric">${item.volume_24h !== undefined ? '$' + formatNumber(item.volume_24h) : '-'}</td>
+                    <td class="numeric">${item.holders ?? '-'}</td>
+                </tr>`;
+            }
+
+            let mediumRows = '';
+            for (const item of medium) {
+                mediumRows += `<tr class="success-row">
+                    <td class="address-cell" data-address="${item.address}" title="点击复制地址"><span>${item.address}</span></td>
+                    <td>${item.symbol}</td>
+                    <td class="numeric">$${formatNumber(item.market_cap)}</td>
+                    <td class="numeric">${item.price ? '$' + item.price.toFixed(6) : '-'}</td>
+                    <td class="numeric">${item.fdv !== undefined ? '$' + formatNumber(item.fdv) : '-'}</td>
+                    <td class="numeric">${item.liquidity !== undefined ? '$' + formatNumber(item.liquidity) : '-'}</td>
+                    <td class="numeric">${item.volume_24h !== undefined ? '$' + formatNumber(item.volume_24h) : '-'}</td>
+                    <td class="numeric">${item.holders ?? '-'}</td>
+                </tr>`;
+            }
+
+            let failedRows = '';
+            for (const item of failed) {
+                if (item.success) continue; // 理论上不会到这里
+                failedRows += `<tr class="error-row">
+                    <td class="address-cell" data-address="${item.address}" title="点击复制地址"><span>${item.address}</span></td>
+                    <td colspan="7" class="error-message">❌ 查询失败: ${item.error}</td>
+                </tr>`;
+            }
+
+            // 构建完整 tbody
+            let html = '';
+            if (highRows) {
+                html += `<tbody id="high-group">${highRows}</tbody>`;
+            }
+            if (mediumRows) {
+                // 默认隐藏的 medium 组
+                html += `<tbody id="medium-group" style="display: none;">${mediumRows}</tbody>`;
+                    // 切换行（用<tbody>包装<tr>以确保正规的HTML结构）
+                    html += `<tbody id="toggle-wrapper"><tr id="toggle-medium-row" class="toggle-row"><td colspan="8">⬇️ 点击显示 5M-10M 代币 (${medium.length} 个) ⬇️</td></tr></tbody>`;
+            }
+            if (failedRows) {
+                html += `<tbody id="failed-group">${failedRows}</tbody>`;
+            }
+            if (!highRows && !mediumRows && !failedRows) {
+                html = `<tr><td colspan="8" style="text-align: center; padding: 40px;">无符合条件的数据（市值均低于500万或全部失败）</td></tr>`;
+            }
+
+            resultsBody.innerHTML = html;
+
+            // 绑定复制事件：为所有 .address-cell 添加点击复制
+            const addressCells = document.querySelectorAll('.address-cell');
+            addressCells.forEach(cell => {
+                cell.addEventListener('click', (e) => {
+                    const address = cell.getAttribute('data-address');
+                    if (address) {
+                        navigator.clipboard.writeText(address).then(() => {
+                            showToast('✅ 地址已复制');
+                        }).catch(() => {
+                            // 降级处理
+                            const textarea = document.createElement('textarea');
+                            textarea.value = address;
+                            document.body.appendChild(textarea);
+                            textarea.select();
+                            document.execCommand('copy');
+                            document.body.removeChild(textarea);
+                            showToast('✅ 地址已复制');
+                        });
+                    }
+                });
+            });
+
+            // 绑定折叠切换事件
+            const toggleRow = document.getElementById('toggle-medium-row');
+            const mediumGroup = document.getElementById('medium-group');
+            if (toggleRow && mediumGroup) {
+                toggleRow.addEventListener('click', function() {
+                    const isHidden = mediumGroup.style.display === 'none';
+                    if (isHidden) {
+                        mediumGroup.style.display = 'table-row-group';
+                        toggleRow.innerHTML = '<td colspan="8">⬆️ 点击隐藏 5M-10M 代币 ⬆️</td>';
+                    } else {
+                        mediumGroup.style.display = 'none';
+                        toggleRow.innerHTML = `<td colspan="8">⬇️ 点击显示 5M-10M 代币 (${medium.length} 个) ⬇️</td>`;
+                    }
+                });
+            }
+
+            // 显示导出区域
+            exportArea.style.display = 'flex';
+
+            // 统计信息
+            const hiddenCount = successWithCap.length - filtered.length; // 被过滤的（<5M）
+            showStatus(`查询完成：成功 ${successWithCap.length} 个（显示 ${filtered.length} 个，过滤 ${hiddenCount} 个），失败 ${failed.length} 个。可进行导出操作。`, 'info');
+        }
+
+        // ---------- 导出功能 ----------
+        toWatchBtn.addEventListener('click', () => {
+            if (L2.length === 0) {
+                showToast('❌ L2 数据为空');
+                return;
+            }
+            const json = JSON.stringify(L2, null, 4);
+            navigator.clipboard.writeText(json).then(() => {
+                showToast(`✅ 已复制 ${L2.length} 个地址到剪贴板 (to Watch)`);
+            }).catch(() => {
+                const textarea = document.createElement('textarea');
+                textarea.value = json;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showToast(`✅ 已复制 ${L2.length} 个地址到剪贴板 (to Watch)`);
+            });
+        });
+
+        toAllBtn.addEventListener('click', () => {
+            // L1 + L0 的合并（去重）
+            const merged = new Set([...L1, ...L0]);
+            const json = JSON.stringify(Array.from(merged), null, 4);
+            navigator.clipboard.writeText(json).then(() => {
+                showToast(`✅ 已复制 ${merged.size} 个地址到剪贴板 (to All)`);
+            }).catch(() => {
+                const textarea = document.createElement('textarea');
+                textarea.value = json;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showToast(`✅ 已复制 ${merged.size} 个地址到剪贴板 (to All)`);
+            });
+        });
+
+        // ---------- 查询按钮点击 ----------
+        queryBtn.addEventListener('click', async () => {
+            const rawText = addressesTextarea.value.trim();
+            if (!rawText) {
+                showStatus('请输入或上传合约地址', 'warning');
+                return;
+            }
+
+            const addresses = rawText.split('\n')
+                .map(line => line.trim())
+                .filter(line => line && !line.startsWith('#'));
+
+            if (addresses.length === 0) {
+                showStatus('没有有效的合约地址', 'warning');
+                return;
+            }
+
+            if (addresses.length > 100) {
+                showStatus(`⚠️ 一次性查询 ${addresses.length} 个代币可能需要很长时间，建议分批进行。`, 'warning');
+            }
+
+            queryBtn.disabled = true;
+            clearResults();
+            showStatus(`准备查询 ${addresses.length} 个代币，每个间隔 1 秒，预计耗时 ${addresses.length} 秒，请耐心等待...`);
+
+            try {
+                const { results, successCount } = await batchQuery(addresses);
+                renderResults(results);
+            } catch (err) {
+                showStatus(`❌ 发生错误: ${err.message}`, 'error');
+                console.error(err);
+            } finally {
+                queryBtn.disabled = false;
+            }
+        });
+    })();
+</script>
+</body>
+</html>
