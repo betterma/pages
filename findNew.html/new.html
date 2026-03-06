@@ -75,8 +75,8 @@
     <h1>数据对比与去重工具</h1>
 
     <div class="section">
-        <h3>1. JSON数据状态</h3>
-        <div id="jsonStatus" class="status loading">正在加载contract.json...</div>
+        <h3>1. JSON 数据状态</h3>
+        <div id="jsonStatus" class="status loading">正在加载 toAll.json...</div>
     </div>
 
     <div class="section">
@@ -115,31 +115,26 @@
         // 加载JSON
         window.addEventListener('DOMContentLoaded', async () => {
             try {
-                const response = await fetch('../contract.json?time=' + new Date());
+                const response = await fetch('../toAll.json?time=' + new Date());
                 if (!response.ok) {
                     throw new Error(`HTTP错误！状态码：${response.status}`);
                 }
-                let data = await response.json();
+                const data = await response.json();
 
-                // 如果不是数组，尝试读取data属性
-                if (!Array.isArray(data) && Array.isArray(data.data)) {
-                    data = data.data;
-                }
+                // toAll.json 是一个字符串数组
                 if (!Array.isArray(data)) {
-                    throw new Error("JSON数据格式错误，未找到有效数组");
+                    throw new Error("JSON数据格式错误，期待一个地址数组");
                 }
 
-                data.forEach(item => {
-                    const dataKeys = Object.keys(item).filter(k => k !== '_source');
-                    if (dataKeys.length !== 1) {
-                        throw new Error("无效的数据格式");
+                data.forEach(addr => {
+                    if (typeof addr === 'string' && addr.trim()) {
+                        jsonKeys.add(addr.trim());
                     }
-                    jsonKeys.add(dataKeys[0]);
                 });
 
                 document.getElementById('jsonStatus').className = 'status';
                 document.getElementById('jsonStatus').innerHTML =
-                    `✅ JSON加载成功，共发现 ${data.length} 条有效数据`;
+                    `✅ toAll.json 加载成功，共发现 ${jsonKeys.size} 条地址`;
 
             } catch (error) {
                 document.getElementById('jsonStatus').className = 'status error';
