@@ -421,6 +421,7 @@
     <div class="export-area" id="exportArea" style="display: none;">
         <button class="export-btn" id="toWatchBtn">📋 To Watch (复制)</button>
         <button class="export-btn" id="toAllBtn">📋 To All (复制)</button>
+        <button class="export-btn" id="clearWatchBtn" style="background: #dc2626;">🗑️ 清除 Watch 数据</button>
         <button class="view-watch-btn" id="viewWatchBtn">👁️ 查看 Watch 列表</button>
     </div>
 
@@ -481,6 +482,7 @@
         const exportArea = document.getElementById('exportArea');
         const toWatchBtn = document.getElementById('toWatchBtn');
         const toAllBtn = document.getElementById('toAllBtn');
+        const clearWatchBtn = document.getElementById('clearWatchBtn');
         const viewWatchBtn = document.getElementById('viewWatchBtn');
         const watchListArea = document.getElementById('watchListArea');
         const closeWatchBtn = document.getElementById('closeWatchBtn');
@@ -859,6 +861,19 @@
             });
             // 更新 GitHub 文件
             updateGitHubFile('toAll.json', json);
+        });
+
+        // 清除 Watch 数据按钮
+        clearWatchBtn.addEventListener('click', () => {
+            const confirmClear = confirm('确定要清除 Watch 列表中的所有数据吗？此操作不可撤销。');
+            if (!confirmClear) return;
+            const emptyJson = '[]';
+            // 更新 GitHub 文件
+            updateGitHubFile('toWatch.json', emptyJson);
+            // 同时更新本地显示
+            L2 = [];
+            watchItems.innerHTML = '<div class="watch-empty">Watch 列表为空</div>';
+            watchCount.textContent = '(0)';
         });
 
         // ---------- 查看 Watch 列表功能 ----------
