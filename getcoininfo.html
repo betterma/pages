@@ -460,6 +460,10 @@
         const PLATFORM = 'solana';
         const REQUEST_DELAY = 1000; // 60 rpm → 1秒
 
+        // GitHub 配置（请替换为您的 Personal Access Token）
+        const GITHUB_TOKEN = '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';  // 替换为您的 GitHub PAT
+        const GITHUB_REPO = 'betterma/pages';
+
         // ---------- 全局数据集合 ----------
         let L0 = [];  // toAll.json 中的数据
         let L1 = [];  // 此次处理的所有合约集合
@@ -516,6 +520,42 @@
             setTimeout(() => {
                 toast.remove();
             }, duration);
+        }
+
+        // 更新 GitHub 文件
+        async function updateGitHubFile(path, content) {
+            try {
+                // 获取文件的当前 SHA
+                const getResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
+                    headers: {
+                        'Authorization': `token ${GITHUB_TOKEN}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                });
+                if (!getResponse.ok) throw new Error('获取文件信息失败');
+                const fileData = await getResponse.json();
+                const sha = fileData.sha;
+
+                // 更新文件
+                const updateResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${GITHUB_TOKEN}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: `Update ${path} via getcoininfo`,
+                        content: btoa(unescape(encodeURIComponent(content))),  // UTF-8 to base64
+                        sha: sha
+                    })
+                });
+                if (!updateResponse.ok) throw new Error('更新文件失败');
+                showToast(`✅ ${path} 已更新到 GitHub`);
+            } catch (error) {
+                console.error('GitHub 更新失败:', error);
+                showToast(`❌ 更新 ${path} 到 GitHub 失败: ${error.message}`);
+            }
         }
 
         function clearResults() {
@@ -796,6 +836,8 @@
                 document.body.removeChild(textarea);
                 showToast(`✅ 已复制 ${L2.length} 个地址到剪贴板 (to Watch)`);
             });
+            // 更新 GitHub 文件
+            updateGitHubFile('toWatch.json', json);
         });
 
         toAllBtn.addEventListener('click', () => {
@@ -813,6 +855,8 @@
                 document.body.removeChild(textarea);
                 showToast(`✅ 已复制 ${merged.size} 个地址到剪贴板 (to All)`);
             });
+            // 更新 GitHub 文件
+            updateGitHubFile('toAll.json', json);
         });
 
         // ---------- 查看 Watch 列表功能 ----------
