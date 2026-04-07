@@ -179,7 +179,37 @@
                 }
             });
 
+            // Store globally
+            window.normalUrls = normalUrls;
+
             // 创建普通资源列表
+            const normalSection = document.createElement('div');
+            const normalTitle = document.createElement('h2');
+            normalTitle.textContent = '普通资源';
+            normalTitle.style.color = 'var(--primary-color)';
+            normalTitle.style.fontSize = '1.2rem';
+            normalTitle.style.marginBottom = '1rem';
+            normalSection.appendChild(normalTitle);
+
+            // Add button
+            const openAllButton = document.createElement('button');
+            openAllButton.textContent = '打开所有普通资源';
+            openAllButton.style.marginBottom = '1rem';
+            openAllButton.style.padding = '0.6rem 1.2rem';
+            openAllButton.style.backgroundColor = 'var(--primary-color)';
+            openAllButton.style.color = 'white';
+            openAllButton.style.border = 'none';
+            openAllButton.style.borderRadius = '6px';
+            openAllButton.style.fontWeight = '500';
+            openAllButton.style.cursor = 'pointer';
+            openAllButton.onclick = () => {
+                window.normalUrls.forEach(urlObj => {
+                    const url = typeof urlObj === 'string' ? urlObj : urlObj.url;
+                    window.open(url, '_blank');
+                });
+            };
+            normalSection.appendChild(openAllButton);
+
             const urlList = document.createElement('div');
             urlList.className = 'url-list';
             normalUrls.forEach(urlObj => {
@@ -197,6 +227,7 @@
                 `;
                 urlList.appendChild(card);
             });
+            normalSection.appendChild(urlList);
 
             // 创建tools资源列表（如果有）
             let toolsSection = null;
@@ -232,7 +263,7 @@
 
             // 渲染到页面
             urlContainer.innerHTML = '';
-            urlContainer.appendChild(urlList);
+            urlContainer.appendChild(normalSection);
             if (toolsSection) {
                 urlContainer.appendChild(toolsSection);
             }
