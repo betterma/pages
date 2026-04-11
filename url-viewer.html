@@ -181,6 +181,7 @@
 
             // Store globally
             window.normalUrls = normalUrls;
+            window.allUrls = urls;
 
             // 创建普通资源列表
             const normalSection = document.createElement('div');
@@ -203,9 +204,11 @@
             openAllButton.style.fontWeight = '500';
             openAllButton.style.cursor = 'pointer';
             openAllButton.onclick = () => {
-                window.normalUrls.forEach(urlObj => {
+                window.normalUrls.forEach((urlObj, index) => {
                     const url = typeof urlObj === 'string' ? urlObj : urlObj.url;
-                    window.open(url, '_blank');
+                    setTimeout(() => {
+                        window.open(url, '_blank');
+                    }, index * 200); // 每200ms打开一个窗口，避免弹出窗口阻止器
                 });
             };
             normalSection.appendChild(openAllButton);
