@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>数据工具中心</title>
+    <title>ETH 数据工具中心</title>
     <style>
         :root {
             --primary-color: #4361ee;
@@ -96,7 +96,6 @@
         .iframe-container {
             position: relative;
             width: 100%;
-            /* 修改高度为更适合移动端的视口高度 */
             height: 90vh;
             min-height: 500px;
             border-radius: 6px;
@@ -111,27 +110,6 @@
             width: 100%;
             height: 100%;
             border: none;
-        }
-
-        .bottom-links {
-            margin-top: 2rem;
-            padding: 1rem 0 2rem;
-            text-align: center;
-        }
-
-        .bottom-links a {
-            display: inline-block;
-            padding: 0.75rem 1.4rem;
-            background: var(--primary-color);
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: 600;
-            transition: background-color 0.2s ease;
-        }
-
-        .bottom-links a:hover {
-            background: var(--hover-color);
         }
         
         @keyframes fadeIn {
@@ -152,7 +130,6 @@
             }
             
             .iframe-container {
-                /* 移动端也用更高的视口高度 */
                 height: 90vh;
                 min-height: 350px;
             }
@@ -161,55 +138,28 @@
 </head>
 <body>
     <div class="container">
-        <div style="text-align:center; margin-bottom: 1.5rem;">
-            <a href="./eth-index.html" style="display:inline-block; padding:0.75rem 1.4rem; background:var(--primary-color); color:white; text-decoration:none; border-radius:6px; font-weight:600;">ETH 独立入口</a>
-        </div>
-
         <div class="tabs">
             <button class="tab-button active" data-tab="url-viewer">资源中心</button>
             <button class="tab-button" data-tab="data-comparison-2">数据对比</button>
             <button class="tab-button" data-tab="get-coin-info">获取详情</button>
-            <!-- <button class="tab-button" data-tab="json-merger">JSON合并</button> -->
-            <!-- <button class="tab-button" data-tab="99-85">99-85</button> -->
-            <!-- <button class="tab-button" data-tab="afterwork">后续跟进</button> -->
         </div>
         
         <div class="tab-content active" id="url-viewer">
             <div class="iframe-container">
-                <iframe src="./url-viewer.html" title="资源链接中心"></iframe>
+                <iframe src="./eth/url-viewer.html" title="资源链接中心"></iframe>
             </div>
         </div>
         
         <div class="tab-content" id="data-comparison-2">
             <div class="iframe-container">
-                <iframe src="./findNew.html/new.html" title="数据对比工具2"></iframe>
+                <iframe src="./eth/findNew.html/new.html" title="数据对比工具2"></iframe>
             </div>
         </div>
 
-            <div class="tab-content" id="get-coin-info">
-                <div class="iframe-container">
-                    <iframe src="./getcoininfo.html" title="获取详情工具"></iframe>
-                </div>
-            </div>
-        
-        <div class="tab-content" id="json-merger">
+        <div class="tab-content" id="get-coin-info">
             <div class="iframe-container">
-                <iframe src="./mergeNew.html/index.html" title="JSON合并工具"></iframe>
+                <iframe src="./eth/getcoininfo.html" title="获取详情工具"></iframe>
             </div>
-        </div>
-        <div class="tab-content" id="99-85">
-            <div class="iframe-container">
-                <iframe src="./mergeNew.html/99-85.html" title="99-85"></iframe>
-            </div>
-        </div>
-         <div class="tab-content" id="afterwork">
-            <div class="iframe-container">
-                <iframe src="./afterwork/afterwork.html" title="后续跟进"></iframe>
-            </div>
-        </div>
-
-        <div class="bottom-links">
-            <a href="./eth-index.html">友情链接：ETH 入口</a>
         </div>
     </div>
 
@@ -220,18 +170,18 @@
             
             tabButtons.forEach(button => {
                 button.addEventListener('click', () => {
-                    // 移除所有active类
                     tabButtons.forEach(btn => btn.classList.remove('active'));
                     tabContents.forEach(content => content.classList.remove('active'));
                     
-                    // 添加active类到当前选项卡
                     button.classList.add('active');
                     const tabId = button.getAttribute('data-tab');
-                    document.getElementById(tabId).classList.add('active');
+                    const targetContent = document.getElementById(tabId);
+                    if (targetContent) {
+                        targetContent.classList.add('active');
+                    }
                 });
             });
             
-            // 初始化第一个选项卡
             tabButtons[0].click();
         });
     </script>

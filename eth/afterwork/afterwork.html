@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JSON 数据处理工具</title>
+    <style>
+        .container { padding: 20px; max-width: 800px; margin: auto; }
+        .section { border: 1px solid #ccc; padding: 20px; margin-bottom: 20px; }
+        textarea { width: 100%; height: 200px; margin-top: 10px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 上半部分 -->
+        <div class="section">
+            <h3>数据解析部分</h3>
+            <input type="radio" name="type" value="99" checked> 99
+            <input type="radio" name="type" value="85"> 85
+            <button onclick="parseJson()">解析数据</button>
+            <textarea id="output"></textarea>
+        </div>
+
+        <!-- 下半部分 -->
+        <div class="section">
+            <h3>数据比较下载</h3>
+            <input type="file" id="upload" accept=".json">
+            <button id="compareBtn">对比数据</button>
+            <button id="downloadBtn" class="hidden" onclick="download()">下载结果</button>
+            <div id="compareResult" style="margin-top:10px;white-space:pre-wrap;"></div>
+        </div>
+    </div>
+
+    <script>
+        let originalData = [];
+        let uploadedData = [];
+        let compareResultData = [];
+        let currentType = '99';
+
+        // 解析JSON数据
+        async function parseJson() {
+            const type = document.querySelector('input[name="type"]:checked').value;
+            currentType = type;
+            const path = `../${type}.json`;
+            try {
+                const response = await fetch(path);
+                const data = await response.json();
+                originalData = data.data;
+                // 提取所有键并显示
+                const keys = [];
+                data.data.forEach(item => {
+                    Object.keys(item).forEach(key => {
+                        if(key !== '_source') keys.push(key)
+                    })
+                });
+                document.getElementById('output').value = keys.join('\n');
+            } catch (error) {
+                alert('解析失败，请检查文件路径和格式');
+            }
+        }
+
+        // 文件上传处理
+        document.getElementById('upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    uploadedData = JSON.parse(e.target.result);
+                    document.getElementById('compareResult').textContent = '文件上传成功，请点击“对比数据”按钮进行对比。';
+                    document.getElementById('downloadBtn').classList.add('hidden');
+                } catch {
+                    alert('文件解析失败，请检查格式');
+                }
+            }
+            reader.readAsText(file);
+        });
+
+        // 对比按钮事件
+        document.getElementById('compareBtn').addEventListener('click', function() {
+            if (!uploadedData || !uploadedData.data || uploadedData.data.length === 0) {
+                alert('请先上传文件');
+                return;
+            }
+            compareData();
+        });
+
+        // 对比逻辑
+        function compareData() {
+            let resultArr = [];
+            let tip = '';
+            // 构建原始数据的主键到值的映射
+            const originalMap = {};
+            originalData.forEach(item => {
+                const key = Object.keys(item)[0];
+                originalMap[key] = item[key];
+            });
+
+            // 用上传数据的 data 字段
+            const uploadArr = uploadedData.data;
+
+            if (currentType === '85') {
+                // 只要新旧数据有相同主键，并且新数据的值里有99
+                uploadArr.forEach(item => {
+                    const key = Object.keys(item)[0];
+                    const valuesNew = item[key];
+                    if (
+                        originalMap.hasOwnProperty(key) &&
+                        Array.isArray(valuesNew) && valuesNew.includes(99)
+                    ) {
+                        resultArr.push(item);
+                    }
+                });
+                tip = '新旧数据中主键相同且新数据包含99的项数量：' + resultArr.length;
+            } else {
+                // 只要新旧数据有相同主键，并且新数据的值里没有99
+                uploadArr.forEach(item => {
+                    const key = Object.keys(item)[0];
+                    const valuesNew = item[key];
+                    if (
+                        originalMap.hasOwnProperty(key) &&
+                        Array.isArray(valuesNew) && !valuesNew.includes(99)
+                    ) {
+                        resultArr.push(item);
+                    }
+                });
+                tip = '新旧数据中主键相同且新数据不包含99的项数量：' + resultArr.length;
+            }
+            compareResultData = resultArr; // 存储结果数组
+            document.getElementById('compareResult').textContent = tip;
+            if (resultArr.length > 0) {
+                document.getElementById('downloadBtn').classList.remove('hidden');
+            } else {
+                document.getElementById('downloadBtn').classList.add('hidden');
+            }
+        }
+
+        // 下载功能
+        function download() {
+            if (!compareResultData || compareResultData.length === 0) return;
+            const exportData = { data: compareResultData };
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([JSON.stringify(exportData, null, 2)], {type: 'application/json'}));
+            a.download = `${currentType}_filtered_${new Date().toISOString()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    </script>
+</body>
+</html>

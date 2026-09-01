@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON合并工具（标识增强版）</title>
+    <style>
+        :root {
+            --primary: #4361ee;
+            --primary-dark: #3a56d4;
+            --secondary: #4cc9f0;
+            --success: #4ade80;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --light: #f8f9fa;
+            --dark: #2b2d42;
+            --gray: #6b7280;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--light);
+            color: var(--dark);
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        h1 {
+            color: var(--primary);
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .status {
+            padding: 1rem;
+            border-radius: 6px;
+            margin: 1rem 0;
+            font-weight: 500;
+        }
+        
+        .status.loading {
+            background-color: #dbeafe;
+            color: var(--primary);
+        }
+        
+        .status.success {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+        
+        .status.warning {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status.error {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+            margin-right: 1rem;
+        }
+        
+        button:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+        
+        button:disabled {
+            background-color: var(--gray);
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        #jsonViewer {
+            font-family: Consolas, Monaco, 'Andale Mono', monospace;
+            background-color: #f5f5f5;
+            padding: 1.5rem;
+            border-radius: 6px;
+            max-height: 500px;
+            overflow: auto;
+        }
+        
+        .json-item {
+            margin: 0.5rem 0;
+        }
+        
+        .original-item {
+            border-left: 3px solid var(--success);
+            padding-left: 1rem;
+        }
+        
+        .new-item {
+            border-left: 3px solid var(--secondary);
+            padding-left: 1rem;
+            background-color: #f0fdf4;
+        }
+        
+        .json-key {
+            color: #7e22ce;
+            font-weight: bold;
+        }
+        
+        .json-value {
+            color: #065f46;
+        }
+
+        .json-value-99 {
+            background: #065f46;
+            color: white;
+        }
+        
+        .json-comment {
+            color: var(--gray);
+            font-style: italic;
+        }
+        
+        .stats {
+            display: flex;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .stat-box {
+            flex: 1;
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            color: var(--gray);
+        }
+    </style>
+</head>
+<body>
+    <h1>JSON合并工具</h1>
+    
+    <div class="card">
+        <h2>基础数据状态</h2>
+        <label for="baseFileSelect">选择基础数据文件：</label>
+        <select id="baseFileSelect" style="margin-bottom: 1rem;">
+            <option value="contract.json">contract.json</option>
+            <option value="99.json">99.json</option>
+            <option value="85.json">85.json</option>
+        </select>
+        <button onclick="window.location.href='../filterAndWatch/index.html'" style="margin-left: 1rem;">跳转到查看工具</button>
+        <div id="jsonStatus" class="status loading" style="display: none;">
+            ⏳ 正在加载基础数据...
+        </div>
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value" id="originalCount">0</div>
+                <div class="stat-label">原始数据</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="additionCount">0</div>
+                <div class="stat-label">新增数据</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="totalCount">0</div>
+                <div class="stat-label">总数据量</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h2>上传新文件</h2>
+        <input type="file" id="fileUpload" multiple accept=".json" style="margin-bottom: 1rem;">
+        <button id="processBtn" onclick="processFiles()">处理并合并文件</button>
+        <button id="downloadBtn" onclick="downloadMerged()" disabled>下载合并结果</button>
+        <div id="processStatus" class="status"></div>
+    </div>
+    
+    <div class="card">
+        <h2>合并结果预览</h2>
+        <div id="jsonViewer">
+            [等待数据加载...]
+        </div>
+    </div>
+
+    <script>
+        // 数据存储架构
+        const dataStore = {
+            original: [],      // 初始数据（不带标识）
+            additions: [],     // 新增数据（带_source标识）
+            allKeys: new Set(), // 全局键值索引
+            meta: {
+                version: "2.0",
+                createdAt: new Date().toISOString()
+            }
+        };
+
+        // 初始化加载基础数据（改为选择加载）
+        window.addEventListener('DOMContentLoaded', async () => {
+            const selectEl = document.getElementById('baseFileSelect');
+            selectEl.addEventListener('change', () => {
+                loadBaseData(selectEl.value);
+            });
+            // 默认加载第一个
+            loadBaseData(selectEl.value);
+        });
+
+        async function loadBaseData(filename) {
+            const jsonStatusEl = document.getElementById('jsonStatus');
+            try {
+                jsonStatusEl.style.display = 'block';
+                setStatus('', '');
+                // 清空数据
+                dataStore.original = [];
+                dataStore.additions = [];
+                dataStore.allKeys = new Set();
+
+                const response = await fetch(`../${filename}?time=` + new Date());
+                if (!response.ok) {
+                    throw new Error(`HTTP错误 ${response.status}`);
+                }
+                const rawData = await response.json();
+                let arr;
+                if (Array.isArray(rawData)) {
+                    arr = rawData;
+                } else if (Array.isArray(rawData.data)) {
+                    arr = rawData.data;
+                } else {
+                    throw new Error("JSON数据必须是数组或包含data数组属性");
+                }
+                processInitialData(arr);
+                updateUI();
+                setStatus('✅ 基础数据加载完成', 'success');
+            } catch (error) {
+                console.error("初始化失败:", error);
+                setStatus(`❌ 加载失败: ${error.message}`, 'error');
+            } finally {
+                if (jsonStatusEl) {
+                    jsonStatusEl.style.display = 'none';
+                }
+            }
+        }
+
+        // 处理初始数据（核心清洗逻辑）
+        function processInitialData(rawData) {
+            let filteredCount = 0;
+            
+            dataStore.original = rawData.map(item => {
+                // 提取有效键值对（过滤_source等元字段）
+                const [key, value] = Object.entries(item)
+                    .find(([k]) => !k.startsWith('_')) || [];
+                
+                if (!key) return null;
+                
+                // 全局去重检查
+                if (dataStore.allKeys.has(key)) {
+                    filteredCount++;
+                    return null;
+                }
+                
+                dataStore.allKeys.add(key);
+                return { [key]: value };
+            }).filter(Boolean);
+            
+            if (filteredCount > 0) {
+                console.warn(`过滤了 ${filteredCount} 条重复数据`);
+            }
+        }
+
+        // 处理上传的文件
+        async function processFiles() {
+            const files = document.getElementById('fileUpload').files;
+            if (files.length === 0) {
+                setStatus('⚠️ 请先选择要上传的文件', 'warning');
+                return;
+            }
+            
+            const processBtn = document.getElementById('processBtn');
+            processBtn.disabled = true;
+            processBtn.textContent = "处理中...";
+            
+            try {
+                setStatus(`⏳ 正在处理 ${files.length} 个文件...`, 'loading');
+                
+                // 1. 解析所有文件
+                const fileResults = await Promise.all(
+                    Array.from(files).map(file => parseFile(file))
+                );
+                
+                // 2. 合并并去重
+                const { added, duplicates } = processNewData(fileResults.flat());
+                
+                // 3. 排序新增数据
+                dataStore.additions.sort(compareItems);
+                
+                // 更新状态
+                setStatus(
+                    `✅ 处理完成: 新增 ${added} 条数据 | 过滤 ${duplicates} 条重复数据`,
+                    'success'
+                );
+                
+                updateUI();
+            } catch (error) {
+                console.error("文件处理失败:", error);
+                setStatus(`❌ 处理失败: ${error.message}`, 'error');
+            } finally {
+                processBtn.disabled = false;
+                processBtn.textContent = "处理并合并文件";
+                document.getElementById('downloadBtn').disabled = false;
+            }
+        }
+
+        // 解析单个文件
+        async function parseFile(file) {
+            try {
+                const text = await readFileAsText(file);
+                const jsonData = JSON.parse(text);
+
+                // 如果不是数组，尝试取 data 属性
+                let arr = [];
+                if (Array.isArray(jsonData)) {
+                    arr = jsonData;
+                } else if (Array.isArray(jsonData.data)) {
+                    arr = jsonData.data;
+                } else {
+                    throw new Error("文件内容必须是JSON数组或包含data数组属性");
+                }
+
+                // 文件内去重（保留最后出现的值）
+                const fileMap = new Map();
+                arr.forEach(item => {
+                    const [key, value] = extractKeyValue(item);
+                    if (key) fileMap.set(key, value);
+                });
+
+                return Array.from(fileMap.entries());
+            } catch (error) {
+                console.error(`文件 ${file.name} 解析失败:`, error);
+                throw new Error(`${file.name}: ${error.message}`);
+            }
+        }
+
+        // 处理新数据并去重
+        function processNewData(newEntries) {
+            let added = 0;
+            let duplicates = 0;
+
+            newEntries.forEach(([key, value]) => {
+                if (!dataStore.allKeys.has(key)) {
+                    dataStore.allKeys.add(key);
+                    dataStore.additions.push({ [key]: value });
+                    added++;
+                } else {
+                    duplicates++;
+                }
+            });
+
+            return { added, duplicates };
+        }
+
+        // 比较函数用于排序
+        function compareItems(a, b) {
+            const aVal = Object.values(a)[0];
+            const bVal = Object.values(b)[0];
+            
+            for (let i = 0; i < aVal.length; i++) {
+                if (aVal[i] !== bVal[i]) {
+                    return bVal[i] - aVal[i]; // 降序排序
+                }
+            }
+            return 0;
+        }
+
+        // 从对象中提取键值对（过滤元数据）
+        function extractKeyValue(item) {
+            if (!item || typeof item !== 'object') {
+                return [null, null];
+            }
+            
+            const entry = Object.entries(item)
+                .find(([k]) => !k.startsWith('_'));
+            
+            return entry || [null, null];
+        }
+
+        // 更新UI显示
+        function updateUI() {
+            // 更新统计信息
+            document.getElementById('originalCount').textContent = dataStore.original.length;
+            document.getElementById('additionCount').textContent = dataStore.additions.length;
+            document.getElementById('totalCount').textContent = dataStore.allKeys.size;
+            
+            // 更新JSON预览
+            document.getElementById('jsonViewer').innerHTML = generatePreview();
+        }
+
+        // 生成预览HTML
+        function generatePreview() {
+            const combinedData = [
+                ...dataStore.original.map(item => ({ 
+                    ...item,
+                    _source: undefined // 确保不显示
+                })),
+                ...dataStore.additions.map(item => ({
+                    ...item,
+                    _source: "new" // 强制标记新增
+                }))
+            ];
+            
+            if (combinedData.length === 0) {
+                return '<div class="json-item">[空数据]</div>';
+            }
+            
+            return [
+                '<div class="json-item">[</div>',
+                ...combinedData.map(item => {
+                    const key = Object.keys(item).find(k => !k.startsWith('_'));
+                    const values = item[key];
+                    const isNew = item._source === 'new';
+                    
+                    return `
+                        <div class="json-item ${isNew ? 'new-item' : 'original-item'}">
+                            <span class="json-key">"${key}"</span>: [
+                            ${values.map(v => `<span class="json-value json-value-${v}">${v}</span>`).join(', ')}
+                            ]${isNew ? ' <span class="json-comment">// new</span>' : ''}
+                        </div>
+                    `;
+                }),
+                '<div class="json-item">]</div>'
+            ].join('\n');
+        }
+
+        // 设置状态显示
+        function setStatus(message, type = '') {
+            const statusEl = document.getElementById('processStatus');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+
+        // 下载合并后的文件
+        function downloadMerged() {
+            const mergedData = {
+                _meta: {
+                    version: dataStore.meta.version,
+                    generatedAt: new Date().toISOString(),
+                    originalCount: dataStore.original.length,
+                    additionCount: dataStore.additions.length
+                },
+                data: [
+                    ...dataStore.original,
+                    ...dataStore.additions.map(item => ({
+                        ...item,
+                        _source: "new" // 确保新增标识
+                    }))
+                ]
+            };
+            
+            const jsonStr = JSON.stringify(mergedData, null, 2);
+            // 获取基础数据文件名
+            const baseFile = document.getElementById('baseFileSelect').value || 'merged';
+            downloadFile(
+                jsonStr,
+                baseFile,
+                'application/json'
+            );
+        }
+
+        /************** 工具函数 **************/
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error("文件读取失败"));
+                reader.readAsText(file);
+            });
+        }
+        
+        function downloadFile(content, filename, type) {
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
