@@ -111,6 +111,7 @@
 
     <script>
         let jsonKeys = new Set();
+        let jsonLoaded = false;
 
         // 加载JSON
         window.addEventListener('DOMContentLoaded', async () => {
@@ -131,9 +132,12 @@
                         jsonKeys.add(addr.trim());
                     }
                 });
+                jsonLoaded = true;
 
                 document.getElementById('jsonStatus').className = 'status';
                 document.getElementById('jsonStatus').innerHTML =
+                    jsonKeys.size === 0 ?
+                    '✅ toAll.json 加载成功，当前没有记录（空数组）' :
                     `✅ toAll.json 加载成功，共发现 ${jsonKeys.size} 条地址`;
 
             } catch (error) {
@@ -146,7 +150,7 @@
 
         // 对比分析
         function compareData() {
-            if (jsonKeys.size === 0) {
+            if (!jsonLoaded) {
                 alert("JSON数据尚未加载完成，请稍后重试");
                 return;
             }
