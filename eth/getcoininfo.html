@@ -392,7 +392,7 @@
     <textarea id="addresses" placeholder="例如：&#10;So11111111111111111111111111111111111111112&#10;EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&#10;# 支持注释行（以#开头会被忽略）"></textarea>
 
     <div class="actions">
-        <button class="btn" id="queryBtn">开始查询</button>
+        <button class="btn" id="queryBtn">整理地址</button>
         <button class="btn" id="clearBtn" style="background: #e2e8f0; color: #1e293b; box-shadow: none;">清空</button>
     </div>
 
@@ -403,13 +403,7 @@
             <thead>
                 <tr>
                     <th>合约地址 (点击复制)</th>
-                    <th>符号</th>
-                    <th class="numeric">市值 (USD)</th>
-                    <th class="numeric">价格 (USD)</th>
-                    <th class="numeric">FDV</th>
-                    <th class="numeric">流动性</th>
-                    <th class="numeric">24h 交易量</th>
-                    <th class="numeric">持有者数</th>
+                    <th colspan="7">说明</th>
                 </tr>
             </thead>
             <tbody id="resultsBody">
@@ -419,8 +413,8 @@
     </div>
 
     <div class="export-area" id="exportArea" style="display: none;">
-        <button class="export-btn" id="toWatchBtn">📋 To Watch (复制)</button>
-        <button class="export-btn" id="toAllBtn">📋 To All (复制)</button>
+        <button class="export-btn" id="toWatchBtn">📋 To Watch (保存本次全部)</button>
+        <button class="export-btn" id="toAllBtn">📋 To All (保存合并结果)</button>
         <button class="export-btn" id="clearWatchBtn" style="background: #dc2626;">🗑️ 清除 Watch 数据</button>
         <button class="view-watch-btn" id="viewWatchBtn">👁️ 查看 Watch 列表</button>
     </div>
@@ -437,31 +431,20 @@
 
     <div class="explain">
         📘 字段说明：<br>
-        - <strong>市值</strong>：当前流通市值（marketCap）。<br>
-        - <strong>FDV</strong>：完全稀释估值（基于总供应量）。<br>
-        - <strong>流动性</strong>：DEX中代币的可交易资金池总额，流动性越高交易滑点越低。<br>
-        - <strong>24h交易量</strong>：过去24小时美元交易额（v24hUSD）。<br>
-        - <strong>排序规则</strong>：市值≥1000万且<1亿直接显示；500万≤市值<1000万折叠；<500万不显示；失败项始终显示。<br>
+        - <strong>整理地址</strong>：仅清理空行、注释行和重复地址，不请求第三方接口。<br>
         - <strong>复制地址</strong>：点击合约地址单元格即可复制完整地址。<br>
-        - <strong>导出功能</strong>：查询完成后可使用 To Watch (市值≥500万) 和 To All (此次+历史) 按钮导出数据。
+        - <strong>To Watch</strong>：保存本次输入的全部地址，会覆盖 eth/toWatch.json。<br>
+        - <strong>To All</strong>：将本次地址与历史 eth/toAll.json 合并去重后保存。
     </div>
 
     <div class="footer-note">
-        ⚡ 数据来源：Birdeye API | 60 rpm → 1秒间隔 | 地址可点击复制
+        ⚡ 纯地址保存模式 | 不请求代币行情接口 | 地址可点击复制
     </div>
 </div>
 
 <script>
     (function() {
         // ---------- 配置 ----------
-       
-        // const API_KEY = '061c2cfb54924a939baa6bff4aa15300';
-        // const API_KEY = '114f9079ceb54b0a9bd1d062ab8397b7';
-        const API_KEY = '8b7c91ac2f48440ba74fe17639304eaf';
-        const BASE_URL = 'https://public-api.birdeye.so';
-        const PLATFORM = 'solana';
-        const REQUEST_DELAY = 1000; // 60 rpm → 1秒
-
         // GitHub 配置（请替换为您的 Personal Access Token）
         const aaa1 = "gh"
         const aaa2 = "p_Xrmz1DjzLfbjyiXZqFyJGd9O8aWFIq4D9758"
@@ -471,7 +454,7 @@
         // ---------- 全局数据集合 ----------
         let L0 = [];  // toAll.json 中的数据
         let L1 = [];  // 此次处理的所有合约集合
-        let L2 = [];  // 市值 > 500万 的集合
+        let L2 = [];  // 兼容旧逻辑：现在等于本次全部地址
 
         // ---------- DOM 元素 ----------
         const fileInput = document.getElementById('fileInput');
@@ -602,81 +585,6 @@
             clearResults();
             hideStatus();
         });
-
-        // ---------- Birdeye API 调用 (单个地址，带重试) ----------
-        async function queryTokenWithRetry(address, retries = 3) {
-            const url = `${BASE_URL}/defi/token_overview?address=${encodeURIComponent(address)}`;
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const response = await fetch(url, {
-                        headers: { 'X-API-KEY': API_KEY }
-                    });
-                    
-                    if (response.status === 429) {
-                        const waitTime = Math.pow(2, i) * 2000; // 2s, 4s, 8s
-                        console.log(`⏳ 429 限流，等待 ${waitTime}ms 后重试 (${i+1}/${retries})`);
-                        await new Promise(resolve => setTimeout(resolve, waitTime));
-                        continue;
-                    }
-                    
-                    if (!response.ok) {
-                        if (response.status === 404) {
-                            throw new Error('未收录');
-                        } else {
-                            const errText = await response.text();
-                            throw new Error(`HTTP ${response.status}: ${errText.slice(0, 100)}`);
-                        }
-                    }
-
-                    const json = await response.json();
-                    const data = json.data || {};
-                    
-                    // 提取所需字段
-                    return {
-                        address,
-                        success: true,
-                        symbol: data.symbol || '-',
-                        market_cap: data.marketCap,          // 注意大小写
-                        price: data.price,
-                        fdv: data.fdv,
-                        liquidity: data.liquidity,
-                        volume_24h: data.v24hUSD,
-                        holders: data.holder,
-                    };
-                } catch (err) {
-                    if (i === retries - 1) throw err;
-                    await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
-                }
-            }
-        }
-
-        // ---------- 批量查询（串行，固定延迟 + 重试）----------
-        async function batchQuery(addresses) {
-            const results = [];
-            let successCount = 0;
-            
-            for (let i = 0; i < addresses.length; i++) {
-                const addr = addresses[i];
-                showStatus(`正在查询 (${i+1}/${addresses.length}): ${addr.slice(0,8)}...`);
-
-                try {
-                    const result = await queryTokenWithRetry(addr);
-                    results.push(result);
-                    successCount++;
-                } catch (err) {
-                    results.push({
-                        address: addr,
-                        success: false,
-                        error: err.message
-                    });
-                }
-
-                if (i < addresses.length - 1) {
-                    await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY));
-                }
-            }
-            return { results, successCount };
-        }
 
         // ---------- 渲染表格（排序+折叠）----------
         function renderResults(results) {
@@ -823,15 +731,44 @@
             showStatus(`查询完成：成功 ${successWithCap.length} 个（显示 ${filtered.length} 个，过滤 ${hiddenCount} 个），失败 ${failed.length} 个。可进行导出操作。`, 'info');
         }
 
-        // ---------- 导出功能 ----------
+        function getInputAddresses() {
+            return [...new Set(addressesTextarea.value
+                .split(/\r?\n/)
+                .map(line => line.trim())
+                .filter(line => line && !line.startsWith('#'))
+                .map(line => line.replace(/\.$/, ''))
+                .filter(Boolean))];
+        }
+
+        function renderAddressList(addresses) {
+            resultsBody.innerHTML = addresses.length
+                ? addresses.map(address => `<tr class="success-row">
+                    <td class="address-cell" data-address="${address}" title="点击复制地址"><span>${address}</span></td>
+                    <td colspan="7">待保存地址</td>
+                </tr>`).join('')
+                : '<tr><td colspan="8" style="text-align: center; padding: 40px;">请输入地址</td></tr>';
+            exportArea.style.display = addresses.length ? 'flex' : 'none';
+            L1 = addresses;
+            L2 = addresses;
+
+            resultsBody.querySelectorAll('.address-cell').forEach(cell => {
+                cell.addEventListener('click', () => {
+                    const address = cell.getAttribute('data-address');
+                    navigator.clipboard.writeText(address).then(() => showToast('✅ 地址已复制'));
+                });
+            });
+        }
+
+        // ---------- 保存功能 ----------
         toWatchBtn.addEventListener('click', () => {
-            if (L2.length === 0) {
-                showToast('❌ L2 数据为空');
+            const addresses = getInputAddresses();
+            if (addresses.length === 0) {
+                showToast('❌ 没有可保存的地址');
                 return;
             }
-            const json = JSON.stringify(L2, null, 4);
+            const json = JSON.stringify(addresses, null, 4);
             navigator.clipboard.writeText(json).then(() => {
-                showToast(`✅ 已复制 ${L2.length} 个地址到剪贴板 (to Watch)`);
+                showToast(`✅ 已复制并保存 ${addresses.length} 个地址 (to Watch)`);
             }).catch(() => {
                 const textarea = document.createElement('textarea');
                 textarea.value = json;
@@ -839,18 +776,22 @@
                 textarea.select();
                 document.execCommand('copy');
                 document.body.removeChild(textarea);
-                showToast(`✅ 已复制 ${L2.length} 个地址到剪贴板 (to Watch)`);
+                showToast(`✅ 已复制并保存 ${addresses.length} 个地址 (to Watch)`);
             });
             // 更新 GitHub 文件
-            updateGitHubFile('toWatch.json', json);
+            updateGitHubFile('eth/toWatch.json', json);
         });
 
         toAllBtn.addEventListener('click', () => {
-            // L1 + L0 的合并（去重）
-            const merged = new Set([...L1, ...L0]);
+            const addresses = getInputAddresses();
+            if (addresses.length === 0) {
+                showToast('❌ 没有可保存的地址');
+                return;
+            }
+            const merged = new Set([...addresses, ...L0]);
             const json = JSON.stringify(Array.from(merged), null, 4);
             navigator.clipboard.writeText(json).then(() => {
-                showToast(`✅ 已复制 ${merged.size} 个地址到剪贴板 (to All)`);
+                showToast(`✅ 已复制并保存 ${merged.size} 个地址 (to All)`);
             }).catch(() => {
                 const textarea = document.createElement('textarea');
                 textarea.value = json;
@@ -858,10 +799,10 @@
                 textarea.select();
                 document.execCommand('copy');
                 document.body.removeChild(textarea);
-                showToast(`✅ 已复制 ${merged.size} 个地址到剪贴板 (to All)`);
+                showToast(`✅ 已复制并保存 ${merged.size} 个地址 (to All)`);
             });
             // 更新 GitHub 文件
-            updateGitHubFile('toAll.json', json);
+            updateGitHubFile('eth/toAll.json', json);
         });
 
         // 清除 Watch 数据按钮
@@ -870,7 +811,7 @@
             if (!confirmClear) return;
             const emptyJson = '[]';
             // 更新 GitHub 文件
-            updateGitHubFile('toWatch.json', emptyJson);
+            updateGitHubFile('eth/toWatch.json', emptyJson);
             // 同时更新本地显示
             L2 = [];
             watchItems.innerHTML = '<div class="watch-empty">Watch 列表为空</div>';
@@ -955,40 +896,17 @@
             loadAndDisplayWatch();
         });
 
-        // ---------- 查询按钮点击 ----------
-        queryBtn.addEventListener('click', async () => {
-            const rawText = addressesTextarea.value.trim();
-            if (!rawText) {
-                showStatus('请输入或上传合约地址', 'warning');
-                return;
-            }
-
-            const addresses = rawText.split('\n')
-                .map(line => line.trim())
-                .filter(line => line && !line.startsWith('#'));
-
+        // ---------- 地址整理 ----------
+        queryBtn.addEventListener('click', () => {
+            const addresses = getInputAddresses();
             if (addresses.length === 0) {
-                showStatus('没有有效的合约地址', 'warning');
+                showStatus('请输入至少一个有效地址', 'warning');
+                renderAddressList([]);
                 return;
             }
 
-            if (addresses.length > 100) {
-                showStatus(`⚠️ 一次性查询 ${addresses.length} 个代币可能需要很长时间，建议分批进行。`, 'warning');
-            }
-
-            queryBtn.disabled = true;
-            clearResults();
-            showStatus(`准备查询 ${addresses.length} 个代币，每个间隔 1 秒，预计耗时 ${addresses.length} 秒，请耐心等待...`);
-
-            try {
-                const { results, successCount } = await batchQuery(addresses);
-                renderResults(results);
-            } catch (err) {
-                showStatus(`❌ 发生错误: ${err.message}`, 'error');
-                console.error(err);
-            } finally {
-                queryBtn.disabled = false;
-            }
+            renderAddressList(addresses);
+            showStatus(`地址整理完成：本次共 ${addresses.length} 个地址，可直接保存。`);
         });
     })();
 </script>
