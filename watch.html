@@ -709,6 +709,8 @@ let reconnectTimer = null;
 
 let wsConnected = false;
 
+let messageCount = 0;
+
 
 /* =========================================================
    其他
@@ -868,16 +870,30 @@ function connectWebSocket() {
                 "WebSocket 已连接"
             );
 
+            setTimeout(
+                () => {
+                    if (!Object.keys(marketMap).length) {
+                        loadRestMarketData();
+                    }
+                },
+                5000
+            );
+
         };
 
 
-        ws.onmessage = event => {
+        ws.onmessage = async event => {
 
             try {
 
+                const rawData =
+                    event.data instanceof Blob
+                        ? await event.data.text()
+                        : event.data;
+
                 const data =
                     JSON.parse(
-                        event.data
+                        rawData
                     );
 
                 // Binance 原始流返回数组，组合流会把数组放在 data 中。
@@ -896,6 +912,13 @@ function connectWebSocket() {
                     );
                     return;
                 }
+
+                messageCount++;
+
+                updateWsStatus(
+                    true,
+                    `WebSocket 已连接 · 已收到 ${messageCount} 条行情`
+                );
 
                 processTickerData(tickers);
 
@@ -999,6 +1022,57 @@ function processTickerData(data) {
     }
 
     render();
+}
+
+
+function loadRestMarketData() {
+
+    updateWsStatus(
+        wsConnected,
+        "WebSocket 暂无行情，正在使用 REST 数据"
+    );
+
+    fetch(
+        "https://api.binance.com/api/v3/ticker/24hr"
+    )
+    .then(
+        response => {
+            if (!response.ok) {
+                throw new Error(
+                    `REST 请求失败: ${response.status}`
+                );
+            }
+
+            return response.json();
+        }
+    )
+    .then(
+        data => {
+            processTickerData(
+                data.map(
+                    ticker => ({
+                        s: ticker.symbol,
+                        c: ticker.lastPrice,
+                        P: ticker.priceChangePercent,
+                        q: ticker.quoteVolume
+                    })
+                )
+            );
+        }
+    )
+    .catch(
+        error => {
+            console.error(
+                "REST 行情获取失败:",
+                error
+            );
+
+            updateWsStatus(
+                wsConnected,
+                "WebSocket 已连接，但暂未收到行情"
+            );
+        }
+    );
 }
 
 
