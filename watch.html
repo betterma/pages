@@ -1,0 +1,3616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Binance 冲榜雷达 V4</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #0b0f14;
+    color: #e8edf3;
+    font-family: Arial, "Microsoft YaHei", sans-serif;
+}
+
+.container {
+    width: 97%;
+    max-width: 1800px;
+    margin: 20px auto;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+h1 {
+    margin: 0;
+    font-size: 26px;
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #666;
+}
+
+.dot.online {
+    background: #00d084;
+    box-shadow: 0 0 10px #00d084;
+}
+
+.dot.offline {
+    background: #ff4757;
+}
+
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+button {
+    border: 1px solid #303944;
+    background: #151b23;
+    color: #dfe6ee;
+    padding: 8px 13px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #202833;
+}
+
+button.danger {
+    border-color: #7a2831;
+    color: #ff7d88;
+}
+
+.info {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.card {
+    background: #111720;
+    border: 1px solid #252d37;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.card-title {
+    color: #8995a4;
+    font-size: 12px;
+    margin-bottom: 5px;
+}
+
+.card-value {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.section {
+    background: #111720;
+    border: 1px solid #252d37;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    overflow: hidden;
+}
+
+.section-header {
+    padding: 12px 15px;
+    border-bottom: 1px solid #252d37;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.section-header h2 {
+    margin: 0;
+    font-size: 17px;
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 1350px;
+}
+
+th {
+    background: #171e28;
+    color: #8f9baa;
+    font-size: 12px;
+    font-weight: normal;
+    padding: 9px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+th:first-child,
+th:nth-child(2),
+td:first-child,
+td:nth-child(2) {
+    text-align: left;
+}
+
+td {
+    padding: 9px;
+    border-top: 1px solid #202731;
+    text-align: right;
+    font-size: 13px;
+}
+
+tr:hover td {
+    background: #151c25;
+}
+
+.symbol {
+    font-weight: bold;
+    color: #f2f5f8;
+}
+
+.rank {
+    color: #8995a4;
+}
+
+.up {
+    color: #00d084;
+}
+
+.down {
+    color: #ff5263;
+}
+
+.neutral {
+    color: #929eab;
+}
+
+.rank-up {
+    color: #00d084;
+    font-weight: bold;
+}
+
+.rank-down {
+    color: #ff5263;
+}
+
+.price-up {
+    color: #00d084;
+}
+
+.price-down {
+    color: #ff5263;
+}
+
+/* =========================
+   Score
+========================= */
+
+.score {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.score-high {
+    color: #ffb300;
+}
+
+.score-medium {
+    color: #55aaff;
+}
+
+.score-low {
+    color: #7f8b98;
+}
+
+.score-zero {
+    color: #59636f;
+}
+
+/* =========================
+   Signal
+========================= */
+
+.signal {
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.signal-strong {
+    color: #ffb300;
+}
+
+.signal-price {
+    color: #00d084;
+}
+
+.signal-rank {
+    color: #55aaff;
+}
+
+.signal-passive {
+    color: #7d8792;
+}
+
+.signal-none {
+    color: #65717f;
+}
+
+.signal-danger {
+    color: #ff5263;
+}
+
+.badge {
+    display: inline-block;
+    padding: 3px 7px;
+    border-radius: 4px;
+    background: #202833;
+    font-size: 11px;
+}
+
+.badge.green {
+    color: #00d084;
+}
+
+.badge.orange {
+    color: #ffb300;
+}
+
+.badge.red {
+    color: #ff5263;
+}
+
+.badge.blue {
+    color: #55aaff;
+}
+
+.badge.gray {
+    color: #929eab;
+}
+
+.event-list {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.event {
+    display: grid;
+    grid-template-columns: 90px 100px 130px 1fr;
+    gap: 10px;
+    padding: 10px 15px;
+    border-bottom: 1px solid #202731;
+    font-size: 13px;
+}
+
+.event-time {
+    color: #7f8b98;
+}
+
+.event-symbol {
+    font-weight: bold;
+}
+
+.event-desc {
+    color: #dfe5eb;
+}
+
+.empty {
+    padding: 30px;
+    text-align: center;
+    color: #687482;
+}
+
+.footer {
+    text-align: center;
+    color: #5d6874;
+    font-size: 12px;
+    margin: 20px 0;
+}
+
+@media (max-width: 1100px) {
+    .info {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 700px) {
+    .info {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .event {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1>🚨 Binance 冲榜雷达 V4</h1>
+
+        <div class="status">
+            <span id="statusDot" class="dot"></span>
+            <span id="wsStatus">正在连接...</span>
+        </div>
+    </div>
+
+
+    <div class="controls">
+
+        <button id="soundBtn">
+            🔊 声音：开启
+        </button>
+
+        <button id="testSoundBtn">
+            🔔 测试声音
+        </button>
+
+        <button id="clearBtn" class="danger">
+            🗑 清空历史
+        </button>
+
+    </div>
+
+
+    <div class="info">
+
+        <div class="card">
+            <div class="card-title">
+                监控交易对
+            </div>
+            <div class="card-value" id="symbolCount">
+                0
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                当前 Top20
+            </div>
+            <div class="card-value" id="top20Count">
+                0
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                历史快照
+            </div>
+            <div class="card-value" id="snapshotCount">
+                0
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                重要事件
+            </div>
+            <div class="card-value" id="eventCount">
+                0
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                最后快照
+            </div>
+            <div class="card-value" id="lastSnapshot">
+                --
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">
+                最高冲榜强度
+            </div>
+            <div class="card-value" id="highestScore">
+                --
+            </div>
+        </div>
+
+    </div>
+
+
+    <!-- =========================
+         TOP20
+    ========================== -->
+
+    <div class="section">
+
+        <div class="section-header">
+
+            <h2>
+                🏆 Binance Top20
+            </h2>
+
+            <span class="badge orange">
+                24h涨幅排名
+            </span>
+
+        </div>
+
+
+        <div class="table-wrap">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>排名</th>
+                        <th>币种</th>
+                        <th>24h涨幅</th>
+
+                        <th>冲榜强度</th>
+                        <th>信号</th>
+
+                        <th>10m排名</th>
+                        <th>30m排名</th>
+                        <th>1h排名</th>
+                        <th>4h排名</th>
+
+                        <th>10m价格</th>
+                        <th>30m价格</th>
+                        <th>1h价格</th>
+                        <th>4h价格</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody id="top20Body"></tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================
+         RADAR
+    ========================== -->
+
+    <div class="section">
+
+        <div class="section-header">
+
+            <h2>
+                📡 冲榜雷达
+            </h2>
+
+            <span class="badge blue">
+                Top20之外 · 按冲榜强度排序
+            </span>
+
+        </div>
+
+
+        <div class="table-wrap">
+
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th>排名</th>
+                        <th>币种</th>
+                        <th>24h涨幅</th>
+
+                        <th>冲榜强度</th>
+                        <th>状态</th>
+
+                        <th>10m排名</th>
+                        <th>30m排名</th>
+                        <th>1h排名</th>
+                        <th>4h排名</th>
+
+                        <th>10m价格</th>
+                        <th>30m价格</th>
+                        <th>1h价格</th>
+                        <th>4h价格</th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody id="radarBody"></tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+
+    <!-- =========================
+         EVENTS
+    ========================== -->
+
+    <div class="section">
+
+        <div class="section-header">
+
+            <h2>
+                📋 重要事件
+            </h2>
+
+            <span class="badge">
+                本地保存
+            </span>
+
+        </div>
+
+        <div id="eventList" class="event-list"></div>
+
+    </div>
+
+
+    <div class="footer">
+        Binance 冲榜雷达 V4 · 每10分钟保存一次 · 保存4小时历史
+    </div>
+
+</div>
+
+
+<script>
+
+"use strict";
+
+
+/* =========================================================
+   配置
+========================================================= */
+
+const CONFIG = {
+
+    WS_URL:
+        "wss://stream.binance.com:9443/ws/!ticker@arr",
+
+    SNAPSHOT_INTERVAL:
+        10 * 60 * 1000,
+
+    HISTORY_DURATION:
+        4 * 60 * 60 * 1000,
+
+    TOP20:
+        20,
+
+    RADAR_MAX_RANK:
+        100,
+
+    MAX_EVENTS:
+        300,
+
+    STORAGE_KEY:
+        "binance_radar_v4",
+
+    /*
+       价格阈值
+    */
+
+    PRICE_THRESHOLD: {
+
+        "10m": 0.3,
+
+        "30m": 0.8,
+
+        "1h": 1.5,
+
+        "4h": 3
+    },
+
+    /*
+       排名阈值
+    */
+
+    RANK_THRESHOLD: {
+
+        "10m": 3,
+
+        "30m": 5,
+
+        "1h": 8,
+
+        "4h": 15
+    },
+
+    /*
+       评分权重
+    */
+
+    WINDOW_WEIGHT: {
+
+        "10m": 0.30,
+
+        "30m": 0.30,
+
+        "1h": 0.25,
+
+        "4h": 0.15
+    },
+
+    /*
+       快速上涨提醒冷却
+    */
+
+    RAPID_COOLDOWN:
+        30 * 60 * 1000
+};
+
+
+/* =========================================================
+   实时行情
+========================================================= */
+
+const marketMap = {};
+
+
+/* =========================================================
+   历史
+========================================================= */
+
+let history = [];
+
+
+/* =========================================================
+   报警状态
+========================================================= */
+
+let alertState = {};
+
+
+/* =========================================================
+   事件
+========================================================= */
+
+let events = [];
+
+
+/* =========================================================
+   WebSocket
+========================================================= */
+
+let ws = null;
+
+let reconnectTimer = null;
+
+let wsConnected = false;
+
+
+/* =========================================================
+   其他
+========================================================= */
+
+let soundEnabled = true;
+
+let lastSnapshotTime = 0;
+
+
+/* =========================================================
+   localStorage
+========================================================= */
+
+function saveStorage() {
+
+    try {
+
+        localStorage.setItem(
+
+            CONFIG.STORAGE_KEY,
+
+            JSON.stringify({
+
+                history,
+
+                alertState,
+
+                events,
+
+                savedAt: Date.now()
+
+            })
+
+        );
+
+    } catch (error) {
+
+        console.error(
+            "保存本地数据失败:",
+            error
+        );
+    }
+}
+
+
+function loadStorage() {
+
+    try {
+
+        const raw =
+            localStorage.getItem(
+                CONFIG.STORAGE_KEY
+            );
+
+        if (!raw) {
+            return;
+        }
+
+        const data =
+            JSON.parse(raw);
+
+        if (
+            Array.isArray(
+                data.history
+            )
+        ) {
+
+            history =
+                data.history;
+        }
+
+        if (
+            data.alertState
+        ) {
+
+            alertState =
+                data.alertState;
+        }
+
+        if (
+            Array.isArray(
+                data.events
+            )
+        ) {
+
+            events =
+                data.events;
+        }
+
+        pruneHistory();
+
+        renderEvents();
+
+    } catch (error) {
+
+        console.error(
+            "读取本地数据失败:",
+            error
+        );
+
+        history = [];
+
+        alertState = {};
+
+        events = [];
+    }
+}
+
+
+/* =========================================================
+   清理历史
+========================================================= */
+
+function pruneHistory() {
+
+    const cutoff =
+        Date.now() -
+        CONFIG.HISTORY_DURATION;
+
+    history =
+        history.filter(
+            item =>
+                item.timestamp >= cutoff
+        );
+}
+
+
+/* =========================================================
+   WebSocket
+========================================================= */
+
+function connectWebSocket() {
+
+    clearTimeout(
+        reconnectTimer
+    );
+
+    updateWsStatus(
+        false,
+        "正在连接..."
+    );
+
+    try {
+
+        ws =
+            new WebSocket(
+                CONFIG.WS_URL
+            );
+
+        ws.onopen = () => {
+
+            wsConnected = true;
+
+            updateWsStatus(
+                true,
+                "WebSocket 已连接"
+            );
+
+        };
+
+
+        ws.onmessage = event => {
+
+            try {
+
+                const data =
+                    JSON.parse(
+                        event.data
+                    );
+
+                if (
+                    !Array.isArray(data)
+                ) {
+                    return;
+                }
+
+                processTickerData(data);
+
+            } catch (error) {
+
+                console.error(
+                    "解析行情失败:",
+                    error
+                );
+            }
+        };
+
+
+        ws.onerror = error => {
+
+            console.error(
+                "WebSocket错误:",
+                error
+            );
+        };
+
+
+        ws.onclose = () => {
+
+            wsConnected = false;
+
+            updateWsStatus(
+                false,
+                "连接断开，5秒后重连..."
+            );
+
+            reconnectTimer =
+                setTimeout(
+                    connectWebSocket,
+                    5000
+                );
+        };
+
+    } catch (error) {
+
+        console.error(
+            "连接失败:",
+            error
+        );
+
+        reconnectTimer =
+            setTimeout(
+                connectWebSocket,
+                5000
+            );
+    }
+}
+
+
+/* =========================================================
+   处理Ticker
+========================================================= */
+
+function processTickerData(data) {
+
+    for (
+        const ticker of data
+    ) {
+
+        const symbol =
+            ticker.s;
+
+        if (
+            !symbol ||
+            !symbol.endsWith("USDT")
+        ) {
+            continue;
+        }
+
+        const price =
+            parseFloat(ticker.c);
+
+        const change24h =
+            parseFloat(ticker.P);
+
+        const volume24h =
+            parseFloat(ticker.q);
+
+        if (
+            !Number.isFinite(price) ||
+            !Number.isFinite(change24h)
+        ) {
+            continue;
+        }
+
+        marketMap[symbol] = {
+
+            price,
+
+            change24h,
+
+            volume24h,
+
+            updateTime: Date.now()
+        };
+    }
+
+    render();
+}
+
+
+/* =========================================================
+   当前排名
+========================================================= */
+
+function getCurrentRanking() {
+
+    return Object.entries(
+        marketMap
+    )
+
+    .sort(
+        (a, b) =>
+            b[1].change24h -
+            a[1].change24h
+    )
+
+    .map(
+        ([symbol]) =>
+            symbol
+    );
+}
+
+
+/* =========================================================
+   当前排名
+========================================================= */
+
+function getRank(symbol) {
+
+    const ranking =
+        getCurrentRanking();
+
+    const index =
+        ranking.indexOf(symbol);
+
+    return index >= 0
+        ? index + 1
+        : null;
+}
+
+
+/* =========================================================
+   创建历史快照
+========================================================= */
+
+function createSnapshot() {
+
+    const ranking =
+        getCurrentRanking();
+
+    if (!ranking.length) {
+        return;
+    }
+
+    const ranks = {};
+
+    const prices = {};
+
+    ranking.forEach(
+        (symbol, index) => {
+
+            ranks[symbol] =
+                index + 1;
+
+            prices[symbol] =
+                marketMap[symbol].price;
+        }
+    );
+
+
+    const snapshot = {
+
+        timestamp:
+            Date.now(),
+
+        ranks,
+
+        prices
+    };
+
+
+    history.push(
+        snapshot
+    );
+
+    pruneHistory();
+
+    lastSnapshotTime =
+        snapshot.timestamp;
+
+    saveStorage();
+
+
+    document.getElementById(
+        "lastSnapshot"
+    ).textContent =
+        formatTime(
+            snapshot.timestamp
+        );
+
+
+    evaluateAllSignals();
+
+    render();
+}
+
+
+/* =========================================================
+   历史快照
+========================================================= */
+
+function getHistoricalSnapshot(
+    millisecondsAgo
+) {
+
+    if (!history.length) {
+        return null;
+    }
+
+    const target =
+        Date.now() -
+        millisecondsAgo;
+
+    let best = null;
+
+    let bestDistance =
+        Infinity;
+
+
+    for (
+        const snapshot of history
+    ) {
+
+        const distance =
+            Math.abs(
+                snapshot.timestamp -
+                target
+            );
+
+        if (
+            distance <
+            bestDistance
+        ) {
+
+            best =
+                snapshot;
+
+            bestDistance =
+                distance;
+        }
+    }
+
+    return best;
+}
+
+
+/* =========================================================
+   排名动量
+========================================================= */
+
+function getRankMomentum(
+    symbol,
+    millisecondsAgo
+) {
+
+    const snapshot =
+        getHistoricalSnapshot(
+            millisecondsAgo
+        );
+
+    if (!snapshot) {
+        return null;
+    }
+
+    const oldRank =
+        snapshot.ranks[symbol];
+
+    const currentRank =
+        getRank(symbol);
+
+    if (
+        !oldRank ||
+        !currentRank
+    ) {
+        return null;
+    }
+
+    return {
+
+        oldRank,
+
+        currentRank,
+
+        improvement:
+            oldRank -
+            currentRank
+    };
+}
+
+
+/* =========================================================
+   价格动量
+========================================================= */
+
+function getPriceMomentum(
+    symbol,
+    millisecondsAgo
+) {
+
+    const snapshot =
+        getHistoricalSnapshot(
+            millisecondsAgo
+        );
+
+    if (!snapshot) {
+        return null;
+    }
+
+    const oldPrice =
+        snapshot.prices[symbol];
+
+    const current =
+        marketMap[symbol];
+
+
+    if (
+        !Number.isFinite(
+            oldPrice
+        ) ||
+        !current ||
+        !Number.isFinite(
+            current.price
+        )
+    ) {
+        return null;
+    }
+
+
+    const change =
+        (
+            current.price -
+            oldPrice
+        ) /
+        oldPrice *
+        100;
+
+
+    return {
+
+        oldPrice,
+
+        currentPrice:
+            current.price,
+
+        change
+    };
+}
+
+
+/* =========================================================
+   时间窗口
+========================================================= */
+
+const WINDOWS = {
+
+    "10m":
+        10 * 60 * 1000,
+
+    "30m":
+        30 * 60 * 1000,
+
+    "1h":
+        60 * 60 * 1000,
+
+    "4h":
+        4 * 60 * 60 * 1000
+};
+
+
+/* =========================================================
+   获取全部动量
+========================================================= */
+
+function getMomentum(symbol) {
+
+    const result = {};
+
+    for (
+        const [
+            name,
+            milliseconds
+        ]
+        of Object.entries(WINDOWS)
+    ) {
+
+        result[name] = {
+
+            rank:
+                getRankMomentum(
+                    symbol,
+                    milliseconds
+                ),
+
+            price:
+                getPriceMomentum(
+                    symbol,
+                    milliseconds
+                )
+        };
+    }
+
+    return result;
+}
+
+
+/* =========================================================
+   限制范围
+========================================================= */
+
+function clamp(
+    value,
+    min,
+    max
+) {
+
+    return Math.max(
+        min,
+        Math.min(
+            max,
+            value
+        )
+    );
+}
+
+
+/* =========================================================
+   单周期评分
+=========================================================
+
+   排名上涨：
+   improvement > 0
+
+   价格上涨：
+   change > 0
+
+   两者分别评分。
+
+========================================================= */
+
+function calculateWindowScore(
+    symbol,
+    windowName
+) {
+
+    const milliseconds =
+        WINDOWS[windowName];
+
+    const rank =
+        getRankMomentum(
+            symbol,
+            milliseconds
+        );
+
+    const price =
+        getPriceMomentum(
+            symbol,
+            milliseconds
+        );
+
+
+    if (
+        !rank &&
+        !price
+    ) {
+
+        return null;
+    }
+
+
+    let rankScore = 0;
+
+    let priceScore = 0;
+
+
+    /*
+       排名评分
+
+       达到阈值 = 约33分
+       达到3倍阈值 = 100分
+    */
+
+    if (
+        rank &&
+        rank.improvement > 0
+    ) {
+
+        rankScore =
+            clamp(
+                rank.improvement /
+                (
+                    CONFIG.RANK_THRESHOLD[
+                        windowName
+                    ] * 3
+                ),
+                0,
+                1
+            ) * 100;
+    }
+
+
+    /*
+       价格评分
+
+       达到阈值 = 约33分
+       达到3倍阈值 = 100分
+    */
+
+    if (
+        price &&
+        price.change > 0
+    ) {
+
+        priceScore =
+            clamp(
+                price.change /
+                (
+                    CONFIG.PRICE_THRESHOLD[
+                        windowName
+                    ] * 3
+                ),
+                0,
+                1
+            ) * 100;
+    }
+
+
+    /*
+       价格下跌：
+
+       价格分 = 0
+
+       但是排名仍然可以
+       单独显示其动量。
+
+       这样不会让排名上涨
+       把一个正在下跌的币
+       打成高分。
+    */
+
+    const score =
+        (
+            rankScore * 0.5 +
+            priceScore * 0.5
+        );
+
+
+    return {
+
+        score,
+
+        rankScore,
+
+        priceScore,
+
+        rank,
+
+        price
+    };
+}
+
+
+/* =========================================================
+   0～100 冲榜强度
+========================================================= */
+
+function calculateSurgeScore(
+    symbol
+) {
+
+    let total =
+        0;
+
+    let weightTotal =
+        0;
+
+
+    for (
+        const windowName
+        of Object.keys(WINDOWS)
+    ) {
+
+        const result =
+            calculateWindowScore(
+                symbol,
+                windowName
+            );
+
+        if (!result) {
+            continue;
+        }
+
+        const weight =
+            CONFIG.WINDOW_WEIGHT[
+                windowName
+            ];
+
+
+        total +=
+            result.score *
+            weight;
+
+        weightTotal +=
+            weight;
+    }
+
+
+    if (
+        weightTotal === 0
+    ) {
+        return 0;
+    }
+
+
+    return clamp(
+        total /
+        weightTotal,
+        0,
+        100
+    );
+}
+
+
+/* =========================================================
+   信号类型
+========================================================= */
+
+function getSignalType(
+    symbol
+) {
+
+    const momentum =
+        getMomentum(symbol);
+
+
+    let hasPriceUp = false;
+
+    let hasStrongPrice = false;
+
+    let hasRankUp = false;
+
+    let hasStrongRank = false;
+
+    let hasPriceDown = false;
+
+
+    for (
+        const windowName
+        of Object.keys(WINDOWS)
+    ) {
+
+        const item =
+            momentum[windowName];
+
+
+        if (
+            item.price
+        ) {
+
+            if (
+                item.price.change > 0
+            ) {
+
+                hasPriceUp = true;
+            }
+
+            if (
+                item.price.change >=
+                CONFIG.PRICE_THRESHOLD[
+                    windowName
+                ]
+            ) {
+
+                hasStrongPrice = true;
+            }
+
+            if (
+                item.price.change < 0
+            ) {
+
+                hasPriceDown = true;
+            }
+        }
+
+
+        if (
+            item.rank
+        ) {
+
+            if (
+                item.rank.improvement > 0
+            ) {
+
+                hasRankUp = true;
+            }
+
+            if (
+                item.rank.improvement >=
+                CONFIG.RANK_THRESHOLD[
+                    windowName
+                ]
+            ) {
+
+                hasStrongRank = true;
+            }
+        }
+    }
+
+
+    /*
+       最重要：
+
+       价格上涨 + 排名上涨
+    */
+
+    if (
+        hasStrongPrice &&
+        hasStrongRank
+    ) {
+
+        return {
+
+            type: "DUAL",
+
+            text:
+                "🚀 双强冲榜",
+
+            class:
+                "signal-strong"
+        };
+    }
+
+
+    /*
+       价格明显上涨
+       但排名暂时没跟上
+    */
+
+    if (
+        hasStrongPrice &&
+        !hasStrongRank
+    ) {
+
+        return {
+
+            type: "PRICE",
+
+            text:
+                "👀 价格强势",
+
+            class:
+                "signal-price"
+        };
+    }
+
+
+    /*
+       价格上涨，
+       排名下降或没有明显改善
+    */
+
+    if (
+        hasPriceUp &&
+        !hasRankUp
+    ) {
+
+        return {
+
+            type: "PRICE_ONLY",
+
+            text:
+                "👀 价格上涨",
+
+            class:
+                "signal-price"
+        };
+    }
+
+
+    /*
+       排名上涨，
+       价格没有上涨
+    */
+
+    if (
+        hasStrongRank &&
+        !hasPriceUp
+    ) {
+
+        if (hasPriceDown) {
+
+            return {
+
+                type: "PASSIVE",
+
+                text:
+                    "⛔ 被动升榜",
+
+                class:
+                    "signal-passive"
+            };
+        }
+
+        return {
+
+            type: "RANK",
+
+            text:
+                "⚠️ 排名异动",
+
+            class:
+                "signal-rank"
+        };
+    }
+
+
+    /*
+       价格正在下跌
+    */
+
+    if (
+        hasPriceDown &&
+        !hasPriceUp
+    ) {
+
+        return {
+
+            type: "DOWN",
+
+            text:
+                "⛔ 价格下跌",
+
+            class:
+                "signal-danger"
+        };
+    }
+
+
+    return {
+
+        type: "NONE",
+
+        text:
+            "观察",
+
+        class:
+            "signal-none"
+    };
+}
+
+
+/* =========================================================
+   信号HTML
+========================================================= */
+
+function getSignal(
+    symbol
+) {
+
+    const rank =
+        getRank(symbol);
+
+    const signal =
+        getSignalType(symbol);
+
+
+    /*
+       Top3 / Top5 / Top10 / Top20
+       仍然优先显示排名阶段。
+
+       但是信号类型保留。
+    */
+
+    if (
+        rank <= 3
+    ) {
+
+        return `
+            <span class="signal signal-strong">
+                🏆 Top3 · ${signal.text}
+            </span>
+        `;
+    }
+
+
+    if (
+        rank <= 5
+    ) {
+
+        return `
+            <span class="signal signal-strong">
+                🔥 Top5 · ${signal.text}
+            </span>
+        `;
+    }
+
+
+    if (
+        rank <= 10
+    ) {
+
+        return `
+            <span class="signal signal-strong">
+                🔥 Top10 · ${signal.text}
+            </span>
+        `;
+    }
+
+
+    if (
+        rank <= 20
+    ) {
+
+        return `
+            <span class="signal ${signal.class}">
+                ${signal.text}
+            </span>
+        `;
+    }
+
+
+    return `
+        <span class="signal ${signal.class}">
+            ${signal.text}
+        </span>
+    `;
+}
+
+
+/* =========================================================
+   Score HTML
+========================================================= */
+
+function scoreCell(
+    symbol
+) {
+
+    const score =
+        calculateSurgeScore(
+            symbol
+        );
+
+
+    let cls =
+        "score-zero";
+
+
+    if (
+        score >= 80
+    ) {
+
+        cls =
+            "score-high";
+
+    } else if (
+        score >= 60
+    ) {
+
+        cls =
+            "score-medium";
+
+    } else if (
+        score >= 30
+    ) {
+
+        cls =
+            "score-low";
+    }
+
+
+    return `
+        <span class="score ${cls}">
+            ${score.toFixed(0)}
+        </span>
+    `;
+}
+
+
+/* =========================================================
+   排名单元格
+========================================================= */
+
+function rankCell(
+    symbol,
+    windowName
+) {
+
+    const momentum =
+        getRankMomentum(
+            symbol,
+            WINDOWS[windowName]
+        );
+
+
+    if (!momentum) {
+
+        return `
+            <span class="neutral">
+                --
+            </span>
+        `;
+    }
+
+
+    const value =
+        momentum.improvement;
+
+
+    let cls =
+        "neutral";
+
+
+    if (
+        value > 0
+    ) {
+
+        cls =
+            "rank-up";
+
+    } else if (
+        value < 0
+    ) {
+
+        cls =
+            "rank-down";
+    }
+
+
+    return `
+        <span class="${cls}">
+            ${formatRankChange(value)}
+        </span>
+    `;
+}
+
+
+/* =========================================================
+   价格单元格
+========================================================= */
+
+function priceCell(
+    symbol,
+    windowName
+) {
+
+    const momentum =
+        getPriceMomentum(
+            symbol,
+            WINDOWS[windowName]
+        );
+
+
+    if (!momentum) {
+
+        return `
+            <span class="neutral">
+                --
+            </span>
+        `;
+    }
+
+
+    const value =
+        momentum.change;
+
+
+    let cls =
+        "neutral";
+
+
+    if (
+        value > 0
+    ) {
+
+        cls =
+            "price-up";
+
+    } else if (
+        value < 0
+    ) {
+
+        cls =
+            "price-down";
+    }
+
+
+    return `
+        <span class="${cls}">
+            ${formatPercent(value)}
+        </span>
+    `;
+}
+
+
+/* =========================================================
+   报警状态
+========================================================= */
+
+function getAlertState(
+    symbol
+) {
+
+    if (
+        !alertState[symbol]
+    ) {
+
+        alertState[symbol] = {
+
+            top20: false,
+
+            top10: false,
+
+            top5: false,
+
+            top3: false,
+
+            preWarning: false,
+
+            priceWarning: false,
+
+            lastRapidAlert: 0
+        };
+    }
+
+
+    return alertState[symbol];
+}
+
+
+/* =========================================================
+   排名阶段
+========================================================= */
+
+function getStage(
+    rank
+) {
+
+    if (
+        rank <= 3
+    ) {
+        return 4;
+    }
+
+    if (
+        rank <= 5
+    ) {
+        return 3;
+    }
+
+    if (
+        rank <= 10
+    ) {
+        return 2;
+    }
+
+    if (
+        rank <= 20
+    ) {
+        return 1;
+    }
+
+    return 0;
+}
+
+
+/* =========================================================
+   是否允许报警
+=========================================================
+
+   新规则：
+
+   价格上涨本身可以报警。
+
+   排名上涨也可以参与报警。
+
+   但是：
+
+   价格明显下跌时，不报警。
+
+========================================================= */
+
+function shouldAlert(
+    symbol
+) {
+
+    const momentum =
+        getMomentum(symbol);
+
+
+    let pricePositive =
+        false;
+
+    let priceNegative =
+        false;
+
+    let rankPositive =
+        false;
+
+
+    for (
+        const windowName
+        of Object.keys(WINDOWS)
+    ) {
+
+        const item =
+            momentum[windowName];
+
+
+        if (
+            item.price
+        ) {
+
+            if (
+                item.price.change > 0
+            ) {
+
+                pricePositive =
+                    true;
+            }
+
+            if (
+                item.price.change < 0
+            ) {
+
+                priceNegative =
+                    true;
+            }
+        }
+
+
+        if (
+            item.rank &&
+            item.rank.improvement > 0
+        ) {
+
+            rankPositive =
+                true;
+        }
+    }
+
+
+    /*
+       所有已有价格周期都为负：
+       不提醒。
+    */
+
+    if (
+        priceNegative &&
+        !pricePositive
+    ) {
+
+        return false;
+    }
+
+
+    /*
+       价格上涨或者排名上涨，
+       都可以成为关注信号。
+
+       但必须至少有一个。
+    */
+
+    return (
+        pricePositive ||
+        rankPositive
+    );
+}
+
+
+/* =========================================================
+   Top20阶段报警
+========================================================= */
+
+function evaluateStageAlert(
+    symbol
+) {
+
+    const rank =
+        getRank(symbol);
+
+
+    if (!rank) {
+        return;
+    }
+
+
+    const state =
+        getAlertState(symbol);
+
+
+    if (
+        !shouldAlert(symbol)
+    ) {
+
+        return;
+    }
+
+
+    const stage =
+        getStage(rank);
+
+
+    if (
+        stage >= 1 &&
+        !state.top20
+    ) {
+
+        addEvent(
+            symbol,
+            "TOP20",
+            "🚨 新进 Top20",
+            rank
+        );
+
+        state.top20 =
+            true;
+    }
+
+
+    if (
+        stage >= 2 &&
+        !state.top10
+    ) {
+
+        addEvent(
+            symbol,
+            "TOP10",
+            "🔥 进入 Top10",
+            rank
+        );
+
+        state.top10 =
+            true;
+    }
+
+
+    if (
+        stage >= 3 &&
+        !state.top5
+    ) {
+
+        addEvent(
+            symbol,
+            "TOP5",
+            "🔥 进入 Top5",
+            rank
+        );
+
+        state.top5 =
+            true;
+    }
+
+
+    if (
+        stage >= 4 &&
+        !state.top3
+    ) {
+
+        addEvent(
+            symbol,
+            "TOP3",
+            "🏆 进入 Top3",
+            rank
+        );
+
+        state.top3 =
+            true;
+    }
+}
+
+
+/* =========================================================
+   Top20外价格预警
+=========================================================
+
+   这一项非常重要。
+
+   即使排名没有快速上升，
+
+   如果价格本身开始明显上涨，
+
+   也值得提前观察。
+
+========================================================= */
+
+function evaluatePriceWarning(
+    symbol
+) {
+
+    const rank =
+        getRank(symbol);
+
+
+    if (
+        !rank ||
+        rank > CONFIG.RADAR_MAX_RANK
+    ) {
+        return;
+    }
+
+
+    const state =
+        getAlertState(symbol);
+
+
+    if (
+        state.priceWarning
+    ) {
+        return;
+    }
+
+
+    /*
+       只针对Top20之外。
+    */
+
+    if (
+        rank <= 20
+    ) {
+        return;
+    }
+
+
+    const price10 =
+        getPriceMomentum(
+            symbol,
+            WINDOWS["10m"]
+        );
+
+
+    const price30 =
+        getPriceMomentum(
+            symbol,
+            WINDOWS["30m"]
+        );
+
+
+    const valid =
+        (
+            price10 &&
+            price10.change >= 1
+        )
+        ||
+        (
+            price30 &&
+            price30.change >= 2
+        );
+
+
+    if (!valid) {
+        return;
+    }
+
+
+    state.priceWarning =
+        true;
+
+
+    addEvent(
+        symbol,
+        "PRICE",
+        "👀 价格强势上涨，值得关注",
+        rank
+    );
+}
+
+
+/* =========================================================
+   Top20外冲榜预警
+========================================================= */
+
+function evaluatePreWarning(
+    symbol
+) {
+
+    const rank =
+        getRank(symbol);
+
+
+    if (
+        !rank ||
+        rank <= 20 ||
+        rank > CONFIG.RADAR_MAX_RANK
+    ) {
+        return;
+    }
+
+
+    const state =
+        getAlertState(symbol);
+
+
+    if (
+        state.preWarning
+    ) {
+        return;
+    }
+
+
+    if (
+        rank > 35
+    ) {
+        return;
+    }
+
+
+    const rank10 =
+        getRankMomentum(
+            symbol,
+            WINDOWS["10m"]
+        );
+
+
+    const rank30 =
+        getRankMomentum(
+            symbol,
+            WINDOWS["30m"]
+        );
+
+
+    const price10 =
+        getPriceMomentum(
+            symbol,
+            WINDOWS["10m"]
+        );
+
+
+    const price30 =
+        getPriceMomentum(
+            symbol,
+            WINDOWS["30m"]
+        );
+
+
+    /*
+       原来的“双条件”继续保留：
+
+       排名明显上涨
+       +
+       价格上涨
+    */
+
+    const valid =
+        (
+            rank10 &&
+            price10 &&
+            rank10.improvement >= 3 &&
+            price10.change >= 0.3
+        )
+        ||
+        (
+            rank30 &&
+            price30 &&
+            rank30.improvement >= 5 &&
+            price30.change >= 0.8
+        );
+
+
+    if (!valid) {
+        return;
+    }
+
+
+    state.preWarning =
+        true;
+
+
+    addEvent(
+        symbol,
+        "PRE_WARNING",
+        "🚀 排名+价格同步冲榜预警",
+        rank
+    );
+}
+
+
+/* =========================================================
+   Top20内部快速上涨
+========================================================= */
+
+function evaluateRapidRise(
+    symbol
+) {
+
+    const rank =
+        getRank(symbol);
+
+
+    if (
+        !rank ||
+        rank > 20
+    ) {
+        return;
+    }
+
+
+    const state =
+        getAlertState(symbol);
+
+
+    const now =
+        Date.now();
+
+
+    if (
+        now -
+        state.lastRapidAlert
+        <
+        CONFIG.RAPID_COOLDOWN
+    ) {
+        return;
+    }
+
+
+    const rank10 =
+        getRankMomentum(
+            symbol,
+            WINDOWS["10m"]
+        );
+
+
+    const price10 =
+        getPriceMomentum(
+            symbol,
+            WINDOWS["10m"]
+        );
+
+
+    if (
+        !rank10 ||
+        !price10
+    ) {
+        return;
+    }
+
+
+    /*
+       Top20内部快速冲榜：
+
+       排名 +5
+       +
+       价格 +1%
+    */
+
+    if (
+        rank10.improvement >= 5 &&
+        price10.change >= 1
+    ) {
+
+        state.lastRapidAlert =
+            now;
+
+
+        addEvent(
+            symbol,
+            "RAPID",
+            "⚡ Top20 内快速上升",
+            rank
+        );
+    }
+}
+
+
+/* =========================================================
+   统一评估
+========================================================= */
+
+function evaluateSymbol(
+    symbol
+) {
+
+    evaluateStageAlert(
+        symbol
+    );
+
+    evaluatePriceWarning(
+        symbol
+    );
+
+    evaluatePreWarning(
+        symbol
+    );
+
+    evaluateRapidRise(
+        symbol
+    );
+}
+
+
+function evaluateAllSignals() {
+
+    const ranking =
+        getCurrentRanking();
+
+
+    for (
+        const symbol of ranking
+    ) {
+
+        evaluateSymbol(
+            symbol
+        );
+    }
+
+
+    saveStorage();
+
+    renderEvents();
+}
+
+
+/* =========================================================
+   添加事件
+========================================================= */
+
+function addEvent(
+    symbol,
+    type,
+    description,
+    rank
+) {
+
+    const now =
+        Date.now();
+
+
+    const momentum =
+        getMomentum(symbol);
+
+
+    let priceChange =
+        null;
+
+
+    if (
+        momentum["10m"] &&
+        momentum["10m"].price
+    ) {
+
+        priceChange =
+            momentum["10m"]
+                .price
+                .change;
+    }
+
+
+    const score =
+        calculateSurgeScore(
+            symbol
+        );
+
+
+    events.unshift({
+
+        timestamp:
+            now,
+
+        symbol,
+
+        type,
+
+        description,
+
+        rank,
+
+        priceChange,
+
+        score
+    });
+
+
+    if (
+        events.length >
+        CONFIG.MAX_EVENTS
+    ) {
+
+        events =
+            events.slice(
+                0,
+                CONFIG.MAX_EVENTS
+            );
+    }
+
+
+    saveStorage();
+
+    renderEvents();
+
+    playAlertSound();
+
+
+    console.log(
+        "ALERT:",
+        symbol,
+        description,
+        "score:",
+        score
+    );
+}
+
+
+/* =========================================================
+   声音
+========================================================= */
+
+function playAlertSound() {
+
+    if (
+        !soundEnabled
+    ) {
+        return;
+    }
+
+
+    try {
+
+        const AudioContext =
+            window.AudioContext ||
+            window.webkitAudioContext;
+
+
+        if (!AudioContext) {
+            return;
+        }
+
+
+        const ctx =
+            new AudioContext();
+
+
+        const oscillator =
+            ctx.createOscillator();
+
+
+        const gain =
+            ctx.createGain();
+
+
+        oscillator.connect(
+            gain
+        );
+
+        gain.connect(
+            ctx.destination
+        );
+
+
+        oscillator.frequency.value =
+            880;
+
+
+        oscillator.type =
+            "sine";
+
+
+        gain.gain.setValueAtTime(
+            0.0001,
+            ctx.currentTime
+        );
+
+
+        gain.gain.exponentialRampToValueAtTime(
+            0.25,
+            ctx.currentTime + 0.02
+        );
+
+
+        gain.gain.exponentialRampToValueAtTime(
+            0.0001,
+            ctx.currentTime + 0.5
+        );
+
+
+        oscillator.start();
+
+
+        oscillator.stop(
+            ctx.currentTime + 0.5
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            "声音播放失败:",
+            error
+        );
+    }
+}
+
+
+/* =========================================================
+   格式化
+========================================================= */
+
+function formatPercent(
+    value
+) {
+
+    if (
+        value === null ||
+        value === undefined ||
+        !Number.isFinite(value)
+    ) {
+
+        return "--";
+    }
+
+
+    const prefix =
+        value > 0
+            ? "+"
+            : "";
+
+
+    return (
+        prefix +
+        value.toFixed(2) +
+        "%"
+    );
+}
+
+
+function formatRankChange(
+    value
+) {
+
+    if (
+        value === null ||
+        value === undefined
+    ) {
+
+        return "--";
+    }
+
+
+    const prefix =
+        value > 0
+            ? "+"
+            : "";
+
+
+    return (
+        prefix +
+        value
+    );
+}
+
+
+function formatPrice(
+    price
+) {
+
+    if (
+        !Number.isFinite(price)
+    ) {
+
+        return "--";
+    }
+
+
+    if (
+        price >= 1000
+    ) {
+
+        return price.toFixed(2);
+    }
+
+
+    if (
+        price >= 1
+    ) {
+
+        return price.toFixed(4);
+    }
+
+
+    if (
+        price >= 0.01
+    ) {
+
+        return price.toFixed(6);
+    }
+
+
+    return price.toPrecision(6);
+}
+
+
+function formatTime(
+    timestamp
+) {
+
+    if (!timestamp) {
+        return "--";
+    }
+
+
+    return new Date(
+        timestamp
+    )
+    .toLocaleTimeString(
+        "zh-CN",
+        {
+            hour:
+                "2-digit",
+
+            minute:
+                "2-digit",
+
+            second:
+                "2-digit"
+        }
+    );
+}
+
+
+/* =========================================================
+   Render Top20
+========================================================= */
+
+function renderTop20() {
+
+    const body =
+        document.getElementById(
+            "top20Body"
+        );
+
+
+    const ranking =
+        getCurrentRanking()
+            .slice(
+                0,
+                CONFIG.TOP20
+            );
+
+
+    if (!ranking.length) {
+
+        body.innerHTML = `
+            <tr>
+                <td colspan="13">
+                    <div class="empty">
+                        等待 Binance 行情...
+                    </div>
+                </td>
+            </tr>
+        `;
+
+        return;
+    }
+
+
+    body.innerHTML =
+        ranking.map(
+            (symbol, index) => {
+
+                const data =
+                    marketMap[symbol];
+
+
+                const rank =
+                    index + 1;
+
+
+                return `
+                    <tr>
+
+                        <td class="rank">
+                            #${rank}
+                        </td>
+
+                        <td class="symbol">
+                            ${symbol.replace(
+                                "USDT",
+                                ""
+                            )}
+                        </td>
+
+                        <td class="up">
+                            ${formatPercent(
+                                data.change24h
+                            )}
+                        </td>
+
+                        <td>
+                            ${scoreCell(
+                                symbol
+                            )}
+                        </td>
+
+                        <td>
+                            ${getSignal(
+                                symbol
+                            )}
+                        </td>
+
+                        <td>
+                            ${rankCell(
+                                symbol,
+                                "10m"
+                            )}
+                        </td>
+
+                        <td>
+                            ${rankCell(
+                                symbol,
+                                "30m"
+                            )}
+                        </td>
+
+                        <td>
+                            ${rankCell(
+                                symbol,
+                                "1h"
+                            )}
+                        </td>
+
+                        <td>
+                            ${rankCell(
+                                symbol,
+                                "4h"
+                            )}
+                        </td>
+
+                        <td>
+                            ${priceCell(
+                                symbol,
+                                "10m"
+                            )}
+                        </td>
+
+                        <td>
+                            ${priceCell(
+                                symbol,
+                                "30m"
+                            )}
+                        </td>
+
+                        <td>
+                            ${priceCell(
+                                symbol,
+                                "1h"
+                            )}
+                        </td>
+
+                        <td>
+                            ${priceCell(
+                                symbol,
+                                "4h"
+                            )}
+                        </td>
+
+                    </tr>
+                `;
+            }
+        )
+        .join("");
+}
+
+
+/* =========================================================
+   Render Radar
+========================================================= */
+
+function renderRadar() {
+
+    const body =
+        document.getElementById(
+            "radarBody"
+        );
+
+
+    let ranking =
+        getCurrentRanking()
+            .slice(
+                CONFIG.TOP20,
+                CONFIG.RADAR_MAX_RANK
+            );
+
+
+    if (!ranking.length) {
+
+        body.innerHTML = `
+            <tr>
+                <td colspan="13">
+                    <div class="empty">
+                        暂无潜在关注币
+                    </div>
+                </td>
+            </tr>
+        `;
+
+        return;
+    }
+
+
+    /*
+       雷达区不再简单按照
+       “有没有有效动量”排序。
+
+       现在直接按照：
+
+       冲榜强度 ↓
+
+    */
+
+    ranking.sort(
+        (a, b) =>
+            calculateSurgeScore(b) -
+            calculateSurgeScore(a)
+    );
+
+
+    body.innerHTML =
+        ranking.map(
+            symbol => {
+
+                const data =
+                    marketMap[symbol];
+
+
+                const rank =
+                    getRank(symbol);
+
+
+                return `
+                    <tr>
+
+                        <td class="rank">
+                            #${rank}
+                        </td>
+
+                        <td class="symbol">
+                            ${symbol.replace(
+                                "USDT",
+                                ""
+                            )}
+                        </td>
+
+                        <td class="up">
+                            ${formatPercent(
+                                data.change24h
+                            )}
+                        </td>
+
+                        <td>
+                            ${scoreCell(
+                                symbol
+                            )}
+                        </td>
+
+                        <td>
+                            ${getSignal(
+                                symbol
+                            )}
+                        </td>
+
+                        <td>
+                            ${rankCell(
+                                symbol,
+                                "10m"
+                            )}
+                        </td>
+
+                        <td>
+                            ${rankCell(
+                                symbol,
+                                "30m"
+                            )}
+                        </td>
+
+                        <td>
+                            ${rankCell(
+                                symbol,
+                                "1h"
+                            )}
+                        </td>
+
+                        <td>
+                            ${rankCell(
+                                symbol,
+                                "4h"
+                            )}
+                        </td>
+
+                        <td>
+                            ${priceCell(
+                                symbol,
+                                "10m"
+                            )}
+                        </td>
+
+                        <td>
+                            ${priceCell(
+                                symbol,
+                                "30m"
+                            )}
+                        </td>
+
+                        <td>
+                            ${priceCell(
+                                symbol,
+                                "1h"
+                            )}
+                        </td>
+
+                        <td>
+                            ${priceCell(
+                                symbol,
+                                "4h"
+                            )}
+                        </td>
+
+                    </tr>
+                `;
+            }
+        )
+        .join("");
+}
+
+
+/* =========================================================
+   Render
+========================================================= */
+
+function render() {
+
+    const symbolCount =
+        Object.keys(
+            marketMap
+        ).length;
+
+
+    document.getElementById(
+        "symbolCount"
+    ).textContent =
+        symbolCount;
+
+
+    document.getElementById(
+        "top20Count"
+    ).textContent =
+        Math.min(
+            20,
+            symbolCount
+        );
+
+
+    document.getElementById(
+        "snapshotCount"
+    ).textContent =
+        history.length;
+
+
+    document.getElementById(
+        "eventCount"
+    ).textContent =
+        events.length;
+
+
+    /*
+       找当前最高分
+    */
+
+    let highest =
+        0;
+
+
+    for (
+        const symbol of
+        getCurrentRanking()
+    ) {
+
+        highest =
+            Math.max(
+                highest,
+                calculateSurgeScore(
+                    symbol
+                )
+            );
+    }
+
+
+    document.getElementById(
+        "highestScore"
+    ).textContent =
+        symbolCount
+            ? highest.toFixed(0)
+            : "--";
+
+
+    renderTop20();
+
+    renderRadar();
+}
+
+
+/* =========================================================
+   Render Events
+========================================================= */
+
+function renderEvents() {
+
+    const container =
+        document.getElementById(
+            "eventList"
+        );
+
+
+    if (!events.length) {
+
+        container.innerHTML = `
+            <div class="empty">
+                暂无重要事件
+            </div>
+        `;
+
+        return;
+    }
+
+
+    container.innerHTML =
+        events.map(
+            event => {
+
+                let badgeClass =
+                    "blue";
+
+
+                if (
+                    event.type === "TOP20"
+                ) {
+
+                    badgeClass =
+                        "orange";
+                }
+
+
+                if (
+                    event.type === "TOP10" ||
+                    event.type === "TOP5"
+                ) {
+
+                    badgeClass =
+                        "red";
+                }
+
+
+                if (
+                    event.type === "TOP3"
+                ) {
+
+                    badgeClass =
+                        "orange";
+                }
+
+
+                if (
+                    event.type === "PRICE"
+                ) {
+
+                    badgeClass =
+                        "green";
+                }
+
+
+                if (
+                    event.type === "RAPID"
+                ) {
+
+                    badgeClass =
+                        "orange";
+                }
+
+
+                return `
+                    <div class="event">
+
+                        <div class="event-time">
+                            ${formatTime(
+                                event.timestamp
+                            )}
+                        </div>
+
+                        <div class="event-symbol">
+                            ${event.symbol.replace(
+                                "USDT",
+                                ""
+                            )}
+                        </div>
+
+                        <div>
+
+                            <span class="badge ${badgeClass}">
+                                ${event.type}
+                            </span>
+
+                        </div>
+
+                        <div class="event-desc">
+
+                            ${event.description}
+
+                            · 当前 #${event.rank}
+
+                            ${
+                                event.score !== undefined
+                                ? ` · 强度 ${event.score.toFixed(0)}`
+                                : ""
+                            }
+
+                            ${
+                                event.priceChange !== null
+                                ? ` · 10m价格 ${formatPercent(
+                                    event.priceChange
+                                )}`
+                                : ""
+                            }
+
+                        </div>
+
+                    </div>
+                `;
+            }
+        )
+        .join("");
+}
+
+
+/* =========================================================
+   WebSocket状态
+========================================================= */
+
+function updateWsStatus(
+    online,
+    text
+) {
+
+    const dot =
+        document.getElementById(
+            "statusDot"
+        );
+
+
+    const status =
+        document.getElementById(
+            "wsStatus"
+        );
+
+
+    dot.className =
+        online
+            ? "dot online"
+            : "dot offline";
+
+
+    status.textContent =
+        text;
+}
+
+
+/* =========================================================
+   清空历史
+========================================================= */
+
+function clearHistory() {
+
+    const ok =
+        confirm(
+            "确定清空所有历史快照、事件和报警状态吗？"
+        );
+
+
+    if (!ok) {
+        return;
+    }
+
+
+    history = [];
+
+    alertState = {};
+
+    events = [];
+
+    lastSnapshotTime = 0;
+
+
+    localStorage.removeItem(
+        CONFIG.STORAGE_KEY
+    );
+
+
+    renderEvents();
+
+    render();
+
+
+    document.getElementById(
+        "lastSnapshot"
+    ).textContent =
+        "--";
+}
+
+
+/* =========================================================
+   初始化
+========================================================= */
+
+function init() {
+
+    loadStorage();
+
+
+    if (
+        history.length
+    ) {
+
+        lastSnapshotTime =
+            history[
+                history.length - 1
+            ].timestamp;
+
+
+        document.getElementById(
+            "lastSnapshot"
+        ).textContent =
+            formatTime(
+                lastSnapshotTime
+            );
+    }
+
+
+    connectWebSocket();
+
+    render();
+
+    renderEvents();
+}
+
+
+/* =========================================================
+   每10分钟保存一次
+========================================================= */
+
+setInterval(
+    () => {
+
+        if (
+            Object.keys(
+                marketMap
+            ).length === 0
+        ) {
+            return;
+        }
+
+
+        createSnapshot();
+
+    },
+    CONFIG.SNAPSHOT_INTERVAL
+);
+
+
+/* =========================================================
+   按钮
+========================================================= */
+
+document.getElementById(
+    "clearBtn"
+).addEventListener(
+    "click",
+    clearHistory
+);
+
+
+document.getElementById(
+    "soundBtn"
+).addEventListener(
+    "click",
+    () => {
+
+        soundEnabled =
+            !soundEnabled;
+
+
+        document.getElementById(
+            "soundBtn"
+        ).textContent =
+            soundEnabled
+                ? "🔊 声音：开启"
+                : "🔇 声音：关闭";
+    }
+);
+
+
+document.getElementById(
+    "testSoundBtn"
+).addEventListener(
+    "click",
+    playAlertSound
+);
+
+
+/* =========================================================
+   启动
+========================================================= */
+
+init();
+
+</script>
+
+</body>
+</html>
