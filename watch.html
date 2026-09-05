@@ -596,11 +596,16 @@ tr:hover td {
 
 const CONFIG = {
 
-    WS_URL:
-        "wss://stream.binance.com:443/ws/!ticker@arr",
+    WS_URLS: [
+        "wss://data-stream.binance.vision/ws/!ticker@arr",
+        "wss://stream.binance.com:443/ws/!ticker@arr"
+    ],
 
     SNAPSHOT_INTERVAL:
         10 * 60 * 1000,
+
+    REST_INTERVAL:
+        30 * 1000,
 
     HISTORY_DURATION:
         4 * 60 * 60 * 1000,
@@ -710,6 +715,12 @@ let reconnectTimer = null;
 let wsConnected = false;
 
 let messageCount = 0;
+
+let wsUrlIndex = 0;
+
+let wsLastMessageTime = 0;
+
+let wsWatchdogTimer = null;
 
 
 /* =========================================================
@@ -856,33 +867,48 @@ function connectWebSocket() {
 
     try {
 
-        ws =
+        const socket =
             new WebSocket(
-                CONFIG.WS_URL
+                CONFIG.WS_URLS[wsUrlIndex]
             );
 
-        ws.onopen = () => {
+        ws = socket;
+
+        socket.onopen = () => {
 
             wsConnected = true;
+
+            wsLastMessageTime = Date.now();
 
             updateWsStatus(
                 true,
                 "WebSocket 已连接"
             );
 
-            setTimeout(
+            clearTimeout(wsWatchdogTimer);
+
+            wsWatchdogTimer = setTimeout(
                 () => {
-                    if (!Object.keys(marketMap).length) {
+                    if (
+                        socket === ws &&
+                        Date.now() - wsLastMessageTime >= 10000
+                    ) {
+                        updateWsStatus(
+                            false,
+                            "WebSocket 已连接但无数据，切换连接方式..."
+                        );
+
                         loadRestMarketData();
+                        socket.close();
                     }
                 },
-                5000
+                10000
             );
 
         };
 
 
-        ws.onmessage = async event => {
+        socket.onmessage = async event => {
 
             try {
 
@@ -913,6 +939,7 @@ function connectWebSocket() {
                     return;
                 }
 
+                wsLastMessageTime = Date.now();
                 messageCount++;
 
                 updateWsStatus(
@@ -932,7 +959,7 @@ function connectWebSocket() {
         };
 
 
-        ws.onerror = error => {
+        socket.onerror = error => {
 
             console.error(
                 "WebSocket错误:",
@@ -941,9 +968,18 @@ function connectWebSocket() {
         };
 
 
-        ws.onclose = () => {
+        socket.onclose = () => {
+
+            if (socket !== ws) {
+                return;
+            }
+
+            clearTimeout(wsWatchdogTimer);
 
             wsConnected = false;
+
+            wsUrlIndex =
+                (wsUrlIndex + 1) % CONFIG.WS_URLS.length;
 
             updateWsStatus(
                 false,
@@ -1058,6 +1094,13 @@ function loadRestMarketData() {
                     })
                 )
             );
+
+            if (!history.length) {
+                createSnapshot();
+            } else {
+                saveStorage();
+                render();
+            }
         }
     )
     .catch(
@@ -3646,6 +3689,19 @@ setInterval(
 
     },
     CONFIG.SNAPSHOT_INTERVAL
+);
+
+
+setInterval(
+    () => {
+        if (
+            !wsConnected ||
+            Date.now() - wsLastMessageTime > CONFIG.REST_INTERVAL
+        ) {
+            loadRestMarketData();
+        }
+    },
+    CONFIG.REST_INTERVAL
 );
 
 
