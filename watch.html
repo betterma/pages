@@ -10,8 +10,8 @@
       }
       body {
         margin: 0;
-        background: #0b0f14;
-        color: #e8edf3;
+        background: #f3f6fa;
+        color: #172033;
         font-family: Arial, "Microsoft YaHei", sans-serif;
       }
       .container {
@@ -49,20 +49,20 @@
       }
       button,
       select {
-        border: 1px solid #303944;
-        background: #151b23;
-        color: #dfe6ee;
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
+        color: #172033;
         padding: 8px 13px;
         border-radius: 6px;
         cursor: pointer;
       }
       button:hover,
       select:hover {
-        background: #202833;
+        background: #eef3f8;
       }
       button.danger {
-        border-color: #7a2831;
-        color: #ff7d88;
+        border-color: #f0a5ad;
+        color: #c6283d;
       }
       .status {
         display: flex;
@@ -91,15 +91,15 @@
       }
       .card,
       .section {
-        background: #111720;
-        border: 1px solid #252d37;
+        background: #ffffff;
+        border: 1px solid #dbe3ec;
         border-radius: 8px;
       }
       .card {
         padding: 12px;
       }
       .card-title {
-        color: #8995a4;
+        color: #64748b;
         font-size: 12px;
         margin-bottom: 5px;
       }
@@ -113,18 +113,22 @@
       }
       .section-header {
         padding: 12px 15px;
-        border-bottom: 1px solid #252d37;
+        border-bottom: 1px solid #e2e8f0;
       }
       .badge {
         padding: 3px 7px;
         border-radius: 4px;
-        background: #202833;
-        color: #929eab;
+        background: #edf2f7;
+        color: #536273;
         font-size: 11px;
       }
       .top20-tag {
         color: #55aaff;
         margin-left: 4px;
+      }
+      .dimension-status {
+        color: #929eab;
+        font-size: 12px;
       }
       .table-wrap {
         overflow-x: auto;
@@ -135,7 +139,7 @@
         min-width: 850px;
       }
       th {
-        background: #171e28;
+        background: #f8fafc;
         color: #8f9baa;
         font-size: 12px;
         font-weight: normal;
@@ -144,7 +148,7 @@
       }
       td {
         padding: 9px;
-        border-top: 1px solid #202731;
+        border-top: 1px solid #e8edf3;
         text-align: right;
         font-size: 13px;
       }
@@ -157,14 +161,14 @@
         text-align: left;
       }
       tr:hover td {
-        background: #151c25;
+        background: #f8fbff;
       }
       .symbol {
         font-weight: bold;
-        color: #f2f5f8;
+        color: #172033;
       }
       .rank {
-        color: #8995a4;
+        color: #64748b;
       }
       .up,
       .rank-up {
@@ -172,10 +176,10 @@
       }
       .rank-down,
       .price-down {
-        color: #ff5263;
+        color: #d9364f;
       }
       .neutral {
-        color: #929eab;
+        color: #64748b;
       }
       .signal {
         font-size: 12px;
@@ -215,11 +219,11 @@
         grid-template-columns: 90px 100px 130px 1fr;
         gap: 10px;
         padding: 10px 15px;
-        border-bottom: 1px solid #202731;
+        border-bottom: 1px solid #e8edf3;
         font-size: 13px;
       }
       .event-time {
-        color: #7f8b98;
+        color: #64748b;
       }
       .event-symbol {
         font-weight: bold;
@@ -227,11 +231,11 @@
       .empty {
         padding: 30px;
         text-align: center;
-        color: #687482;
+        color: #64748b;
       }
       .footer {
         text-align: center;
-        color: #5d6874;
+        color: #64748b;
         font-size: 12px;
         margin: 20px 0;
       }
@@ -241,10 +245,66 @@
         }
       }
       @media (max-width: 700px) {
+        .container {
+          width: calc(100% - 20px);
+          margin: 12px auto;
+        }
+        .header {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 8px;
+        }
+        h1 {
+          font-size: 22px;
+        }
+        .controls {
+          align-items: stretch;
+          flex-direction: column;
+        }
+        .controls label,
+        .controls select,
+        .controls button {
+          width: 100%;
+        }
+        .controls label {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+        .controls select {
+          flex: 1;
+        }
         .info {
           grid-template-columns: repeat(2, 1fr);
+          gap: 8px;
+        }
+        .card {
+          min-width: 0;
+          padding: 10px;
+        }
+        .card-value {
+          font-size: 17px;
+          overflow-wrap: anywhere;
+        }
+        .section-header {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 6px;
+          padding: 11px 12px;
+        }
+        .table-wrap {
+          -webkit-overflow-scrolling: touch;
+        }
+        table {
+          min-width: 760px;
+        }
+        th,
+        td {
+          padding: 8px 7px;
         }
         .event {
+          padding: 10px 12px;
           grid-template-columns: 1fr;
           gap: 4px;
         }
@@ -270,7 +330,8 @@
             <option value="2h">2h</option>
             <option value="4h">4h</option>
           </select></label
-        ><button id="refreshBtn">刷新数据</button
+          ><span id="dimensionStatus" class="dimension-status"></span
+          ><button id="refreshBtn">刷新数据</button
         ><button id="clearBtn" class="danger">清空历史</button>
       </div>
       <div class="info">
@@ -428,6 +489,25 @@
         const index = history.length - 1 - OFFSETS[selectedDimension];
         return index >= 0 ? history[index] : null;
       }
+      function dimensionLabel() {
+        return selectedDimension === "1h" || selectedDimension === "2h"
+          ? selectedDimension
+          : `${selectedDimension}in`;
+      }
+      function updateDimensionStatus() {
+        const required = OFFSETS[selectedDimension] + 1;
+        const status = document.getElementById("dimensionStatus");
+        status.textContent = comparison()
+          ? `${dimensionLabel()} 对比已启用`
+          : `${dimensionLabel()} 数据积累中（已有 ${history.length} / 需要 ${required} 份快照）`;
+      }
+      function updateDimensionHeaders() {
+        const label = dimensionLabel();
+        document.getElementById("topRankHeader").textContent = `${label}排名`;
+        document.getElementById("topPriceHeader").textContent = `${label}价格`;
+        document.getElementById("radarRankHeader").textContent = `${label}排名`;
+        document.getElementById("radarPriceHeader").textContent = `${label}价格`;
+      }
       function momentum(symbol) {
         const old = comparison(),
           currentRank = ranking().indexOf(symbol) + 1;
@@ -465,7 +545,8 @@
       }
       function metric(symbol, type) {
         const item = momentum(symbol)[type];
-        if (!item) return '<span class="neutral">--</span>';
+        if (!comparison()) return '<span class="neutral">等待可比较快照</span>';
+        if (!item) return '<span class="neutral">暂无历史数据</span>';
         const value = type === "rank" ? item.improvement : item.change;
         const cls =
           value > 0
@@ -498,6 +579,8 @@
         document.getElementById("apiUpdated").textContent = formatTime(lastApiUpdate);
         document.getElementById("snapshotAge").textContent = formatAge(history.length ? history[history.length - 1].timestamp : 0);
         document.getElementById("snapshotCount").textContent = history.length;
+        updateDimensionStatus();
+        updateDimensionHeaders();
         renderRows("top20Body", list.slice(0, 20));
         renderRows("radarBody", list.slice(20, 100));
         renderEvents();
@@ -553,8 +636,6 @@
         history.push({ timestamp, ranks, prices });
         pruneHistory();
         saveStorage();
-        document.getElementById("lastSnapshot").textContent =
-          formatTime(timestamp);
         render();
       }
       function setStatus(ok, text) {
@@ -608,7 +689,6 @@
         events = [];
         alertState = {};
         localStorage.removeItem(CONFIG.STORAGE_KEY);
-        document.getElementById("lastSnapshot").textContent = "--";
         render();
       }
       function toggleFavorite(symbol) {
