@@ -771,7 +771,8 @@
                     : "";
                 const isFavorite = favorites.has(symbol);
                 const favoriteButton = `<button class="favorite-button${isFavorite ? " active" : ""}" data-symbol="${symbol}" aria-label="${isFavorite ? "取消收藏" : "收藏"}">${isFavorite ? "★" : "☆"}</button>`;
-                const tradeUrl = `https://www.binance.com/en/trade/${symbol}_USDT?type=spot`;
+                const baseAsset = symbol.replace(/USDT$/, "");
+                const tradeUrl = `https://www.binance.com/en/trade/${baseAsset}_USDT?type=spot`;
                 return `<tr><td>${favoriteButton}</td><td class=\"symbol symbol-copy\" data-symbol=\"${symbol}\" title=\"点击复制交易对\">${symbol.replace("USDT", "")} ${tag}</td><td class=\"up\"><a class=\"price-link\" href=\"${tradeUrl}\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"打开 ${symbol.replace("USDT", "")}/USDT 交易页\">${formatPercent(data.change24h)}</a></td><td>${metric(symbol, "price")}</td><td>${metric(symbol, "rank")}</td></tr>`;
               })
               .join("")
@@ -958,6 +959,13 @@
         if (event.target === snapshotDialog) snapshotDialog.close();
       });
       document.addEventListener("click", (event) => {
+        const priceLink = event.target.closest(".price-link");
+        if (priceLink) {
+          event.preventDefault();
+          window.open(priceLink.href, "_blank", "noopener,noreferrer");
+          window.focus();
+          return;
+        }
         const button = event.target.closest(".favorite-button");
         if (button) toggleFavorite(button.dataset.symbol);
         const symbolCell = event.target.closest(".symbol-copy");
