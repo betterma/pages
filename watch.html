@@ -161,10 +161,8 @@
       }
       th:first-child,
       th:nth-child(2),
-      th:nth-child(3),
       td:first-child,
-      td:nth-child(2),
-      td:nth-child(3) {
+      td:nth-child(2) {
         text-align: left;
       }
       tr:hover td {
@@ -371,7 +369,6 @@
             <thead>
               <tr>
                 <th>收藏</th>
-                <th>排名</th>
                 <th>币种</th>
                 <th>24h涨幅</th>
                 <th id="topRankHeader">15min排名</th>
@@ -392,7 +389,6 @@
             <thead>
               <tr>
                 <th>收藏</th>
-                <th>排名</th>
                 <th>币种</th>
                 <th>24h涨幅</th>
                 <th id="radarRankHeader">15min排名</th>
@@ -613,17 +609,10 @@
       }
       function metric(symbol, type) {
         const item = momentum(symbol)[type];
-        if (!comparison()) return '<span class="neutral">等待可比较快照</span>';
-        if (!item) return '<span class="neutral">暂无历史数据</span>';
+        if (!comparison() || !item) return "";
         const value = type === "rank" ? item.improvement : item.change;
-        const cls =
-          value > 0
-            ? "rank-up"
-            : value < 0
-              ? type === "rank"
-                ? "rank-down"
-                : "price-down"
-              : "neutral";
+        if (value <= 0) return "";
+        const cls = type === "rank" ? "rank-up" : "up";
         const oldValue =
           type === "rank"
             ? item.oldRank
@@ -647,10 +636,10 @@
                     : "";
                 const isFavorite = favorites.has(symbol);
                 const favoriteButton = `<button class="favorite-button${isFavorite ? " active" : ""}" data-symbol="${symbol}" aria-label="${isFavorite ? "取消收藏" : "收藏"}">${isFavorite ? "★" : "☆"}</button>`;
-                return `<tr><td>${favoriteButton}</td><td class=\"rank\">#${id === "top20Body" ? index + 1 : rank}</td><td class=\"symbol symbol-copy\" data-symbol=\"${symbol}\" title=\"点击复制交易对\">${symbol.replace("USDT", "")} ${tag}</td><td class=\"up\">${formatPercent(data.change24h)}</td><td>${metric(symbol, "rank")}</td><td>${metric(symbol, "price")}</td></tr>`;
+                return `<tr><td>${favoriteButton}</td><td class=\"symbol symbol-copy\" data-symbol=\"${symbol}\" title=\"点击复制交易对\">${symbol.replace("USDT", "")} ${tag}</td><td class=\"up\">${formatPercent(data.change24h)}</td><td>${metric(symbol, "rank")}</td><td>${metric(symbol, "price")}</td></tr>`;
               })
               .join("")
-          : '<tr><td colspan="6"><div class="empty">暂无数据</div></td></tr>';
+          : '<tr><td colspan="5"><div class="empty">暂无数据</div></td></tr>';
       }
       function render() {
         const list = ranking();
