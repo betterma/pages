@@ -98,6 +98,12 @@
       .card {
         padding: 12px;
       }
+      .snapshot-age-card {
+        cursor: pointer;
+      }
+      .snapshot-age-card:hover {
+        background: #f1f4f1;
+      }
       .card-title {
         color: #78817f;
         font-size: 12px;
@@ -250,6 +256,54 @@
         font-size: 12px;
         margin: 20px 0;
       }
+      dialog {
+        width: min(420px, calc(100% - 32px));
+        padding: 0;
+        border: 1px solid #d8ddda;
+        border-radius: 8px;
+        background: #fbfcfa;
+        color: #28323a;
+      }
+      dialog::backdrop {
+        background: rgba(40, 50, 58, 0.28);
+      }
+      .dialog-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px;
+        border-bottom: 1px solid #e1e5e2;
+      }
+      .dialog-header h2 {
+        font-size: 16px;
+      }
+      .dialog-close {
+        border: 0;
+        background: transparent;
+        color: #78817f;
+        padding: 2px 6px;
+        font-size: 20px;
+        line-height: 1;
+      }
+      .snapshot-list {
+        max-height: 55vh;
+        overflow-y: auto;
+        padding: 8px 16px 12px;
+      }
+      .snapshot-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 9px 0;
+        border-bottom: 1px solid #e5e9e6;
+        font-size: 13px;
+      }
+      .snapshot-item:last-child {
+        border-bottom: 0;
+      }
+      .snapshot-index {
+        color: #78817f;
+      }
       @media (max-width: 1100px) {
         .info {
           grid-template-columns: repeat(3, 1fr);
@@ -350,7 +404,14 @@
           <div class="card-title">API 更新时间</div>
           <div class="card-value" id="apiUpdated">--</div>
         </div>
-        <div class="card">
+        <div
+          class="card snapshot-age-card"
+          id="snapshotAgeCard"
+          role="button"
+          tabindex="0"
+          title="点击查看所有快照时间点"
+          aria-label="查看所有快照时间点"
+        >
           <div class="card-title">快照年龄</div>
           <div class="card-value" id="snapshotAge">--</div>
         </div>
@@ -408,6 +469,13 @@
       </div>
       <div class="footer">每15分钟请求并保存快照 · 保存4小时历史</div>
     </div>
+    <dialog id="snapshotDialog" aria-labelledby="snapshotDialogTitle">
+      <div class="dialog-header">
+        <h2 id="snapshotDialogTitle">所有快照时间点</h2>
+        <button class="dialog-close" id="snapshotDialogClose" aria-label="关闭">×</button>
+      </div>
+      <div class="snapshot-list" id="snapshotList"></div>
+    </dialog>
     <script>
       "use strict";
       const CONFIG = {
@@ -449,6 +517,7 @@
       const githubToken = CONFIG.GITHUB_TOKEN;
       let githubSha = null;
       let githubReady = false;
+      let saveQueue = Promise.resolve();
       function githubHeaders() {
         return {
           Accept: "application/vnd.github+json",
@@ -494,35 +563,41 @@
         pruneHistory();
       }
       async function saveStorage() {
-        if (!githubReady) return;
-        try {
-          const url = `${CONFIG.GITHUB_API}/repos/${CONFIG.GITHUB_REPO}/contents/${CONFIG.GITHUB_PATH}`;
-          const body = {
-            message: "Update Binance radar data",
-            content: encodeBase64(
-              JSON.stringify({
-                history,
-                events,
-                alertState,
-                favorites: [...favorites],
-                selectedDimension,
-                savedAt: Date.now(),
-              }),
-            ),
-          };
-          if (githubSha) body.sha = githubSha;
-          const response = await fetch(url, {
-            method: "PUT",
-            headers: { ...githubHeaders(), "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-          if (!response.ok)
-            throw new Error(`保存 GitHub 数据失败: ${response.status}`);
-          const result = await response.json();
-          githubSha = result.content.sha;
-        } catch (error) {
-          console.error(error);
-        }
+        saveQueue = saveQueue.then(async () => {
+          if (!githubReady) return;
+          try {
+            const url = `${CONFIG.GITHUB_API}/repos/${CONFIG.GITHUB_REPO}/contents/${CONFIG.GITHUB_PATH}`;
+            const body = {
+              message: "Update Binance radar data",
+              content: encodeBase64(
+                JSON.stringify({
+                  history,
+                  events,
+                  alertState,
+                  favorites: [...favorites],
+                  selectedDimension,
+                  savedAt: Date.now(),
+                }),
+              ),
+            };
+            if (githubSha) body.sha = githubSha;
+            const response = await fetch(url, {
+              method: "PUT",
+              headers: {
+                ...githubHeaders(),
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(body),
+            });
+            if (!response.ok)
+              throw new Error(`保存 GitHub 数据失败: ${response.status}`);
+            const result = await response.json();
+            githubSha = result.content.sha;
+          } catch (error) {
+            console.error(error);
+          }
+        });
+        return saveQueue;
       }
       function pruneHistory() {
         const cutoff = Date.now() - CONFIG.HISTORY_DURATION;
@@ -530,6 +605,19 @@
       }
       function formatTime(value) {
         return value ? new Date(value).toLocaleTimeString("zh-CN") : "--";
+      }
+      function formatDateTime(value) {
+        return value
+          ? new Date(value).toLocaleString("zh-CN", {
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: false,
+            })
+          : "--";
       }
       function formatPercent(value) {
         return Number.isFinite(value)
@@ -690,6 +778,18 @@
         renderRows("radarBody", list.slice(20, 100));
         renderEvents();
       }
+      function renderSnapshotList() {
+        const list = document.getElementById("snapshotList");
+        list.innerHTML = history.length
+          ? [...history]
+              .reverse()
+              .map(
+                (snapshot, index) =>
+                  `<div class="snapshot-item"><span class="snapshot-index">#${history.length - index}</span><span>${formatDateTime(snapshot.timestamp)}</span></div>`,
+              )
+              .join("")
+          : '<div class="empty">暂无历史快照</div>';
+      }
       function renderEvents() {
         document.getElementById("eventList").innerHTML = events.length
           ? events
@@ -719,7 +819,6 @@
           }
         }
         events = events.slice(0, CONFIG.MAX_EVENTS);
-        saveStorage();
       }
       function createSnapshot() {
         const list = ranking();
@@ -733,7 +832,6 @@
         const timestamp = Date.now();
         history.push({ timestamp, ranks, prices });
         pruneHistory();
-        saveStorage();
         render();
       }
       function setStatus(ok, text) {
@@ -779,6 +877,7 @@
             } else {
               render();
             }
+            saveStorage();
           })
           .catch((error) => {
             console.error(error);
@@ -806,6 +905,28 @@
           render();
         });
       document.getElementById("refreshBtn").addEventListener("click", loadData);
+      const snapshotDialog = document.getElementById("snapshotDialog");
+      const openSnapshotDialog = () => {
+        renderSnapshotList();
+        snapshotDialog.showModal();
+      };
+      document
+        .getElementById("snapshotAgeCard")
+        .addEventListener("click", openSnapshotDialog);
+      document
+        .getElementById("snapshotAgeCard")
+        .addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openSnapshotDialog();
+          }
+        });
+      document
+        .getElementById("snapshotDialogClose")
+        .addEventListener("click", () => snapshotDialog.close());
+      snapshotDialog.addEventListener("click", (event) => {
+        if (event.target === snapshotDialog) snapshotDialog.close();
+      });
       document.addEventListener("click", (event) => {
         const button = event.target.closest(".favorite-button");
         if (button) toggleFavorite(button.dataset.symbol);
