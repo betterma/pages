@@ -162,14 +162,17 @@
       td {
         padding: 9px;
         border-top: 1px solid #e5e9e6;
-        text-align: right;
+        text-align: left;
         font-size: 13px;
       }
-      th:first-child,
-      th:nth-child(2),
-      td:first-child,
-      td:nth-child(2) {
+      th {
         text-align: left;
+      }
+      th.sortable {
+        cursor: pointer;
+      }
+      th.sortable:hover {
+        background: #e7ebe8;
       }
       tr:hover td {
         background: #f1f4f1;
@@ -432,8 +435,8 @@
                 <th>收藏</th>
                 <th>币种</th>
                 <th>24h涨幅</th>
+                <th id="topPriceHeader" class="sortable" title="点击按价格涨幅排序">15min价格</th>
                 <th id="topRankHeader">15min排名</th>
-                <th id="topPriceHeader">15min价格</th>
               </tr>
             </thead>
             <tbody id="top20Body"></tbody>
@@ -452,8 +455,8 @@
                 <th>收藏</th>
                 <th>币种</th>
                 <th>24h涨幅</th>
+                <th id="radarPriceHeader" class="sortable" title="点击按价格涨幅排序">15min价格</th>
                 <th id="radarRankHeader">15min排名</th>
-                <th id="radarPriceHeader">15min价格</th>
               </tr>
             </thead>
             <tbody id="radarBody"></tbody>
@@ -514,6 +517,7 @@
       let lastApiUpdate = 0;
       let newTop20Symbols = new Set();
       let favorites = new Set();
+      let priceSortDescending = false;
       const githubToken = CONFIG.GITHUB_TOKEN;
       let githubSha = null;
       let githubReady = false;
@@ -703,10 +707,10 @@
       function updateDimensionHeaders() {
         const label = dimensionLabel();
         document.getElementById("topRankHeader").textContent = `${label}排名`;
-        document.getElementById("topPriceHeader").textContent = `${label}价格`;
+        document.getElementById("topPriceHeader").textContent = `${label}价格${priceSortDescending ? " ↓" : ""}`;
         document.getElementById("radarRankHeader").textContent = `${label}排名`;
         document.getElementById("radarPriceHeader").textContent =
-          `${label}价格`;
+          `${label}价格${priceSortDescending ? " ↓" : ""}`;
       }
       function momentum(symbol) {
         const old = comparison(),
@@ -759,13 +763,20 @@
                     : "";
                 const isFavorite = favorites.has(symbol);
                 const favoriteButton = `<button class="favorite-button${isFavorite ? " active" : ""}" data-symbol="${symbol}" aria-label="${isFavorite ? "取消收藏" : "收藏"}">${isFavorite ? "★" : "☆"}</button>`;
-                return `<tr><td>${favoriteButton}</td><td class=\"symbol symbol-copy\" data-symbol=\"${symbol}\" title=\"点击复制交易对\">${symbol.replace("USDT", "")} ${tag}</td><td class=\"up\">${formatPercent(data.change24h)}</td><td>${metric(symbol, "rank")}</td><td>${metric(symbol, "price")}</td></tr>`;
+                return `<tr><td>${favoriteButton}</td><td class=\"symbol symbol-copy\" data-symbol=\"${symbol}\" title=\"点击复制交易对\">${symbol.replace("USDT", "")} ${tag}</td><td class=\"up\">${formatPercent(data.change24h)}</td><td>${metric(symbol, "price")}</td><td>${metric(symbol, "rank")}</td></tr>`;
               })
               .join("")
           : '<tr><td colspan="5"><div class="empty">暂无数据</div></td></tr>';
       }
       function render() {
         const list = ranking();
+        const displayList = priceSortDescending
+          ? [...list].sort((a, b) => {
+              const aChange = momentum(a).price?.change ?? -Infinity;
+              const bChange = momentum(b).price?.change ?? -Infinity;
+              return bChange - aChange;
+            })
+          : list;
         document.getElementById("apiUpdated").textContent =
           formatTime(lastApiUpdate);
         document.getElementById("snapshotAge").textContent = formatAge(
@@ -774,8 +785,8 @@
         document.getElementById("snapshotCount").textContent = history.length;
         updateDimensionStatus();
         updateDimensionHeaders();
-        renderRows("top20Body", list.slice(0, 20));
-        renderRows("radarBody", list.slice(20, 100));
+        renderRows("top20Body", displayList.slice(0, 20));
+        renderRows("radarBody", displayList.slice(20, 100));
         renderEvents();
       }
       function renderSnapshotList() {
@@ -904,6 +915,16 @@
           selectedDimension = event.target.value;
           render();
         });
+      function togglePriceSort() {
+        priceSortDescending = !priceSortDescending;
+        render();
+      }
+      document
+        .getElementById("topPriceHeader")
+        .addEventListener("click", togglePriceSort);
+      document
+        .getElementById("radarPriceHeader")
+        .addEventListener("click", togglePriceSort);
       document.getElementById("refreshBtn").addEventListener("click", loadData);
       const snapshotDialog = document.getElementById("snapshotDialog");
       const openSnapshotDialog = () => {
