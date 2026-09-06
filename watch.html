@@ -194,6 +194,14 @@
       .rank-up {
         color: #687f87;
       }
+      .price-link {
+        color: inherit;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .price-link:hover {
+        text-decoration: underline;
+      }
       .rank-down,
       .price-down {
         color: #8d7771;
@@ -763,7 +771,8 @@
                     : "";
                 const isFavorite = favorites.has(symbol);
                 const favoriteButton = `<button class="favorite-button${isFavorite ? " active" : ""}" data-symbol="${symbol}" aria-label="${isFavorite ? "取消收藏" : "收藏"}">${isFavorite ? "★" : "☆"}</button>`;
-                return `<tr><td>${favoriteButton}</td><td class=\"symbol symbol-copy\" data-symbol=\"${symbol}\" title=\"点击复制交易对\">${symbol.replace("USDT", "")} ${tag}</td><td class=\"up\">${formatPercent(data.change24h)}</td><td>${metric(symbol, "price")}</td><td>${metric(symbol, "rank")}</td></tr>`;
+                const tradeUrl = `https://www.binance.com/en/trade/${symbol}_USDT?type=spot`;
+                return `<tr><td>${favoriteButton}</td><td class=\"symbol symbol-copy\" data-symbol=\"${symbol}\" title=\"点击复制交易对\">${symbol.replace("USDT", "")} ${tag}</td><td class=\"up\"><a class=\"price-link\" href=\"${tradeUrl}\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"打开 ${symbol.replace("USDT", "")}/USDT 交易页\">${formatPercent(data.change24h)}</a></td><td>${metric(symbol, "price")}</td><td>${metric(symbol, "rank")}</td></tr>`;
               })
               .join("")
           : '<tr><td colspan="5"><div class="empty">暂无数据</div></td></tr>';
