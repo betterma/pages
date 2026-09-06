@@ -412,8 +412,8 @@
       "use strict";
       const CONFIG = {
         REST_INTERVAL: 15 * 60 * 1000,
-        SNAPSHOT_INTERVAL: 15 * 60 * 1000,
-        HISTORY_DURATION: 4 * 60 * 60 * 1000,
+          SNAPSHOT_INTERVAL: 15 * 60 * 1000,
+          HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000, // 保存最近 3 天的快照
         GITHUB_REPO: "betterma/pages",
         GITHUB_PATH: "watch-data.json",
         GITHUB_API: "https://api.github.com",
@@ -430,6 +430,14 @@
         },
       };
       const OFFSETS = { "15m": 1, "30m": 2, "1h": 4, "2h": 8, "4h": 16 };
+      // 各维度对应的时间长度（毫秒），用于按时间查找比较快照
+      const DURATION_MS = {
+        "15m": 15 * 60 * 1000,
+        "30m": 30 * 60 * 1000,
+        "1h": 60 * 60 * 1000,
+        "2h": 2 * 60 * 60 * 1000,
+        "4h": 4 * 60 * 60 * 1000,
+      };
       const marketMap = {};
       let history = [],
         events = [],
@@ -550,20 +558,33 @@
       }
       function formatAge(timestamp) {
         if (!timestamp) return "--";
-        const minutes = Math.max(
-          0,
-          Math.floor((Date.now() - timestamp) / 60000),
-        );
-        return minutes < 1 ? "刚刚" : `${minutes} 分钟前`;
+        const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
+        return minutes < 1 ? "刚刚" : `${formatDurationString(minutes)}前`;
+      }
+
+      function formatDurationString(totalMinutes) {
+        const h = Math.floor(totalMinutes / 60);
+        const m = totalMinutes % 60;
+        if (h > 0) return `${h}h${m}min`;
+        return `${m}min`;
       }
       function ranking() {
         return Object.entries(marketMap)
           .sort((a, b) => b[1].change24h - a[1].change24h)
           .map(([symbol]) => symbol);
       }
+      // 基于时间的比较：返回当前最新快照之前、且最接近目标时间点的那一份快照
       function comparison() {
-        const index = history.length - 1 - OFFSETS[selectedDimension];
-        return index >= 0 ? history[index] : null;
+        if (!history.length) return null;
+        const current = history[history.length - 1];
+        const duration = DURATION_MS[selectedDimension] || 0;
+        if (!duration) return null;
+        const targetTime = current.timestamp - duration;
+        // 从倒数第二个快照向前查找：找到 timestamp <= targetTime 的最新一项
+        for (let i = history.length - 2; i >= 0; i--) {
+          if (history[i].timestamp <= targetTime) return history[i];
+        }
+        return null;
       }
       function dimensionLabel() {
         return selectedDimension === "1h" || selectedDimension === "2h"
@@ -571,11 +592,25 @@
           : `${selectedDimension}in`;
       }
       function updateDimensionStatus() {
-        const required = OFFSETS[selectedDimension] + 1;
         const status = document.getElementById("dimensionStatus");
-        status.textContent = comparison()
-          ? `${dimensionLabel()} 对比已启用`
-          : `${dimensionLabel()} 数据积累中（已有 ${history.length} / 需要 ${required} 份快照）`;
+        const comp = comparison();
+        const label = dimensionLabel();
+        const duration = DURATION_MS[selectedDimension] || 0;
+        const targetMinutes = Math.floor(duration / 60000);
+        if (!history.length) {
+          status.textContent = `${label} 数据积累中（暂无快照）`;
+          return;
+        }
+        if (!comp) {
+          status.textContent = `${label} 数据积累中（未找到在 ${targetMinutes} 分钟之前的快照）`;
+          return;
+        }
+        const ageMinutes = Math.max(0, Math.floor((Date.now() - comp.timestamp) / 60000));
+        let note = `${label} 对比已启用 · 使用距现在 ${ageMinutes} 分钟的快照`;
+        if (ageMinutes > targetMinutes) {
+          note += `（目标 ${targetMinutes} 分钟，实际 ${ageMinutes} 分钟）`;
+        }
+        status.textContent = note;
       }
       function updateDimensionHeaders() {
         const label = dimensionLabel();
