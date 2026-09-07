@@ -534,11 +534,11 @@
         "4h": 4 * 60 * 60 * 1000,
       };
       const WINDOW_TOLERANCE_MS = {
-        "15m": 5 * 60 * 1000,
-        "30m": 10 * 60 * 1000,
-        "1h": 15 * 60 * 1000,
-        "2h": 20 * 60 * 1000,
-        "4h": 30 * 60 * 1000,
+        "15m": 2 * 60 * 1000,
+        "30m": 2 * 60 * 1000,
+        "1h": 2 * 60 * 1000,
+        "2h": 2 * 60 * 1000,
+        "4h": 2 * 60 * 1000,
       };
       const marketMap = {};
       let history = [],
@@ -672,11 +672,18 @@
       function selectWindowSnapshot(windowStart, duration) {
         const tolerance = getWindowTolerance(duration);
         const windowEnd = windowStart + duration;
-        const candidates = history.filter(
+        const strictCandidates = history.filter(
           (snapshot) =>
             snapshot.timestamp >= windowStart &&
-            snapshot.timestamp <= windowEnd + tolerance,
+            snapshot.timestamp < windowEnd,
         );
+        const candidates = strictCandidates.length
+          ? strictCandidates
+          : history.filter(
+              (snapshot) =>
+                snapshot.timestamp >= windowStart &&
+                snapshot.timestamp < windowEnd + tolerance,
+            );
         if (candidates.length) {
           return candidates.sort((a, b) => b.timestamp - a.timestamp)[0];
         }
@@ -702,11 +709,18 @@
       function selectWindowSnapshotByMode(windowStart, duration, mode) {
         const tolerance = getWindowTolerance(duration);
         const windowEnd = windowStart + duration;
-        const candidates = history.filter(
+        const strictCandidates = history.filter(
           (snapshot) =>
             snapshot.timestamp >= windowStart &&
-            snapshot.timestamp <= windowEnd + tolerance,
+            snapshot.timestamp < windowEnd,
         );
+        const candidates = strictCandidates.length
+          ? strictCandidates
+          : history.filter(
+              (snapshot) =>
+                snapshot.timestamp >= windowStart &&
+                snapshot.timestamp < windowEnd + tolerance,
+            );
         if (!candidates.length) return null;
         return candidates.sort((a, b) =>
           mode === "earliest" ? a.timestamp - b.timestamp : b.timestamp - a.timestamp,
