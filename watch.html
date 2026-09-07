@@ -570,17 +570,23 @@
         );
       }
       async function loadGithubStorage() {
-        const url = `${CONFIG.GITHUB_API}/repos/${CONFIG.GITHUB_REPO}/contents/${CONFIG.GITHUB_PATH}`;
-        const response = await fetch(url, { headers: githubHeaders() });
+        const url = `https://raw.githubusercontent.com/${CONFIG.GITHUB_REPO}/main/${CONFIG.GITHUB_PATH}?t=${Date.now()}`;
+        const response = await fetch(url, { cache: "no-store" });
         if (response.status === 404) {
           githubSha = null;
           return;
         }
         if (!response.ok)
           throw new Error(`读取 GitHub 数据失败: ${response.status}`);
-        const file = await response.json();
-        githubSha = file.sha;
-        const data = JSON.parse(decodeBase64(file.content));
+        const content = await response.text();
+        if (!content.trim()) throw new Error("watch-data.json 内容为空");
+        let data;
+        try {
+          data = JSON.parse(content);
+        } catch (error) {
+          throw new Error(`watch-data.json 不是有效 JSON: ${error.message}`);
+        }
+        githubSha = null;
         history = Array.isArray(data.history) ? data.history : [];
         events = Array.isArray(data.events) ? data.events : [];
         alertState = data.alertState || {};
@@ -1079,7 +1085,7 @@
           loadData();
         } catch (error) {
           console.error(error);
-          setStatus(false, "GitHub 数据读取失败");
+          setStatus(false, `GitHub 数据读取失败：${error.message}`);
         }
       }
       init();
