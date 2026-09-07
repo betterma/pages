@@ -315,6 +315,21 @@
       .snapshot-index {
         color: #78817f;
       }
+      .window-chain {
+        min-width: 140px;
+        color: #42505a;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      .window-chain-up {
+        color: #1f2328;
+      }
+      .window-chain-down {
+        color: #9aa3a1;
+      }
+      .window-chain-flat {
+        color: #78817f;
+      }
       @media (max-width: 1100px) {
         .info {
           grid-template-columns: repeat(3, 1fr);
@@ -445,6 +460,7 @@
                 <th>24h涨幅</th>
                 <th id="topPriceHeader" class="sortable" title="点击按价格涨幅排序">15min价格</th>
                 <th id="topRankHeader">15min排名</th>
+                <th id="topWindowHeader" title="最近 4 个窗口的相邻变化">窗口链</th>
               </tr>
             </thead>
             <tbody id="top20Body"></tbody>
@@ -465,6 +481,7 @@
                 <th>24h涨幅</th>
                 <th id="radarPriceHeader" class="sortable" title="点击按价格涨幅排序">15min价格</th>
                 <th id="radarRankHeader">15min排名</th>
+                <th id="radarWindowHeader" title="最近 4 个窗口的相邻变化">窗口链</th>
               </tr>
             </thead>
             <tbody id="radarBody"></tbody>
@@ -516,6 +533,13 @@
         "1h": 60 * 60 * 1000,
         "2h": 2 * 60 * 60 * 1000,
         "4h": 4 * 60 * 60 * 1000,
+      };
+      const WINDOW_TOLERANCE_MS = {
+        "15m": 5 * 60 * 1000,
+        "30m": 10 * 60 * 1000,
+        "1h": 15 * 60 * 1000,
+        "2h": 20 * 60 * 1000,
+        "4h": 30 * 60 * 1000,
       };
       const marketMap = {};
       let history = [],
@@ -673,18 +697,63 @@
           .sort((a, b) => b[1].change24h - a[1].change24h)
           .map(([symbol]) => symbol);
       }
-      // 基于时间的比较：返回当前最新快照之前、且最接近目标时间点的那一份快照
+      function getWindowTolerance(duration) {
+        return (
+          WINDOW_TOLERANCE_MS[selectedDimension] ||
+          Math.min(30 * 60 * 1000, Math.max(5 * 60 * 1000, duration / 2))
+        );
+      }
+      function getWindowStart(timestamp, duration) {
+        return Math.floor(timestamp / duration) * duration;
+      }
+      function selectWindowSnapshot(windowStart, duration) {
+        const tolerance = getWindowTolerance(duration);
+        const windowEnd = windowStart + duration;
+        const candidates = history.filter(
+          (snapshot) =>
+            snapshot.timestamp >= windowStart &&
+            snapshot.timestamp <= windowEnd + tolerance,
+        );
+        if (candidates.length) {
+          return candidates.sort((a, b) => a.timestamp - b.timestamp)[0];
+        }
+        const previous = [...history]
+          .filter((snapshot) => snapshot.timestamp < windowStart)
+          .sort((a, b) => b.timestamp - a.timestamp)[0];
+        return previous || null;
+      }
+      function getWindowSeries(limit = 4) {
+        const duration = DURATION_MS[selectedDimension] || 0;
+        if (!duration) return [];
+        const now = Date.now();
+        const currentWindowStart = getWindowStart(now, duration);
+        const series = [];
+        for (let index = 0; index < limit; index++) {
+          const windowStart = currentWindowStart - index * duration;
+          const snapshot = selectWindowSnapshot(windowStart, duration);
+          if (!snapshot) continue;
+          series.push({ windowStart, snapshot });
+        }
+        return series;
+      }
+      function getAdjacentWindowSeries(limit = 4) {
+        const series = getWindowSeries(limit);
+        const chain = [];
+        for (let i = 1; i < series.length; i++) {
+          chain.push({
+            current: series[i - 1],
+            previous: series[i],
+          });
+        }
+        return chain;
+      }
+      // 基于固定窗口的比较：重点比较当前窗口和上一窗口之间的差异，允许按维度设置容差
       function comparison() {
         if (!history.length) return null;
-        const current = history[history.length - 1];
         const duration = DURATION_MS[selectedDimension] || 0;
         if (!duration) return null;
-        const targetTime = current.timestamp - duration;
-        // 从倒数第二个快照向前查找：找到 timestamp <= targetTime 的最新一项
-        for (let i = history.length - 2; i >= 0; i--) {
-          if (history[i].timestamp <= targetTime) return history[i];
-        }
-        return null;
+        const series = getWindowSeries(2);
+        return series[1]?.snapshot || series[0]?.snapshot || null;
       }
       function dimensionLabel() {
         return selectedDimension === "1h" || selectedDimension === "2h"
@@ -695,22 +764,22 @@
         const status = document.getElementById("dimensionStatus");
         const comp = comparison();
         const label = dimensionLabel();
-        const duration = DURATION_MS[selectedDimension] || 0;
-        const targetMinutes = Math.floor(duration / 60000);
         if (!history.length) {
           status.textContent = `${label} 数据积累中（暂无快照）`;
           return;
         }
         if (!comp) {
-          status.textContent = `${label} 数据积累中（未找到在 ${targetMinutes} 分钟之前的快照）`;
+          status.textContent = `${label} 数据积累中（未找到当前窗口附近的有效快照）`;
           return;
         }
-        const ageMinutes = Math.max(0, Math.floor((Date.now() - comp.timestamp) / 60000));
-        let note = `${label} 对比已启用 · 使用距现在 ${ageMinutes} 分钟的快照`;
-        if (ageMinutes > targetMinutes) {
-          note += `（目标 ${targetMinutes} 分钟，实际 ${ageMinutes} 分钟）`;
-        }
-        status.textContent = note;
+        const tolerance = getWindowTolerance(DURATION_MS[selectedDimension] || 0);
+        const compareMinutes = Math.floor(tolerance / 60000);
+        const compareTime = new Date(comp.timestamp).toLocaleTimeString("zh-CN", {
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        status.textContent = `${label} 对比已启用 · 使用前一窗口 ${compareTime} 快照（允许 ${compareMinutes} 分钟容差）`;
       }
       function updateDimensionHeaders() {
         const label = dimensionLabel();
@@ -719,10 +788,35 @@
         document.getElementById("radarRankHeader").textContent = `${label}排名`;
         document.getElementById("radarPriceHeader").textContent =
           `${label}价格${priceSortDescending ? " ↓" : ""}`;
+        document.getElementById("topWindowHeader").textContent = "窗口链";
+        document.getElementById("radarWindowHeader").textContent = "窗口链";
+      }
+      function getWindowChainSummary(symbol) {
+        const series = getWindowSeries(4);
+        if (series.length < 2) return "--";
+        const deltas = [];
+        for (let i = 0; i < series.length - 1; i++) {
+          const newer = series[i].snapshot;
+          const older = series[i + 1].snapshot;
+          const newerPrice = newer.prices[symbol];
+          const olderPrice = older.prices[symbol];
+          if (!Number.isFinite(newerPrice) || !Number.isFinite(olderPrice) || olderPrice === 0) continue;
+          deltas.push(((newerPrice - olderPrice) / olderPrice) * 100);
+        }
+        if (!deltas.length) return "--";
+        return deltas
+          .slice(0, 3)
+          .map((delta) => {
+            const sign = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
+            const cls = delta > 0 ? "window-chain-up" : delta < 0 ? "window-chain-down" : "window-chain-flat";
+            return `<span class="${cls}">${sign}${Math.abs(delta).toFixed(2)}%</span>`;
+          })
+          .join(" / ");
       }
       function momentum(symbol) {
-        const old = comparison(),
-          currentRank = ranking().indexOf(symbol) + 1;
+        const series = getWindowSeries(2);
+        const old = series[1]?.snapshot || comparison();
+        const currentRank = ranking().indexOf(symbol) + 1;
         if (!old || !old.ranks[symbol] || !currentRank)
           return { rank: null, price: null };
         const oldPrice = old.prices[symbol],
@@ -773,10 +867,11 @@
                 const favoriteButton = `<button class="favorite-button${isFavorite ? " active" : ""}" data-symbol="${symbol}" aria-label="${isFavorite ? "取消收藏" : "收藏"}">${isFavorite ? "★" : "☆"}</button>`;
                 const baseAsset = symbol.replace(/USDT$/, "");
                 const tradeUrl = `https://www.binance.com/en/trade/${baseAsset}_USDT?type=spot`;
-                return `<tr><td>${favoriteButton}</td><td class=\"symbol symbol-copy\" data-symbol=\"${symbol}\" title=\"点击复制交易对\">${symbol.replace("USDT", "")} ${tag}</td><td class=\"up\"><a class=\"price-link\" href=\"${tradeUrl}\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"打开 ${symbol.replace("USDT", "")}/USDT 交易页\">${formatPercent(data.change24h)}</a></td><td>${metric(symbol, "price")}</td><td>${metric(symbol, "rank")}</td></tr>`;
+                const windowChain = getWindowChainSummary(symbol);
+                return `<tr><td>${favoriteButton}</td><td class=\"symbol symbol-copy\" data-symbol=\"${symbol}\" title=\"点击复制交易对\">${symbol.replace("USDT", "")} ${tag}</td><td class=\"up\"><a class=\"price-link\" href=\"${tradeUrl}\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"打开 ${symbol.replace("USDT", "")}/USDT 交易页\">${formatPercent(data.change24h)}</a></td><td>${metric(symbol, "price")}</td><td>${metric(symbol, "rank")}</td><td class="window-chain">${windowChain}</td></tr>`;
               })
               .join("")
-          : '<tr><td colspan="5"><div class="empty">暂无数据</div></td></tr>';
+          : '<tr><td colspan="6"><div class="empty">暂无数据</div></td></tr>';
       }
       function render() {
         const list = ranking();
