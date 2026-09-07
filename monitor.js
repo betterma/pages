@@ -2,7 +2,7 @@
 
 const CONFIG = {
   GITHUB_REPO: process.env.GITHUB_REPO || 'betterma/pages',
-  GITHUB_PATH: process.env.GITHUB_PATH || 'watch-data.json',
+  DATA_PATH: process.env.DATA_PATH || 'watch-data.json',
   GITHUB_API: 'https://api.github.com',
   GITHUB_TOKEN: process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '',
   SNAPSHOT_INTERVAL: 15 * 60 * 1000,
@@ -151,12 +151,12 @@ async function readGithubState() {
     throw new Error('Missing GITHUB_TOKEN. Set it in the environment or GitHub Actions secrets.');
   }
 
-  const url = `${CONFIG.GITHUB_API}/repos/${CONFIG.GITHUB_REPO}/contents/${CONFIG.GITHUB_PATH}`;
+  const url = `${CONFIG.GITHUB_API}/repos/${CONFIG.GITHUB_REPO}/contents/${CONFIG.DATA_PATH}`;
   console.log(`Reading GitHub state from ${url}`);
   const response = await fetch(url, { headers: githubHeaders() });
 
   if (response.status === 404) {
-    console.log(`GitHub state file not found yet: ${CONFIG.GITHUB_PATH}`);
+    console.log(`GitHub state file not found yet: ${CONFIG.DATA_PATH}`);
     return { history: [], events: [], alertState: {}, favorites: [], selectedDimension: CONFIG.SELECTED_DIMENSION, sha: null };
   }
 
@@ -181,7 +181,7 @@ async function readGithubState() {
 }
 
 async function writeGithubState(state, sha) {
-  const url = `${CONFIG.GITHUB_API}/repos/${CONFIG.GITHUB_REPO}/contents/${CONFIG.GITHUB_PATH}`;
+  const url = `${CONFIG.GITHUB_API}/repos/${CONFIG.GITHUB_REPO}/contents/${CONFIG.DATA_PATH}`;
   const payload = {
     message: 'Update Binance radar data',
     content: encodeBase64(JSON.stringify(state)),
@@ -206,12 +206,25 @@ async function writeGithubState(state, sha) {
 }
 
 async function fetchBinanceTicker() {
-  console.log('Requesting Binance ticker data');
-  const response = await fetch('https://api.binance.com/api/v3/ticker/24hr');
-  if (!response.ok) {
-    throw new Error(`Binance API HTTP ${response.status} ${response.statusText}`);
+  const endpoints = [
+    'https://api.binance.us/api/v3/ticker/24hr',
+    'https://api.binance.com/api/v3/ticker/24hr',
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      console.log(`Requesting Binance ticker data from ${endpoint}`);
+      const response = await fetch(endpoint);
+      if (response.ok) return response.json();
+
+      const text = await response.text();
+      console.warn(`Binance API HTTP ${response.status} ${response.statusText} from ${endpoint}: ${text.slice(0, 200)}`);
+    } catch (error) {
+      console.warn(`Binance API request failed for ${endpoint}: ${error.message}`);
+    }
   }
-  return response.json();
+
+  throw new Error('All Binance ticker endpoints failed');
 }
 
 async function main() {
@@ -262,7 +275,7 @@ async function main() {
     };
 
     const newSha = await writeGithubState(nextState, state.sha);
-    console.log(`Updated ${CONFIG.GITHUB_REPO}/${CONFIG.GITHUB_PATH} at ${new Date().toISOString()} | snapshots=${history.length} | events=${events.length} | sha=${newSha}`);
+    console.log(`Updated ${CONFIG.GITHUB_REPO}/${CONFIG.DATA_PATH} at ${new Date().toISOString()} | snapshots=${history.length} | events=${events.length} | sha=${newSha}`);
   } catch (error) {
     console.error(error);
     process.exitCode = 1;
