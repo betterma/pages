@@ -152,14 +152,16 @@ async function readGithubState() {
   }
 
   const url = `${CONFIG.GITHUB_API}/repos/${CONFIG.GITHUB_REPO}/contents/${CONFIG.GITHUB_PATH}`;
+  console.log(`Reading GitHub state from ${url}`);
   const response = await fetch(url, { headers: githubHeaders() });
 
   if (response.status === 404) {
+    console.log(`GitHub state file not found yet: ${CONFIG.GITHUB_PATH}`);
     return { history: [], events: [], alertState: {}, favorites: [], selectedDimension: CONFIG.SELECTED_DIMENSION, sha: null };
   }
 
   if (!response.ok) {
-    throw new Error(`读取 GitHub 数据失败: ${response.status}`);
+    throw new Error(`读取 GitHub 数据失败: ${response.status} ${response.statusText}`);
   }
 
   const file = await response.json();
@@ -187,6 +189,7 @@ async function writeGithubState(state, sha) {
 
   if (sha) payload.sha = sha;
 
+  console.log(`Writing GitHub state to ${url}`);
   const response = await fetch(url, {
     method: 'PUT',
     headers: githubHeaders(),
@@ -194,7 +197,8 @@ async function writeGithubState(state, sha) {
   });
 
   if (!response.ok) {
-    throw new Error(`保存 GitHub 数据失败: ${response.status}`);
+    const text = await response.text();
+    throw new Error(`保存 GitHub 数据失败: ${response.status} ${response.statusText} :: ${text.slice(0, 300)}`);
   }
 
   const result = await response.json();
@@ -202,9 +206,10 @@ async function writeGithubState(state, sha) {
 }
 
 async function fetchBinanceTicker() {
+  console.log('Requesting Binance ticker data');
   const response = await fetch('https://api.binance.com/api/v3/ticker/24hr');
   if (!response.ok) {
-    throw new Error(`Binance API HTTP ${response.status}`);
+    throw new Error(`Binance API HTTP ${response.status} ${response.statusText}`);
   }
   return response.json();
 }
