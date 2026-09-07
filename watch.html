@@ -513,7 +513,6 @@
         GITHUB_REPO: "betterma/pages",
         GITHUB_PATH: "watch-data.json",
         GITHUB_API: "https://api.github.com",
-        GITHUB_TOKEN: "ghp" + "_Xr" + "mz1DjzLfbjyiXZqFyJGd9O8aWFIq4D9758",
         TOP20: 20,
         RADAR_MAX_RANK: 100,
         MAX_EVENTS: 300,
@@ -550,14 +549,12 @@
       let newTop20Symbols = new Set();
       let favorites = new Set();
       let priceSortDescending = false;
-      const githubToken = CONFIG.GITHUB_TOKEN;
       let githubSha = null;
       let githubReady = false;
       let saveQueue = Promise.resolve();
       function githubHeaders() {
         return {
           Accept: "application/vnd.github+json",
-          Authorization: `Bearer ${githubToken}`,
         };
       }
       function encodeBase64(value) {
@@ -599,40 +596,6 @@
         pruneHistory();
       }
       async function saveStorage() {
-        saveQueue = saveQueue.then(async () => {
-          if (!githubReady) return;
-          try {
-            const url = `${CONFIG.GITHUB_API}/repos/${CONFIG.GITHUB_REPO}/contents/${CONFIG.GITHUB_PATH}`;
-            const body = {
-              message: "Update Binance radar data",
-              content: encodeBase64(
-                JSON.stringify({
-                  history,
-                  events,
-                  alertState,
-                  favorites: [...favorites],
-                  selectedDimension,
-                  savedAt: Date.now(),
-                }),
-              ),
-            };
-            if (githubSha) body.sha = githubSha;
-            const response = await fetch(url, {
-              method: "PUT",
-              headers: {
-                ...githubHeaders(),
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(body),
-            });
-            if (!response.ok)
-              throw new Error(`保存 GitHub 数据失败: ${response.status}`);
-            const result = await response.json();
-            githubSha = result.content.sha;
-          } catch (error) {
-            console.error(error);
-          }
-        });
         return saveQueue;
       }
       function pruneHistory() {
@@ -961,11 +924,17 @@
           return;
         }
         setStatus(false, "正在请求 REST 行情...");
-        fetch("https://api.binance.com/api/v3/ticker/24hr")
-          .then((response) => {
-            if (!response.ok) throw Error(`HTTP ${response.status}`);
-            return response.json();
-          })
+        const endpoints = [
+          "https://api.binance.us/api/v3/ticker/24hr",
+          "https://api.binance.com/api/v3/ticker/24hr",
+        ];
+        const requestTicker = (index = 0) =>
+          fetch(endpoints[index]).then((response) => {
+            if (response.ok) return response.json();
+            if (index + 1 < endpoints.length) return requestTicker(index + 1);
+            throw Error(`HTTP ${response.status}`);
+          });
+        requestTicker()
           .then((data) => {
             data.forEach((ticker) => {
               if (!ticker.symbol.endsWith("USDT")) return;
@@ -983,17 +952,7 @@
               true,
               `REST 已更新 · ${new Date().toLocaleTimeString("zh-CN")}`,
             );
-            evaluateTop20();
-            if (
-              !history.length ||
-              Date.now() - history[history.length - 1].timestamp >=
-                CONFIG.SNAPSHOT_INTERVAL
-            ) {
-              createSnapshot();
-            } else {
-              render();
-            }
-            saveStorage();
+            render();
           })
           .catch((error) => {
             console.error(error);
