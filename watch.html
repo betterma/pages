@@ -678,7 +678,7 @@
             snapshot.timestamp <= windowEnd + tolerance,
         );
         if (candidates.length) {
-          return candidates.sort((a, b) => a.timestamp - b.timestamp)[0];
+          return candidates.sort((a, b) => b.timestamp - a.timestamp)[0];
         }
         const previous = [...history]
           .filter((snapshot) => snapshot.timestamp < windowStart)
@@ -719,7 +719,7 @@
         return series[1]?.snapshot || series[0]?.snapshot || null;
       }
       function dimensionLabel() {
-        return selectedDimension === "1h" || selectedDimension === "2h"
+        return selectedDimension.endsWith("h")
           ? selectedDimension
           : `${selectedDimension}in`;
       }
