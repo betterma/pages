@@ -207,7 +207,7 @@ async function writeGithubState(state, sha) {
 
 async function fetchBinanceTicker() {
   const endpoints = [
-    'https://api.binance.us/api/v3/ticker/24hr',
+    'https://data-api.binance.vision/api/v3/ticker/24hr',
     'https://api.binance.com/api/v3/ticker/24hr',
   ];
 
