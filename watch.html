@@ -699,6 +699,31 @@
         }
         return series;
       }
+      function selectWindowSnapshotByMode(windowStart, duration, mode) {
+        const tolerance = getWindowTolerance(duration);
+        const windowEnd = windowStart + duration;
+        const candidates = history.filter(
+          (snapshot) =>
+            snapshot.timestamp >= windowStart &&
+            snapshot.timestamp <= windowEnd + tolerance,
+        );
+        if (!candidates.length) return null;
+        return candidates.sort((a, b) =>
+          mode === "earliest" ? a.timestamp - b.timestamp : b.timestamp - a.timestamp,
+        )[0];
+      }
+      function getWindowChainSeries() {
+        const duration = DURATION_MS[selectedDimension] || 0;
+        if (!duration) return [];
+        const currentWindowStart = getWindowStart(Date.now(), duration);
+        return [0, 1, 2, 3].map((index) => {
+          const windowStart = currentWindowStart - (3 - index) * duration;
+          return {
+            windowStart,
+            snapshot: selectWindowSnapshotByMode(windowStart, duration, "earliest"),
+          };
+        });
+      }
       function getAdjacentWindowSeries(limit = 4) {
         const series = getWindowSeries(limit);
         const chain = [];
@@ -755,21 +780,22 @@
         document.getElementById("radarWindowHeader").textContent = "窗口链";
       }
       function getWindowChainSummary(symbol) {
-        const series = getWindowSeries(4);
-        if (series.length < 2) return "--";
+        const series = getWindowChainSeries();
+        const values = series.map((item) => item.snapshot?.prices[symbol]);
+        values.push(marketMap[symbol]?.price);
         const deltas = [];
-        for (let i = 0; i < series.length - 1; i++) {
-          const newer = series[i].snapshot;
-          const older = series[i + 1].snapshot;
-          const newerPrice = newer.prices[symbol];
-          const olderPrice = older.prices[symbol];
-          if (!Number.isFinite(newerPrice) || !Number.isFinite(olderPrice) || olderPrice === 0) continue;
+        for (let index = 1; index < values.length; index += 1) {
+          const olderPrice = values[index - 1];
+          const newerPrice = values[index];
+          if (!Number.isFinite(olderPrice) || !Number.isFinite(newerPrice) || olderPrice === 0) {
+            deltas.push(null);
+            continue;
+          }
           deltas.push(((newerPrice - olderPrice) / olderPrice) * 100);
         }
-        if (!deltas.length) return "--";
         return deltas
-          .slice(0, 3)
           .map((delta) => {
+            if (delta === null) return "--";
             const sign = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
             const cls = delta > 0 ? "window-chain-up" : delta < 0 ? "window-chain-down" : "window-chain-flat";
             return `<span class="${cls}">${sign}${Math.abs(delta).toFixed(2)}%</span>`;
