@@ -821,8 +821,7 @@
           .join(" / ");
       }
       function momentum(symbol) {
-        const series = getWindowSeries(2);
-        const old = series[1]?.snapshot || comparison();
+        const old = comparison();
         const currentRank = ranking().indexOf(symbol) + 1;
         if (!old || !old.ranks[symbol] || !currentRank)
           return { rank: null, price: null };
