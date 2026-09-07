@@ -754,8 +754,12 @@
         if (!history.length) return null;
         const duration = DURATION_MS[selectedDimension] || 0;
         if (!duration) return null;
-        const series = getWindowSeries(2);
-        return series[1]?.snapshot || series[0]?.snapshot || null;
+        const currentWindowStart = getWindowStart(Date.now(), duration);
+        return selectWindowSnapshotByMode(
+          currentWindowStart,
+          duration,
+          "earliest",
+        );
       }
       function dimensionLabel() {
         return selectedDimension.endsWith("h")
@@ -781,7 +785,7 @@
           hour: "2-digit",
           minute: "2-digit",
         });
-        status.textContent = `${label} 对比已启用 · 使用前一窗口 ${compareTime} 快照（允许 ${compareMinutes} 分钟容差）`;
+        status.textContent = `${label} 对比已启用 · 使用当前窗口 ${compareTime} 快照（允许 ${compareMinutes} 分钟容差）`;
       }
       function updateDimensionHeaders() {
         const label = dimensionLabel();
