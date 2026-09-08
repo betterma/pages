@@ -376,11 +376,32 @@
         padding: 0 16px 16px;
       }
       .kline-card {
+        position: relative;
         min-width: 0;
         padding: 8px 10px 10px;
         background: #f7f8f6;
         border: 1px solid #d8ddda;
         border-radius: 8px;
+        user-select: none;
+        -webkit-user-select: none;
+        touch-action: manipulation;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+      }
+      .kline-card.is-pressed {
+        transform: scale(0.98);
+        box-shadow: 0 0 0 2px rgba(113, 139, 136, 0.35);
+      }
+      .kline-card.is-favorite {
+        border-color: #b7c4b8;
+      }
+      .kline-card .fav-mark {
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        color: #7a8f7c;
+        font-size: 12px;
+        line-height: 1;
+        pointer-events: none;
       }
       .kline-card-head {
         display: flex;
@@ -389,6 +410,7 @@
         gap: 8px;
         margin-bottom: 6px;
         font-size: 13px;
+        padding-right: 14px;
       }
       .kline-card-head .symbol-copy {
         color: inherit;
@@ -738,6 +760,7 @@
       <div id="klineMeta" class="kline-meta"></div>
       <div id="klineGrid" class="kline-grid"></div>
     </dialog>
+    <script src="./watch-favorites.js"></script>
     <script>
       "use strict";
       const CONFIG = {
@@ -762,6 +785,8 @@
       let history = [];
       let events = [];
       let favorites = new Set();
+      let favoriteItems = [];
+      let favoriteSaving = false;
       let watchPool = new Set();
       let selectedDimension = "15m";
       let lastApiUpdate = 0;
@@ -862,6 +887,7 @@
           history = [];
           events = [];
           favorites = new Set();
+          favoriteItems = [];
           watchPool = new Set();
           setStep("github", "warn", "文件不存在，将使用空数据");
           return;
@@ -878,9 +904,8 @@
         }
         history = Array.isArray(data.history) ? data.history : [];
         events = Array.isArray(data.events) ? data.events : [];
-        favorites = new Set(
-          Array.isArray(data.favorites) ? data.favorites : [],
-        );
+        favoriteItems = WatchFavorites.normalizeFavorites(data.favorites);
+        favorites = WatchFavorites.favoritesToSymbolSet(favoriteItems);
         watchPool = new Set(
           Array.isArray(data.watchPool) ? data.watchPool : [],
         );
@@ -1245,11 +1270,17 @@
               .map((symbol) => {
                 const label = symbol.replace("USDT", "");
                 const change = momentum(symbol).price?.change;
-                return `<div class="kline-card" data-symbol="${symbol}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span></div><canvas></canvas></div>`;
+                const isFavorite = favorites.has(symbol);
+                const favClass = isFavorite ? " is-favorite" : "";
+                const mark = isFavorite
+                  ? '<span class="fav-mark">★</span>'
+                  : "";
+                return `<div class="kline-card${favClass}" data-symbol="${symbol}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span></div>${mark}<canvas></canvas></div>`;
               })
               .join("")
           : '<div class="empty">暂无上涨币种</div>';
         dialog.showModal();
+        bindKlineCardLongPress(grid);
 
         const cards = [...grid.querySelectorAll(".kline-card")];
         const batchSize = 4;
@@ -1262,6 +1293,48 @@
             ),
           );
         }
+      }
+
+      function bindKlineCardLongPress(root) {
+        root.querySelectorAll(".kline-card").forEach((card) => {
+          let timer = null;
+          let triggered = false;
+          const clear = () => {
+            if (timer) {
+              clearTimeout(timer);
+              timer = null;
+            }
+            card.classList.remove("is-pressed");
+          };
+          const start = (event) => {
+            if (event.target.closest(".symbol-copy")) return;
+            if (event.pointerType === "mouse" && event.button !== 0) return;
+            triggered = false;
+            card.classList.add("is-pressed");
+            timer = setTimeout(() => {
+              triggered = true;
+              clear();
+              if (navigator.vibrate) navigator.vibrate(20);
+              toggleFavorite(card.dataset.symbol, "kline");
+            }, 450);
+          };
+          card.addEventListener("pointerdown", start);
+          card.addEventListener("pointerup", clear);
+          card.addEventListener("pointerleave", clear);
+          card.addEventListener("pointercancel", clear);
+          card.addEventListener("contextmenu", (event) => event.preventDefault());
+          card.addEventListener(
+            "click",
+            (event) => {
+              if (triggered) {
+                event.preventDefault();
+                event.stopPropagation();
+                triggered = false;
+              }
+            },
+            true,
+          );
+        });
       }
 
       function closeKlineDialog() {
@@ -1476,10 +1549,41 @@
         render();
       }
 
-      function toggleFavorite(symbol) {
-        if (favorites.has(symbol)) favorites.delete(symbol);
-        else favorites.add(symbol);
-        render();
+      async function toggleFavorite(symbol, source) {
+        if (!symbol || favoriteSaving) return;
+        favoriteSaving = true;
+        const label = symbol.replace("USDT", "");
+        try {
+          setStatus(false, `正在保存 ${label} 收藏...`);
+          const result = await WatchFavorites.patchFavorites({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.GITHUB_PATH,
+            message: `Update favorite ${symbol}`,
+            mutate(list) {
+              return WatchFavorites.toggleFavorite(
+                list,
+                symbol,
+                source || "radar",
+              );
+            },
+          });
+          favoriteItems = result.favorites;
+          favorites = WatchFavorites.favoritesToSymbolSet(favoriteItems);
+          const added = result.meta && result.meta.added;
+          setStatus(
+            true,
+            added ? `${label} 已收藏并同步` : `${label} 已取消收藏并同步`,
+          );
+          render();
+          if (document.getElementById("klineDialog").open) {
+            openKlineDialog();
+          }
+        } catch (error) {
+          console.error(error);
+          setStatus(false, error.message || "收藏保存失败");
+        } finally {
+          favoriteSaving = false;
+        }
       }
 
       document
@@ -1575,7 +1679,11 @@
           return;
         }
         const button = event.target.closest(".favorite-button");
-        if (button) toggleFavorite(button.dataset.symbol);
+        if (button) {
+          event.preventDefault();
+          toggleFavorite(button.dataset.symbol, "radar");
+          return;
+        }
         const symbolCell = event.target.closest(".symbol-copy");
         if (symbolCell) {
           copySymbol(symbolCell.dataset.name || symbolCell.dataset.symbol);

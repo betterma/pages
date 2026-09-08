@@ -36,6 +36,10 @@
         margin: 0;
         font-size: 20px;
       }
+      h2.section-title {
+        margin: 16px 0 6px;
+        font-size: 15px;
+      }
       .nav-link {
         color: #5a6a68;
         font-size: 13px;
@@ -91,17 +95,43 @@
         font-size: 12px;
         margin-bottom: 10px;
       }
+      .hint {
+        color: #9aa3a0;
+        font-size: 12px;
+        margin: -2px 0 10px;
+      }
       .kline-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
         gap: 10px;
       }
       .kline-card {
+        position: relative;
         min-width: 0;
         padding: 8px 10px 10px;
         background: #fbfcfa;
         border: 1px solid #d8ddda;
         border-radius: 8px;
+        user-select: none;
+        -webkit-user-select: none;
+        touch-action: manipulation;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+      }
+      .kline-card.is-pressed {
+        transform: scale(0.98);
+        box-shadow: 0 0 0 2px rgba(113, 139, 136, 0.35);
+      }
+      .kline-card.is-favorite {
+        border-color: #b7c4b8;
+      }
+      .fav-mark {
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        color: #7a8f7c;
+        font-size: 12px;
+        line-height: 1;
+        pointer-events: none;
       }
       .kline-card-head {
         display: flex;
@@ -110,6 +140,7 @@
         gap: 8px;
         margin-bottom: 6px;
         font-size: 13px;
+        padding-right: 14px;
       }
       .kline-card-head .symbol-copy {
         color: inherit;
@@ -127,6 +158,7 @@
         display: block;
         width: 100%;
         height: 150px;
+        pointer-events: none;
       }
       .up {
         color: #4f7a6e;
@@ -151,6 +183,19 @@
         border: none;
         background: transparent;
         font-size: 12px;
+      }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        background: rgba(40, 50, 58, 0.92);
+        color: #f7f8f6;
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-size: 13px;
+        z-index: 20;
+        pointer-events: none;
       }
       @media (max-width: 768px) {
         .page {
@@ -192,9 +237,17 @@
         <span id="statusDot" class="dot"></span>
         <span id="statusText">等待启动...</span>
       </div>
-      <div id="meta" class="meta"></div>
-      <div id="klineGrid" class="kline-grid"></div>
+      <p class="hint">长按 K 线卡片可加入/取消收藏（同步到 GitHub）· 单击名称复制</p>
+
+      <h2 class="section-title">窗口上涨</h2>
+      <div id="risingMeta" class="meta"></div>
+      <div id="risingGrid" class="kline-grid"></div>
+
+      <h2 class="section-title">我的收藏</h2>
+      <div id="favMeta" class="meta"></div>
+      <div id="favGrid" class="kline-grid"></div>
     </div>
+    <script src="./watch-favorites.js"></script>
     <script>
       "use strict";
 
@@ -206,6 +259,7 @@
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
         KLINE_MAX_LIMIT: 1000,
         KLINE_INTERVAL: "4h",
+        LONG_PRESS_MS: 450,
       };
       const DURATION_MS = {
         "15m": 15 * 60 * 1000,
@@ -218,8 +272,10 @@
       const marketMap = {};
       let history = [];
       let watchPool = new Set();
+      let favoriteItems = [];
       let klineAbort = null;
       let loading = false;
+      let favoriteSaving = false;
 
       function setStatus(ok, text) {
         document.getElementById("statusDot").className =
@@ -227,10 +283,24 @@
         document.getElementById("statusText").textContent = text;
       }
 
+      function showToast(message) {
+        const existing = document.querySelector(".toast");
+        if (existing) existing.remove();
+        const toast = document.createElement("div");
+        toast.className = "toast";
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 1600);
+      }
+
       function formatPercent(value) {
         return Number.isFinite(value)
           ? `${value > 0 ? "+" : ""}${value.toFixed(2)}%`
           : "--";
+      }
+
+      function favoriteSymbols() {
+        return WatchFavorites.favoritesToSymbolSet(favoriteItems);
       }
 
       async function copyName(name) {
@@ -283,7 +353,8 @@
           : history.filter(
               (snapshot) =>
                 snapshot.timestamp >= windowStart &&
-                snapshot.timestamp < windowEnd + CONFIG.WINDOW_TOLERANCE_MS,
+                snapshot.timestamp <
+                  windowEnd + CONFIG.WINDOW_TOLERANCE_MS,
             );
         if (!candidates.length) return null;
         return candidates.reduce((earliest, item) =>
@@ -342,12 +413,20 @@
         );
       }
 
+      function getFavoriteOnlySymbols(risingSymbols) {
+        const rising = new Set(risingSymbols);
+        return favoriteItems
+          .map((item) => item.symbol)
+          .filter((symbol) => marketMap[symbol] && !rising.has(symbol));
+      }
+
       async function loadGithubStorage() {
         const url = `https://raw.githubusercontent.com/${CONFIG.GITHUB_REPO}/main/${CONFIG.GITHUB_PATH}?t=${Date.now()}`;
         const response = await fetch(url, { cache: "no-store" });
         if (response.status === 404) {
           history = [];
           watchPool = new Set();
+          favoriteItems = [];
           return;
         }
         if (!response.ok) {
@@ -358,6 +437,7 @@
         watchPool = new Set(
           Array.isArray(data.watchPool) ? data.watchPool : [],
         );
+        favoriteItems = WatchFavorites.normalizeFavorites(data.favorites);
         pruneHistory();
       }
 
@@ -472,6 +552,7 @@
       async function renderKlineCard(card, symbol, interval, signal) {
         const canvas = card.querySelector("canvas");
         const status = card.querySelector("[data-kline-status]");
+        if (!canvas || !status) return;
         try {
           const candles = await fetchKlines(symbol, interval, signal);
           const last = candles[candles.length - 1];
@@ -499,33 +580,86 @@
         }
       }
 
-      async function renderKlines(symbols) {
-        const interval = CONFIG.KLINE_INTERVAL;
-        const grid = document.getElementById("klineGrid");
-        const meta = document.getElementById("meta");
-        const bars = klineLimit(interval);
+      function buildCardHtml(symbol, options) {
+        const label = symbol.replace("USDT", "");
+        const change = windowPriceChange(symbol, CONFIG.KLINE_INTERVAL);
+        const favClass = options.isFavorite ? " is-favorite" : "";
+        const mark = options.showMark ? '<span class="fav-mark">★</span>' : "";
+        return `<div class="kline-card${favClass}" data-symbol="${symbol}" data-section="${options.section}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span></div>${mark}<canvas></canvas></div>`;
+      }
 
-        if (klineAbort) klineAbort.abort();
-        klineAbort = new AbortController();
-        const { signal } = klineAbort;
+      function bindCardInteractions(root) {
+        root.querySelectorAll(".symbol-copy").forEach((btn) => {
+          btn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            copyName(btn.dataset.name);
+          });
+        });
+        root.querySelectorAll(".kline-card").forEach((card) => {
+          bindLongPress(card);
+        });
+      }
 
-        meta.textContent = symbols.length
-          ? `窗口上涨 ${symbols.length} / 观察池 ${watchPool.size} · ${interval} · 近3天 ${bars} 根`
-          : `当前没有窗口上涨的观察池币种 · 观察池 ${watchPool.size} 个`;
+      function bindLongPress(card) {
+        let timer = null;
+        let triggered = false;
 
+        const clear = () => {
+          if (timer) {
+            clearTimeout(timer);
+            timer = null;
+          }
+          card.classList.remove("is-pressed");
+        };
+
+        const start = (event) => {
+          if (event.target.closest(".symbol-copy")) return;
+          if (event.pointerType === "mouse" && event.button !== 0) return;
+          triggered = false;
+          card.classList.add("is-pressed");
+          timer = setTimeout(async () => {
+            triggered = true;
+            clear();
+            if (navigator.vibrate) navigator.vibrate(20);
+            await toggleFavoriteForSymbol(card.dataset.symbol);
+          }, CONFIG.LONG_PRESS_MS);
+        };
+
+        card.addEventListener("pointerdown", start);
+        card.addEventListener("pointerup", clear);
+        card.addEventListener("pointerleave", clear);
+        card.addEventListener("pointercancel", clear);
+        card.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+        });
+        card.addEventListener(
+          "click",
+          (event) => {
+            if (triggered) {
+              event.preventDefault();
+              event.stopPropagation();
+              triggered = false;
+            }
+          },
+          true,
+        );
+      }
+
+      async function fillGrid(grid, symbols, section, signal) {
+        const favSet = favoriteSymbols();
         grid.innerHTML = symbols.length
           ? symbols
-              .map((symbol) => {
-                const label = symbol.replace("USDT", "");
-                const change = windowPriceChange(symbol, interval);
-                return `<div class="kline-card" data-symbol="${symbol}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span></div><canvas></canvas></div>`;
-              })
+              .map((symbol) =>
+                buildCardHtml(symbol, {
+                  section,
+                  isFavorite: favSet.has(symbol),
+                  showMark: section === "rising" && favSet.has(symbol),
+                }),
+              )
               .join("")
-          : '<div class="empty">暂无上涨币种</div>';
+          : `<div class="empty">${section === "rising" ? "暂无上涨币种" : "暂无需要补位的收藏"}</div>`;
 
-        grid.querySelectorAll(".symbol-copy").forEach((btn) => {
-          btn.addEventListener("click", () => copyName(btn.dataset.name));
-        });
+        bindCardInteractions(grid);
 
         const cards = [...grid.querySelectorAll(".kline-card")];
         const batchSize = 4;
@@ -534,9 +668,82 @@
           const batch = cards.slice(index, index + batchSize);
           await Promise.all(
             batch.map((card) =>
-              renderKlineCard(card, card.dataset.symbol, interval, signal),
+              renderKlineCard(
+                card,
+                card.dataset.symbol,
+                CONFIG.KLINE_INTERVAL,
+                signal,
+              ),
             ),
           );
+        }
+      }
+
+      async function renderKlines() {
+        const interval = CONFIG.KLINE_INTERVAL;
+        const bars = klineLimit(interval);
+        const rising = getRisingSymbols();
+        const favOnly = getFavoriteOnlySymbols(rising);
+        const overlap = favoriteItems.filter((item) =>
+          rising.includes(item.symbol),
+        ).length;
+
+        if (klineAbort) klineAbort.abort();
+        klineAbort = new AbortController();
+        const { signal } = klineAbort;
+
+        document.getElementById("risingMeta").textContent = rising.length
+          ? `窗口上涨 ${rising.length} / 观察池 ${watchPool.size} · ${interval} · 近3天 ${bars} 根`
+          : `当前没有窗口上涨的观察池币种 · 观察池 ${watchPool.size} 个`;
+
+        document.getElementById("favMeta").textContent =
+          favoriteItems.length > 0
+            ? `收藏 ${favoriteItems.length} · 下方补位 ${favOnly.length} · 另有 ${overlap} 个已在上方上涨区`
+            : "还没有收藏 · 长按上方 K 线卡片即可加入";
+
+        await fillGrid(
+          document.getElementById("risingGrid"),
+          rising,
+          "rising",
+          signal,
+        );
+        if (signal.aborted) return;
+        await fillGrid(
+          document.getElementById("favGrid"),
+          favOnly,
+          "favorite",
+          signal,
+        );
+      }
+
+      async function toggleFavoriteForSymbol(symbol) {
+        if (!symbol || favoriteSaving) return;
+        favoriteSaving = true;
+        const label = symbol.replace("USDT", "");
+        try {
+          setStatus(false, `正在保存 ${label} 收藏到 GitHub...`);
+          const result = await WatchFavorites.patchFavorites({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.GITHUB_PATH,
+            message: `Update favorite ${symbol}`,
+            mutate(list) {
+              return WatchFavorites.toggleFavorite(list, symbol, "kline");
+            },
+          });
+          favoriteItems = result.favorites;
+          const added = result.meta && result.meta.added;
+          showToast(added ? `${label} 已收藏` : `${label} 已取消收藏`);
+          await renderKlines();
+          setStatus(
+            true,
+            added ? `${label} 已同步到 GitHub` : `${label} 已从 GitHub 移除`,
+          );
+        } catch (error) {
+          console.error(error);
+          showToast(error.message || "收藏保存失败");
+          setStatus(false, error.message || "收藏保存失败");
+        } finally {
+          favoriteSaving = false;
         }
       }
 
@@ -546,7 +753,7 @@
         const btn = document.getElementById("refreshBtn");
         btn.disabled = true;
         try {
-          setStatus(false, "1/3 读取 GitHub 快照与观察池...");
+          setStatus(false, "1/3 读取 GitHub 快照 / 观察池 / 收藏...");
           await loadGithubStorage();
 
           setStatus(false, "2/3 拉取币安最新行情...");
@@ -554,18 +761,20 @@
 
           setStatus(false, "3/3 重算观察池并加载 K 线...");
           updateWatchPool();
-          const symbols = getRisingSymbols();
-          await renderKlines(symbols);
+          await renderKlines();
+          const rising = getRisingSymbols().length;
           setStatus(
             true,
-            `已更新 · 上涨 ${symbols.length} 个 · ${new Date().toLocaleTimeString("zh-CN")}`,
+            `已更新 · 上涨 ${rising} · 收藏 ${favoriteItems.length} · ${new Date().toLocaleTimeString("zh-CN")}`,
           );
         } catch (error) {
           console.error(error);
           setStatus(false, error.message || "刷新失败");
-          document.getElementById("meta").textContent = "";
-          document.getElementById("klineGrid").innerHTML =
+          document.getElementById("risingMeta").textContent = "";
+          document.getElementById("favMeta").textContent = "";
+          document.getElementById("risingGrid").innerHTML =
             `<div class="empty">${error.message || "加载失败"}</div>`;
+          document.getElementById("favGrid").innerHTML = "";
         } finally {
           loading = false;
           btn.disabled = false;

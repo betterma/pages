@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 
 const https = require('https');
+const {
+  normalizeFavorites,
+  serializeFavorites,
+} = require('./watch-favorites.js');
 
 const CONFIG = {
   GITHUB_REPO: process.env.GITHUB_REPO || 'betterma/pages',
@@ -250,7 +254,7 @@ async function readGithubState() {
 
   if (response.status === 404) {
     console.log(`GitHub state file not found yet: ${CONFIG.DATA_PATH}`);
-    return { history: [], events: [], alertState: {}, favorites: [], watchPool: [], selectedDimension: CONFIG.SELECTED_DIMENSION, sha: null };
+    return { history: [], events: [], alertState: {}, favorites: [], favoritesUpdatedAt: null, watchPool: [], selectedDimension: CONFIG.SELECTED_DIMENSION, sha: null };
   }
 
   if (!response.ok) {
@@ -289,7 +293,10 @@ async function readGithubState() {
     history: Array.isArray(parsed.history) ? parsed.history : [],
     events: Array.isArray(parsed.events) ? parsed.events : [],
     alertState: parsed.alertState || {},
-    favorites: Array.isArray(parsed.favorites) ? parsed.favorites : [],
+    favorites: normalizeFavorites(parsed.favorites),
+    favoritesUpdatedAt: Number.isFinite(Number(parsed.favoritesUpdatedAt))
+      ? Number(parsed.favoritesUpdatedAt)
+      : null,
     watchPool: Array.isArray(parsed.watchPool) ? parsed.watchPool : [],
     selectedDimension: Object.prototype.hasOwnProperty.call(CONFIG.DURATION_MS, parsed.selectedDimension)
       ? parsed.selectedDimension
@@ -345,12 +352,14 @@ async function fetchBinanceTicker() {
   throw new Error('All Binance ticker endpoints failed');
 }
 
-async function main() {
+async function runMonitorOnce() {
   const state = await readGithubState();
   let history = pruneHistory(state.history.slice());
   let events = state.events.slice();
   let alertState = state.alertState || {};
-  let favorites = new Set(state.favorites || []);
+  // Personal favorites are owned by the page; monitor only preserves them.
+  const favorites = serializeFavorites(state.favorites || []);
+  const favoritesUpdatedAt = state.favoritesUpdatedAt;
   let watchPool = new Set(state.watchPool || []);
   let selectedDimension = Object.prototype.hasOwnProperty.call(CONFIG.DURATION_MS, state.selectedDimension)
     ? state.selectedDimension
@@ -384,7 +393,8 @@ async function main() {
     history,
     events,
     alertState,
-    favorites: [...favorites],
+    favorites,
+    favoritesUpdatedAt,
     watchPool: [...watchPool],
     selectedDimension,
     savedAt: Date.now(),
@@ -398,12 +408,28 @@ async function main() {
     snapshots: history.length,
     events: events.length,
     watchPool: watchPool.size,
+    favorites: favorites.length,
     sha: newSha,
   };
   console.log(
-    `Updated ${CONFIG.GITHUB_REPO}/${CONFIG.DATA_PATH} at ${resultSummary.updatedAt} | snapshots=${history.length} | events=${events.length} | watchPool=${watchPool.size} | sha=${newSha}`,
+    `Updated ${CONFIG.GITHUB_REPO}/${CONFIG.DATA_PATH} at ${resultSummary.updatedAt} | snapshots=${history.length} | events=${events.length} | watchPool=${watchPool.size} | favorites=${favorites.length} | sha=${newSha}`,
   );
   return resultSummary;
+}
+
+async function main() {
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await runMonitorOnce();
+    } catch (error) {
+      lastError = error;
+      const message = String(error && error.message ? error.message : error);
+      if (!message.includes('409') && !/conflict/i.test(message)) throw error;
+      console.warn(`GitHub write conflict, retrying monitor (${attempt + 1}/3)`);
+    }
+  }
+  throw lastError || new Error('monitor failed after conflicts');
 }
 
 if (require.main === module) {
