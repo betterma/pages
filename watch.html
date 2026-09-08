@@ -85,7 +85,7 @@
       }
       .info {
         display: grid;
-        grid-template-columns: repeat(6, 1fr);
+        grid-template-columns: repeat(3, 1fr);
         gap: 10px;
         margin-bottom: 15px;
       }
@@ -128,19 +128,8 @@
         color: #687370;
         font-size: 11px;
       }
-      .top20-tag {
-        color: #687f87;
-        margin-left: 4px;
-      }
       .dimension-status {
         color: #7b8582;
-        font-size: 12px;
-      }
-      .github-token {
-        min-width: 260px;
-      }
-      .github-status {
-        color: #78817f;
         font-size: 12px;
       }
       .table-wrap {
@@ -267,6 +256,24 @@
         font-size: 12px;
         margin: 20px 0;
       }
+      .watch-pool-btn {
+        position: relative;
+      }
+      .watch-pool-hint {
+        display: none;
+        min-width: 18px;
+        margin-left: 6px;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: #9a8162;
+        color: #fff;
+        font-size: 11px;
+        line-height: 1.4;
+        vertical-align: middle;
+      }
+      .watch-pool-hint.visible {
+        display: inline-block;
+      }
       dialog {
         width: min(420px, calc(100% - 32px));
         padding: 0;
@@ -274,6 +281,25 @@
         border-radius: 8px;
         background: #fbfcfa;
         color: #28323a;
+      }
+      dialog.watch-pool-dialog {
+        width: min(1100px, calc(100% - 24px));
+      }
+      .dialog-body {
+        padding: 0 0 14px;
+      }
+      .dialog-body .table-wrap {
+        padding: 0 12px;
+      }
+      .dialog-actions {
+        display: flex;
+        justify-content: center;
+        padding: 4px 16px 2px;
+      }
+      .watch-pool-meta {
+        padding: 0 16px 10px;
+        color: #78817f;
+        font-size: 12px;
       }
       dialog::backdrop {
         background: rgba(40, 50, 58, 0.28);
@@ -329,11 +355,6 @@
       }
       .window-chain-flat {
         color: #78817f;
-      }
-      @media (max-width: 1100px) {
-        .info {
-          grid-template-columns: repeat(3, 1fr);
-        }
       }
       @media (max-width: 700px) {
         .container {
@@ -423,6 +444,9 @@
           </select></label
         ><span id="dimensionStatus" class="dimension-status"></span
         ><button id="refreshBtn">刷新数据</button
+        ><button id="watchPoolBtn" class="watch-pool-btn" type="button">
+          观察池<span id="watchPoolHint" class="watch-pool-hint" aria-live="polite">0</span>
+        </button
         ><button id="clearBtn" class="danger">清空历史</button>
       </div>
       <div class="info">
@@ -495,7 +519,7 @@
         </div>
         <div id="eventList" class="event-list"></div>
       </div>
-      <div class="footer">每15分钟请求并保存快照 · 保存4小时历史</div>
+      <div class="footer">每15分钟请求行情 · 历史快照来自 GitHub · 本地保留最近3天</div>
     </div>
     <dialog id="snapshotDialog" aria-labelledby="snapshotDialogTitle">
       <div class="dialog-header">
@@ -504,28 +528,51 @@
       </div>
       <div class="snapshot-list" id="snapshotList"></div>
     </dialog>
+    <dialog
+      id="watchPoolDialog"
+      class="watch-pool-dialog"
+      aria-labelledby="watchPoolDialogTitle"
+    >
+      <div class="dialog-header">
+        <h2 id="watchPoolDialogTitle">观察池</h2>
+        <button class="dialog-close" id="watchPoolDialogClose" aria-label="关闭">×</button>
+      </div>
+      <div class="dialog-body">
+        <div id="watchPoolMeta" class="watch-pool-meta"></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>收藏</th>
+                <th>币种</th>
+                <th>24h涨幅</th>
+                <th id="poolPriceHeader" class="sortable" title="点击按价格涨幅排序">
+                  15min价格
+                </th>
+                <th id="poolRankHeader">15min排名</th>
+                <th id="poolWindowHeader" title="最近 4 个窗口的相邻变化">窗口链</th>
+              </tr>
+            </thead>
+            <tbody id="watchPoolBody"></tbody>
+          </table>
+        </div>
+        <div class="dialog-actions">
+          <button id="watchPoolToggleBtn" type="button">切换全部</button>
+        </div>
+      </div>
+    </dialog>
     <script>
       "use strict";
       const CONFIG = {
         REST_INTERVAL: 15 * 60 * 1000,
-          SNAPSHOT_INTERVAL: 15 * 60 * 1000,
-          HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000, // 保存最近 3 天的快照
+        HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000,
         GITHUB_REPO: "betterma/pages",
         GITHUB_PATH: "watch-data.json",
-        GITHUB_API: "https://api.github.com",
         TOP20: 20,
         RADAR_MAX_RANK: 100,
-        MAX_EVENTS: 300,
-        PRICE_THRESHOLD: {
-          "15m": 0.3,
-          "30m": 0.8,
-          "1h": 1.5,
-          "2h": 2.2,
-          "4h": 3,
-        },
+        WATCH_POOL_RANK: 30,
+        WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
       };
-      const OFFSETS = { "15m": 1, "30m": 2, "1h": 4, "2h": 8, "4h": 16 };
-      // 各维度对应的时间长度（毫秒），用于按时间查找比较快照
       const DURATION_MS = {
         "15m": 15 * 60 * 1000,
         "30m": 30 * 60 * 1000,
@@ -533,49 +580,21 @@
         "2h": 2 * 60 * 60 * 1000,
         "4h": 4 * 60 * 60 * 1000,
       };
-      const WINDOW_TOLERANCE_MS = {
-        "15m": 2 * 60 * 1000,
-        "30m": 2 * 60 * 1000,
-        "1h": 2 * 60 * 1000,
-        "2h": 2 * 60 * 1000,
-        "4h": 2 * 60 * 1000,
-      };
       const marketMap = {};
-      let history = [],
-        events = [],
-        alertState = {},
-        selectedDimension = "15m";
-      let lastApiUpdate = 0;
-      let newTop20Symbols = new Set();
+      let history = [];
+      let events = [];
       let favorites = new Set();
+      let watchPool = new Set();
+      let selectedDimension = "15m";
+      let lastApiUpdate = 0;
       let priceSortDescending = false;
-      let githubSha = null;
+      let watchPoolShowAll = false;
       let githubReady = false;
-      let saveQueue = Promise.resolve();
-      function githubHeaders() {
-        return {
-          Accept: "application/vnd.github+json",
-        };
-      }
-      function encodeBase64(value) {
-        const bytes = new TextEncoder().encode(value);
-        let binary = "";
-        bytes.forEach((byte) => (binary += String.fromCharCode(byte)));
-        return btoa(binary);
-      }
-      function decodeBase64(value) {
-        const binary = atob(value.replace(/\n/g, ""));
-        return new TextDecoder().decode(
-          Uint8Array.from(binary, (character) => character.charCodeAt(0)),
-        );
-      }
+
       async function loadGithubStorage() {
         const url = `https://raw.githubusercontent.com/${CONFIG.GITHUB_REPO}/main/${CONFIG.GITHUB_PATH}?t=${Date.now()}`;
         const response = await fetch(url, { cache: "no-store" });
-        if (response.status === 404) {
-          githubSha = null;
-          return;
-        }
+        if (response.status === 404) return;
         if (!response.ok)
           throw new Error(`读取 GitHub 数据失败: ${response.status}`);
         const content = await response.text();
@@ -586,31 +605,30 @@
         } catch (error) {
           throw new Error(`watch-data.json 不是有效 JSON: ${error.message}`);
         }
-        githubSha = null;
         history = Array.isArray(data.history) ? data.history : [];
         events = Array.isArray(data.events) ? data.events : [];
-        alertState = data.alertState || {};
         favorites = new Set(
           Array.isArray(data.favorites) ? data.favorites : [],
         );
-        if (
-          Object.prototype.hasOwnProperty.call(OFFSETS, data.selectedDimension)
-        ) {
+        watchPool = new Set(
+          Array.isArray(data.watchPool) ? data.watchPool : [],
+        );
+        if (Object.prototype.hasOwnProperty.call(DURATION_MS, data.selectedDimension)) {
           selectedDimension = data.selectedDimension;
           document.getElementById("dimensionSelect").value = selectedDimension;
         }
         pruneHistory();
       }
-      async function saveStorage() {
-        return saveQueue;
-      }
+
       function pruneHistory() {
         const cutoff = Date.now() - CONFIG.HISTORY_DURATION;
         history = history.filter((item) => item.timestamp >= cutoff);
       }
+
       function formatTime(value) {
         return value ? new Date(value).toLocaleTimeString("zh-CN") : "--";
       }
+
       function formatDateTime(value) {
         return value
           ? new Date(value).toLocaleString("zh-CN", {
@@ -624,11 +642,13 @@
             })
           : "--";
       }
+
       function formatPercent(value) {
         return Number.isFinite(value)
           ? `${value > 0 ? "+" : ""}${value.toFixed(2)}%`
           : "--";
       }
+
       function formatPrice(value) {
         if (!Number.isFinite(value)) return "--";
         if (value >= 1000) return value.toFixed(2);
@@ -636,6 +656,7 @@
         if (value >= 0.01) return value.toFixed(6);
         return value.toPrecision(6);
       }
+
       async function copySymbol(symbol) {
         try {
           await navigator.clipboard.writeText(symbol);
@@ -649,6 +670,7 @@
         }
         document.getElementById("apiStatus").textContent = `${symbol} 已复制`;
       }
+
       function formatAge(timestamp) {
         if (!timestamp) return "--";
         const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
@@ -661,22 +683,18 @@
         if (h > 0) return `${h}h${m}min`;
         return `${m}min`;
       }
+
       function ranking() {
         return Object.entries(marketMap)
           .sort((a, b) => b[1].change24h - a[1].change24h)
           .map(([symbol]) => symbol);
       }
-      function getWindowTolerance(duration) {
-        return (
-          WINDOW_TOLERANCE_MS[selectedDimension] ||
-          Math.min(30 * 60 * 1000, Math.max(5 * 60 * 1000, duration / 2))
-        );
-      }
+
       function getWindowStart(timestamp, duration) {
         return Math.floor(timestamp / duration) * duration;
       }
-      function selectWindowSnapshot(windowStart, duration) {
-        const tolerance = getWindowTolerance(duration);
+
+      function selectEarliestWindowSnapshot(windowStart, duration) {
         const windowEnd = windowStart + duration;
         const strictCandidates = history.filter(
           (snapshot) =>
@@ -688,50 +706,12 @@
           : history.filter(
               (snapshot) =>
                 snapshot.timestamp >= windowStart &&
-                snapshot.timestamp < windowEnd + tolerance,
-            );
-        if (candidates.length) {
-          return candidates.sort((a, b) => b.timestamp - a.timestamp)[0];
-        }
-        const previous = [...history]
-          .filter((snapshot) => snapshot.timestamp < windowStart)
-          .sort((a, b) => b.timestamp - a.timestamp)[0];
-        return previous || null;
-      }
-      function getWindowSeries(limit = 4) {
-        const duration = DURATION_MS[selectedDimension] || 0;
-        if (!duration) return [];
-        const now = Date.now();
-        const currentWindowStart = getWindowStart(now, duration);
-        const series = [];
-        for (let index = 0; index < limit; index++) {
-          const windowStart = currentWindowStart - index * duration;
-          const snapshot = selectWindowSnapshot(windowStart, duration);
-          if (!snapshot) continue;
-          series.push({ windowStart, snapshot });
-        }
-        return series;
-      }
-      function selectWindowSnapshotByMode(windowStart, duration, mode) {
-        const tolerance = getWindowTolerance(duration);
-        const windowEnd = windowStart + duration;
-        const strictCandidates = history.filter(
-          (snapshot) =>
-            snapshot.timestamp >= windowStart &&
-            snapshot.timestamp < windowEnd,
-        );
-        const candidates = strictCandidates.length
-          ? strictCandidates
-          : history.filter(
-              (snapshot) =>
-                snapshot.timestamp >= windowStart &&
-                snapshot.timestamp < windowEnd + tolerance,
+                snapshot.timestamp < windowEnd + CONFIG.WINDOW_TOLERANCE_MS,
             );
         if (!candidates.length) return null;
-        return candidates.sort((a, b) =>
-          mode === "earliest" ? a.timestamp - b.timestamp : b.timestamp - a.timestamp,
-        )[0];
+        return candidates.sort((a, b) => a.timestamp - b.timestamp)[0];
       }
+
       function getWindowChainSeries() {
         const duration = DURATION_MS[selectedDimension] || 0;
         if (!duration) return [];
@@ -740,38 +720,25 @@
           const windowStart = currentWindowStart - (3 - index) * duration;
           return {
             windowStart,
-            snapshot: selectWindowSnapshotByMode(windowStart, duration, "earliest"),
+            snapshot: selectEarliestWindowSnapshot(windowStart, duration),
           };
         });
       }
-      function getAdjacentWindowSeries(limit = 4) {
-        const series = getWindowSeries(limit);
-        const chain = [];
-        for (let i = 1; i < series.length; i++) {
-          chain.push({
-            current: series[i - 1],
-            previous: series[i],
-          });
-        }
-        return chain;
-      }
-      // 基于固定窗口的比较：重点比较当前窗口和上一窗口之间的差异，允许按维度设置容差
+
       function comparison() {
         if (!history.length) return null;
         const duration = DURATION_MS[selectedDimension] || 0;
         if (!duration) return null;
         const currentWindowStart = getWindowStart(Date.now(), duration);
-        return selectWindowSnapshotByMode(
-          currentWindowStart,
-          duration,
-          "earliest",
-        );
+        return selectEarliestWindowSnapshot(currentWindowStart, duration);
       }
+
       function dimensionLabel() {
         return selectedDimension.endsWith("h")
           ? selectedDimension
           : `${selectedDimension}in`;
       }
+
       function updateDimensionStatus() {
         const status = document.getElementById("dimensionStatus");
         const comp = comparison();
@@ -784,8 +751,7 @@
           status.textContent = `${label} 数据积累中（未找到当前窗口附近的有效快照）`;
           return;
         }
-        const tolerance = getWindowTolerance(DURATION_MS[selectedDimension] || 0);
-        const compareMinutes = Math.floor(tolerance / 60000);
+        const compareMinutes = Math.floor(CONFIG.WINDOW_TOLERANCE_MS / 60000);
         const compareTime = new Date(comp.timestamp).toLocaleTimeString("zh-CN", {
           hour12: false,
           hour: "2-digit",
@@ -793,16 +759,80 @@
         });
         status.textContent = `${label} 对比已启用 · 使用当前窗口 ${compareTime} 快照（允许 ${compareMinutes} 分钟容差）`;
       }
+
       function updateDimensionHeaders() {
         const label = dimensionLabel();
+        const priceLabel = `${label}价格${priceSortDescending ? " ↓" : ""}`;
         document.getElementById("topRankHeader").textContent = `${label}排名`;
-        document.getElementById("topPriceHeader").textContent = `${label}价格${priceSortDescending ? " ↓" : ""}`;
+        document.getElementById("topPriceHeader").textContent = priceLabel;
         document.getElementById("radarRankHeader").textContent = `${label}排名`;
-        document.getElementById("radarPriceHeader").textContent =
-          `${label}价格${priceSortDescending ? " ↓" : ""}`;
-        document.getElementById("topWindowHeader").textContent = "窗口链";
-        document.getElementById("radarWindowHeader").textContent = "窗口链";
+        document.getElementById("radarPriceHeader").textContent = priceLabel;
+        document.getElementById("poolRankHeader").textContent = `${label}排名`;
+        document.getElementById("poolPriceHeader").textContent = priceLabel;
       }
+
+      function hasWindowGain(symbol) {
+        const change = momentum(symbol).price?.change;
+        return Number.isFinite(change) && change > 0;
+      }
+
+      function getWatchPoolRisingSymbols() {
+        return getWatchPoolSymbols().filter(hasWindowGain);
+      }
+
+      function getWatchPoolSymbols() {
+        const list = ranking();
+        const ranked = list.filter((symbol) => watchPool.has(symbol));
+        const unranked = [...watchPool].filter(
+          (symbol) => marketMap[symbol] && !list.includes(symbol),
+        );
+        const ordered = [...ranked, ...unranked];
+        if (!priceSortDescending) return ordered;
+        return [...ordered].sort((a, b) => {
+          const aChange = momentum(a).price?.change ?? -Infinity;
+          const bChange = momentum(b).price?.change ?? -Infinity;
+          return bChange - aChange;
+        });
+      }
+
+      function updateWatchPool() {
+        if (selectedDimension !== "4h") return;
+        const list = ranking();
+        if (!list.length) return;
+        for (const symbol of [...watchPool]) {
+          const rank = list.indexOf(symbol) + 1;
+          if (!rank || rank > CONFIG.WATCH_POOL_RANK) watchPool.delete(symbol);
+        }
+        for (const symbol of list.slice(0, CONFIG.WATCH_POOL_RANK)) {
+          if (hasWindowGain(symbol)) watchPool.add(symbol);
+        }
+      }
+
+      function updateWatchPoolHint() {
+        const hint = document.getElementById("watchPoolHint");
+        const risingCount = getWatchPoolRisingSymbols().length;
+        hint.textContent = String(risingCount);
+        hint.classList.toggle("visible", risingCount > 0);
+        hint.title =
+          risingCount > 0
+            ? `观察池中有 ${risingCount} 个币种在当前窗口上涨`
+            : "";
+      }
+
+      function renderWatchPoolDialog() {
+        const symbols = watchPoolShowAll
+          ? getWatchPoolSymbols()
+          : getWatchPoolRisingSymbols();
+        const risingCount = getWatchPoolRisingSymbols().length;
+        document.getElementById("watchPoolMeta").textContent = watchPoolShowAll
+          ? `全部观察池 · 共 ${watchPool.size} 个 · 当前窗口上涨 ${risingCount} 个`
+          : `当前窗口上涨 · ${risingCount} / ${watchPool.size}`;
+        document.getElementById("watchPoolToggleBtn").textContent = watchPoolShowAll
+          ? "仅看涨幅"
+          : "切换全部";
+        renderRows("watchPoolBody", symbols);
+      }
+
       function getWindowChainSummary(symbol) {
         const series = getWindowChainSeries();
         const values = series.map((item) => item.snapshot?.prices[symbol]);
@@ -811,7 +841,11 @@
         for (let index = 1; index < values.length; index += 1) {
           const olderPrice = values[index - 1];
           const newerPrice = values[index];
-          if (!Number.isFinite(olderPrice) || !Number.isFinite(newerPrice) || olderPrice === 0) {
+          if (
+            !Number.isFinite(olderPrice) ||
+            !Number.isFinite(newerPrice) ||
+            olderPrice === 0
+          ) {
             deltas.push(null);
             continue;
           }
@@ -821,18 +855,24 @@
           .map((delta) => {
             if (delta === null) return "--";
             const sign = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
-            const cls = delta > 0 ? "window-chain-up" : delta < 0 ? "window-chain-down" : "window-chain-flat";
+            const cls =
+              delta > 0
+                ? "window-chain-up"
+                : delta < 0
+                  ? "window-chain-down"
+                  : "window-chain-flat";
             return `<span class="${cls}">${sign}${Math.abs(delta).toFixed(2)}%</span>`;
           })
           .join(" / ");
       }
+
       function momentum(symbol) {
         const old = comparison();
         const currentRank = ranking().indexOf(symbol) + 1;
         if (!old || !old.ranks[symbol] || !currentRank)
           return { rank: null, price: null };
-        const oldPrice = old.prices[symbol],
-          currentPrice = marketMap[symbol].price;
+        const oldPrice = old.prices[symbol];
+        const currentPrice = marketMap[symbol].price;
         return {
           rank: {
             oldRank: old.ranks[symbol],
@@ -848,43 +888,40 @@
             : null,
         };
       }
+
       function metric(symbol, type) {
         const item = momentum(symbol)[type];
         if (!comparison() || !item) return "";
         const value = type === "rank" ? item.improvement : item.change;
         if (value <= 0) return "";
         const cls = type === "rank" ? "rank-up" : "up";
-        const oldValue =
-          type === "rank"
-            ? item.oldRank
-            : formatPrice(item.oldPrice);
+        const oldValue = type === "rank" ? item.oldRank : formatPrice(item.oldPrice);
         const currentValue =
+          type === "rank" ? item.currentRank : formatPrice(item.currentPrice);
+        const display =
           type === "rank"
-            ? item.currentRank
-            : formatPrice(item.currentPrice);
-        return `<span class="change-cell"><span class="${cls}">${type === "rank" ? (value > 0 ? "+" : "") + value : formatPercent(value)}</span><span class="change-tag"><span>${oldValue}</span><span>${currentValue}</span></span></span>`;
+            ? `${value > 0 ? "+" : ""}${value}`
+            : formatPercent(value);
+        return `<span class="change-cell"><span class="${cls}">${display}</span><span class="change-tag"><span>${oldValue}</span><span>${currentValue}</span></span></span>`;
       }
+
       function renderRows(id, items) {
         const body = document.getElementById(id);
         body.innerHTML = items.length
           ? items
-              .map((symbol, index) => {
-                const data = marketMap[symbol],
-                  rank = ranking().indexOf(symbol) + 1;
-                const tag =
-                  id === "top20Body" && newTop20Symbols.has(symbol)
-                    ? '<span class="badge top20-tag">新进 Top20</span>'
-                    : "";
+              .map((symbol) => {
+                const data = marketMap[symbol];
                 const isFavorite = favorites.has(symbol);
                 const favoriteButton = `<button class="favorite-button${isFavorite ? " active" : ""}" data-symbol="${symbol}" aria-label="${isFavorite ? "取消收藏" : "收藏"}">${isFavorite ? "★" : "☆"}</button>`;
                 const baseAsset = symbol.replace(/USDT$/, "");
                 const tradeUrl = `https://www.binance.com/en/trade/${baseAsset}_USDT?type=spot`;
-                const windowChain = getWindowChainSummary(symbol);
-                return `<tr><td>${favoriteButton}</td><td class=\"symbol symbol-copy\" data-symbol=\"${symbol}\" title=\"点击复制交易对\">${symbol.replace("USDT", "")} ${tag}</td><td class=\"up\"><a class=\"price-link\" href=\"${tradeUrl}\" target=\"_blank\" rel=\"noopener noreferrer\" title=\"打开 ${symbol.replace("USDT", "")}/USDT 交易页\">${formatPercent(data.change24h)}</a></td><td>${metric(symbol, "price")}</td><td>${metric(symbol, "rank")}</td><td class="window-chain">${windowChain}</td></tr>`;
+                const label = symbol.replace("USDT", "");
+                return `<tr><td>${favoriteButton}</td><td class="symbol symbol-copy" data-symbol="${symbol}" title="点击复制交易对">${label}</td><td class="up"><a class="price-link" href="${tradeUrl}" target="_blank" rel="noopener noreferrer" title="打开 ${label}/USDT 交易页">${formatPercent(data.change24h)}</a></td><td>${metric(symbol, "price")}</td><td>${metric(symbol, "rank")}</td><td class="window-chain">${getWindowChainSummary(symbol)}</td></tr>`;
               })
               .join("")
           : '<tr><td colspan="6"><div class="empty">暂无数据</div></td></tr>';
       }
+
       function render() {
         const list = ranking();
         const displayList = priceSortDescending
@@ -902,10 +939,18 @@
         document.getElementById("snapshotCount").textContent = history.length;
         updateDimensionStatus();
         updateDimensionHeaders();
-        renderRows("top20Body", displayList.slice(0, 20));
-        renderRows("radarBody", displayList.slice(20, 100));
+        renderRows("top20Body", displayList.slice(0, CONFIG.TOP20));
+        renderRows(
+          "radarBody",
+          displayList.slice(CONFIG.TOP20, CONFIG.RADAR_MAX_RANK),
+        );
         renderEvents();
+        updateWatchPoolHint();
+        if (document.getElementById("watchPoolDialog").open) {
+          renderWatchPoolDialog();
+        }
       }
+
       function renderSnapshotList() {
         const list = document.getElementById("snapshotList");
         list.innerHTML = history.length
@@ -918,58 +963,27 @@
               .join("")
           : '<div class="empty">暂无历史快照</div>';
       }
+
       function renderEvents() {
         document.getElementById("eventList").innerHTML = events.length
           ? events
               .map(
                 (event) =>
-                  `<div class=\"event\"><div class=\"event-time\">${formatTime(event.timestamp)}</div><div class=\"event-symbol\">${event.symbol.replace("USDT", "")}</div><div><span class=\"badge\">TOP20</span></div><div>当前 #${event.rank} · ${event.description}</div></div>`,
+                  `<div class="event"><div class="event-time">${formatTime(event.timestamp)}</div><div class="event-symbol">${event.symbol.replace("USDT", "")}</div><div><span class="badge">TOP20</span></div><div>当前 #${event.rank} · ${event.description}</div></div>`,
               )
               .join("")
           : '<div class="empty">暂无重要事件</div>';
       }
-      function evaluateTop20() {
-        const list = ranking();
-        newTop20Symbols = new Set();
-        for (const symbol of list) {
-          const state = alertState[symbol] || { top20: false };
-          const currentRank = list.indexOf(symbol) + 1;
-          const oldRank = comparison()?.ranks[symbol] || 999;
-          if (currentRank > 20) {
-            state.top20 = false;
-            alertState[symbol] = state;
-            continue;
-          }
-          if (!state.top20 && oldRank > 20 && currentRank <= 20) {
-            newTop20Symbols.add(symbol);
-            state.top20 = true;
-            alertState[symbol] = state;
-          }
-        }
-        events = events.slice(0, CONFIG.MAX_EVENTS);
-      }
-      function createSnapshot() {
-        const list = ranking();
-        if (!list.length) return;
-        const ranks = {},
-          prices = {};
-        list.forEach((symbol, index) => {
-          ranks[symbol] = index + 1;
-          prices[symbol] = marketMap[symbol].price;
-        });
-        const timestamp = Date.now();
-        history.push({ timestamp, ranks, prices });
-        pruneHistory();
-        render();
-      }
+
       function setStatus(ok, text) {
         document.getElementById("statusDot").className =
           `dot ${ok ? "online" : "offline"}`;
         document.getElementById("apiStatus").textContent = text;
       }
+
       function loadData() {
         if (!githubReady) {
-          setStatus(false, "请先连接 GitHub");
+          setStatus(false, "请先加载 GitHub 数据");
           return;
         }
         setStatus(false, "正在请求 REST 行情...");
@@ -987,8 +1001,8 @@
           .then((data) => {
             data.forEach((ticker) => {
               if (!ticker.symbol.endsWith("USDT")) return;
-              const price = Number(ticker.lastPrice),
-                change = Number(ticker.priceChangePercent);
+              const price = Number(ticker.lastPrice);
+              const change = Number(ticker.priceChangePercent);
               if (Number.isFinite(price) && Number.isFinite(change))
                 marketMap[ticker.symbol] = {
                   price,
@@ -1001,6 +1015,7 @@
               true,
               `REST 已更新 · ${new Date().toLocaleTimeString("zh-CN")}`,
             );
+            updateWatchPool();
             render();
           })
           .catch((error) => {
@@ -1008,37 +1023,44 @@
             setStatus(false, "REST 请求失败");
           });
       }
-      async function clearHistory() {
-        if (!confirm("确定清空所有历史快照、事件和报警状态吗？")) return;
+
+      function clearHistory() {
+        if (!confirm("确定清空本地历史快照和事件吗？（刷新后会重新从 GitHub 加载）"))
+          return;
         history = [];
         events = [];
-        alertState = {};
-        await saveStorage();
         render();
       }
+
       function toggleFavorite(symbol) {
         if (favorites.has(symbol)) favorites.delete(symbol);
         else favorites.add(symbol);
-        saveStorage();
         render();
       }
+
       document
         .getElementById("dimensionSelect")
         .addEventListener("change", (event) => {
           selectedDimension = event.target.value;
           render();
         });
+
       function togglePriceSort() {
         priceSortDescending = !priceSortDescending;
         render();
       }
+
       document
         .getElementById("topPriceHeader")
         .addEventListener("click", togglePriceSort);
       document
         .getElementById("radarPriceHeader")
         .addEventListener("click", togglePriceSort);
+      document
+        .getElementById("poolPriceHeader")
+        .addEventListener("click", togglePriceSort);
       document.getElementById("refreshBtn").addEventListener("click", loadData);
+
       const snapshotDialog = document.getElementById("snapshotDialog");
       const openSnapshotDialog = () => {
         renderSnapshotList();
@@ -1061,6 +1083,28 @@
       snapshotDialog.addEventListener("click", (event) => {
         if (event.target === snapshotDialog) snapshotDialog.close();
       });
+
+      const watchPoolDialog = document.getElementById("watchPoolDialog");
+      const openWatchPoolDialog = () => {
+        renderWatchPoolDialog();
+        watchPoolDialog.showModal();
+      };
+      document
+        .getElementById("watchPoolBtn")
+        .addEventListener("click", openWatchPoolDialog);
+      document
+        .getElementById("watchPoolDialogClose")
+        .addEventListener("click", () => watchPoolDialog.close());
+      watchPoolDialog.addEventListener("click", (event) => {
+        if (event.target === watchPoolDialog) watchPoolDialog.close();
+      });
+      document
+        .getElementById("watchPoolToggleBtn")
+        .addEventListener("click", () => {
+          watchPoolShowAll = !watchPoolShowAll;
+          renderWatchPoolDialog();
+        });
+
       document.addEventListener("click", (event) => {
         const priceLink = event.target.closest(".price-link");
         if (priceLink) {
@@ -1074,9 +1118,11 @@
         const symbolCell = event.target.closest(".symbol-copy");
         if (symbolCell) copySymbol(symbolCell.dataset.symbol);
       });
+
       document
         .getElementById("clearBtn")
         .addEventListener("click", clearHistory);
+
       async function init() {
         try {
           await loadGithubStorage();
@@ -1088,6 +1134,7 @@
           setStatus(false, `GitHub 数据读取失败：${error.message}`);
         }
       }
+
       init();
       setInterval(() => {
         if (githubReady) loadData();

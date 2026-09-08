@@ -10,6 +10,7 @@ const CONFIG = {
   SNAPSHOT_INTERVAL: 15 * 60 * 1000,
   HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000,
   TOP20: 20,
+  WATCH_POOL_RANK: 30,
   MAX_EVENTS: 300,
   DURATION_MS: {
     '15m': 15 * 60 * 1000,
@@ -139,6 +140,58 @@ function comparison(history, selectedDimension) {
   return series[1] || series[0] || null;
 }
 
+function selectEarliestWindowSnapshot(history, windowStart, duration, selectedDimension) {
+  const tolerance = getWindowTolerance(selectedDimension);
+  const windowEnd = windowStart + duration;
+  const strictCandidates = history.filter(
+    (snapshot) => snapshot.timestamp >= windowStart && snapshot.timestamp < windowEnd,
+  );
+  const candidates = strictCandidates.length
+    ? strictCandidates
+    : history.filter(
+        (snapshot) =>
+          snapshot.timestamp >= windowStart &&
+          snapshot.timestamp < windowEnd + tolerance,
+      );
+  if (!candidates.length) return null;
+  return [...candidates].sort((a, b) => a.timestamp - b.timestamp)[0];
+}
+
+function getWindowPriceChange(history, marketMap, symbol, selectedDimension) {
+  const duration = CONFIG.DURATION_MS[selectedDimension] || 0;
+  if (!duration) return null;
+  const snapshot = selectEarliestWindowSnapshot(
+    history,
+    getWindowStart(Date.now(), duration),
+    duration,
+    selectedDimension,
+  );
+  if (!snapshot) return null;
+  const oldPrice = snapshot.prices?.[symbol];
+  const currentPrice = marketMap[symbol]?.price;
+  if (!Number.isFinite(oldPrice) || !Number.isFinite(currentPrice) || oldPrice === 0) {
+    return null;
+  }
+  return ((currentPrice - oldPrice) / oldPrice) * 100;
+}
+
+function updateWatchPool(history, marketMap, watchPool) {
+  const list = ranking(marketMap);
+  const nextPool = new Set(watchPool);
+
+  for (const symbol of [...nextPool]) {
+    const rank = list.indexOf(symbol) + 1;
+    if (!rank || rank > CONFIG.WATCH_POOL_RANK) nextPool.delete(symbol);
+  }
+
+  for (const symbol of list.slice(0, CONFIG.WATCH_POOL_RANK)) {
+    const change = getWindowPriceChange(history, marketMap, symbol, '4h');
+    if (Number.isFinite(change) && change > 0) nextPool.add(symbol);
+  }
+
+  return nextPool;
+}
+
 function pruneHistory(history) {
   const cutoff = Date.now() - CONFIG.HISTORY_DURATION;
   return history.filter((item) => item.timestamp >= cutoff);
@@ -197,7 +250,7 @@ async function readGithubState() {
 
   if (response.status === 404) {
     console.log(`GitHub state file not found yet: ${CONFIG.DATA_PATH}`);
-    return { history: [], events: [], alertState: {}, favorites: [], selectedDimension: CONFIG.SELECTED_DIMENSION, sha: null };
+    return { history: [], events: [], alertState: {}, favorites: [], watchPool: [], selectedDimension: CONFIG.SELECTED_DIMENSION, sha: null };
   }
 
   if (!response.ok) {
@@ -237,6 +290,7 @@ async function readGithubState() {
     events: Array.isArray(parsed.events) ? parsed.events : [],
     alertState: parsed.alertState || {},
     favorites: Array.isArray(parsed.favorites) ? parsed.favorites : [],
+    watchPool: Array.isArray(parsed.watchPool) ? parsed.watchPool : [],
     selectedDimension: Object.prototype.hasOwnProperty.call(CONFIG.DURATION_MS, parsed.selectedDimension)
       ? parsed.selectedDimension
       : CONFIG.SELECTED_DIMENSION,
@@ -297,6 +351,7 @@ async function main() {
   let events = state.events.slice();
   let alertState = state.alertState || {};
   let favorites = new Set(state.favorites || []);
+  let watchPool = new Set(state.watchPool || []);
   let selectedDimension = Object.prototype.hasOwnProperty.call(CONFIG.DURATION_MS, state.selectedDimension)
     ? state.selectedDimension
     : CONFIG.SELECTED_DIMENSION;
@@ -319,6 +374,7 @@ async function main() {
 
   const result = evaluateTop20(history, marketMap, alertState, selectedDimension);
   alertState = result.alertState;
+  watchPool = updateWatchPool(history, marketMap, watchPool);
   history.push(buildSnapshot(marketMap));
   history = pruneHistory(history);
 
@@ -329,6 +385,7 @@ async function main() {
     events,
     alertState,
     favorites: [...favorites],
+    watchPool: [...watchPool],
     selectedDimension,
     savedAt: Date.now(),
   };
@@ -340,9 +397,12 @@ async function main() {
     updatedAt: new Date().toISOString(),
     snapshots: history.length,
     events: events.length,
+    watchPool: watchPool.size,
     sha: newSha,
   };
-  console.log(`Updated ${CONFIG.GITHUB_REPO}/${CONFIG.DATA_PATH} at ${resultSummary.updatedAt} | snapshots=${history.length} | events=${events.length} | sha=${newSha}`);
+  console.log(
+    `Updated ${CONFIG.GITHUB_REPO}/${CONFIG.DATA_PATH} at ${resultSummary.updatedAt} | snapshots=${history.length} | events=${events.length} | watchPool=${watchPool.size} | sha=${newSha}`,
+  );
   return resultSummary;
 }
 
