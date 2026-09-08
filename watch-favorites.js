@@ -226,11 +226,49 @@
     return response.json();
   }
 
+  async function getMainCommitSha(options) {
+    const repo = options.repo || DEFAULT_REPO;
+    const token = options.token || getGithubToken();
+    const response = await fetch(
+      `https://api.github.com/repos/${repo}/commits/main?per_page=1&t=${Date.now()}`,
+      {
+        cache: "no-store",
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`读取 main commit 失败: ${response.status}`);
+    }
+    const data = await response.json();
+    if (!data.sha) throw new Error("main commit sha 为空");
+    return data.sha;
+  }
+
+  async function fetchRawJsonByCommit(options) {
+    const repo = options.repo || DEFAULT_REPO;
+    const path = options.path;
+    const commitSha = options.commitSha;
+    // Pin to commit sha so CDN key is unique per revision (avoids stale /main cache).
+    const url = `https://raw.githubusercontent.com/${repo}/${commitSha}/${path}`;
+    const response = await fetch(url, {
+      cache: "no-store",
+      headers: {
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+      },
+    });
+    return response;
+  }
+
   async function loadFavoritesRaw(options) {
     const repo = options.repo || DEFAULT_REPO;
     const path = options.path || FAVORITES_PATH;
 
-    // Prefer Contents API (auth, no raw CDN cache). Raw is fallback only.
+    // 1) Prefer Contents API — same channel as writes, no raw CDN.
     try {
       const current = await fetchJsonFile({
         repo,
@@ -238,9 +276,8 @@
         token: options.token,
       });
       if (current.data) {
-        const favorites = normalizeFavorites(current.data.favorites);
         return {
-          favorites,
+          favorites: normalizeFavorites(current.data.favorites),
           favoritesUpdatedAt: Number.isFinite(
             Number(current.data.favoritesUpdatedAt),
           )
@@ -253,9 +290,18 @@
       console.warn("loadFavorites via API failed, trying raw", error);
     }
 
-    const url = `https://raw.githubusercontent.com/${repo}/main/${path}?t=${Date.now()}`;
+    // 2) Raw with commit pin: ?t= cannot disable GitHub CDN, but
+    //    /{commitSha}/path is a new URL per push → no stale /main blob.
     try {
-      const response = await fetch(url, { cache: "no-store" });
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
       if (response.ok) {
         const data = await response.json();
         const favorites = normalizeFavorites(data.favorites);
@@ -265,17 +311,17 @@
             favoritesUpdatedAt: Number.isFinite(Number(data.favoritesUpdatedAt))
               ? Number(data.favoritesUpdatedAt)
               : null,
-            source: "raw",
+            source: "raw-commit",
           };
         }
       } else if (response.status !== 404) {
         console.warn(`读取收藏 raw 失败: ${response.status}`);
       }
     } catch (error) {
-      console.warn("loadFavorites via raw failed", error);
+      console.warn("loadFavorites via commit-raw failed", error);
     }
 
-    // Migrate legacy favorites embedded in watch-data.json.
+    // 3) Migrate legacy favorites embedded in watch-data.json.
     try {
       const legacy = await fetchJsonFile({
         repo,
@@ -297,9 +343,16 @@
       console.warn("legacy favorites via API failed", error);
     }
 
-    const legacyUrl = `https://raw.githubusercontent.com/${repo}/main/${LEGACY_DATA_PATH}?t=${Date.now()}`;
     try {
-      const legacyResponse = await fetch(legacyUrl, { cache: "no-store" });
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options.token,
+      });
+      const legacyResponse = await fetchRawJsonByCommit({
+        repo,
+        path: LEGACY_DATA_PATH,
+        commitSha,
+      });
       if (legacyResponse.ok) {
         const legacy = await legacyResponse.json();
         return {
@@ -307,11 +360,11 @@
           favoritesUpdatedAt: Number.isFinite(Number(legacy.favoritesUpdatedAt))
             ? Number(legacy.favoritesUpdatedAt)
             : null,
-          source: "legacy-raw",
+          source: "legacy-raw-commit",
         };
       }
     } catch (error) {
-      console.warn("legacy favorites via raw failed", error);
+      console.warn("legacy favorites via commit-raw failed", error);
     }
 
     return { favorites: [], favoritesUpdatedAt: null, source: "empty" };
