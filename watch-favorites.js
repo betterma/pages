@@ -13,11 +13,10 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
+  // 收藏仍用 GitHub 小文件（浏览器可写），避免 HTTP 函数 / APIG。
+  // 行情大数据走 OBS，由定时云函数写入。
   const DEFAULT_REPO = "betterma/pages";
-  // Personal favorites live in a small dedicated file so browser writes
-  // do not depend on the multi‑MB watch-data.json Contents API limit.
   const FAVORITES_PATH = "watch-favorites.json";
-  const LEGACY_DATA_PATH = "watch-data.json";
 
   const TOKEN_PART_A = "gh";
   const TOKEN_PART_B = "p_Xrmz1DjzLfbjyiXZqFyJGd9O8aWFIq4D9758";
@@ -65,51 +64,8 @@
     });
   }
 
-  function serializeFavorites(list) {
-    return normalizeFavorites(list).map((item) => ({
-      symbol: item.symbol,
-      addedAt: item.addedAt,
-      source: item.source || "legacy",
-    }));
-  }
-
   function favoritesToSymbolSet(list) {
     return new Set(normalizeFavorites(list).map((item) => item.symbol));
-  }
-
-  function hasFavorite(list, symbol) {
-    const key = String(symbol || "")
-      .trim()
-      .toUpperCase();
-    return normalizeFavorites(list).some((item) => item.symbol === key);
-  }
-
-  function addFavorite(list, symbol, source) {
-    const key = String(symbol || "")
-      .trim()
-      .toUpperCase();
-    if (!key) return normalizeFavorites(list);
-    const next = normalizeFavorites(list).filter((item) => item.symbol !== key);
-    next.unshift({
-      symbol: key,
-      addedAt: Date.now(),
-      source: source || "manual",
-    });
-    return next;
-  }
-
-  function removeFavorite(list, symbol) {
-    const key = String(symbol || "")
-      .trim()
-      .toUpperCase();
-    return normalizeFavorites(list).filter((item) => item.symbol !== key);
-  }
-
-  function toggleFavorite(list, symbol, source) {
-    if (hasFavorite(list, symbol)) {
-      return { list: removeFavorite(list, symbol), added: false };
-    }
-    return { list: addFavorite(list, symbol, source), added: true };
   }
 
   function encodeBase64Utf8(text) {
@@ -134,10 +90,10 @@
     return new TextDecoder().decode(bytes);
   }
 
-  async function fetchJsonFile(options) {
-    const repo = options.repo || DEFAULT_REPO;
-    const path = options.path;
-    const token = options.token || getGithubToken();
+  async function fetchFavoritesFile(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || FAVORITES_PATH;
+    const token = (options && options.token) || getGithubToken();
     const response = await fetch(
       `https://api.github.com/repos/${repo}/contents/${path}?t=${Date.now()}`,
       {
@@ -154,45 +110,22 @@
     }
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(
-        `读取 ${path} 失败: ${response.status} ${text.slice(0, 180)}`,
-      );
+      throw new Error(`读取收藏失败: ${response.status} ${text.slice(0, 160)}`);
     }
     const file = await response.json();
-    let raw = "";
-    if (file.content) {
-      raw = decodeBase64Utf8(file.content);
-    } else if (file.sha) {
-      const blobResponse = await fetch(
-        `https://api.github.com/repos/${repo}/git/blobs/${file.sha}`,
-        {
-          cache: "no-store",
-          headers: {
-            Accept: "application/vnd.github+json",
-            Authorization: `Bearer ${token}`,
-            "X-GitHub-Api-Version": "2022-11-28",
-          },
-        },
-      );
-      if (!blobResponse.ok) {
-        throw new Error(`读取 ${path} blob 失败: ${blobResponse.status}`);
-      }
-      const blob = await blobResponse.json();
-      raw = decodeBase64Utf8(blob.content || "");
-    }
-    if (!raw.trim()) {
-      throw new Error(`${path} 内容为空`);
+    if (!file.content) {
+      throw new Error("收藏文件内容为空");
     }
     return {
-      data: JSON.parse(raw),
+      data: JSON.parse(decodeBase64Utf8(file.content)),
       sha: file.sha,
     };
   }
 
-  async function writeJsonFile(options) {
-    const repo = options.repo || DEFAULT_REPO;
-    const path = options.path;
-    const token = options.token || getGithubToken();
+  async function writeFavoritesFile(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || FAVORITES_PATH;
+    const token = (options && options.token) || getGithubToken();
     const payload = {
       message: options.message || `Update ${path}`,
       content: encodeBase64Utf8(JSON.stringify(options.data, null, 2)),
@@ -219,62 +152,15 @@
     }
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(
-        `写入 ${path} 失败: ${response.status} ${text.slice(0, 220)}`,
-      );
+      throw new Error(`写入收藏失败: ${response.status} ${text.slice(0, 180)}`);
     }
     return response.json();
   }
 
-  async function getMainCommitSha(options) {
-    const repo = options.repo || DEFAULT_REPO;
-    const token = options.token || getGithubToken();
-    const response = await fetch(
-      `https://api.github.com/repos/${repo}/commits/main?per_page=1&t=${Date.now()}`,
-      {
-        cache: "no-store",
-        headers: {
-          Accept: "application/vnd.github+json",
-          Authorization: `Bearer ${token}`,
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
-      },
-    );
-    if (!response.ok) {
-      throw new Error(`读取 main commit 失败: ${response.status}`);
-    }
-    const data = await response.json();
-    if (!data.sha) throw new Error("main commit sha 为空");
-    return data.sha;
-  }
-
-  async function fetchRawJsonByCommit(options) {
-    const repo = options.repo || DEFAULT_REPO;
-    const path = options.path;
-    const commitSha = options.commitSha;
-    // Pin to commit sha so CDN key is unique per revision (avoids stale /main cache).
-    const url = `https://raw.githubusercontent.com/${repo}/${commitSha}/${path}`;
-    const response = await fetch(url, {
-      cache: "no-store",
-      headers: {
-        "Cache-Control": "no-cache",
-        Pragma: "no-cache",
-      },
-    });
-    return response;
-  }
-
   async function loadFavoritesRaw(options) {
-    const repo = options.repo || DEFAULT_REPO;
-    const path = options.path || FAVORITES_PATH;
-
-    // 1) Prefer Contents API — same channel as writes, no raw CDN.
+    // 1) GitHub API（无 CDN 缓存，和写入一致）
     try {
-      const current = await fetchJsonFile({
-        repo,
-        path,
-        token: options.token,
-      });
+      const current = await fetchFavoritesFile(options);
       if (current.data) {
         return {
           favorites: normalizeFavorites(current.data.favorites),
@@ -283,113 +169,74 @@
           )
             ? Number(current.data.favoritesUpdatedAt)
             : null,
-          source: "api",
+          source: "github-api",
         };
       }
     } catch (error) {
-      console.warn("loadFavorites via API failed, trying raw", error);
+      console.warn("loadFavorites via GitHub API failed", error);
     }
 
-    // 2) Raw with commit pin: ?t= cannot disable GitHub CDN, but
-    //    /{commitSha}/path is a new URL per push → no stale /main blob.
-    try {
-      const commitSha = await getMainCommitSha({
-        repo,
-        token: options.token,
-      });
-      const response = await fetchRawJsonByCommit({
-        repo,
-        path,
-        commitSha,
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const favorites = normalizeFavorites(data.favorites);
-        if (favorites.length) {
-          return {
-            favorites,
-            favoritesUpdatedAt: Number.isFinite(Number(data.favoritesUpdatedAt))
-              ? Number(data.favoritesUpdatedAt)
-              : null,
-            source: "raw-commit",
-          };
-        }
-      } else if (response.status !== 404) {
-        console.warn(`读取收藏 raw 失败: ${response.status}`);
-      }
-    } catch (error) {
-      console.warn("loadFavorites via commit-raw failed", error);
+    // 2) raw 兜底
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || FAVORITES_PATH;
+    const url = `https://raw.githubusercontent.com/${repo}/main/${path}?t=${Date.now()}`;
+    const response = await fetch(url, { cache: "no-store" });
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        favorites: normalizeFavorites(data.favorites),
+        favoritesUpdatedAt: Number.isFinite(Number(data.favoritesUpdatedAt))
+          ? Number(data.favoritesUpdatedAt)
+          : null,
+        source: "github-raw",
+      };
     }
-
-    // 3) Migrate legacy favorites embedded in watch-data.json.
-    try {
-      const legacy = await fetchJsonFile({
-        repo,
-        path: LEGACY_DATA_PATH,
-        token: options.token,
-      });
-      if (legacy.data) {
-        return {
-          favorites: normalizeFavorites(legacy.data.favorites),
-          favoritesUpdatedAt: Number.isFinite(
-            Number(legacy.data.favoritesUpdatedAt),
-          )
-            ? Number(legacy.data.favoritesUpdatedAt)
-            : null,
-          source: "legacy-api",
-        };
-      }
-    } catch (error) {
-      console.warn("legacy favorites via API failed", error);
-    }
-
-    try {
-      const commitSha = await getMainCommitSha({
-        repo,
-        token: options.token,
-      });
-      const legacyResponse = await fetchRawJsonByCommit({
-        repo,
-        path: LEGACY_DATA_PATH,
-        commitSha,
-      });
-      if (legacyResponse.ok) {
-        const legacy = await legacyResponse.json();
-        return {
-          favorites: normalizeFavorites(legacy.favorites),
-          favoritesUpdatedAt: Number.isFinite(Number(legacy.favoritesUpdatedAt))
-            ? Number(legacy.favoritesUpdatedAt)
-            : null,
-          source: "legacy-raw-commit",
-        };
-      }
-    } catch (error) {
-      console.warn("legacy favorites via commit-raw failed", error);
-    }
-
     return { favorites: [], favoritesUpdatedAt: null, source: "empty" };
   }
 
-  async function patchFavorites(options) {
-    const repo = options.repo || DEFAULT_REPO;
-    const path = options.path || FAVORITES_PATH;
-    const maxAttempts = options.maxAttempts || 3;
-    let lastError = null;
+  function toggleFavorite(list, symbol, source) {
+    const key = String(symbol || "")
+      .trim()
+      .toUpperCase();
+    const normalized = normalizeFavorites(list);
+    const exists = normalized.some((item) => item.symbol === key);
+    if (exists) {
+      return {
+        list: normalized.filter((item) => item.symbol !== key),
+        added: false,
+      };
+    }
+    return {
+      list: [
+        { symbol: key, addedAt: Date.now(), source: source || "manual" },
+        ...normalized.filter((item) => item.symbol !== key),
+      ],
+      added: true,
+    };
+  }
 
+  async function patchFavorites(options) {
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       try {
-        const current = await fetchJsonFile({
-          repo,
-          path,
-          token: options.token,
-        });
+        const current = await fetchFavoritesFile(options);
         const base = current.data || {
           favorites: [],
           favoritesUpdatedAt: null,
         };
         const favorites = normalizeFavorites(base.favorites);
-        const result = options.mutate(favorites.slice());
-        const nextFavorites = serializeFavorites(
+        let result;
+        if (typeof options.mutate === "function") {
+          result = options.mutate(favorites.slice());
+        } else {
+          result = toggleFavorite(
+            favorites,
+            options.symbol,
+            options.source || "manual",
+          );
+        }
+        const nextFavorites = normalizeFavorites(
           result && result.list ? result.list : result,
         );
         const nextData = {
@@ -397,13 +244,11 @@
           favoritesUpdatedAt: Date.now(),
           updatedAt: Date.now(),
         };
-        await writeJsonFile({
-          repo,
-          path,
-          token: options.token,
+        await writeFavoritesFile({
+          ...options,
           data: nextData,
           sha: current.sha,
-          message: options.message || `Update ${path}`,
+          message: options.message || `Update favorite ${options.symbol || ""}`.trim(),
         });
         return {
           favorites: nextFavorites,
@@ -421,14 +266,8 @@
   return {
     DEFAULT_REPO,
     FAVORITES_PATH,
-    LEGACY_DATA_PATH,
-    getGithubToken,
     normalizeFavorites,
-    serializeFavorites,
     favoritesToSymbolSet,
-    hasFavorite,
-    addFavorite,
-    removeFavorite,
     toggleFavorite,
     loadFavoritesRaw,
     patchFavorites,

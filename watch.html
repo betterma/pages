@@ -768,6 +768,7 @@
         HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000,
         GITHUB_REPO: "betterma/pages",
         GITHUB_PATH: "watch-data.json",
+        OBS_BASE: "https://mpctest.obs.cn-north-4.myhuaweicloud.com",
         FAVORITES_PATH: "watch-favorites.json",
         TOP20: 20,
         RADAR_MAX_RANK: 100,
@@ -881,8 +882,8 @@
       }
 
       async function loadGithubStorage() {
-        setStep("github", "loading", "正在读取 watch-data.json");
-        const url = `https://raw.githubusercontent.com/${CONFIG.GITHUB_REPO}/main/${CONFIG.GITHUB_PATH}?t=${Date.now()}`;
+        setStep("github", "loading", "正在读取 OBS watch-data.json");
+        const url = `${CONFIG.OBS_BASE}/${CONFIG.GITHUB_PATH}?t=${Date.now()}`;
         const response = await fetch(url, { cache: "no-store" });
         if (response.status === 404) {
           history = [];
@@ -890,11 +891,11 @@
           favorites = new Set();
           favoriteItems = [];
           watchPool = new Set();
-          setStep("github", "warn", "文件不存在，将使用空数据");
+          setStep("github", "warn", "OBS 文件不存在，将使用空数据");
           return;
         }
         if (!response.ok)
-          throw new Error(`读取 GitHub 数据失败: ${response.status}`);
+          throw new Error(`读取 OBS 数据失败: ${response.status}`);
         const content = await response.text();
         if (!content.trim()) throw new Error("watch-data.json 内容为空");
         let data;
@@ -923,8 +924,8 @@
           favorites = WatchFavorites.favoritesToSymbolSet(favoriteItems);
         } catch (error) {
           console.warn(error);
-          favoriteItems = WatchFavorites.normalizeFavorites(data.favorites);
-          favorites = WatchFavorites.favoritesToSymbolSet(favoriteItems);
+          favoriteItems = [];
+          favorites = new Set();
         }
 
         const latest = history.length ? history[history.length - 1].timestamp : 0;
@@ -932,8 +933,8 @@
           "github",
           "ok",
           latest
-            ? `已加载 · ${history.length} 张快照 · 收藏 ${favorites.size} · ${formatAge(latest)}`
-            : `已加载 · 暂无快照 · 收藏 ${favorites.size}`,
+            ? `OBS已加载 · ${history.length} 张快照 · 收藏 ${favorites.size} · ${formatAge(latest)}`
+            : `OBS已加载 · 暂无快照 · 收藏 ${favorites.size}`,
         );
       }
 
@@ -1571,14 +1572,9 @@
           const result = await WatchFavorites.patchFavorites({
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.FAVORITES_PATH,
+            symbol,
+            source: source || "radar",
             message: `Update favorite ${symbol}`,
-            mutate(list) {
-              return WatchFavorites.toggleFavorite(
-                list,
-                symbol,
-                source || "radar",
-              );
-            },
           });
           favoriteItems = result.favorites;
           favorites = WatchFavorites.favoritesToSymbolSet(favoriteItems);

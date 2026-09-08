@@ -255,6 +255,7 @@
         HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000,
         GITHUB_REPO: "betterma/pages",
         GITHUB_PATH: "watch-data.json",
+        OBS_BASE: "https://mpctest.obs.cn-north-4.myhuaweicloud.com",
         FAVORITES_PATH: "watch-favorites.json",
         WATCH_POOL_RANK: 30,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
@@ -422,7 +423,7 @@
       }
 
       async function loadGithubStorage() {
-        const url = `https://raw.githubusercontent.com/${CONFIG.GITHUB_REPO}/main/${CONFIG.GITHUB_PATH}?t=${Date.now()}`;
+        const url = `${CONFIG.OBS_BASE}/${CONFIG.GITHUB_PATH}?t=${Date.now()}`;
         const response = await fetch(url, { cache: "no-store" });
         if (response.status === 404) {
           history = [];
@@ -431,7 +432,7 @@
           return;
         }
         if (!response.ok) {
-          throw new Error(`读取 GitHub 失败: ${response.status}`);
+          throw new Error(`读取 OBS 失败: ${response.status}`);
         }
         const data = await response.json();
         history = Array.isArray(data.history) ? data.history : [];
@@ -446,7 +447,7 @@
           favoriteItems = favState.favorites;
         } catch (error) {
           console.warn(error);
-          favoriteItems = WatchFavorites.normalizeFavorites(data.favorites);
+          favoriteItems = [];
         }
         pruneHistory();
       }
@@ -735,10 +736,9 @@
           const result = await WatchFavorites.patchFavorites({
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.FAVORITES_PATH,
+            symbol,
+            source: "kline",
             message: `Update favorite ${symbol}`,
-            mutate(list) {
-              return WatchFavorites.toggleFavorite(list, symbol, "kline");
-            },
           });
           favoriteItems = result.favorites;
           const added = result.meta && result.meta.added;
