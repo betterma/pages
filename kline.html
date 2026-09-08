@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>观察池 K 线</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f4f5f3;
+        color: #28323a;
+        font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+      .page {
+        width: min(1400px, calc(100% - 20px));
+        margin: 12px auto 24px;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+      .topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      h1 {
+        margin: 0;
+        font-size: 20px;
+      }
+      .nav-link {
+        color: #5a6a68;
+        font-size: 13px;
+        text-decoration: none;
+      }
+      .nav-link:hover {
+        text-decoration: underline;
+      }
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      button {
+        border: 1px solid #c9d0d0;
+        background: #fbfcfa;
+        color: #28323a;
+        padding: 8px 13px;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #eef1ee;
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #78817f;
+        margin-bottom: 10px;
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #a39d95;
+        flex-shrink: 0;
+      }
+      .dot.online {
+        background: #718b88;
+        box-shadow: 0 0 8px rgba(113, 139, 136, 0.35);
+      }
+      .dot.offline {
+        background: #8d7771;
+      }
+      .meta {
+        color: #78817f;
+        font-size: 12px;
+        margin-bottom: 10px;
+      }
+      .kline-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 10px;
+      }
+      .kline-card {
+        min-width: 0;
+        padding: 8px 10px 10px;
+        background: #fbfcfa;
+        border: 1px solid #d8ddda;
+        border-radius: 8px;
+      }
+      .kline-card-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+        font-size: 13px;
+      }
+      .kline-card-head a {
+        color: inherit;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .kline-card-head a:hover {
+        text-decoration: underline;
+      }
+      .kline-card canvas {
+        display: block;
+        width: 100%;
+        height: 150px;
+      }
+      .up {
+        color: #4f7a6e;
+      }
+      .price-down {
+        color: #8d7771;
+      }
+      .neutral {
+        color: #78817f;
+      }
+      .empty {
+        padding: 28px 12px;
+        text-align: center;
+        color: #78817f;
+        font-size: 13px;
+        background: #fbfcfa;
+        border: 1px dashed #d8ddda;
+        border-radius: 8px;
+      }
+      .kline-card .empty {
+        padding: 40px 8px;
+        border: none;
+        background: transparent;
+        font-size: 12px;
+      }
+      @media (max-width: 768px) {
+        .page {
+          width: calc(100% - 12px);
+          margin: 8px auto 16px;
+        }
+        h1 {
+          font-size: 17px;
+        }
+        .kline-grid {
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+        }
+        .kline-card {
+          padding: 6px 7px 8px;
+        }
+        .kline-card-head {
+          font-size: 12px;
+          margin-bottom: 4px;
+        }
+        .kline-card canvas {
+          height: 120px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1>观察池 K 线</h1>
+          <a class="nav-link" href="./watch.html">冲榜雷达</a>
+        </div>
+        <div class="topbar-actions">
+          <button id="refreshBtn" type="button">刷新</button>
+        </div>
+      </div>
+      <div class="status">
+        <span id="statusDot" class="dot"></span>
+        <span id="statusText">等待启动...</span>
+      </div>
+      <div id="meta" class="meta"></div>
+      <div id="klineGrid" class="kline-grid"></div>
+    </div>
+    <script>
+      "use strict";
+
+      const CONFIG = {
+        HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000,
+        GITHUB_REPO: "betterma/pages",
+        GITHUB_PATH: "watch-data.json",
+        WATCH_POOL_RANK: 30,
+        WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
+        KLINE_MAX_LIMIT: 1000,
+        KLINE_INTERVAL: "4h",
+      };
+      const DURATION_MS = {
+        "15m": 15 * 60 * 1000,
+        "30m": 30 * 60 * 1000,
+        "1h": 60 * 60 * 1000,
+        "2h": 2 * 60 * 60 * 1000,
+        "4h": 4 * 60 * 60 * 1000,
+      };
+
+      const marketMap = {};
+      let history = [];
+      let watchPool = new Set();
+      let klineAbort = null;
+      let loading = false;
+
+      function setStatus(ok, text) {
+        document.getElementById("statusDot").className =
+          `dot ${ok ? "online" : "offline"}`;
+        document.getElementById("statusText").textContent = text;
+      }
+
+      function formatPercent(value) {
+        return Number.isFinite(value)
+          ? `${value > 0 ? "+" : ""}${value.toFixed(2)}%`
+          : "--";
+      }
+
+      function klineLimit(interval) {
+        const duration = DURATION_MS[interval];
+        if (!duration) return 1;
+        return Math.min(
+          CONFIG.KLINE_MAX_LIMIT,
+          Math.max(1, Math.ceil(CONFIG.HISTORY_DURATION / duration)),
+        );
+      }
+
+      function pruneHistory() {
+        const cutoff = Date.now() - CONFIG.HISTORY_DURATION;
+        history = history.filter((item) => item.timestamp >= cutoff);
+      }
+
+      function ranking() {
+        return Object.entries(marketMap)
+          .sort((a, b) => b[1].change24h - a[1].change24h)
+          .map(([symbol]) => symbol);
+      }
+
+      function getWindowStart(timestamp, duration) {
+        return Math.floor(timestamp / duration) * duration;
+      }
+
+      function selectEarliestWindowSnapshot(windowStart, duration) {
+        const windowEnd = windowStart + duration;
+        const strictCandidates = history.filter(
+          (snapshot) =>
+            snapshot.timestamp >= windowStart &&
+            snapshot.timestamp < windowEnd,
+        );
+        const candidates = strictCandidates.length
+          ? strictCandidates
+          : history.filter(
+              (snapshot) =>
+                snapshot.timestamp >= windowStart &&
+                snapshot.timestamp < windowEnd + CONFIG.WINDOW_TOLERANCE_MS,
+            );
+        if (!candidates.length) return null;
+        return candidates.reduce((earliest, item) =>
+          item.timestamp < earliest.timestamp ? item : earliest,
+        );
+      }
+
+      function comparison(interval) {
+        if (!history.length) return null;
+        const duration = DURATION_MS[interval];
+        if (!duration) return null;
+        const currentWindowStart = getWindowStart(Date.now(), duration);
+        return selectEarliestWindowSnapshot(currentWindowStart, duration);
+      }
+
+      function windowPriceChange(symbol, interval) {
+        const old = comparison(interval);
+        const oldPrice = old?.prices?.[symbol];
+        const currentPrice = marketMap[symbol]?.price;
+        if (
+          !Number.isFinite(oldPrice) ||
+          !Number.isFinite(currentPrice) ||
+          oldPrice === 0
+        ) {
+          return null;
+        }
+        return ((currentPrice - oldPrice) / oldPrice) * 100;
+      }
+
+      function hasWindowGain(symbol, interval) {
+        const change = windowPriceChange(symbol, interval);
+        return Number.isFinite(change) && change > 0;
+      }
+
+      function updateWatchPool() {
+        const list = ranking();
+        if (!list.length) return;
+        for (const symbol of [...watchPool]) {
+          const rank = list.indexOf(symbol) + 1;
+          if (!rank || rank > CONFIG.WATCH_POOL_RANK) watchPool.delete(symbol);
+        }
+        for (const symbol of list.slice(0, CONFIG.WATCH_POOL_RANK)) {
+          if (hasWindowGain(symbol, "4h")) watchPool.add(symbol);
+        }
+      }
+
+      function getRisingSymbols() {
+        const interval = CONFIG.KLINE_INTERVAL;
+        const list = ranking();
+        const ranked = list.filter((symbol) => watchPool.has(symbol));
+        const unranked = [...watchPool].filter(
+          (symbol) => marketMap[symbol] && !list.includes(symbol),
+        );
+        return [...ranked, ...unranked].filter((symbol) =>
+          hasWindowGain(symbol, interval),
+        );
+      }
+
+      async function loadGithubStorage() {
+        const url = `https://raw.githubusercontent.com/${CONFIG.GITHUB_REPO}/main/${CONFIG.GITHUB_PATH}?t=${Date.now()}`;
+        const response = await fetch(url, { cache: "no-store" });
+        if (response.status === 404) {
+          history = [];
+          watchPool = new Set();
+          return;
+        }
+        if (!response.ok) {
+          throw new Error(`读取 GitHub 失败: ${response.status}`);
+        }
+        const data = await response.json();
+        history = Array.isArray(data.history) ? data.history : [];
+        watchPool = new Set(
+          Array.isArray(data.watchPool) ? data.watchPool : [],
+        );
+        pruneHistory();
+      }
+
+      async function loadBinanceTicker() {
+        const endpoints = [
+          "https://data-api.binance.vision/api/v3/ticker/24hr",
+          "https://api.binance.com/api/v3/ticker/24hr",
+        ];
+        let lastError = null;
+        for (const url of endpoints) {
+          try {
+            const response = await fetch(url, { cache: "no-store" });
+            if (!response.ok) {
+              lastError = new Error(`HTTP ${response.status}`);
+              continue;
+            }
+            const data = await response.json();
+            Object.keys(marketMap).forEach((key) => delete marketMap[key]);
+            data.forEach((ticker) => {
+              if (!ticker.symbol.endsWith("USDT")) return;
+              const price = Number(ticker.lastPrice);
+              const change = Number(ticker.priceChangePercent);
+              if (Number.isFinite(price) && Number.isFinite(change)) {
+                marketMap[ticker.symbol] = {
+                  price,
+                  change24h: change,
+                };
+              }
+            });
+            return;
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("行情请求失败");
+      }
+
+      async function fetchKlines(symbol, interval, signal) {
+        const query = `symbol=${symbol}&interval=${interval}&limit=${klineLimit(interval)}`;
+        const endpoints = [
+          `https://data-api.binance.vision/api/v3/klines?${query}`,
+          `https://api.binance.com/api/v3/klines?${query}`,
+        ];
+        let lastError = null;
+        for (const url of endpoints) {
+          try {
+            const response = await fetch(url, { signal, cache: "no-store" });
+            if (!response.ok) {
+              lastError = new Error(`HTTP ${response.status}`);
+              continue;
+            }
+            const rows = await response.json();
+            if (!Array.isArray(rows) || !rows.length) {
+              lastError = new Error("K线为空");
+              continue;
+            }
+            return rows.map((row) => ({
+              time: Number(row[0]),
+              open: Number(row[1]),
+              high: Number(row[2]),
+              low: Number(row[3]),
+              close: Number(row[4]),
+            }));
+          } catch (error) {
+            if (error.name === "AbortError") throw error;
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("K线请求失败");
+      }
+
+      function drawKline(canvas, candles) {
+        const rect = canvas.getBoundingClientRect();
+        const width = Math.max(1, Math.floor(rect.width));
+        const height = Math.max(1, Math.floor(rect.height));
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+        if (!candles.length) return;
+
+        const pad = { top: 6, right: 4, bottom: 6, left: 4 };
+        const chartW = width - pad.left - pad.right;
+        const chartH = height - pad.top - pad.bottom;
+        const highs = candles.map((item) => item.high);
+        const lows = candles.map((item) => item.low);
+        const max = Math.max(...highs);
+        const min = Math.min(...lows);
+        const range = max - min || max * 0.01 || 1;
+        const slot = chartW / candles.length;
+        const bodyW = Math.max(1, slot * 0.62);
+        const yOf = (price) => pad.top + ((max - price) / range) * chartH;
+
+        candles.forEach((candle, index) => {
+          const x = pad.left + slot * index + slot / 2;
+          const up = candle.close >= candle.open;
+          ctx.strokeStyle = up ? "#718b88" : "#8d7771";
+          ctx.fillStyle = up ? "#718b88" : "#8d7771";
+          ctx.beginPath();
+          ctx.moveTo(x, yOf(candle.high));
+          ctx.lineTo(x, yOf(candle.low));
+          ctx.stroke();
+          const y1 = yOf(candle.open);
+          const y2 = yOf(candle.close);
+          const bodyH = Math.max(1, Math.abs(y2 - y1));
+          ctx.fillRect(x - bodyW / 2, Math.min(y1, y2), bodyW, bodyH);
+        });
+      }
+
+      async function renderKlineCard(card, symbol, interval, signal) {
+        const canvas = card.querySelector("canvas");
+        const status = card.querySelector("[data-kline-status]");
+        try {
+          const candles = await fetchKlines(symbol, interval, signal);
+          const last = candles[candles.length - 1];
+          const first = candles[0];
+          const change =
+            first && first.open
+              ? ((last.close - first.open) / first.open) * 100
+              : null;
+          status.textContent = Number.isFinite(change)
+            ? `${formatPercent(change)} · ${interval}`
+            : interval;
+          status.className =
+            change > 0 ? "up" : change < 0 ? "price-down" : "neutral";
+          drawKline(canvas, candles);
+        } catch (error) {
+          if (error.name === "AbortError") return;
+          status.textContent = "加载失败";
+          status.className = "price-down";
+          canvas.replaceWith(
+            Object.assign(document.createElement("div"), {
+              className: "empty",
+              textContent: error.message || "K线加载失败",
+            }),
+          );
+        }
+      }
+
+      async function renderKlines(symbols) {
+        const interval = CONFIG.KLINE_INTERVAL;
+        const grid = document.getElementById("klineGrid");
+        const meta = document.getElementById("meta");
+        const bars = klineLimit(interval);
+
+        if (klineAbort) klineAbort.abort();
+        klineAbort = new AbortController();
+        const { signal } = klineAbort;
+
+        meta.textContent = symbols.length
+          ? `窗口上涨 ${symbols.length} / 观察池 ${watchPool.size} · ${interval} · 近3天 ${bars} 根`
+          : `当前没有窗口上涨的观察池币种 · 观察池 ${watchPool.size} 个`;
+
+        grid.innerHTML = symbols.length
+          ? symbols
+              .map((symbol) => {
+                const label = symbol.replace("USDT", "");
+                const tradeUrl = `https://www.binance.com/en/trade/${label}_USDT?type=spot`;
+                const change = windowPriceChange(symbol, interval);
+                return `<div class="kline-card" data-symbol="${symbol}"><div class="kline-card-head"><a href="${tradeUrl}" target="_blank" rel="noopener noreferrer">${label}</a><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span></div><canvas></canvas></div>`;
+              })
+              .join("")
+          : '<div class="empty">暂无上涨币种</div>';
+
+        const cards = [...grid.querySelectorAll(".kline-card")];
+        const batchSize = 4;
+        for (let index = 0; index < cards.length; index += batchSize) {
+          if (signal.aborted) return;
+          const batch = cards.slice(index, index + batchSize);
+          await Promise.all(
+            batch.map((card) =>
+              renderKlineCard(card, card.dataset.symbol, interval, signal),
+            ),
+          );
+        }
+      }
+
+      async function refreshAll() {
+        if (loading) return;
+        loading = true;
+        const btn = document.getElementById("refreshBtn");
+        btn.disabled = true;
+        try {
+          setStatus(false, "1/3 读取 GitHub 快照与观察池...");
+          await loadGithubStorage();
+
+          setStatus(false, "2/3 拉取币安最新行情...");
+          await loadBinanceTicker();
+
+          setStatus(false, "3/3 重算观察池并加载 K 线...");
+          updateWatchPool();
+          const symbols = getRisingSymbols();
+          await renderKlines(symbols);
+          setStatus(
+            true,
+            `已更新 · 上涨 ${symbols.length} 个 · ${new Date().toLocaleTimeString("zh-CN")}`,
+          );
+        } catch (error) {
+          console.error(error);
+          setStatus(false, error.message || "刷新失败");
+          document.getElementById("meta").textContent = "";
+          document.getElementById("klineGrid").innerHTML =
+            `<div class="empty">${error.message || "加载失败"}</div>`;
+        } finally {
+          loading = false;
+          btn.disabled = false;
+        }
+      }
+
+      document.getElementById("refreshBtn").addEventListener("click", refreshAll);
+      refreshAll();
+    </script>
+  </body>
+</html>
