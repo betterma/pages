@@ -229,34 +229,92 @@
   async function loadFavoritesRaw(options) {
     const repo = options.repo || DEFAULT_REPO;
     const path = options.path || FAVORITES_PATH;
-    const url = `https://raw.githubusercontent.com/${repo}/main/${path}?t=${Date.now()}`;
-    const response = await fetch(url, { cache: "no-store" });
-    if (response.ok) {
-      const data = await response.json();
-      return {
-        favorites: normalizeFavorites(data.favorites),
-        favoritesUpdatedAt: Number.isFinite(Number(data.favoritesUpdatedAt))
-          ? Number(data.favoritesUpdatedAt)
-          : null,
-      };
-    }
-    if (response.status !== 404) {
-      throw new Error(`读取收藏失败: ${response.status}`);
+
+    // Prefer Contents API (auth, no raw CDN cache). Raw is fallback only.
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options.token,
+      });
+      if (current.data) {
+        const favorites = normalizeFavorites(current.data.favorites);
+        return {
+          favorites,
+          favoritesUpdatedAt: Number.isFinite(
+            Number(current.data.favoritesUpdatedAt),
+          )
+            ? Number(current.data.favoritesUpdatedAt)
+            : null,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadFavorites via API failed, trying raw", error);
     }
 
-    // One-time migration from legacy watch-data.json favorites.
-    const legacyUrl = `https://raw.githubusercontent.com/${repo}/main/${LEGACY_DATA_PATH}?t=${Date.now()}`;
-    const legacyResponse = await fetch(legacyUrl, { cache: "no-store" });
-    if (!legacyResponse.ok) {
-      return { favorites: [], favoritesUpdatedAt: null };
+    const url = `https://raw.githubusercontent.com/${repo}/main/${path}?t=${Date.now()}`;
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      if (response.ok) {
+        const data = await response.json();
+        const favorites = normalizeFavorites(data.favorites);
+        if (favorites.length) {
+          return {
+            favorites,
+            favoritesUpdatedAt: Number.isFinite(Number(data.favoritesUpdatedAt))
+              ? Number(data.favoritesUpdatedAt)
+              : null,
+            source: "raw",
+          };
+        }
+      } else if (response.status !== 404) {
+        console.warn(`读取收藏 raw 失败: ${response.status}`);
+      }
+    } catch (error) {
+      console.warn("loadFavorites via raw failed", error);
     }
-    const legacy = await legacyResponse.json();
-    return {
-      favorites: normalizeFavorites(legacy.favorites),
-      favoritesUpdatedAt: Number.isFinite(Number(legacy.favoritesUpdatedAt))
-        ? Number(legacy.favoritesUpdatedAt)
-        : null,
-    };
+
+    // Migrate legacy favorites embedded in watch-data.json.
+    try {
+      const legacy = await fetchJsonFile({
+        repo,
+        path: LEGACY_DATA_PATH,
+        token: options.token,
+      });
+      if (legacy.data) {
+        return {
+          favorites: normalizeFavorites(legacy.data.favorites),
+          favoritesUpdatedAt: Number.isFinite(
+            Number(legacy.data.favoritesUpdatedAt),
+          )
+            ? Number(legacy.data.favoritesUpdatedAt)
+            : null,
+          source: "legacy-api",
+        };
+      }
+    } catch (error) {
+      console.warn("legacy favorites via API failed", error);
+    }
+
+    const legacyUrl = `https://raw.githubusercontent.com/${repo}/main/${LEGACY_DATA_PATH}?t=${Date.now()}`;
+    try {
+      const legacyResponse = await fetch(legacyUrl, { cache: "no-store" });
+      if (legacyResponse.ok) {
+        const legacy = await legacyResponse.json();
+        return {
+          favorites: normalizeFavorites(legacy.favorites),
+          favoritesUpdatedAt: Number.isFinite(Number(legacy.favoritesUpdatedAt))
+            ? Number(legacy.favoritesUpdatedAt)
+            : null,
+          source: "legacy-raw",
+        };
+      }
+    } catch (error) {
+      console.warn("legacy favorites via raw failed", error);
+    }
+
+    return { favorites: [], favoritesUpdatedAt: null, source: "empty" };
   }
 
   async function patchFavorites(options) {
