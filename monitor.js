@@ -1,10 +1,6 @@
 #!/usr/bin/env node
 
 const https = require('https');
-const {
-  normalizeFavorites,
-  serializeFavorites,
-} = require('./watch-favorites.js');
 
 const CONFIG = {
   GITHUB_REPO: process.env.GITHUB_REPO || 'betterma/pages',
@@ -16,6 +12,8 @@ const CONFIG = {
   TOP20: 20,
   WATCH_POOL_RANK: 30,
   MAX_EVENTS: 300,
+  // Keep snapshots lean so watch-data.json stays under GitHub Contents 1MB limit.
+  SNAPSHOT_MAX_RANK: 150,
   DURATION_MS: {
     '15m': 15 * 60 * 1000,
     '30m': 30 * 60 * 1000,
@@ -33,6 +31,52 @@ const CONFIG = {
   SELECTED_DIMENSION: '15m',
 };
 
+// Keep favorites helpers inline so Huawei cloud can deploy monitor.js alone.
+function normalizeFavoriteItem(item) {
+  if (typeof item === 'string' && item.trim()) {
+    return {
+      symbol: item.trim().toUpperCase(),
+      addedAt: 0,
+      source: 'legacy',
+    };
+  }
+  if (item && typeof item === 'object' && item.symbol) {
+    const symbol = String(item.symbol).trim().toUpperCase();
+    if (!symbol) return null;
+    return {
+      symbol,
+      addedAt: Number.isFinite(Number(item.addedAt)) ? Number(item.addedAt) : 0,
+      source: item.source ? String(item.source) : 'legacy',
+    };
+  }
+  return null;
+}
+
+function normalizeFavorites(raw) {
+  if (!Array.isArray(raw)) return [];
+  const map = new Map();
+  raw.forEach((item) => {
+    const normalized = normalizeFavoriteItem(item);
+    if (!normalized) return;
+    const prev = map.get(normalized.symbol);
+    if (!prev || normalized.addedAt >= prev.addedAt) {
+      map.set(normalized.symbol, normalized);
+    }
+  });
+  return [...map.values()].sort((a, b) => {
+    if (b.addedAt !== a.addedAt) return b.addedAt - a.addedAt;
+    return a.symbol.localeCompare(b.symbol);
+  });
+}
+
+function serializeFavorites(list) {
+  return normalizeFavorites(list).map((item) => ({
+    symbol: item.symbol,
+    addedAt: item.addedAt,
+    source: item.source || 'legacy',
+  }));
+}
+
 function githubHeaders() {
   return {
     Accept: 'application/vnd.github+json',
@@ -45,7 +89,16 @@ function githubHeaders() {
 
 function requestJson(url, options = {}) {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      if (error) reject(error);
+      else resolve(value);
+    };
+
     const target = new URL(url);
+    const timeoutMs = options.timeout || 15000;
     const request = https.request(
       target,
       {
@@ -59,7 +112,7 @@ function requestJson(url, options = {}) {
           body += chunk;
         });
         response.on('end', () => {
-          resolve({
+          finish(null, {
             ok: response.statusCode >= 200 && response.statusCode < 300,
             status: response.statusCode,
             statusText: response.statusMessage || '',
@@ -71,12 +124,14 @@ function requestJson(url, options = {}) {
             },
           });
         });
+        response.on('error', (error) => finish(error));
       },
     );
 
-    request.on('error', reject);
-    request.setTimeout(options.timeout || 10000, () => {
-      request.destroy(new Error(`Request timeout: ${url}`));
+    request.on('error', (error) => finish(error));
+    request.setTimeout(timeoutMs, () => {
+      request.destroy();
+      finish(new Error(`Request timeout after ${timeoutMs}ms: ${url}`));
     });
     if (options.body) request.write(options.body);
     request.end();
@@ -202,7 +257,7 @@ function pruneHistory(history) {
 }
 
 function buildSnapshot(marketMap) {
-  const list = ranking(marketMap);
+  const list = ranking(marketMap).slice(0, CONFIG.SNAPSHOT_MAX_RANK);
   const ranks = {};
   const prices = {};
   list.forEach((symbol, index) => {
@@ -215,6 +270,30 @@ function buildSnapshot(marketMap) {
     ranks,
     prices,
   };
+}
+
+function slimSnapshot(snapshot) {
+  if (!snapshot || !snapshot.ranks) return snapshot;
+  const ranked = Object.entries(snapshot.ranks)
+    .sort((a, b) => a[1] - b[1])
+    .slice(0, CONFIG.SNAPSHOT_MAX_RANK);
+  const ranks = {};
+  const prices = {};
+  ranked.forEach(([symbol, rank]) => {
+    ranks[symbol] = rank;
+    if (snapshot.prices && Number.isFinite(snapshot.prices[symbol])) {
+      prices[symbol] = snapshot.prices[symbol];
+    }
+  });
+  return {
+    timestamp: snapshot.timestamp,
+    ranks,
+    prices,
+  };
+}
+
+function slimHistory(history) {
+  return history.map(slimSnapshot);
 }
 
 function evaluateTop20(history, marketMap, alertState, selectedDimension) {
@@ -250,7 +329,10 @@ async function readGithubState() {
 
   const url = `${CONFIG.GITHUB_API}/repos/${CONFIG.GITHUB_REPO}/contents/${CONFIG.DATA_PATH}`;
   console.log(`Reading GitHub state from ${url}`);
-  const response = await requestJson(url, { headers: githubHeaders() });
+  const response = await requestJson(url, {
+    headers: githubHeaders(),
+    timeout: 15000,
+  });
 
   if (response.status === 404) {
     console.log(`GitHub state file not found yet: ${CONFIG.DATA_PATH}`);
@@ -265,17 +347,32 @@ async function readGithubState() {
   const file = await response.json();
   let raw = file.content ? decodeBase64(file.content) : '';
 
+  // Contents API omits inline content when file > 1MB. Prefer GitHub API
+  // (api.github.com) over raw.githubusercontent.com — the latter often hangs
+  // on China cloud networks.
   if (!raw.trim()) {
-    const rawUrl = `https://raw.githubusercontent.com/${CONFIG.GITHUB_REPO}/main/${CONFIG.DATA_PATH}?t=${Date.now()}`;
-    console.warn(`GitHub Contents response had no content; reading ${rawUrl}`);
-    const rawResponse = await requestJson(rawUrl, {
-      headers: { 'User-Agent': 'binance-radar-monitor' },
-    });
-    if (!rawResponse.ok) {
-      const text = await rawResponse.text();
-      throw new Error(`读取 GitHub Raw 数据失败: ${rawResponse.status} ${rawResponse.statusText} :: ${text.slice(0, 300)}`);
+    if (!file.sha) {
+      throw new Error(`GitHub Contents 无 content 且无 sha: ${CONFIG.DATA_PATH}`);
     }
-    raw = await rawResponse.text();
+    const blobUrl = `${CONFIG.GITHUB_API}/repos/${CONFIG.GITHUB_REPO}/git/blobs/${file.sha}`;
+    console.warn(
+      `GitHub Contents inline empty (file likely >1MB); fetching blob ${file.sha}`,
+    );
+    const blobResponse = await requestJson(blobUrl, {
+      headers: githubHeaders(),
+      timeout: 20000,
+    });
+    if (!blobResponse.ok) {
+      const text = await blobResponse.text();
+      throw new Error(
+        `读取 GitHub Blob 失败: ${blobResponse.status} ${blobResponse.statusText} :: ${text.slice(0, 300)}`,
+      );
+    }
+    const blob = await blobResponse.json();
+    if (!blob.content) {
+      throw new Error(`GitHub Blob 无 content: ${file.sha}`);
+    }
+    raw = decodeBase64(blob.content);
   }
 
   if (!raw.trim()) {
@@ -288,6 +385,10 @@ async function readGithubState() {
   } catch (error) {
     throw new Error(`GitHub 数据文件不是有效 JSON: ${error.message} :: ${raw.slice(0, 120)}`);
   }
+
+  console.log(
+    `Loaded GitHub state · history=${Array.isArray(parsed.history) ? parsed.history.length : 0} · bytes≈${Buffer.byteLength(raw, 'utf8')}`,
+  );
 
   return {
     history: Array.isArray(parsed.history) ? parsed.history : [],
@@ -385,7 +486,7 @@ async function runMonitorOnce() {
   alertState = result.alertState;
   watchPool = updateWatchPool(history, marketMap, watchPool);
   history.push(buildSnapshot(marketMap));
-  history = pruneHistory(history);
+  history = slimHistory(pruneHistory(history));
 
   events = events.slice(0, CONFIG.MAX_EVENTS);
 
@@ -399,6 +500,26 @@ async function runMonitorOnce() {
     selectedDimension,
     savedAt: Date.now(),
   };
+
+  const encodedSize = Buffer.byteLength(JSON.stringify(nextState), 'utf8');
+  console.log(`Prepared state size ${(encodedSize / 1024).toFixed(1)}KB · snapshots=${history.length}`);
+  if (encodedSize > 900 * 1024) {
+    console.warn(
+      'State still large for Contents API; trimming older snapshots to fit ~900KB',
+    );
+    while (history.length > 12) {
+      const size = Buffer.byteLength(
+        JSON.stringify({ ...nextState, history }),
+        'utf8',
+      );
+      if (size <= 900 * 1024) break;
+      history.shift();
+    }
+    nextState.history = history;
+    console.log(
+      `Trimmed state size ${(Buffer.byteLength(JSON.stringify(nextState), 'utf8') / 1024).toFixed(1)}KB · snapshots=${history.length}`,
+    );
+  }
 
   const newSha = await writeGithubState(nextState, state.sha);
   const resultSummary = {
