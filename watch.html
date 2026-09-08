@@ -420,6 +420,11 @@
       .dialog-header h2 {
         font-size: 16px;
       }
+      .dialog-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
       .dialog-close {
         border: 0;
         background: transparent;
@@ -532,6 +537,19 @@
           padding: 10px 12px;
           grid-template-columns: 1fr;
           gap: 4px;
+        }
+        dialog,
+        dialog.watch-pool-dialog,
+        dialog.kline-dialog {
+          width: 100vw;
+          max-width: none;
+          height: 100vh;
+          max-height: none;
+          margin: 0;
+          border-radius: 0;
+        }
+        .dialog-header-actions button:not(.dialog-close) {
+          padding: 7px 9px;
         }
       }
     </style>
@@ -678,7 +696,10 @@
     >
       <div class="dialog-header">
         <h2 id="watchPoolDialogTitle">观察池</h2>
-        <button class="dialog-close" id="watchPoolDialogClose" aria-label="关闭">×</button>
+        <div class="dialog-header-actions">
+          <button id="watchPoolKlineBtn" type="button">查看K线</button>
+          <button class="dialog-close" id="watchPoolDialogClose" aria-label="关闭">×</button>
+        </div>
       </div>
       <div class="dialog-body">
         <div id="watchPoolMeta" class="watch-pool-meta"></div>
@@ -701,7 +722,6 @@
         </div>
         <div class="dialog-actions">
           <button id="watchPoolToggleBtn" type="button">切换全部</button>
-          <button id="watchPoolKlineBtn" type="button">查看K线</button>
         </div>
       </div>
     </dialog>
