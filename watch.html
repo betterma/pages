@@ -724,7 +724,7 @@
         RADAR_MAX_RANK: 100,
         WATCH_POOL_RANK: 30,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
-        KLINE_LIMIT: 80,
+        KLINE_MAX_LIMIT: 1000,
       };
       const DURATION_MS = {
         "15m": 15 * 60 * 1000,
@@ -1091,8 +1091,17 @@
         return selectedDimension;
       }
 
+      function klineLimit(interval) {
+        const duration = DURATION_MS[interval];
+        if (!duration) return 1;
+        return Math.min(
+          CONFIG.KLINE_MAX_LIMIT,
+          Math.max(1, Math.ceil(CONFIG.HISTORY_DURATION / duration)),
+        );
+      }
+
       async function fetchKlines(symbol, interval, signal) {
-        const query = `symbol=${symbol}&interval=${interval}&limit=${CONFIG.KLINE_LIMIT}`;
+        const query = `symbol=${symbol}&interval=${interval}&limit=${klineLimit(interval)}`;
         const endpoints = [
           `https://data-api.binance.vision/api/v3/klines?${query}`,
           `https://api.binance.com/api/v3/klines?${query}`,
@@ -1202,8 +1211,9 @@
         klineAbort = new AbortController();
         const { signal } = klineAbort;
 
+        const bars = klineLimit(interval);
         meta.textContent = symbols.length
-          ? `当前窗口上涨 ${symbols.length} 个 · ${interval} K线 · 最近 ${CONFIG.KLINE_LIMIT} 根`
+          ? `当前窗口上涨 ${symbols.length} 个 · ${interval} K线 · 近3天 ${bars} 根`
           : "当前没有窗口上涨的观察池币种";
         grid.innerHTML = symbols.length
           ? symbols
