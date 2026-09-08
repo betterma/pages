@@ -350,11 +350,61 @@
       .dialog-actions {
         display: flex;
         justify-content: center;
+        gap: 8px;
         padding: 4px 16px 2px;
       }
       .watch-pool-meta {
         padding: 0 16px 10px;
         color: #78817f;
+        font-size: 12px;
+      }
+      dialog.kline-dialog {
+        width: min(1400px, calc(100% - 16px));
+        max-height: calc(100vh - 20px);
+      }
+      .kline-meta {
+        padding: 0 16px 8px;
+        color: #78817f;
+        font-size: 12px;
+      }
+      .kline-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 10px;
+        max-height: calc(100vh - 130px);
+        overflow-y: auto;
+        padding: 0 16px 16px;
+      }
+      .kline-card {
+        min-width: 0;
+        padding: 8px 10px 10px;
+        background: #f7f8f6;
+        border: 1px solid #d8ddda;
+        border-radius: 8px;
+      }
+      .kline-card-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+        font-size: 13px;
+      }
+      .kline-card-head a {
+        color: inherit;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .kline-card-head a:hover {
+        text-decoration: underline;
+      }
+      .kline-card canvas {
+        display: block;
+        width: 100%;
+        height: 170px;
+      }
+      .kline-card .empty {
+        padding: 40px 10px;
         font-size: 12px;
       }
       dialog::backdrop {
@@ -473,6 +523,10 @@
         th,
         td {
           padding: 8px 7px;
+        }
+        .kline-grid {
+          grid-template-columns: 1fr;
+          max-height: calc(100vh - 140px);
         }
         .event {
           padding: 10px 12px;
@@ -647,8 +701,17 @@
         </div>
         <div class="dialog-actions">
           <button id="watchPoolToggleBtn" type="button">切换全部</button>
+          <button id="watchPoolKlineBtn" type="button">查看K线</button>
         </div>
       </div>
+    </dialog>
+    <dialog id="klineDialog" class="kline-dialog" aria-labelledby="klineDialogTitle">
+      <div class="dialog-header">
+        <h2 id="klineDialogTitle">观察池 K 线</h2>
+        <button class="dialog-close" id="klineDialogClose" aria-label="关闭">×</button>
+      </div>
+      <div id="klineMeta" class="kline-meta"></div>
+      <div id="klineGrid" class="kline-grid"></div>
     </dialog>
     <script>
       "use strict";
@@ -661,6 +724,7 @@
         RADAR_MAX_RANK: 100,
         WATCH_POOL_RANK: 30,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
+        KLINE_LIMIT: 80,
       };
       const DURATION_MS = {
         "15m": 15 * 60 * 1000,
@@ -679,6 +743,7 @@
       let priceSortDescending = false;
       let watchPoolShowAll = false;
       let githubReady = false;
+      let klineAbort = null;
       const stepState = {
         github: { status: "pending", detail: "等待加载" },
         binance: { status: "pending", detail: "等待请求" },
@@ -1022,6 +1087,157 @@
         renderRows("watchPoolBody", symbols);
       }
 
+      function klineInterval() {
+        return selectedDimension;
+      }
+
+      async function fetchKlines(symbol, interval, signal) {
+        const query = `symbol=${symbol}&interval=${interval}&limit=${CONFIG.KLINE_LIMIT}`;
+        const endpoints = [
+          `https://data-api.binance.vision/api/v3/klines?${query}`,
+          `https://api.binance.com/api/v3/klines?${query}`,
+        ];
+        let lastError = null;
+        for (const url of endpoints) {
+          try {
+            const response = await fetch(url, { signal, cache: "no-store" });
+            if (!response.ok) {
+              lastError = new Error(`HTTP ${response.status}`);
+              continue;
+            }
+            const rows = await response.json();
+            if (!Array.isArray(rows) || !rows.length) {
+              lastError = new Error("K线为空");
+              continue;
+            }
+            return rows.map((row) => ({
+              time: Number(row[0]),
+              open: Number(row[1]),
+              high: Number(row[2]),
+              low: Number(row[3]),
+              close: Number(row[4]),
+            }));
+          } catch (error) {
+            if (error.name === "AbortError") throw error;
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("K线请求失败");
+      }
+
+      function drawKline(canvas, candles) {
+        const rect = canvas.getBoundingClientRect();
+        const width = Math.max(1, Math.floor(rect.width));
+        const height = Math.max(1, Math.floor(rect.height));
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+        if (!candles.length) return;
+
+        const pad = { top: 8, right: 8, bottom: 8, left: 8 };
+        const chartW = width - pad.left - pad.right;
+        const chartH = height - pad.top - pad.bottom;
+        const highs = candles.map((item) => item.high);
+        const lows = candles.map((item) => item.low);
+        const max = Math.max(...highs);
+        const min = Math.min(...lows);
+        const range = max - min || max * 0.01 || 1;
+        const slot = chartW / candles.length;
+        const bodyW = Math.max(1, slot * 0.62);
+        const yOf = (price) => pad.top + ((max - price) / range) * chartH;
+
+        candles.forEach((candle, index) => {
+          const x = pad.left + slot * index + slot / 2;
+          const up = candle.close >= candle.open;
+          ctx.strokeStyle = up ? "#718b88" : "#8d7771";
+          ctx.fillStyle = up ? "#718b88" : "#8d7771";
+          ctx.beginPath();
+          ctx.moveTo(x, yOf(candle.high));
+          ctx.lineTo(x, yOf(candle.low));
+          ctx.stroke();
+          const y1 = yOf(candle.open);
+          const y2 = yOf(candle.close);
+          const bodyH = Math.max(1, Math.abs(y2 - y1));
+          ctx.fillRect(x - bodyW / 2, Math.min(y1, y2), bodyW, bodyH);
+        });
+      }
+
+      async function renderKlineCard(card, symbol, interval, signal) {
+        const canvas = card.querySelector("canvas");
+        const status = card.querySelector("[data-kline-status]");
+        try {
+          const candles = await fetchKlines(symbol, interval, signal);
+          const last = candles[candles.length - 1];
+          const first = candles[0];
+          const change =
+            first && first.open
+              ? ((last.close - first.open) / first.open) * 100
+              : null;
+          status.textContent = Number.isFinite(change)
+            ? `${formatPercent(change)} · ${interval}`
+            : interval;
+          status.className = change > 0 ? "up" : change < 0 ? "price-down" : "neutral";
+          drawKline(canvas, candles);
+        } catch (error) {
+          if (error.name === "AbortError") return;
+          status.textContent = "加载失败";
+          status.className = "price-down";
+          canvas.replaceWith(Object.assign(document.createElement("div"), {
+            className: "empty",
+            textContent: error.message || "K线加载失败",
+          }));
+        }
+      }
+
+      async function openKlineDialog() {
+        const symbols = getWatchPoolRisingSymbols();
+        const interval = klineInterval();
+        const dialog = document.getElementById("klineDialog");
+        const grid = document.getElementById("klineGrid");
+        const meta = document.getElementById("klineMeta");
+        if (klineAbort) klineAbort.abort();
+        klineAbort = new AbortController();
+        const { signal } = klineAbort;
+
+        meta.textContent = symbols.length
+          ? `当前窗口上涨 ${symbols.length} 个 · ${interval} K线 · 最近 ${CONFIG.KLINE_LIMIT} 根`
+          : "当前没有窗口上涨的观察池币种";
+        grid.innerHTML = symbols.length
+          ? symbols
+              .map((symbol) => {
+                const label = symbol.replace("USDT", "");
+                const tradeUrl = `https://www.binance.com/en/trade/${label}_USDT?type=spot`;
+                const change = momentum(symbol).price?.change;
+                return `<div class="kline-card" data-symbol="${symbol}"><div class="kline-card-head"><a href="${tradeUrl}" target="_blank" rel="noopener noreferrer">${label}</a><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span></div><canvas></canvas></div>`;
+              })
+              .join("")
+          : '<div class="empty">暂无上涨币种</div>';
+        dialog.showModal();
+
+        const cards = [...grid.querySelectorAll(".kline-card")];
+        const batchSize = 4;
+        for (let index = 0; index < cards.length; index += batchSize) {
+          if (signal.aborted) return;
+          const batch = cards.slice(index, index + batchSize);
+          await Promise.all(
+            batch.map((card) =>
+              renderKlineCard(card, card.dataset.symbol, interval, signal),
+            ),
+          );
+        }
+      }
+
+      function closeKlineDialog() {
+        if (klineAbort) {
+          klineAbort.abort();
+          klineAbort = null;
+        }
+        document.getElementById("klineDialog").close();
+      }
+
       function getWindowChainSummary(symbol) {
         const series = getWindowChainSeries();
         const values = series.map((item) => item.snapshot?.prices[symbol]);
@@ -1298,6 +1514,23 @@
           watchPoolShowAll = !watchPoolShowAll;
           renderWatchPoolDialog();
         });
+      document
+        .getElementById("watchPoolKlineBtn")
+        .addEventListener("click", openKlineDialog);
+
+      const klineDialog = document.getElementById("klineDialog");
+      document
+        .getElementById("klineDialogClose")
+        .addEventListener("click", closeKlineDialog);
+      klineDialog.addEventListener("click", (event) => {
+        if (event.target === klineDialog) closeKlineDialog();
+      });
+      klineDialog.addEventListener("close", () => {
+        if (klineAbort) {
+          klineAbort.abort();
+          klineAbort = null;
+        }
+      });
 
       document.addEventListener("click", (event) => {
         const priceLink = event.target.closest(".price-link");
