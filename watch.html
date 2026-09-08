@@ -768,6 +768,7 @@
         HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000,
         GITHUB_REPO: "betterma/pages",
         GITHUB_PATH: "watch-data.json",
+        FAVORITES_PATH: "watch-favorites.json",
         TOP20: 20,
         RADAR_MAX_RANK: 100,
         WATCH_POOL_RANK: 30,
@@ -904,8 +905,6 @@
         }
         history = Array.isArray(data.history) ? data.history : [];
         events = Array.isArray(data.events) ? data.events : [];
-        favoriteItems = WatchFavorites.normalizeFavorites(data.favorites);
-        favorites = WatchFavorites.favoritesToSymbolSet(favoriteItems);
         watchPool = new Set(
           Array.isArray(data.watchPool) ? data.watchPool : [],
         );
@@ -914,6 +913,20 @@
           document.getElementById("dimensionSelect").value = selectedDimension;
         }
         pruneHistory();
+
+        try {
+          const favState = await WatchFavorites.loadFavoritesRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.FAVORITES_PATH,
+          });
+          favoriteItems = favState.favorites;
+          favorites = WatchFavorites.favoritesToSymbolSet(favoriteItems);
+        } catch (error) {
+          console.warn(error);
+          favoriteItems = WatchFavorites.normalizeFavorites(data.favorites);
+          favorites = WatchFavorites.favoritesToSymbolSet(favoriteItems);
+        }
+
         const latest = history.length ? history[history.length - 1].timestamp : 0;
         setStep(
           "github",
@@ -1557,7 +1570,7 @@
           setStatus(false, `正在保存 ${label} 收藏...`);
           const result = await WatchFavorites.patchFavorites({
             repo: CONFIG.GITHUB_REPO,
-            path: CONFIG.GITHUB_PATH,
+            path: CONFIG.FAVORITES_PATH,
             message: `Update favorite ${symbol}`,
             mutate(list) {
               return WatchFavorites.toggleFavorite(
@@ -1581,6 +1594,7 @@
         } catch (error) {
           console.error(error);
           setStatus(false, error.message || "收藏保存失败");
+          window.alert(error.message || "收藏保存失败，请打开控制台查看详情");
         } finally {
           favoriteSaving = false;
         }

@@ -255,6 +255,7 @@
         HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000,
         GITHUB_REPO: "betterma/pages",
         GITHUB_PATH: "watch-data.json",
+        FAVORITES_PATH: "watch-favorites.json",
         WATCH_POOL_RANK: 30,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
         KLINE_MAX_LIMIT: 1000,
@@ -437,7 +438,16 @@
         watchPool = new Set(
           Array.isArray(data.watchPool) ? data.watchPool : [],
         );
-        favoriteItems = WatchFavorites.normalizeFavorites(data.favorites);
+        try {
+          const favState = await WatchFavorites.loadFavoritesRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.FAVORITES_PATH,
+          });
+          favoriteItems = favState.favorites;
+        } catch (error) {
+          console.warn(error);
+          favoriteItems = WatchFavorites.normalizeFavorites(data.favorites);
+        }
         pruneHistory();
       }
 
@@ -724,7 +734,7 @@
           setStatus(false, `正在保存 ${label} 收藏到 GitHub...`);
           const result = await WatchFavorites.patchFavorites({
             repo: CONFIG.GITHUB_REPO,
-            path: CONFIG.GITHUB_PATH,
+            path: CONFIG.FAVORITES_PATH,
             message: `Update favorite ${symbol}`,
             mutate(list) {
               return WatchFavorites.toggleFavorite(list, symbol, "kline");
@@ -742,6 +752,7 @@
           console.error(error);
           showToast(error.message || "收藏保存失败");
           setStatus(false, error.message || "收藏保存失败");
+          window.alert(error.message || "收藏保存失败");
         } finally {
           favoriteSaving = false;
         }

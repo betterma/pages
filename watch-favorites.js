@@ -14,9 +14,11 @@
   "use strict";
 
   const DEFAULT_REPO = "betterma/pages";
-  const DEFAULT_PATH = "watch-data.json";
+  // Personal favorites live in a small dedicated file so browser writes
+  // do not depend on the multi‑MB watch-data.json Contents API limit.
+  const FAVORITES_PATH = "watch-favorites.json";
+  const LEGACY_DATA_PATH = "watch-data.json";
 
-  // Same pattern as getcoininfo.html — required for browser → GitHub writes.
   const TOKEN_PART_A = "gh";
   const TOKEN_PART_B = "p_Xrmz1DjzLfbjyiXZqFyJGd9O8aWFIq4D9758";
 
@@ -111,16 +113,30 @@
   }
 
   function encodeBase64Utf8(text) {
-    return btoa(unescape(encodeURIComponent(text)));
+    const bytes = new TextEncoder().encode(text);
+    let binary = "";
+    const chunk = 0x8000;
+    for (let index = 0; index < bytes.length; index += chunk) {
+      binary += String.fromCharCode.apply(
+        null,
+        bytes.subarray(index, index + chunk),
+      );
+    }
+    return btoa(binary);
   }
 
   function decodeBase64Utf8(content) {
-    return decodeURIComponent(escape(atob(content.replace(/\n/g, ""))));
+    const binary = atob(String(content || "").replace(/\n/g, ""));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return new TextDecoder().decode(bytes);
   }
 
-  async function fetchWatchDataFile(options) {
+  async function fetchJsonFile(options) {
     const repo = options.repo || DEFAULT_REPO;
-    const path = options.path || DEFAULT_PATH;
+    const path = options.path;
     const token = options.token || getGithubToken();
     const response = await fetch(
       `https://api.github.com/repos/${repo}/contents/${path}?t=${Date.now()}`,
@@ -134,47 +150,52 @@
       },
     );
     if (response.status === 404) {
-      return { data: null, sha: null, raw: "" };
+      return { data: null, sha: null };
     }
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`读取 GitHub 失败: ${response.status} ${text.slice(0, 180)}`);
+      throw new Error(
+        `读取 ${path} 失败: ${response.status} ${text.slice(0, 180)}`,
+      );
     }
     const file = await response.json();
     let raw = "";
     if (file.content) {
       raw = decodeBase64Utf8(file.content);
-    } else if (file.download_url) {
-      // Contents API omits inline body when file > 1MB.
-      const rawResponse = await fetch(file.download_url, {
-        cache: "no-store",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github.raw",
+    } else if (file.sha) {
+      const blobResponse = await fetch(
+        `https://api.github.com/repos/${repo}/git/blobs/${file.sha}`,
+        {
+          cache: "no-store",
+          headers: {
+            Accept: "application/vnd.github+json",
+            Authorization: `Bearer ${token}`,
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
         },
-      });
-      if (!rawResponse.ok) {
-        throw new Error(`读取大文件失败: ${rawResponse.status}`);
+      );
+      if (!blobResponse.ok) {
+        throw new Error(`读取 ${path} blob 失败: ${blobResponse.status}`);
       }
-      raw = await rawResponse.text();
+      const blob = await blobResponse.json();
+      raw = decodeBase64Utf8(blob.content || "");
     }
     if (!raw.trim()) {
-      throw new Error("watch-data.json 内容为空");
+      throw new Error(`${path} 内容为空`);
     }
     return {
       data: JSON.parse(raw),
       sha: file.sha,
-      raw,
     };
   }
 
-  async function writeWatchDataFile(options) {
+  async function writeJsonFile(options) {
     const repo = options.repo || DEFAULT_REPO;
-    const path = options.path || DEFAULT_PATH;
+    const path = options.path;
     const token = options.token || getGithubToken();
     const payload = {
-      message: options.message || "Update watch favorites",
-      content: encodeBase64Utf8(JSON.stringify(options.data)),
+      message: options.message || `Update ${path}`,
+      content: encodeBase64Utf8(JSON.stringify(options.data, null, 2)),
     };
     if (options.sha) payload.sha = options.sha;
 
@@ -198,35 +219,80 @@
     }
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`写入 GitHub 失败: ${response.status} ${text.slice(0, 180)}`);
+      throw new Error(
+        `写入 ${path} 失败: ${response.status} ${text.slice(0, 220)}`,
+      );
     }
     return response.json();
   }
 
+  async function loadFavoritesRaw(options) {
+    const repo = options.repo || DEFAULT_REPO;
+    const path = options.path || FAVORITES_PATH;
+    const url = `https://raw.githubusercontent.com/${repo}/main/${path}?t=${Date.now()}`;
+    const response = await fetch(url, { cache: "no-store" });
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        favorites: normalizeFavorites(data.favorites),
+        favoritesUpdatedAt: Number.isFinite(Number(data.favoritesUpdatedAt))
+          ? Number(data.favoritesUpdatedAt)
+          : null,
+      };
+    }
+    if (response.status !== 404) {
+      throw new Error(`读取收藏失败: ${response.status}`);
+    }
+
+    // One-time migration from legacy watch-data.json favorites.
+    const legacyUrl = `https://raw.githubusercontent.com/${repo}/main/${LEGACY_DATA_PATH}?t=${Date.now()}`;
+    const legacyResponse = await fetch(legacyUrl, { cache: "no-store" });
+    if (!legacyResponse.ok) {
+      return { favorites: [], favoritesUpdatedAt: null };
+    }
+    const legacy = await legacyResponse.json();
+    return {
+      favorites: normalizeFavorites(legacy.favorites),
+      favoritesUpdatedAt: Number.isFinite(Number(legacy.favoritesUpdatedAt))
+        ? Number(legacy.favoritesUpdatedAt)
+        : null,
+    };
+  }
+
   async function patchFavorites(options) {
+    const repo = options.repo || DEFAULT_REPO;
+    const path = options.path || FAVORITES_PATH;
     const maxAttempts = options.maxAttempts || 3;
     let lastError = null;
+
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       try {
-        const current = await fetchWatchDataFile(options);
-        if (!current.data) {
-          throw new Error("watch-data.json 不存在，无法保存收藏");
-        }
-        const favorites = normalizeFavorites(current.data.favorites);
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options.token,
+        });
+        const base = current.data || {
+          favorites: [],
+          favoritesUpdatedAt: null,
+        };
+        const favorites = normalizeFavorites(base.favorites);
         const result = options.mutate(favorites.slice());
         const nextFavorites = serializeFavorites(
           result && result.list ? result.list : result,
         );
         const nextData = {
-          ...current.data,
           favorites: nextFavorites,
           favoritesUpdatedAt: Date.now(),
+          updatedAt: Date.now(),
         };
-        await writeWatchDataFile({
-          ...options,
+        await writeJsonFile({
+          repo,
+          path,
+          token: options.token,
           data: nextData,
           sha: current.sha,
-          message: options.message || "Update watch favorites",
+          message: options.message || `Update ${path}`,
         });
         return {
           favorites: nextFavorites,
@@ -243,7 +309,8 @@
 
   return {
     DEFAULT_REPO,
-    DEFAULT_PATH,
+    FAVORITES_PATH,
+    LEGACY_DATA_PATH,
     getGithubToken,
     normalizeFavorites,
     serializeFavorites,
@@ -252,8 +319,7 @@
     addFavorite,
     removeFavorite,
     toggleFavorite,
-    fetchWatchDataFile,
-    writeWatchDataFile,
+    loadFavoritesRaw,
     patchFavorites,
   };
 });
