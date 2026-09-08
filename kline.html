@@ -111,12 +111,16 @@
         margin-bottom: 6px;
         font-size: 13px;
       }
-      .kline-card-head a {
+      .kline-card-head .symbol-copy {
         color: inherit;
         font-weight: 700;
-        text-decoration: none;
+        cursor: pointer;
+        border: none;
+        background: none;
+        padding: 0;
+        font: inherit;
       }
-      .kline-card-head a:hover {
+      .kline-card-head .symbol-copy:hover {
         text-decoration: underline;
       }
       .kline-card canvas {
@@ -227,6 +231,20 @@
         return Number.isFinite(value)
           ? `${value > 0 ? "+" : ""}${value.toFixed(2)}%`
           : "--";
+      }
+
+      async function copyName(name) {
+        try {
+          await navigator.clipboard.writeText(name);
+        } catch (error) {
+          const textarea = document.createElement("textarea");
+          textarea.value = name;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          textarea.remove();
+        }
+        setStatus(true, `${name} 已复制`);
       }
 
       function klineLimit(interval) {
@@ -499,12 +517,15 @@
           ? symbols
               .map((symbol) => {
                 const label = symbol.replace("USDT", "");
-                const tradeUrl = `https://www.binance.com/en/trade/${label}_USDT?type=spot`;
                 const change = windowPriceChange(symbol, interval);
-                return `<div class="kline-card" data-symbol="${symbol}"><div class="kline-card-head"><a href="${tradeUrl}" target="_blank" rel="noopener noreferrer">${label}</a><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span></div><canvas></canvas></div>`;
+                return `<div class="kline-card" data-symbol="${symbol}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span></div><canvas></canvas></div>`;
               })
               .join("")
           : '<div class="empty">暂无上涨币种</div>';
+
+        grid.querySelectorAll(".symbol-copy").forEach((btn) => {
+          btn.addEventListener("click", () => copyName(btn.dataset.name));
+        });
 
         const cards = [...grid.querySelectorAll(".kline-card")];
         const batchSize = 4;
@@ -552,6 +573,12 @@
       }
 
       document.getElementById("refreshBtn").addEventListener("click", refreshAll);
+      document.addEventListener("dblclick", (event) => {
+        if (event.target.closest("button, a, input, select, textarea, label")) {
+          return;
+        }
+        window.location.href = "./watch.html";
+      });
       refreshAll();
     </script>
   </body>

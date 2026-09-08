@@ -390,12 +390,16 @@
         margin-bottom: 6px;
         font-size: 13px;
       }
-      .kline-card-head a {
+      .kline-card-head .symbol-copy {
         color: inherit;
         font-weight: 700;
-        text-decoration: none;
+        cursor: pointer;
+        border: none;
+        background: none;
+        padding: 0;
+        font: inherit;
       }
-      .kline-card-head a:hover {
+      .kline-card-head .symbol-copy:hover {
         text-decoration: underline;
       }
       .kline-card canvas {
@@ -1240,9 +1244,8 @@
           ? symbols
               .map((symbol) => {
                 const label = symbol.replace("USDT", "");
-                const tradeUrl = `https://www.binance.com/en/trade/${label}_USDT?type=spot`;
                 const change = momentum(symbol).price?.change;
-                return `<div class="kline-card" data-symbol="${symbol}"><div class="kline-card-head"><a href="${tradeUrl}" target="_blank" rel="noopener noreferrer">${label}</a><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span></div><canvas></canvas></div>`;
+                return `<div class="kline-card" data-symbol="${symbol}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span></div><canvas></canvas></div>`;
               })
               .join("")
           : '<div class="empty">暂无上涨币种</div>';
@@ -1574,7 +1577,9 @@
         const button = event.target.closest(".favorite-button");
         if (button) toggleFavorite(button.dataset.symbol);
         const symbolCell = event.target.closest(".symbol-copy");
-        if (symbolCell) copySymbol(symbolCell.dataset.symbol);
+        if (symbolCell) {
+          copySymbol(symbolCell.dataset.name || symbolCell.dataset.symbol);
+        }
       });
 
       document
@@ -1605,6 +1610,17 @@
       setInterval(() => {
         if (githubReady) refreshDerivedSteps();
       }, 60 * 1000);
+
+      document.addEventListener("dblclick", (event) => {
+        if (
+          event.target.closest(
+            "button, a, input, select, textarea, label, dialog, .favorite-button, .symbol-copy, .price-link",
+          )
+        ) {
+          return;
+        }
+        window.location.href = "./kline.html";
+      });
     </script>
   </body>
 </html>
