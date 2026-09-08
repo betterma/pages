@@ -70,6 +70,62 @@
         gap: 8px;
         font-size: 14px;
       }
+      .pipeline {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-bottom: 15px;
+      }
+      .pipeline-step {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px 12px;
+        background: #fbfcfa;
+        border: 1px solid #d8ddda;
+        border-radius: 8px;
+        min-width: 0;
+      }
+      .pipeline-dot {
+        width: 10px;
+        height: 10px;
+        margin-top: 4px;
+        border-radius: 50%;
+        background: #a39d95;
+        flex-shrink: 0;
+      }
+      .pipeline-step.is-pending .pipeline-dot {
+        background: #a39d95;
+      }
+      .pipeline-step.is-loading .pipeline-dot {
+        background: #8a9aa3;
+        box-shadow: 0 0 8px rgba(138, 154, 163, 0.35);
+      }
+      .pipeline-step.is-ok .pipeline-dot {
+        background: #718b88;
+        box-shadow: 0 0 8px rgba(113, 139, 136, 0.35);
+      }
+      .pipeline-step.is-warn .pipeline-dot {
+        background: #9a8162;
+      }
+      .pipeline-step.is-error .pipeline-dot {
+        background: #8d7771;
+      }
+      .pipeline-copy {
+        min-width: 0;
+      }
+      .pipeline-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #28323a;
+      }
+      .pipeline-detail {
+        margin-top: 2px;
+        color: #78817f;
+        font-size: 12px;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+      }
       .dot {
         width: 10px;
         height: 10px;
@@ -391,6 +447,9 @@
           grid-template-columns: repeat(2, 1fr);
           gap: 8px;
         }
+        .pipeline {
+          grid-template-columns: 1fr 1fr;
+        }
         .card {
           min-width: 0;
           padding: 10px;
@@ -429,7 +488,37 @@
         <h1>Binance 冲榜雷达</h1>
         <div class="status">
           <span id="statusDot" class="dot"></span
-          ><span id="apiStatus">等待行情...</span>
+          ><span id="apiStatus">等待启动...</span>
+        </div>
+      </div>
+      <div class="pipeline" id="pipeline" aria-label="关键步骤状态">
+        <div class="pipeline-step is-pending" data-step="github">
+          <span class="pipeline-dot" aria-hidden="true"></span>
+          <div class="pipeline-copy">
+            <div class="pipeline-title">1. GitHub 数据</div>
+            <div class="pipeline-detail" data-detail>等待加载</div>
+          </div>
+        </div>
+        <div class="pipeline-step is-pending" data-step="binance">
+          <span class="pipeline-dot" aria-hidden="true"></span>
+          <div class="pipeline-copy">
+            <div class="pipeline-title">2. 币安行情</div>
+            <div class="pipeline-detail" data-detail>等待请求</div>
+          </div>
+        </div>
+        <div class="pipeline-step is-pending" data-step="compare">
+          <span class="pipeline-dot" aria-hidden="true"></span>
+          <div class="pipeline-copy">
+            <div class="pipeline-title">3. 窗口对比</div>
+            <div class="pipeline-detail" data-detail>等待快照</div>
+          </div>
+        </div>
+        <div class="pipeline-step is-pending" data-step="watchPool">
+          <span class="pipeline-dot" aria-hidden="true"></span>
+          <div class="pipeline-copy">
+            <div class="pipeline-title">4. 观察池</div>
+            <div class="pipeline-detail" data-detail>等待同步</div>
+          </div>
         </div>
       </div>
       <div class="controls">
@@ -590,11 +679,103 @@
       let priceSortDescending = false;
       let watchPoolShowAll = false;
       let githubReady = false;
+      const stepState = {
+        github: { status: "pending", detail: "等待加载" },
+        binance: { status: "pending", detail: "等待请求" },
+        compare: { status: "pending", detail: "等待快照" },
+        watchPool: { status: "pending", detail: "等待同步" },
+      };
+
+      function setStep(id, status, detail) {
+        if (!stepState[id]) return;
+        stepState[id] = { status, detail };
+        renderPipeline();
+        syncHeaderStatus();
+      }
+
+      function renderPipeline() {
+        Object.entries(stepState).forEach(([id, state]) => {
+          const node = document.querySelector(`.pipeline-step[data-step="${id}"]`);
+          if (!node) return;
+          node.className = `pipeline-step is-${state.status}`;
+          const detail = node.querySelector("[data-detail]");
+          if (detail) detail.textContent = state.detail;
+        });
+      }
+
+      function syncHeaderStatus() {
+        const order = ["github", "binance", "compare", "watchPool"];
+        const states = order.map((id) => ({ id, ...stepState[id] }));
+        const error = states.find((item) => item.status === "error");
+        if (error) {
+          setStatus(false, error.detail);
+          return;
+        }
+        const loading = states.find((item) => item.status === "loading");
+        if (loading) {
+          setStatus(false, loading.detail);
+          return;
+        }
+        const warn = states.find((item) => item.status === "warn");
+        if (warn) {
+          setStatus(true, warn.detail);
+          return;
+        }
+        if (states.every((item) => item.status === "ok")) {
+          setStatus(true, "关键步骤正常");
+          return;
+        }
+        const pending = states.find((item) => item.status === "pending");
+        setStatus(false, pending ? pending.detail : "等待启动...");
+      }
+
+      function refreshDerivedSteps() {
+        const label = dimensionLabel();
+        const comp = comparison();
+        if (!history.length) {
+          setStep("compare", "warn", `${label} 暂无历史快照`);
+        } else if (!comp) {
+          setStep("compare", "warn", `${label} 当前窗口缺少可用快照`);
+        } else {
+          const compareTime = new Date(comp.timestamp).toLocaleTimeString("zh-CN", {
+            hour12: false,
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          setStep("compare", "ok", `${label} 对比正常 · 基准 ${compareTime}`);
+        }
+
+        const latestSnapshot = history.length
+          ? history[history.length - 1].timestamp
+          : 0;
+        const ageMinutes = latestSnapshot
+          ? Math.floor((Date.now() - latestSnapshot) / 60000)
+          : null;
+        if (!githubReady) {
+          setStep("watchPool", "pending", "等待同步");
+        } else if (ageMinutes !== null && ageMinutes > 45) {
+          setStep(
+            "watchPool",
+            "warn",
+            `已载入 ${watchPool.size} 个 · 快照偏旧 ${formatDurationString(ageMinutes)}`,
+          );
+        } else {
+          setStep("watchPool", "ok", `已载入 ${watchPool.size} 个币种`);
+        }
+      }
 
       async function loadGithubStorage() {
+        setStep("github", "loading", "正在读取 watch-data.json");
         const url = `https://raw.githubusercontent.com/${CONFIG.GITHUB_REPO}/main/${CONFIG.GITHUB_PATH}?t=${Date.now()}`;
         const response = await fetch(url, { cache: "no-store" });
-        if (response.status === 404) return;
+        if (response.status === 404) {
+          history = [];
+          events = [];
+          favorites = new Set();
+          watchPool = new Set();
+          setStep("github", "warn", "文件不存在，将使用空数据");
+          return;
+        }
         if (!response.ok)
           throw new Error(`读取 GitHub 数据失败: ${response.status}`);
         const content = await response.text();
@@ -618,6 +799,14 @@
           document.getElementById("dimensionSelect").value = selectedDimension;
         }
         pruneHistory();
+        const latest = history.length ? history[history.length - 1].timestamp : 0;
+        setStep(
+          "github",
+          "ok",
+          latest
+            ? `已加载 · ${history.length} 张快照 · ${formatAge(latest)}`
+            : `已加载 · 暂无快照`,
+        );
       }
 
       function pruneHistory() {
@@ -946,6 +1135,7 @@
         );
         renderEvents();
         updateWatchPoolHint();
+        refreshDerivedSteps();
         if (document.getElementById("watchPoolDialog").open) {
           renderWatchPoolDialog();
         }
@@ -983,10 +1173,10 @@
 
       function loadData() {
         if (!githubReady) {
-          setStatus(false, "请先加载 GitHub 数据");
+          setStep("binance", "error", "需先完成 GitHub 数据加载");
           return;
         }
-        setStatus(false, "正在请求 REST 行情...");
+        setStep("binance", "loading", "正在请求 REST 行情...");
         const endpoints = [
           "https://data-api.binance.vision/api/v3/ticker/24hr",
           "https://api.binance.com/api/v3/ticker/24hr",
@@ -999,28 +1189,32 @@
           });
         requestTicker()
           .then((data) => {
+            let count = 0;
             data.forEach((ticker) => {
               if (!ticker.symbol.endsWith("USDT")) return;
               const price = Number(ticker.lastPrice);
               const change = Number(ticker.priceChangePercent);
-              if (Number.isFinite(price) && Number.isFinite(change))
+              if (Number.isFinite(price) && Number.isFinite(change)) {
                 marketMap[ticker.symbol] = {
                   price,
                   change24h: change,
                   updateTime: Date.now(),
                 };
+                count += 1;
+              }
             });
             lastApiUpdate = Date.now();
-            setStatus(
-              true,
-              `REST 已更新 · ${new Date().toLocaleTimeString("zh-CN")}`,
+            setStep(
+              "binance",
+              "ok",
+              `已更新 · ${count} 个 USDT · ${formatTime(lastApiUpdate)}`,
             );
             updateWatchPool();
             render();
           })
           .catch((error) => {
             console.error(error);
-            setStatus(false, "REST 请求失败");
+            setStep("binance", "error", `REST 请求失败：${error.message}`);
           });
       }
 
@@ -1124,6 +1318,7 @@
         .addEventListener("click", clearHistory);
 
       async function init() {
+        renderPipeline();
         try {
           await loadGithubStorage();
           githubReady = true;
@@ -1131,7 +1326,11 @@
           loadData();
         } catch (error) {
           console.error(error);
-          setStatus(false, `GitHub 数据读取失败：${error.message}`);
+          githubReady = false;
+          setStep("github", "error", error.message);
+          setStep("binance", "pending", "等待 GitHub 就绪");
+          setStep("compare", "pending", "等待上游数据");
+          setStep("watchPool", "pending", "等待上游数据");
         }
       }
 
@@ -1139,6 +1338,9 @@
       setInterval(() => {
         if (githubReady) loadData();
       }, CONFIG.REST_INTERVAL);
+      setInterval(() => {
+        if (githubReady) refreshDerivedSteps();
+      }, 60 * 1000);
     </script>
   </body>
 </html>
