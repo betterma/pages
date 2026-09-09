@@ -6,6 +6,7 @@ const { getObjectJson, putObjectJson, obsConfig } = require('./obs-client');
 const CONFIG = {
   GITHUB_REPO: process.env.GITHUB_REPO || 'betterma/pages',
   DATA_PATH: process.env.DATA_PATH || 'watch-data.json',
+  BLACKLIST_PATH: process.env.BLACKLIST_PATH || 'watch-blacklist.json',
   GITHUB_API: 'https://api.github.com',
   GITHUB_TOKEN: process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '',
   SNAPSHOT_INTERVAL: 15 * 60 * 1000,
@@ -248,21 +249,61 @@ function getWindowPriceChange(history, marketMap, symbol, selectedDimension) {
   return ((currentPrice - oldPrice) / oldPrice) * 100;
 }
 
-function updateWatchPool(history, marketMap, watchPool) {
-  const list = ranking(marketMap);
+function updateWatchPool(history, marketMap, watchPool, blacklist) {
+  const blocked = blacklist instanceof Set ? blacklist : new Set(blacklist || []);
+  const list = ranking(marketMap).filter((symbol) => !blocked.has(symbol));
   const nextPool = new Set(watchPool);
 
   for (const symbol of [...nextPool]) {
     const rank = list.indexOf(symbol) + 1;
-    if (!rank || rank > CONFIG.WATCH_POOL_RANK) nextPool.delete(symbol);
+    if (blocked.has(symbol) || !rank || rank > CONFIG.WATCH_POOL_RANK) {
+      nextPool.delete(symbol);
+    }
   }
 
   for (const symbol of list.slice(0, CONFIG.WATCH_POOL_RANK)) {
+    if (blocked.has(symbol)) continue;
     const change = getWindowPriceChange(history, marketMap, symbol, '4h');
     if (Number.isFinite(change) && change > 0) nextPool.add(symbol);
   }
 
   return nextPool;
+}
+
+async function loadBlacklistSymbols() {
+  const path = CONFIG.BLACKLIST_PATH;
+  try {
+    const headers = {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'binance-radar-monitor',
+      'X-GitHub-Api-Version': '2022-11-28',
+    };
+    if (CONFIG.GITHUB_TOKEN) {
+      headers.Authorization = `Bearer ${CONFIG.GITHUB_TOKEN}`;
+    }
+    const url = `${CONFIG.GITHUB_API}/repos/${CONFIG.GITHUB_REPO}/contents/${path}`;
+    const response = await requestJson(url, { headers, timeout: 12000 });
+    if (response.status === 404) {
+      console.log(`Blacklist file not found: ${path}`);
+      return new Set();
+    }
+    if (!response.ok) {
+      console.warn(`读取黑名单失败: ${response.status}`);
+      return new Set();
+    }
+    const file = await response.json();
+    if (!file.content) {
+      console.warn('黑名单 Contents 无 content');
+      return new Set();
+    }
+    const parsed = JSON.parse(decodeBase64(file.content));
+    const list = normalizeFavorites(parsed.blacklist);
+    console.log(`Loaded blacklist ${list.length} symbols`);
+    return new Set(list.map((item) => item.symbol));
+  } catch (error) {
+    console.warn(`loadBlacklist failed: ${error.message}`);
+    return new Set();
+  }
 }
 
 function pruneHistory(history) {
@@ -581,12 +622,13 @@ async function runMonitorOnce() {
 
   const result = evaluateTop20(history, marketMap, alertState, selectedDimension);
   alertState = result.alertState;
-  watchPool = updateWatchPool(history, marketMap, watchPool);
+  const blacklist = await loadBlacklistSymbols();
+  watchPool = updateWatchPool(history, marketMap, watchPool, blacklist);
   history.push(buildSnapshot(marketMap));
   history = slimHistory(pruneHistory(history));
   events = events.slice(0, CONFIG.MAX_EVENTS);
 
-  // Personal favorites live in GitHub watch-favorites.json (browser-written).
+  // Personal favorites / blacklist live in GitHub small JSON files (browser-written).
   const nextState = {
     history,
     events,
@@ -598,7 +640,7 @@ async function runMonitorOnce() {
 
   const encodedSize = Buffer.byteLength(JSON.stringify(nextState), 'utf8');
   console.log(
-    `Prepared state size ${(encodedSize / 1024).toFixed(1)}KB · snapshots=${history.length}`,
+    `Prepared state size ${(encodedSize / 1024).toFixed(1)}KB · snapshots=${history.length} · blacklist=${blacklist.size}`,
   );
 
   const key = await writeObsState(nextState);

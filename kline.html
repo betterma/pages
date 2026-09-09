@@ -133,6 +133,19 @@
         line-height: 1;
         pointer-events: none;
       }
+      .blacklist-card-btn {
+        border: 0;
+        background: transparent;
+        color: #9aa3a0;
+        padding: 0 2px;
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+      .blacklist-card-btn:hover {
+        color: #8d7771;
+      }
       .kline-card-head {
         display: flex;
         align-items: baseline;
@@ -237,7 +250,7 @@
         <span id="statusDot" class="dot"></span>
         <span id="statusText">等待启动...</span>
       </div>
-      <p class="hint">长按 K 线卡片可加入/取消收藏（同步到 GitHub）· 单击名称复制</p>
+      <p class="hint">长按 K 线卡片可加入/取消收藏 · 点 ⊖ 拉黑 · 单击名称复制</p>
 
       <h2 class="section-title">窗口上涨</h2>
       <div id="risingMeta" class="meta"></div>
@@ -257,6 +270,7 @@
         GITHUB_PATH: "watch-data.json",
         OBS_BASE: "https://mpctest.obs.cn-north-4.myhuaweicloud.com",
         FAVORITES_PATH: "watch-favorites.json",
+        BLACKLIST_PATH: "watch-blacklist.json",
         WATCH_POOL_RANK: 30,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
         KLINE_MAX_LIMIT: 1000,
@@ -275,9 +289,11 @@
       let history = [];
       let watchPool = new Set();
       let favoriteItems = [];
+      let blacklistItems = [];
       let klineAbort = null;
       let loading = false;
       let favoriteSaving = false;
+      let blacklistSaving = false;
 
       function setStatus(ok, text) {
         document.getElementById("statusDot").className =
@@ -303,6 +319,10 @@
 
       function favoriteSymbols() {
         return WatchFavorites.favoritesToSymbolSet(favoriteItems);
+      }
+
+      function blacklistSymbols() {
+        return WatchFavorites.blacklistToSymbolSet(blacklistItems);
       }
 
       async function copyName(name) {
@@ -334,9 +354,11 @@
       }
 
       function ranking() {
+        const blocked = blacklistSymbols();
         return Object.entries(marketMap)
           .sort((a, b) => b[1].change24h - a[1].change24h)
-          .map(([symbol]) => symbol);
+          .map(([symbol]) => symbol)
+          .filter((symbol) => !blocked.has(symbol));
       }
 
       function getWindowStart(timestamp, duration) {
@@ -393,33 +415,46 @@
 
       function updateWatchPool() {
         const list = ranking();
+        const blocked = blacklistSymbols();
         if (!list.length) return;
         for (const symbol of [...watchPool]) {
           const rank = list.indexOf(symbol) + 1;
-          if (!rank || rank > CONFIG.WATCH_POOL_RANK) watchPool.delete(symbol);
+          if (blocked.has(symbol) || !rank || rank > CONFIG.WATCH_POOL_RANK) {
+            watchPool.delete(symbol);
+          }
         }
         for (const symbol of list.slice(0, CONFIG.WATCH_POOL_RANK)) {
+          if (blocked.has(symbol)) continue;
           if (hasWindowGain(symbol, "4h")) watchPool.add(symbol);
         }
       }
 
       function getRisingSymbols() {
         const interval = CONFIG.KLINE_INTERVAL;
+        const blocked = blacklistSymbols();
         const list = ranking();
         const ranked = list.filter((symbol) => watchPool.has(symbol));
         const unranked = [...watchPool].filter(
-          (symbol) => marketMap[symbol] && !list.includes(symbol),
+          (symbol) =>
+            marketMap[symbol] &&
+            !list.includes(symbol) &&
+            !blocked.has(symbol),
         );
-        return [...ranked, ...unranked].filter((symbol) =>
-          hasWindowGain(symbol, interval),
+        return [...ranked, ...unranked].filter(
+          (symbol) =>
+            !blocked.has(symbol) && hasWindowGain(symbol, interval),
         );
       }
 
       function getFavoriteOnlySymbols(risingSymbols) {
         const rising = new Set(risingSymbols);
+        const blocked = blacklistSymbols();
         return favoriteItems
           .map((item) => item.symbol)
-          .filter((symbol) => marketMap[symbol] && !rising.has(symbol));
+          .filter(
+            (symbol) =>
+              marketMap[symbol] && !rising.has(symbol) && !blocked.has(symbol),
+          );
       }
 
       async function loadGithubStorage() {
@@ -429,6 +464,7 @@
           history = [];
           watchPool = new Set();
           favoriteItems = [];
+          blacklistItems = [];
           return;
         }
         if (!response.ok) {
@@ -448,6 +484,20 @@
         } catch (error) {
           console.warn(error);
           favoriteItems = [];
+        }
+        try {
+          const blackState = await WatchFavorites.loadBlacklistRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.BLACKLIST_PATH,
+          });
+          blacklistItems = blackState.blacklist;
+          const blocked = blacklistSymbols();
+          for (const symbol of [...watchPool]) {
+            if (blocked.has(symbol)) watchPool.delete(symbol);
+          }
+        } catch (error) {
+          console.warn(error);
+          blacklistItems = [];
         }
         pruneHistory();
       }
@@ -596,7 +646,7 @@
         const change = windowPriceChange(symbol, CONFIG.KLINE_INTERVAL);
         const favClass = options.isFavorite ? " is-favorite" : "";
         const mark = options.showMark ? '<span class="fav-mark">★</span>' : "";
-        return `<div class="kline-card${favClass}" data-symbol="${symbol}" data-section="${options.section}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span></div>${mark}<canvas></canvas></div>`;
+        return `<div class="kline-card${favClass}" data-symbol="${symbol}" data-section="${options.section}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span style="display:inline-flex;align-items:center;gap:6px"><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span><button type="button" class="blacklist-card-btn" data-symbol="${symbol}" title="加入黑名单" aria-label="加入黑名单">⊖</button></span></div>${mark}<canvas></canvas></div>`;
       }
 
       function bindCardInteractions(root) {
@@ -604,6 +654,12 @@
           btn.addEventListener("click", (event) => {
             event.stopPropagation();
             copyName(btn.dataset.name);
+          });
+        });
+        root.querySelectorAll(".blacklist-card-btn").forEach((btn) => {
+          btn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            addToBlacklist(btn.dataset.symbol);
           });
         });
         root.querySelectorAll(".kline-card").forEach((card) => {
@@ -624,7 +680,7 @@
         };
 
         const start = (event) => {
-          if (event.target.closest(".symbol-copy")) return;
+          if (event.target.closest(".symbol-copy, .blacklist-card-btn")) return;
           if (event.pointerType === "mouse" && event.button !== 0) return;
           triggered = false;
           card.classList.add("is-pressed");
@@ -736,9 +792,9 @@
           const result = await WatchFavorites.patchFavorites({
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.FAVORITES_PATH,
-            symbol,
-            source: "kline",
             message: `Update favorite ${symbol}`,
+            mutate: (list) =>
+              WatchFavorites.toggleFavorite(list, symbol, "kline"),
           });
           favoriteItems = result.favorites;
           const added = result.meta && result.meta.added;
@@ -755,6 +811,58 @@
           window.alert(error.message || "收藏保存失败");
         } finally {
           favoriteSaving = false;
+        }
+      }
+
+      async function addToBlacklist(symbol) {
+        if (!symbol || blacklistSaving) return;
+        const label = symbol.replace("USDT", "");
+        if (!window.confirm(`确定将 ${label} 加入黑名单？`)) return;
+        blacklistSaving = true;
+        try {
+          setStatus(false, `正在拉黑 ${label}...`);
+          const result = await WatchFavorites.patchBlacklist({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.BLACKLIST_PATH,
+            message: `Add blacklist ${symbol}`,
+            mutate: (list) => {
+              if (WatchFavorites.hasBlacklist(list, symbol)) {
+                return { list, added: false };
+              }
+              return {
+                list: WatchFavorites.addBlacklist(list, symbol, "kline"),
+                added: true,
+              };
+            },
+          });
+          blacklistItems = result.blacklist;
+          watchPool.delete(symbol);
+          if (favoriteSymbols().has(symbol)) {
+            try {
+              const favResult = await WatchFavorites.patchFavorites({
+                repo: CONFIG.GITHUB_REPO,
+                path: CONFIG.FAVORITES_PATH,
+                message: `Remove favorite ${symbol} after blacklist`,
+                mutate: (list) => ({
+                  list: WatchFavorites.removeFavorite(list, symbol),
+                  added: false,
+                }),
+              });
+              favoriteItems = favResult.favorites;
+            } catch (error) {
+              console.warn("拉黑后移除收藏失败", error);
+            }
+          }
+          showToast(`${label} 已加入黑名单`);
+          await renderKlines();
+          setStatus(true, `${label} 已拉黑并同步`);
+        } catch (error) {
+          console.error(error);
+          showToast(error.message || "黑名单保存失败");
+          setStatus(false, error.message || "黑名单保存失败");
+          window.alert(error.message || "黑名单保存失败");
+        } finally {
+          blacklistSaving = false;
         }
       }
 

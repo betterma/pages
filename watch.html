@@ -270,18 +270,49 @@
         font-weight: normal;
         line-height: 1.2;
       }
-      .favorite-button {
+      .favorite-button,
+      .blacklist-button {
         border: 0;
         background: transparent;
         color: #8a918e;
         padding: 0 4px;
-        font-size: 18px;
+        font-size: 16px;
         line-height: 1;
+        cursor: pointer;
       }
       .favorite-button:hover,
       .favorite-button.active {
         background: transparent;
         color: #9a8162;
+      }
+      .blacklist-button:hover {
+        color: #8d7771;
+      }
+      .row-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        white-space: nowrap;
+      }
+      .blacklist-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        max-height: min(60vh, 480px);
+        overflow-y: auto;
+      }
+      .blacklist-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 4px;
+        border-bottom: 1px solid #e5e9e6;
+        font-size: 14px;
+      }
+      .blacklist-item-meta {
+        color: #78817f;
+        font-size: 12px;
       }
       .event-list {
         max-height: 500px;
@@ -635,6 +666,9 @@
         ><button id="watchPoolBtn" class="watch-pool-btn" type="button">
           观察池<span id="watchPoolHint" class="watch-pool-hint" aria-live="polite">0</span>
         </button
+        ><button id="blacklistBtn" class="watch-pool-btn" type="button">
+          黑名单<span id="blacklistHint" class="watch-pool-hint" aria-live="polite">0</span>
+        </button
         ><button id="clearBtn" class="danger">清空历史</button>
       </div>
       <div class="info">
@@ -667,7 +701,7 @@
           <table>
             <thead>
               <tr>
-                <th>收藏</th>
+                <th>操作</th>
                 <th>币种</th>
                 <th>24h涨幅</th>
                 <th id="topPriceHeader" class="sortable" title="点击按价格涨幅排序">15min价格</th>
@@ -688,7 +722,7 @@
           <table>
             <thead>
               <tr>
-                <th>收藏</th>
+                <th>操作</th>
                 <th>币种</th>
                 <th>24h涨幅</th>
                 <th id="radarPriceHeader" class="sortable" title="点击按价格涨幅排序">15min价格</th>
@@ -734,7 +768,7 @@
           <table>
             <thead>
               <tr>
-                <th>收藏</th>
+                <th>操作</th>
                 <th>币种</th>
                 <th>24h涨幅</th>
                 <th id="poolPriceHeader" class="sortable" title="点击按价格涨幅排序">
@@ -760,6 +794,22 @@
       <div id="klineMeta" class="kline-meta"></div>
       <div id="klineGrid" class="kline-grid"></div>
     </dialog>
+    <dialog
+      id="blacklistDialog"
+      class="watch-pool-dialog"
+      aria-labelledby="blacklistDialogTitle"
+    >
+      <div class="dialog-header">
+        <h2 id="blacklistDialogTitle">黑名单</h2>
+        <button class="dialog-close" id="blacklistDialogClose" aria-label="关闭">×</button>
+      </div>
+      <div class="dialog-body">
+        <div id="blacklistMeta" class="watch-pool-meta">
+          拉黑后将从 Top20、雷达、观察池与 K 线中隐藏
+        </div>
+        <div id="blacklistList" class="blacklist-list"></div>
+      </div>
+    </dialog>
     <script src="./watch-favorites.js"></script>
     <script>
       "use strict";
@@ -770,6 +820,7 @@
         GITHUB_PATH: "watch-data.json",
         OBS_BASE: "https://mpctest.obs.cn-north-4.myhuaweicloud.com",
         FAVORITES_PATH: "watch-favorites.json",
+        BLACKLIST_PATH: "watch-blacklist.json",
         TOP20: 20,
         RADAR_MAX_RANK: 100,
         WATCH_POOL_RANK: 30,
@@ -789,6 +840,9 @@
       let favorites = new Set();
       let favoriteItems = [];
       let favoriteSaving = false;
+      let blacklist = new Set();
+      let blacklistItems = [];
+      let blacklistSaving = false;
       let watchPool = new Set();
       let selectedDimension = "15m";
       let lastApiUpdate = 0;
@@ -890,6 +944,8 @@
           events = [];
           favorites = new Set();
           favoriteItems = [];
+          blacklist = new Set();
+          blacklistItems = [];
           watchPool = new Set();
           setStep("github", "warn", "OBS 文件不存在，将使用空数据");
           return;
@@ -928,13 +984,29 @@
           favorites = new Set();
         }
 
+        try {
+          const blackState = await WatchFavorites.loadBlacklistRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.BLACKLIST_PATH,
+          });
+          blacklistItems = blackState.blacklist;
+          blacklist = WatchFavorites.blacklistToSymbolSet(blacklistItems);
+          for (const symbol of [...watchPool]) {
+            if (blacklist.has(symbol)) watchPool.delete(symbol);
+          }
+        } catch (error) {
+          console.warn(error);
+          blacklistItems = [];
+          blacklist = new Set();
+        }
+
         const latest = history.length ? history[history.length - 1].timestamp : 0;
         setStep(
           "github",
           "ok",
           latest
-            ? `OBS已加载 · ${history.length} 张快照 · 收藏 ${favorites.size} · ${formatAge(latest)}`
-            : `OBS已加载 · 暂无快照 · 收藏 ${favorites.size}`,
+            ? `OBS已加载 · ${history.length} 张快照 · 收藏 ${favorites.size} · 黑名单 ${blacklist.size} · ${formatAge(latest)}`
+            : `OBS已加载 · 暂无快照 · 收藏 ${favorites.size} · 黑名单 ${blacklist.size}`,
         );
       }
 
@@ -1005,7 +1077,8 @@
       function ranking() {
         return Object.entries(marketMap)
           .sort((a, b) => b[1].change24h - a[1].change24h)
-          .map(([symbol]) => symbol);
+          .map(([symbol]) => symbol)
+          .filter((symbol) => !blacklist.has(symbol));
       }
 
       function getWindowStart(timestamp, duration) {
@@ -1102,7 +1175,10 @@
         const list = ranking();
         const ranked = list.filter((symbol) => watchPool.has(symbol));
         const unranked = [...watchPool].filter(
-          (symbol) => marketMap[symbol] && !list.includes(symbol),
+          (symbol) =>
+            marketMap[symbol] &&
+            !list.includes(symbol) &&
+            !blacklist.has(symbol),
         );
         const ordered = [...ranked, ...unranked];
         if (!priceSortDescending) return ordered;
@@ -1119,9 +1195,12 @@
         if (!list.length) return;
         for (const symbol of [...watchPool]) {
           const rank = list.indexOf(symbol) + 1;
-          if (!rank || rank > CONFIG.WATCH_POOL_RANK) watchPool.delete(symbol);
+          if (blacklist.has(symbol) || !rank || rank > CONFIG.WATCH_POOL_RANK) {
+            watchPool.delete(symbol);
+          }
         }
         for (const symbol of list.slice(0, CONFIG.WATCH_POOL_RANK)) {
+          if (blacklist.has(symbol)) continue;
           if (hasWindowGain(symbol)) watchPool.add(symbol);
         }
       }
@@ -1135,6 +1214,32 @@
           risingCount > 0
             ? `观察池中有 ${risingCount} 个币种在当前窗口上涨`
             : "";
+        const blackHint = document.getElementById("blacklistHint");
+        if (blackHint) {
+          blackHint.textContent = String(blacklist.size);
+          blackHint.classList.toggle("visible", blacklist.size > 0);
+          blackHint.title =
+            blacklist.size > 0 ? `黑名单 ${blacklist.size} 个币种` : "";
+        }
+      }
+
+      function renderBlacklistDialog() {
+        const meta = document.getElementById("blacklistMeta");
+        const list = document.getElementById("blacklistList");
+        meta.textContent = blacklistItems.length
+          ? `共 ${blacklistItems.length} 个 · 拉黑后从 Top20 / 雷达 / 观察池 / K 线隐藏`
+          : "黑名单为空 · 在列表中点 ⊖ 即可拉黑";
+        list.innerHTML = blacklistItems.length
+          ? blacklistItems
+              .map((item) => {
+                const label = item.symbol.replace("USDT", "");
+                const when = item.addedAt
+                  ? new Date(item.addedAt).toLocaleString("zh-CN")
+                  : "--";
+                return `<div class="blacklist-item"><div><strong>${label}</strong><div class="blacklist-item-meta">${when} · ${item.source || "manual"}</div></div><button type="button" class="blacklist-remove" data-symbol="${item.symbol}">移出</button></div>`;
+              })
+              .join("")
+          : '<div class="empty">暂无黑名单</div>';
       }
 
       function renderWatchPoolDialog() {
@@ -1289,7 +1394,7 @@
                 const mark = isFavorite
                   ? '<span class="fav-mark">★</span>'
                   : "";
-                return `<div class="kline-card${favClass}" data-symbol="${symbol}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span></div>${mark}<canvas></canvas></div>`;
+                return `<div class="kline-card${favClass}" data-symbol="${symbol}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span style="display:inline-flex;align-items:center;gap:6px"><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span><button type="button" class="blacklist-button" data-symbol="${symbol}" title="加入黑名单" aria-label="加入黑名单">⊖</button></span></div>${mark}<canvas></canvas></div>`;
               })
               .join("")
           : '<div class="empty">暂无上涨币种</div>';
@@ -1321,7 +1426,7 @@
             card.classList.remove("is-pressed");
           };
           const start = (event) => {
-            if (event.target.closest(".symbol-copy")) return;
+            if (event.target.closest(".symbol-copy, .blacklist-button")) return;
             if (event.pointerType === "mouse" && event.button !== 0) return;
             triggered = false;
             card.classList.add("is-pressed");
@@ -1439,10 +1544,11 @@
                 const data = marketMap[symbol];
                 const isFavorite = favorites.has(symbol);
                 const favoriteButton = `<button class="favorite-button${isFavorite ? " active" : ""}" data-symbol="${symbol}" aria-label="${isFavorite ? "取消收藏" : "收藏"}">${isFavorite ? "★" : "☆"}</button>`;
+                const blacklistButton = `<button class="blacklist-button" data-symbol="${symbol}" title="加入黑名单" aria-label="加入黑名单">⊖</button>`;
                 const baseAsset = symbol.replace(/USDT$/, "");
                 const tradeUrl = `https://www.binance.com/en/trade/${baseAsset}_USDT?type=spot`;
                 const label = symbol.replace("USDT", "");
-                return `<tr><td>${favoriteButton}</td><td class="symbol symbol-copy" data-symbol="${symbol}" title="点击复制交易对">${label}</td><td class="up"><a class="price-link" href="${tradeUrl}" target="_blank" rel="noopener noreferrer" title="打开 ${label}/USDT 交易页">${formatPercent(data.change24h)}</a></td><td>${metric(symbol, "price")}</td><td>${metric(symbol, "rank")}</td><td class="window-chain">${getWindowChainSummary(symbol)}</td></tr>`;
+                return `<tr><td><span class="row-actions">${favoriteButton}${blacklistButton}</span></td><td class="symbol symbol-copy" data-symbol="${symbol}" title="点击复制交易对">${label}</td><td class="up"><a class="price-link" href="${tradeUrl}" target="_blank" rel="noopener noreferrer" title="打开 ${label}/USDT 交易页">${formatPercent(data.change24h)}</a></td><td>${metric(symbol, "price")}</td><td>${metric(symbol, "rank")}</td><td class="window-chain">${getWindowChainSummary(symbol)}</td></tr>`;
               })
               .join("")
           : '<tr><td colspan="6"><div class="empty">暂无数据</div></td></tr>';
@@ -1492,8 +1598,9 @@
       }
 
       function renderEvents() {
-        document.getElementById("eventList").innerHTML = events.length
-          ? events
+        const visible = events.filter((event) => !blacklist.has(event.symbol));
+        document.getElementById("eventList").innerHTML = visible.length
+          ? visible
               .map(
                 (event) =>
                   `<div class="event"><div class="event-time">${formatTime(event.timestamp)}</div><div class="event-symbol">${event.symbol.replace("USDT", "")}</div><div><span class="badge">TOP20</span></div><div>当前 #${event.rank} · ${event.description}</div></div>`,
@@ -1572,9 +1679,9 @@
           const result = await WatchFavorites.patchFavorites({
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.FAVORITES_PATH,
-            symbol,
-            source: source || "radar",
             message: `Update favorite ${symbol}`,
+            mutate: (list) =>
+              WatchFavorites.toggleFavorite(list, symbol, source || "radar"),
           });
           favoriteItems = result.favorites;
           favorites = WatchFavorites.favoritesToSymbolSet(favoriteItems);
@@ -1593,6 +1700,103 @@
           window.alert(error.message || "收藏保存失败，请打开控制台查看详情");
         } finally {
           favoriteSaving = false;
+        }
+      }
+
+      async function addToBlacklist(symbol, source) {
+        if (!symbol || blacklistSaving) return;
+        const label = symbol.replace("USDT", "");
+        if (!window.confirm(`确定将 ${label} 加入黑名单？将从列表中隐藏。`)) {
+          return;
+        }
+        blacklistSaving = true;
+        try {
+          setStatus(false, `正在拉黑 ${label}...`);
+          const result = await WatchFavorites.patchBlacklist({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.BLACKLIST_PATH,
+            message: `Add blacklist ${symbol}`,
+            mutate: (list) => {
+              if (WatchFavorites.hasBlacklist(list, symbol)) {
+                return { list, added: false };
+              }
+              return {
+                list: WatchFavorites.addBlacklist(
+                  list,
+                  symbol,
+                  source || "radar",
+                ),
+                added: true,
+              };
+            },
+          });
+          blacklistItems = result.blacklist;
+          blacklist = WatchFavorites.blacklistToSymbolSet(blacklistItems);
+          watchPool.delete(symbol);
+
+          if (favorites.has(symbol)) {
+            try {
+              const favResult = await WatchFavorites.patchFavorites({
+                repo: CONFIG.GITHUB_REPO,
+                path: CONFIG.FAVORITES_PATH,
+                message: `Remove favorite ${symbol} after blacklist`,
+                mutate: (list) => ({
+                  list: WatchFavorites.removeFavorite(list, symbol),
+                  added: false,
+                }),
+              });
+              favoriteItems = favResult.favorites;
+              favorites = WatchFavorites.favoritesToSymbolSet(favoriteItems);
+            } catch (error) {
+              console.warn("拉黑后移除收藏失败", error);
+            }
+          }
+
+          setStatus(true, `${label} 已加入黑名单`);
+          render();
+          if (document.getElementById("blacklistDialog").open) {
+            renderBlacklistDialog();
+          }
+          if (document.getElementById("klineDialog").open) {
+            openKlineDialog();
+          }
+        } catch (error) {
+          console.error(error);
+          setStatus(false, error.message || "黑名单保存失败");
+          window.alert(error.message || "黑名单保存失败");
+        } finally {
+          blacklistSaving = false;
+        }
+      }
+
+      async function removeFromBlacklist(symbol) {
+        if (!symbol || blacklistSaving) return;
+        blacklistSaving = true;
+        const label = symbol.replace("USDT", "");
+        try {
+          setStatus(false, `正在移出黑名单 ${label}...`);
+          const result = await WatchFavorites.patchBlacklist({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.BLACKLIST_PATH,
+            message: `Remove blacklist ${symbol}`,
+            mutate: (list) => ({
+              list: WatchFavorites.removeBlacklist(list, symbol),
+              added: false,
+            }),
+          });
+          blacklistItems = result.blacklist;
+          blacklist = WatchFavorites.blacklistToSymbolSet(blacklistItems);
+          setStatus(true, `${label} 已移出黑名单`);
+          render();
+          if (document.getElementById("blacklistDialog").open) {
+            renderBlacklistDialog();
+          }
+        } catch (error) {
+          console.error(error);
+          setStatus(false, error.message || "移出黑名单失败");
+          window.alert(error.message || "移出黑名单失败");
+        } finally {
+          blacklistSaving = false;
         }
       }
 
@@ -1666,6 +1870,21 @@
         .getElementById("watchPoolKlineBtn")
         .addEventListener("click", openKlineDialog);
 
+      const blacklistDialog = document.getElementById("blacklistDialog");
+      const openBlacklistDialog = () => {
+        renderBlacklistDialog();
+        blacklistDialog.showModal();
+      };
+      document
+        .getElementById("blacklistBtn")
+        .addEventListener("click", openBlacklistDialog);
+      document
+        .getElementById("blacklistDialogClose")
+        .addEventListener("click", () => blacklistDialog.close());
+      blacklistDialog.addEventListener("click", (event) => {
+        if (event.target === blacklistDialog) blacklistDialog.close();
+      });
+
       const klineDialog = document.getElementById("klineDialog");
       document
         .getElementById("klineDialogClose")
@@ -1686,6 +1905,18 @@
           event.preventDefault();
           window.open(priceLink.href, "_blank", "noopener,noreferrer");
           window.focus();
+          return;
+        }
+        const removeBtn = event.target.closest(".blacklist-remove");
+        if (removeBtn) {
+          event.preventDefault();
+          removeFromBlacklist(removeBtn.dataset.symbol);
+          return;
+        }
+        const blackBtn = event.target.closest(".blacklist-button");
+        if (blackBtn) {
+          event.preventDefault();
+          addToBlacklist(blackBtn.dataset.symbol, "radar");
           return;
         }
         const button = event.target.closest(".favorite-button");
@@ -1732,7 +1963,7 @@
       document.addEventListener("dblclick", (event) => {
         if (
           event.target.closest(
-            "button, a, input, select, textarea, label, dialog, .favorite-button, .symbol-copy, .price-link",
+            "button, a, input, select, textarea, label, dialog, .favorite-button, .blacklist-button, .symbol-copy, .price-link",
           )
         ) {
           return;
