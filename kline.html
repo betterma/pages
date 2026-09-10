@@ -140,7 +140,7 @@
         color: #f4f7f5;
         font-size: 11px;
         line-height: 1.3;
-        pointer-events: none;
+        cursor: help;
       }
       .fav-mark {
         position: absolute;
@@ -709,14 +709,17 @@
 
       function applyEarlyBadge(card, early) {
         card.classList.remove("is-early");
+        card.removeAttribute("title");
         const old = card.querySelector(".early-badge");
         if (old) old.remove();
         if (!early || !early.hit) return;
         card.classList.add("is-early");
+        const tip = `15m 启动分 ${early.score}/4 · ${early.detail}`;
         const badge = document.createElement("span");
         badge.className = "early-badge";
         badge.textContent = `启动 ${early.score}`;
-        badge.title = `15m 启动分 ${early.score}/4 · ${early.detail}`;
+        badge.title = tip;
+        badge.addEventListener("pointerdown", (event) => event.stopPropagation());
         card.appendChild(badge);
       }
 
