@@ -243,6 +243,9 @@
           <a class="nav-link" href="./watch.html">冲榜雷达</a>
         </div>
         <div class="topbar-actions">
+          <button id="rangeBtn" type="button" title="切换 K 线时间范围（4h 周期不变）">
+            近10天K线
+          </button>
           <button id="refreshBtn" type="button">刷新</button>
         </div>
       </div>
@@ -266,6 +269,8 @@
 
       const CONFIG = {
         HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000,
+        KLINE_RANGE_DAYS_DEFAULT: 3,
+        KLINE_RANGE_DAYS_EXTENDED: 10,
         GITHUB_REPO: "betterma/pages",
         GITHUB_PATH: "watch-data.json",
         OBS_BASE: "https://mpctest.obs.cn-north-4.myhuaweicloud.com",
@@ -294,6 +299,7 @@
       let loading = false;
       let favoriteSaving = false;
       let blacklistSaving = false;
+      let klineRangeDays = CONFIG.KLINE_RANGE_DAYS_DEFAULT;
 
       function setStatus(ok, text) {
         document.getElementById("statusDot").className =
@@ -339,13 +345,28 @@
         setStatus(true, `${name} 已复制`);
       }
 
+      function klineRangeLabel() {
+        return `近${klineRangeDays}天`;
+      }
+
       function klineLimit(interval) {
         const duration = DURATION_MS[interval];
         if (!duration) return 1;
+        const rangeMs = klineRangeDays * 24 * 60 * 60 * 1000;
         return Math.min(
           CONFIG.KLINE_MAX_LIMIT,
-          Math.max(1, Math.ceil(CONFIG.HISTORY_DURATION / duration)),
+          Math.max(1, Math.ceil(rangeMs / duration)),
         );
+      }
+
+      function syncRangeButton() {
+        const btn = document.getElementById("rangeBtn");
+        const isExtended =
+          klineRangeDays === CONFIG.KLINE_RANGE_DAYS_EXTENDED;
+        btn.textContent = isExtended ? "近3天K线" : "近10天K线";
+        btn.title = isExtended
+          ? "切换回近3天 K 线（4h 周期不变）"
+          : "切换到近10天 K 线（4h 周期不变）";
       }
 
       function pruneHistory() {
@@ -446,14 +467,18 @@
         );
       }
 
-      function getFavoriteOnlySymbols(risingSymbols) {
+      function getFavoriteRisingSymbols(risingSymbols) {
         const rising = new Set(risingSymbols);
         const blocked = blacklistSymbols();
+        const interval = CONFIG.KLINE_INTERVAL;
         return favoriteItems
           .map((item) => item.symbol)
           .filter(
             (symbol) =>
-              marketMap[symbol] && !rising.has(symbol) && !blocked.has(symbol),
+              marketMap[symbol] &&
+              !rising.has(symbol) &&
+              !blocked.has(symbol) &&
+              hasWindowGain(symbol, interval),
           );
       }
 
@@ -724,7 +749,7 @@
                 }),
               )
               .join("")
-          : `<div class="empty">${section === "rising" ? "暂无上涨币种" : "暂无需要补位的收藏"}</div>`;
+          : `<div class="empty">${section === "rising" ? "暂无上涨币种" : "暂无窗口上涨的收藏"}</div>`;
 
         bindCardInteractions(grid);
 
@@ -749,24 +774,42 @@
       async function renderKlines() {
         const interval = CONFIG.KLINE_INTERVAL;
         const bars = klineLimit(interval);
+        const rangeText = klineRangeLabel();
         const rising = getRisingSymbols();
-        const favOnly = getFavoriteOnlySymbols(rising);
+        const favRising = getFavoriteRisingSymbols(rising);
         const overlap = favoriteItems.filter((item) =>
           rising.includes(item.symbol),
         ).length;
+        const fallingHidden = favoriteItems.filter((item) => {
+          const symbol = item.symbol;
+          return (
+            marketMap[symbol] &&
+            !blacklistSymbols().has(symbol) &&
+            !hasWindowGain(symbol, interval) &&
+            !rising.includes(symbol)
+          );
+        }).length;
 
         if (klineAbort) klineAbort.abort();
         klineAbort = new AbortController();
         const { signal } = klineAbort;
 
         document.getElementById("risingMeta").textContent = rising.length
-          ? `窗口上涨 ${rising.length} / 观察池 ${watchPool.size} · ${interval} · 近3天 ${bars} 根`
+          ? `窗口上涨 ${rising.length} / 观察池 ${watchPool.size} · ${interval} · ${rangeText} ${bars} 根`
           : `当前没有窗口上涨的观察池币种 · 观察池 ${watchPool.size} 个`;
 
-        document.getElementById("favMeta").textContent =
-          favoriteItems.length > 0
-            ? `收藏 ${favoriteItems.length} · 下方补位 ${favOnly.length} · 另有 ${overlap} 个已在上方上涨区`
-            : "还没有收藏 · 长按上方 K 线卡片即可加入";
+        if (!favoriteItems.length) {
+          document.getElementById("favMeta").textContent =
+            "还没有收藏 · 长按上方 K 线卡片即可加入";
+        } else {
+          const parts = [
+            `收藏 ${favoriteItems.length}`,
+            `窗口上涨展示 ${favRising.length}`,
+          ];
+          if (overlap > 0) parts.push(`另有 ${overlap} 个已在上方上涨区`);
+          if (fallingHidden > 0) parts.push(`已隐藏下跌 ${fallingHidden}`);
+          document.getElementById("favMeta").textContent = parts.join(" · ");
+        }
 
         await fillGrid(
           document.getElementById("risingGrid"),
@@ -777,7 +820,7 @@
         if (signal.aborted) return;
         await fillGrid(
           document.getElementById("favGrid"),
-          favOnly,
+          favRising,
           "favorite",
           signal,
         );
@@ -901,12 +944,32 @@
       }
 
       document.getElementById("refreshBtn").addEventListener("click", refreshAll);
+      document.getElementById("rangeBtn").addEventListener("click", async () => {
+        if (loading) return;
+        const extended = CONFIG.KLINE_RANGE_DAYS_EXTENDED;
+        const defaults = CONFIG.KLINE_RANGE_DAYS_DEFAULT;
+        klineRangeDays =
+          klineRangeDays === extended ? defaults : extended;
+        syncRangeButton();
+        setStatus(false, `正在加载${klineRangeLabel()} ${CONFIG.KLINE_INTERVAL} K线...`);
+        try {
+          await renderKlines();
+          setStatus(
+            true,
+            `已切换为${klineRangeLabel()} · ${CONFIG.KLINE_INTERVAL} · ${new Date().toLocaleTimeString("zh-CN")}`,
+          );
+        } catch (error) {
+          console.error(error);
+          setStatus(false, error.message || "切换 K 线范围失败");
+        }
+      });
       document.addEventListener("dblclick", (event) => {
         if (event.target.closest("button, a, input, select, textarea, label")) {
           return;
         }
         window.location.href = "./watch.html";
       });
+      syncRangeButton();
       refreshAll();
     </script>
   </body>
