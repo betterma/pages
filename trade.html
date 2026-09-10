@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>模拟交易面板</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: #f4f5f3;
+        color: #28323a;
+        font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+      .page { width: min(720px, calc(100% - 24px)); margin: 16px auto 32px; }
+      .topbar {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; margin-bottom: 10px; flex-wrap: wrap;
+      }
+      h1 { margin: 0; font-size: 20px; }
+      h2 { margin: 0 0 10px; font-size: 15px; }
+      .nav-link { color: #5a6a68; font-size: 13px; text-decoration: none; }
+      .nav-link:hover { text-decoration: underline; }
+      .badge {
+        display: inline-block; margin-left: 8px; padding: 2px 8px;
+        border-radius: 999px; background: #e7efe9; color: #4f7a6e; font-size: 12px;
+      }
+      .card {
+        background: #fbfcfa; border: 1px solid #d8ddda; border-radius: 8px;
+        padding: 14px; margin-bottom: 12px;
+      }
+      .hint { color: #9aa3a0; font-size: 12px; line-height: 1.45; margin: 0 0 10px; }
+      label { display: block; font-size: 12px; color: #78817f; margin-bottom: 4px; }
+      input {
+        width: 100%; border: 1px solid #c9d0d0; background: #fff; color: #28323a;
+        padding: 9px 11px; border-radius: 6px; margin-bottom: 10px; font-size: 14px;
+      }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+      button {
+        border: 1px solid #c9d0d0; background: #fbfcfa; color: #28323a;
+        padding: 8px 13px; border-radius: 6px; cursor: pointer; font-size: 13px;
+      }
+      button:hover { background: #eef1ee; }
+      button.primary { background: #6d8580; border-color: #6d8580; color: #f7faf8; }
+      button.danger { color: #8d7771; }
+      button:disabled { opacity: 0.55; cursor: not-allowed; }
+      .status-grid {
+        display: grid; grid-template-columns: 120px 1fr; gap: 8px 12px; font-size: 13px;
+      }
+      .k { color: #78817f; }
+      .v { font-weight: 600; word-break: break-all; }
+      .pill {
+        display: inline-block; padding: 2px 8px; border-radius: 999px;
+        background: #edf0ed; color: #687370; font-size: 12px;
+      }
+      .pill.on { background: #dce8e4; color: #4f7a6e; }
+      .pill.off { background: #eee8e4; color: #8d7771; }
+      .error { color: #8d7771; font-size: 13px; margin-top: 8px; }
+      .logs { max-height: 320px; overflow: auto; font-size: 12px; }
+      .log-item { padding: 8px 0; border-bottom: 1px solid #e5e9e6; }
+      .log-time { color: #9aa3a0; margin-right: 6px; }
+      .toast {
+        position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+        background: rgba(40, 50, 58, 0.92); color: #f7f8f6;
+        padding: 8px 14px; border-radius: 8px; font-size: 13px; z-index: 20;
+      }
+      @media (max-width: 640px) {
+        .row, .status-grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="topbar">
+        <h1>模拟交易面板 <span class="badge">PAPER</span></h1>
+        <div>
+          <a class="nav-link" href="./kline.html">观察池K线</a>
+          ·
+          <a class="nav-link" href="./watch.html">冲榜雷达</a>
+        </div>
+      </div>
+      <p class="hint">
+        从 K 线复制币名 → 填入 USDT →「开始模拟交易」。按现价折算数量，扣 0.1% 模拟手续费。
+        状态写入 GitHub <code>trade-bot-state.json</code>；华为<strong>事件函数定时器（建议 30 分钟）</strong>会自动检测。
+        本页也可「立即检测」。以后改真实下单只需把云函数 <code>TRADE_MODE=live</code>。
+      </p>
+
+      <div class="card">
+        <h2>开仓</h2>
+        <div class="row">
+          <div>
+            <label for="symbolInput">币种</label>
+            <input id="symbolInput" placeholder="IOST 或 IOSTUSDT" autocomplete="off" />
+          </div>
+          <div>
+            <label for="quoteInput">USDT 数量</label>
+            <input id="quoteInput" type="number" min="5" step="1" value="100" />
+          </div>
+        </div>
+        <div class="actions">
+          <button id="startBtn" class="primary" type="button">开始模拟交易</button>
+          <button id="stopBtn" type="button">停止检测</button>
+          <button id="tickBtn" type="button">立即检测</button>
+          <button id="refreshBtn" type="button">刷新状态</button>
+          <button id="closeBtn" class="danger" type="button">停止并平仓</button>
+        </div>
+        <div id="actionError" class="error"></div>
+      </div>
+
+      <div class="card">
+        <h2>当前状态</h2>
+        <div id="statusGrid" class="status-grid"><div class="k">加载中…</div></div>
+      </div>
+
+      <div class="card">
+        <h2>日志</h2>
+        <p class="hint">
+          面板展示近期约 200 条；完整历史追加在仓库
+          <code>trade-bot-logs.json</code>（最多约 500 条）。定时器日志来源标记为
+          <code>[timer]</code>，本页操作为 <code>[page]</code>。
+        </p>
+        <div id="logList" class="logs"><div class="hint">暂无</div></div>
+      </div>
+    </div>
+
+    <script src="./trade-sim.js"></script>
+    <script>
+      "use strict";
+
+      const statusLabel = {
+        idle: "空闲",
+        holding: "持仓中",
+        cooldown: "冷静期",
+        flat_rebuy: "空仓可回补",
+      };
+
+      function $(id) { return document.getElementById(id); }
+
+      function toast(message) {
+        const old = document.querySelector(".toast");
+        if (old) old.remove();
+        const el = document.createElement("div");
+        el.className = "toast";
+        el.textContent = message;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 1800);
+      }
+
+      function formatTime(ms) {
+        if (!ms) return "--";
+        return new Date(ms).toLocaleString("zh-CN", { hour12: false });
+      }
+
+      function formatNum(value, digits) {
+        if (!Number.isFinite(Number(value))) return "--";
+        return Number(value).toPrecision(digits || 6);
+      }
+
+      function render(data) {
+        const enabled = data.enabled
+          ? '<span class="pill on">检测开启</span>'
+          : '<span class="pill off">检测关闭</span>';
+        const rows = [
+          ["模式", "模拟盘 PAPER"],
+          ["币种", data.symbol || "--"],
+          ["检测", enabled],
+          ["状态", statusLabel[data.status] || data.status || "--"],
+          ["投入金额", `${data.quoteAmount ?? "--"} USDT`],
+          ["持仓数量", formatNum(data.quantity, 8)],
+          ["现价", formatNum(data.lastPrice)],
+          ["开仓均价", formatNum(data.entryPrice)],
+          ["起步价", formatNum(data.anchorPrice)],
+          ["卖出线", formatNum(data.sellLine)],
+          ["现金", Number.isFinite(data.cash) ? data.cash.toFixed(2) : "--"],
+          ["权益", Number.isFinite(data.equity) ? data.equity.toFixed(2) : "--"],
+          ["累计手续费", Number.isFinite(data.feesPaid) ? data.feesPaid.toFixed(4) : "--"],
+          ["上次动作", data.lastAction || "--"],
+          ["上次检查", formatTime(data.lastCheckAt)],
+          ["更新时间", formatTime(data.updatedAt)],
+          ["错误", data.lastError || "无"],
+        ];
+        $("statusGrid").innerHTML = rows
+          .map(([k, v]) => `<div class="k">${k}</div><div class="v">${v}</div>`)
+          .join("");
+
+        if (data.symbol) {
+          $("symbolInput").value = data.symbol.replace(/USDT$/, "");
+        }
+        if (data.quoteAmount) $("quoteInput").value = data.quoteAmount;
+
+        const logs = Array.isArray(data.logs) ? data.logs : [];
+        $("logList").innerHTML = logs.length
+          ? logs
+              .map((item) => {
+                const src = item.source ? `[${item.source}] ` : "";
+                return `<div class="log-item"><span class="log-time">${formatTime(item.at)}</span>${src}${item.message}</div>`;
+              })
+              .join("")
+          : '<div class="hint">暂无日志</div>';
+      }
+
+      async function wrap(fn, okMsg) {
+        $("actionError").textContent = "";
+        const buttons = document.querySelectorAll("button");
+        buttons.forEach((btn) => { btn.disabled = true; });
+        try {
+          const data = await fn();
+          render(data);
+          if (okMsg) toast(okMsg);
+          return data;
+        } catch (error) {
+          $("actionError").textContent = error.message || String(error);
+          toast(error.message || "失败");
+          throw error;
+        } finally {
+          buttons.forEach((btn) => { btn.disabled = false; });
+        }
+      }
+
+      $("startBtn").addEventListener("click", () => {
+        const symbol = $("symbolInput").value;
+        const amount = Number($("quoteInput").value);
+        if (!window.confirm(`确认开始模拟？\n${symbol || "?"} / ${amount} USDT`)) return;
+        wrap(() => TradeSim.startTrade(symbol, amount), "已开仓并开启检测");
+      });
+      $("stopBtn").addEventListener("click", () =>
+        wrap(() => TradeSim.stopDetection(), "已停止检测"),
+      );
+      $("tickBtn").addEventListener("click", () =>
+        wrap(() => TradeSim.runTick({ force: true }), "检测完成"),
+      );
+      $("refreshBtn").addEventListener("click", () =>
+        wrap(() => TradeSim.load(), "已刷新"),
+      );
+      $("closeBtn").addEventListener("click", () => {
+        if (!window.confirm("确认停止检测并按现价模拟平仓？")) return;
+        wrap(() => TradeSim.closeAndStop(), "已平仓");
+      });
+
+      const params = new URLSearchParams(location.search);
+      if (params.get("symbol")) $("symbolInput").value = params.get("symbol");
+
+      wrap(() => TradeSim.load()).catch(() => {
+        $("statusGrid").innerHTML = '<div class="k">尚无状态文件，开始一笔模拟即可创建</div>';
+      });
+
+      // 页面打开时也可本地兜底定时（云函数才是主定时）
+      setInterval(() => {
+        TradeSim.load()
+          .then((data) => {
+            if (!data.enabled) return null;
+            return TradeSim.runTick({ force: false });
+          })
+          .then((data) => { if (data) render(data); })
+          .catch(() => {});
+      }, TradeSim.CHECK_MS);
+    </script>
+  </body>
+</html>
