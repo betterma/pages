@@ -124,6 +124,11 @@
       .kline-card.is-favorite {
         border-color: #b7c4b8;
       }
+      .kline-card.is-pair {
+        border-width: 2px;
+        border-color: var(--pair-color);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--pair-color) 35%, transparent);
+      }
       .fav-mark {
         position: absolute;
         top: 6px;
@@ -467,8 +472,7 @@
         );
       }
 
-      function getFavoriteRisingSymbols(risingSymbols) {
-        const rising = new Set(risingSymbols);
+      function getFavoriteRisingSymbols() {
         const blocked = blacklistSymbols();
         const interval = CONFIG.KLINE_INTERVAL;
         return favoriteItems
@@ -476,10 +480,32 @@
           .filter(
             (symbol) =>
               marketMap[symbol] &&
-              !rising.has(symbol) &&
               !blocked.has(symbol) &&
               hasWindowGain(symbol, interval),
           );
+      }
+
+      // Session-stable random colors for symbols that appear in both grids.
+      const pairColorBySymbol = new Map();
+
+      function getPairBorderColor(symbol) {
+        const existing = pairColorBySymbol.get(symbol);
+        if (existing) return existing;
+        const hue = Math.floor(Math.random() * 360);
+        const color = `hsl(${hue} 40% 46%)`;
+        pairColorBySymbol.set(symbol, color);
+        return color;
+      }
+
+      function buildPairColorMap(rising, favRising) {
+        const risingSet = new Set(rising);
+        const map = new Map();
+        favRising.forEach((symbol) => {
+          if (risingSet.has(symbol)) {
+            map.set(symbol, getPairBorderColor(symbol));
+          }
+        });
+        return map;
       }
 
       async function loadGithubStorage() {
@@ -670,8 +696,12 @@
         const label = symbol.replace("USDT", "");
         const change = windowPriceChange(symbol, CONFIG.KLINE_INTERVAL);
         const favClass = options.isFavorite ? " is-favorite" : "";
+        const pairClass = options.pairColor ? " is-pair" : "";
+        const pairStyle = options.pairColor
+          ? ` style="--pair-color:${options.pairColor}"`
+          : "";
         const mark = options.showMark ? '<span class="fav-mark">★</span>' : "";
-        return `<div class="kline-card${favClass}" data-symbol="${symbol}" data-section="${options.section}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span style="display:inline-flex;align-items:center;gap:6px"><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span><button type="button" class="blacklist-card-btn" data-symbol="${symbol}" title="加入黑名单" aria-label="加入黑名单">⊖</button></span></div>${mark}<canvas></canvas></div>`;
+        return `<div class="kline-card${favClass}${pairClass}" data-symbol="${symbol}" data-section="${options.section}"${pairStyle}><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span style="display:inline-flex;align-items:center;gap:6px"><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span><button type="button" class="blacklist-card-btn" data-symbol="${symbol}" title="加入黑名单" aria-label="加入黑名单">⊖</button></span></div>${mark}<canvas></canvas></div>`;
       }
 
       function bindCardInteractions(root) {
@@ -737,8 +767,9 @@
         );
       }
 
-      async function fillGrid(grid, symbols, section, signal) {
+      async function fillGrid(grid, symbols, section, signal, pairColors) {
         const favSet = favoriteSymbols();
+        const colors = pairColors || new Map();
         grid.innerHTML = symbols.length
           ? symbols
               .map((symbol) =>
@@ -746,6 +777,7 @@
                   section,
                   isFavorite: favSet.has(symbol),
                   showMark: section === "rising" && favSet.has(symbol),
+                  pairColor: colors.get(symbol) || "",
                 }),
               )
               .join("")
@@ -776,17 +808,16 @@
         const bars = klineLimit(interval);
         const rangeText = klineRangeLabel();
         const rising = getRisingSymbols();
-        const favRising = getFavoriteRisingSymbols(rising);
-        const overlap = favoriteItems.filter((item) =>
-          rising.includes(item.symbol),
-        ).length;
+        const favRising = getFavoriteRisingSymbols();
+        const pairColors = buildPairColorMap(rising, favRising);
+        const overlap = pairColors.size;
+        const blocked = blacklistSymbols();
         const fallingHidden = favoriteItems.filter((item) => {
           const symbol = item.symbol;
           return (
             marketMap[symbol] &&
-            !blacklistSymbols().has(symbol) &&
-            !hasWindowGain(symbol, interval) &&
-            !rising.includes(symbol)
+            !blocked.has(symbol) &&
+            !hasWindowGain(symbol, interval)
           );
         }).length;
 
@@ -806,7 +837,9 @@
             `收藏 ${favoriteItems.length}`,
             `窗口上涨展示 ${favRising.length}`,
           ];
-          if (overlap > 0) parts.push(`另有 ${overlap} 个已在上方上涨区`);
+          if (overlap > 0) {
+            parts.push(`与上方重复 ${overlap} · 同色边框对应`);
+          }
           if (fallingHidden > 0) parts.push(`已隐藏下跌 ${fallingHidden}`);
           document.getElementById("favMeta").textContent = parts.join(" · ");
         }
@@ -816,6 +849,7 @@
           rising,
           "rising",
           signal,
+          pairColors,
         );
         if (signal.aborted) return;
         await fillGrid(
@@ -823,6 +857,7 @@
           favRising,
           "favorite",
           signal,
+          pairColors,
         );
       }
 
