@@ -472,7 +472,8 @@
         );
       }
 
-      function getFavoriteRisingSymbols() {
+      function getFavoriteRisingSymbols(risingSymbols) {
+        const rising = new Set(risingSymbols);
         const blocked = blacklistSymbols();
         const interval = CONFIG.KLINE_INTERVAL;
         return favoriteItems
@@ -480,12 +481,13 @@
           .filter(
             (symbol) =>
               marketMap[symbol] &&
+              !rising.has(symbol) &&
               !blocked.has(symbol) &&
               hasWindowGain(symbol, interval),
           );
       }
 
-      // Session-stable random colors for symbols that appear in both grids.
+      // Session-stable random colors for favorites that also appear in rising.
       const pairColorBySymbol = new Map();
 
       function getPairBorderColor(symbol) {
@@ -497,11 +499,11 @@
         return color;
       }
 
-      function buildPairColorMap(rising, favRising) {
-        const risingSet = new Set(rising);
+      function buildPairColorMap(rising) {
+        const favSet = favoriteSymbols();
         const map = new Map();
-        favRising.forEach((symbol) => {
-          if (risingSet.has(symbol)) {
+        rising.forEach((symbol) => {
+          if (favSet.has(symbol)) {
             map.set(symbol, getPairBorderColor(symbol));
           }
         });
@@ -808,8 +810,8 @@
         const bars = klineLimit(interval);
         const rangeText = klineRangeLabel();
         const rising = getRisingSymbols();
-        const favRising = getFavoriteRisingSymbols();
-        const pairColors = buildPairColorMap(rising, favRising);
+        const favRising = getFavoriteRisingSymbols(rising);
+        const pairColors = buildPairColorMap(rising);
         const overlap = pairColors.size;
         const blocked = blacklistSymbols();
         const fallingHidden = favoriteItems.filter((item) => {
@@ -817,7 +819,8 @@
           return (
             marketMap[symbol] &&
             !blocked.has(symbol) &&
-            !hasWindowGain(symbol, interval)
+            !hasWindowGain(symbol, interval) &&
+            !rising.includes(symbol)
           );
         }).length;
 
@@ -838,7 +841,7 @@
             `窗口上涨展示 ${favRising.length}`,
           ];
           if (overlap > 0) {
-            parts.push(`与上方重复 ${overlap} · 同色边框对应`);
+            parts.push(`另有 ${overlap} 个在上方 · 彩色边框标记`);
           }
           if (fallingHidden > 0) parts.push(`已隐藏下跌 ${fallingHidden}`);
           document.getElementById("favMeta").textContent = parts.join(" · ");
