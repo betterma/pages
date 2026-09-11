@@ -1,0 +1,789 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OKX 自选 K 线</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f4f5f3;
+        color: #28323a;
+        font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+      .page {
+        width: min(1400px, calc(100% - 20px));
+        margin: 12px auto 24px;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+      .topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      h1 {
+        margin: 0;
+        font-size: 20px;
+      }
+      h2.section-title {
+        margin: 16px 0 6px;
+        font-size: 15px;
+      }
+      .nav-link {
+        color: #5a6a68;
+        font-size: 13px;
+        text-decoration: none;
+      }
+      .nav-link:hover {
+        text-decoration: underline;
+      }
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      button,
+      select,
+      input,
+      textarea {
+        border: 1px solid #c9d0d0;
+        background: #fbfcfa;
+        color: #28323a;
+        padding: 8px 13px;
+        border-radius: 6px;
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      button:hover {
+        background: #eef1ee;
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: #78817f;
+        margin-bottom: 10px;
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #a39d95;
+        flex-shrink: 0;
+      }
+      .dot.online {
+        background: #718b88;
+        box-shadow: 0 0 8px rgba(113, 139, 136, 0.35);
+      }
+      .dot.offline {
+        background: #8d7771;
+      }
+      .meta {
+        color: #78817f;
+        font-size: 12px;
+        margin-bottom: 10px;
+      }
+      .hint {
+        color: #9aa3a0;
+        font-size: 12px;
+        margin: -2px 0 10px;
+      }
+      .panel {
+        margin-bottom: 14px;
+        padding: 12px;
+        background: #fbfcfa;
+        border: 1px solid #d8ddda;
+        border-radius: 8px;
+      }
+      .panel-title {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0 0 8px;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 8px;
+        align-items: center;
+      }
+      .row input[type="text"] {
+        min-width: 180px;
+        flex: 1;
+      }
+      .row textarea {
+        width: 100%;
+        min-height: 88px;
+        resize: vertical;
+      }
+      .chain-tag {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: #e8ece9;
+        color: #5a6a68;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .filters {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+      }
+      .filters button.active {
+        background: #dfe8e4;
+        border-color: #9eb0aa;
+      }
+      .kline-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 10px;
+      }
+      .kline-card {
+        position: relative;
+        min-width: 0;
+        padding: 8px 10px 10px;
+        background: #fbfcfa;
+        border: 1px solid #d8ddda;
+        border-radius: 8px;
+      }
+      .remove-card-btn {
+        border: 0;
+        background: transparent;
+        color: #9aa3a0;
+        padding: 0 2px;
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+      .remove-card-btn:hover {
+        color: #8d7771;
+      }
+      .kline-card-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+        font-size: 13px;
+      }
+      .kline-card-head .symbol-copy {
+        color: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        border: none;
+        background: none;
+        padding: 0;
+        font: inherit;
+        text-align: left;
+      }
+      .kline-card-head .symbol-copy:hover {
+        text-decoration: underline;
+      }
+      .kline-card canvas {
+        display: block;
+        width: 100%;
+        height: 150px;
+        pointer-events: none;
+      }
+      .up {
+        color: #4f7a6e;
+      }
+      .price-down {
+        color: #8d7771;
+      }
+      .neutral {
+        color: #78817f;
+      }
+      .empty {
+        padding: 28px 12px;
+        text-align: center;
+        color: #78817f;
+        font-size: 13px;
+        background: #fbfcfa;
+        border: 1px dashed #d8ddda;
+        border-radius: 8px;
+      }
+      .kline-card .empty {
+        padding: 40px 8px;
+        border: none;
+        background: transparent;
+        font-size: 12px;
+      }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        background: rgba(40, 50, 58, 0.92);
+        color: #f7f8f6;
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-size: 13px;
+        z-index: 20;
+        pointer-events: none;
+      }
+      @media (max-width: 768px) {
+        .page {
+          width: calc(100% - 12px);
+          margin: 8px auto 16px;
+        }
+        h1 {
+          font-size: 17px;
+        }
+        .kline-grid {
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+        }
+        .kline-card canvas {
+          height: 120px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1>OKX 自选 K 线</h1>
+          <a class="nav-link" href="../kline.html">币安观察池</a>
+          <a
+            class="nav-link"
+            href="https://web3.okx.com/zh-hans/tracker"
+            target="_blank"
+            rel="noopener noreferrer"
+            >OKX Tracker</a
+          >
+        </div>
+        <div class="topbar-actions">
+          <button id="rangeBtn" type="button">近10天K线</button>
+          <button id="refreshBtn" type="button">刷新</button>
+        </div>
+      </div>
+
+      <div class="status">
+        <span id="statusDot" class="dot"></span>
+        <span id="statusText">等待启动...</span>
+      </div>
+      <p class="hint">
+        自选 = 全部卡片 · 当前 4h 上涨在上、下跌在下 · 点名称复制合约 · ⊖ 移出自选 ·
+        K 线由定时云函数写入缓存（新加币需等下一轮）
+      </p>
+
+      <div class="panel">
+        <p class="panel-title">添加自选（Solana / Robinhood）</p>
+        <div class="row">
+          <select id="chainSelect" aria-label="链">
+            <option value="501">Solana (501)</option>
+            <option value="4663">Robinhood (4663)</option>
+          </select>
+          <input
+            id="addressInput"
+            type="text"
+            placeholder="合约地址"
+            autocomplete="off"
+          />
+          <input
+            id="symbolInput"
+            type="text"
+            placeholder="代号（可选）"
+            style="max-width: 140px"
+            autocomplete="off"
+          />
+          <button id="addOneBtn" type="button">添加</button>
+        </div>
+        <div class="row">
+          <textarea
+            id="batchInput"
+            placeholder="批量粘贴，一行一个&#10;501,合约,SYMBOL&#10;4663,0x...&#10;或仅合约（用上方所选链）"
+          ></textarea>
+        </div>
+        <div class="row">
+          <button id="addBatchBtn" type="button">批量添加</button>
+          <span class="meta" style="margin: 0"
+            >不会自动同步 OKX 站内自选，名单存在本仓库 okx/favorites.json</span
+          >
+        </div>
+      </div>
+
+      <div class="filters">
+        <button type="button" class="filter-btn active" data-filter="all">
+          全部
+        </button>
+        <button type="button" class="filter-btn" data-filter="501">
+          Solana
+        </button>
+        <button type="button" class="filter-btn" data-filter="4663">
+          Robinhood
+        </button>
+      </div>
+
+      <h2 class="section-title">窗口上涨</h2>
+      <div id="risingMeta" class="meta"></div>
+      <div id="risingGrid" class="kline-grid"></div>
+
+      <h2 class="section-title">窗口下跌</h2>
+      <div id="fallingMeta" class="meta"></div>
+      <div id="fallingGrid" class="kline-grid"></div>
+    </div>
+
+    <script src="./favorites.js"></script>
+    <script>
+      "use strict";
+
+      const CONFIG = {
+        GITHUB_REPO: "betterma/pages",
+        FAVORITES_PATH: "okx/favorites.json",
+        // 定时函数写入 OBS（与 watch-data 同桶）
+        OBS_BASE: "https://mpctest.obs.cn-north-4.myhuaweicloud.com",
+        CANDLES_OBS_KEY: "okx-candles-cache.json",
+        CANDLES_URLS: [
+          "https://mpctest.obs.cn-north-4.myhuaweicloud.com/okx-candles-cache.json",
+          "./candles-cache.json",
+        ],
+        KLINE_RANGE_DAYS_DEFAULT: 3,
+        KLINE_RANGE_DAYS_EXTENDED: 10,
+        KLINE_MAX_LIMIT: 299,
+        KLINE_BAR: "4H",
+        WINDOW_MS: 4 * 60 * 60 * 1000,
+      };
+
+      let items = [];
+      let candleCache = new Map();
+      let chainFilter = "all";
+      let klineRangeDays = CONFIG.KLINE_RANGE_DAYS_DEFAULT;
+      let loading = false;
+      let saving = false;
+      let klineAbort = null;
+
+      function setStatus(ok, text) {
+        document.getElementById("statusDot").className =
+          `dot ${ok ? "online" : "offline"}`;
+        document.getElementById("statusText").textContent = text;
+      }
+
+      function showToast(message) {
+        const existing = document.querySelector(".toast");
+        if (existing) existing.remove();
+        const toast = document.createElement("div");
+        toast.className = "toast";
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 1600);
+      }
+
+      function formatPercent(value) {
+        return Number.isFinite(value)
+          ? `${value > 0 ? "+" : ""}${value.toFixed(2)}%`
+          : "--";
+      }
+
+      function tokenId(item) {
+        return OkxFavorites.tokenKey(
+          item.chainIndex,
+          item.tokenContractAddress,
+        );
+      }
+
+      function chainCode(chainIndex) {
+        return (OkxFavorites.CHAINS[chainIndex] || {}).code || chainIndex;
+      }
+
+      function klineLimit() {
+        const rangeMs = klineRangeDays * 24 * 60 * 60 * 1000;
+        return Math.min(
+          CONFIG.KLINE_MAX_LIMIT,
+          Math.max(1, Math.ceil(rangeMs / CONFIG.WINDOW_MS)),
+        );
+      }
+
+      function syncRangeButton() {
+        const btn = document.getElementById("rangeBtn");
+        const isExtended =
+          klineRangeDays === CONFIG.KLINE_RANGE_DAYS_EXTENDED;
+        btn.textContent = isExtended ? "近3天K线" : "近10天K线";
+      }
+
+      function sliceCandles(candles) {
+        if (!Array.isArray(candles) || !candles.length) return [];
+        const need = klineLimit();
+        return candles.length > need ? candles.slice(-need) : candles.slice();
+      }
+
+      async function copyText(text) {
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch (error) {
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          textarea.remove();
+        }
+        showToast("已复制");
+      }
+
+      function windowChangeFromCandles(candles) {
+        if (!Array.isArray(candles) || !candles.length) return null;
+        const now = Date.now();
+        const windowStart =
+          Math.floor(now / CONFIG.WINDOW_MS) * CONFIG.WINDOW_MS;
+        const inWindow = candles.filter(
+          (candle) =>
+            Number.isFinite(candle.time) && candle.time >= windowStart,
+        );
+        const series = inWindow.length
+          ? inWindow
+          : [candles[candles.length - 1]];
+        const open = series[0].open;
+        const close = series[series.length - 1].close;
+        if (!Number.isFinite(open) || !Number.isFinite(close) || open === 0) {
+          return null;
+        }
+        return ((close - open) / open) * 100;
+      }
+
+      function drawKline(canvas, candles) {
+        const rect = canvas.getBoundingClientRect();
+        const width = Math.max(1, Math.floor(rect.width));
+        const height = Math.max(1, Math.floor(rect.height));
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+        if (!candles.length) return;
+
+        const pad = { top: 6, right: 4, bottom: 6, left: 4 };
+        const chartW = width - pad.left - pad.right;
+        const chartH = height - pad.top - pad.bottom;
+        const highs = candles.map((item) => item.high);
+        const lows = candles.map((item) => item.low);
+        const max = Math.max(...highs);
+        const min = Math.min(...lows);
+        const range = max - min || max * 0.01 || 1;
+        const slot = chartW / candles.length;
+        const bodyW = Math.max(1, slot * 0.62);
+        const yOf = (price) => pad.top + ((max - price) / range) * chartH;
+
+        candles.forEach((candle, index) => {
+          const x = pad.left + slot * index + slot / 2;
+          const up = candle.close >= candle.open;
+          ctx.strokeStyle = up ? "#718b88" : "#8d7771";
+          ctx.fillStyle = up ? "#718b88" : "#8d7771";
+          ctx.beginPath();
+          ctx.moveTo(x, yOf(candle.high));
+          ctx.lineTo(x, yOf(candle.low));
+          ctx.stroke();
+          const y1 = yOf(candle.open);
+          const y2 = yOf(candle.close);
+          const bodyH = Math.max(1, Math.abs(y2 - y1));
+          ctx.fillRect(x - bodyW / 2, Math.min(y1, y2), bodyW, bodyH);
+        });
+      }
+
+      async function loadCandlesCache(signal) {
+        let lastError = null;
+        for (const base of CONFIG.CANDLES_URLS) {
+          const url = `${base}${base.includes("?") ? "&" : "?"}t=${Date.now()}`;
+          try {
+            const response = await fetch(url, { signal, cache: "no-store" });
+            if (!response.ok) {
+              lastError = new Error(`HTTP ${response.status}`);
+              continue;
+            }
+            const data = await response.json();
+            const tokens =
+              data && data.tokens && typeof data.tokens === "object"
+                ? data.tokens
+                : {};
+            const map = new Map();
+            Object.keys(tokens).forEach((key) => {
+              map.set(key, tokens[key]);
+            });
+            return {
+              map,
+              updatedAt: Number(data.updatedAt) || null,
+              okCount: Number(data.okCount) || 0,
+              failCount: Number(data.failCount) || 0,
+            };
+          } catch (error) {
+            if (error.name === "AbortError") throw error;
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("读取 K 线缓存失败");
+      }
+
+      function filteredItems() {
+        if (chainFilter === "all") return items.slice();
+        return items.filter((item) => item.chainIndex === chainFilter);
+      }
+
+      function splitByWindow(list) {
+        const rising = [];
+        const falling = [];
+        list.forEach((item) => {
+          const key = tokenId(item);
+          const row = candleCache.get(key);
+          const change = row && row.ok ? windowChangeFromCandles(row.candles) : null;
+          const packed = { item, change, key };
+          if (Number.isFinite(change) && change > 0) rising.push(packed);
+          else falling.push(packed);
+        });
+        rising.sort((a, b) => (b.change || 0) - (a.change || 0));
+        falling.sort((a, b) => (a.change || 0) - (b.change || 0));
+        return { rising, falling };
+      }
+
+      function buildCardHtml(packed) {
+        const { item, change } = packed;
+        const label = item.symbol || OkxFavorites.shortLabel(item.tokenContractAddress);
+        const chain = chainCode(item.chainIndex);
+        const changeText = formatPercent(change);
+        const changeClass =
+          change > 0 ? "up" : change < 0 ? "price-down" : "neutral";
+        return `<div class="kline-card" data-key="${packed.key}" data-chain="${item.chainIndex}" data-address="${item.tokenContractAddress}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-copy="${item.tokenContractAddress}" title="点击复制合约">${label}<span class="chain-tag">${chain}</span></button><span style="display:inline-flex;align-items:center;gap:6px"><span data-kline-status class="${changeClass}">${changeText} · 4h</span><button type="button" class="remove-card-btn" title="移出自选" aria-label="移出自选">⊖</button></span></div><canvas></canvas></div>`;
+      }
+
+      function bindCardInteractions(root) {
+        root.querySelectorAll(".symbol-copy").forEach((btn) => {
+          btn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            copyText(btn.dataset.copy);
+          });
+        });
+        root.querySelectorAll(".remove-card-btn").forEach((btn) => {
+          btn.addEventListener("click", async (event) => {
+            event.stopPropagation();
+            const card = btn.closest(".kline-card");
+            if (!card) return;
+            await removeToken(card.dataset.chain, card.dataset.address);
+          });
+        });
+      }
+
+      async function fillGrid(grid, packedList, emptyText) {
+        grid.innerHTML = packedList.length
+          ? packedList.map(buildCardHtml).join("")
+          : `<div class="empty">${emptyText}</div>`;
+        bindCardInteractions(grid);
+        packedList.forEach((packed) => {
+          const card = grid.querySelector(
+            `.kline-card[data-key="${CSS.escape(packed.key)}"]`,
+          );
+          if (!card) return;
+          const canvas = card.querySelector("canvas");
+          const row = candleCache.get(packed.key);
+          if (!row || !row.ok || !Array.isArray(row.candles)) {
+            const status = card.querySelector("[data-kline-status]");
+            if (status) {
+              status.textContent = row && row.error ? "加载失败" : "--";
+              status.className = "price-down";
+            }
+            if (canvas) {
+              canvas.replaceWith(
+                Object.assign(document.createElement("div"), {
+                  className: "empty",
+                  textContent: (row && row.error) || "无 K 线",
+                }),
+              );
+            }
+            return;
+          }
+          drawKline(canvas, sliceCandles(row.candles));
+        });
+      }
+
+      async function renderAll() {
+        const list = filteredItems();
+        const { rising, falling } = splitByWindow(list);
+        const bars = klineLimit();
+        document.getElementById("risingMeta").textContent = rising.length
+          ? `上涨 ${rising.length} · ${CONFIG.KLINE_BAR} · 近${klineRangeDays}天约 ${bars} 根`
+          : "当前没有窗口上涨的自选";
+        document.getElementById("fallingMeta").textContent = falling.length
+          ? `下跌/持平 ${falling.length} · ${CONFIG.KLINE_BAR} · 近${klineRangeDays}天约 ${bars} 根`
+          : "当前没有窗口下跌的自选";
+        await fillGrid(
+          document.getElementById("risingGrid"),
+          rising,
+          "暂无上涨",
+        );
+        await fillGrid(
+          document.getElementById("fallingGrid"),
+          falling,
+          "暂无下跌",
+        );
+      }
+
+      async function loadAndRender() {
+        if (loading) return;
+        loading = true;
+        document.getElementById("refreshBtn").disabled = true;
+        try {
+          setStatus(true, "读取自选…");
+          const state = await OkxFavorites.loadFavorites({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.FAVORITES_PATH,
+          });
+          items = state.items;
+          if (klineAbort) klineAbort.abort();
+          klineAbort = new AbortController();
+
+          if (!items.length) {
+            candleCache = new Map();
+            await renderAll();
+            setStatus(true, "自选为空 · 先添加合约");
+            return;
+          }
+
+          setStatus(true, `读取定时缓存（${items.length} 自选）…`);
+          const cache = await loadCandlesCache(klineAbort.signal);
+          candleCache = cache.map;
+          await renderAll();
+          const ageMin = cache.updatedAt
+            ? Math.max(0, Math.round((Date.now() - cache.updatedAt) / 60000))
+            : null;
+          const missing = items.filter((item) => {
+            const row = candleCache.get(tokenId(item));
+            return !row || !row.ok;
+          }).length;
+          const ageText =
+            ageMin == null ? "缓存时间未知" : `缓存约 ${ageMin} 分钟前`;
+          setStatus(
+            true,
+            missing
+              ? `${ageText} · ${items.length - missing} 有K线 / ${missing} 待定时刷新`
+              : `${ageText} · ${items.length} 个自选`,
+          );
+        } catch (error) {
+          if (error.name === "AbortError") return;
+          console.error(error);
+          setStatus(false, error.message || "加载失败");
+          await renderAll();
+        } finally {
+          loading = false;
+          document.getElementById("refreshBtn").disabled = false;
+        }
+      }
+
+      async function persist(nextItems, message) {
+        if (saving) return;
+        saving = true;
+        try {
+          await OkxFavorites.saveFavorites(nextItems, {
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.FAVORITES_PATH,
+            message,
+          });
+          items = OkxFavorites.normalizeList(nextItems);
+          showToast("自选已保存");
+          await loadAndRender();
+        } catch (error) {
+          console.error(error);
+          setStatus(false, error.message || "保存失败");
+          showToast(error.message || "保存失败");
+        } finally {
+          saving = false;
+        }
+      }
+
+      async function addOne() {
+        const chainIndex = document.getElementById("chainSelect").value;
+        const address = document.getElementById("addressInput").value;
+        const symbol = document.getElementById("symbolInput").value;
+        const result = OkxFavorites.addItems(
+          items,
+          [{ chainIndex, tokenContractAddress: address, symbol }],
+          "manual",
+        );
+        if (!result.added.length) {
+          showToast("已在自选中或地址无效");
+          return;
+        }
+        document.getElementById("addressInput").value = "";
+        document.getElementById("symbolInput").value = "";
+        await persist(result.items, "Add OKX watch token");
+      }
+
+      async function addBatch() {
+        const defaultChain = document.getElementById("chainSelect").value;
+        const text = document.getElementById("batchInput").value;
+        const parsed = OkxFavorites.parseBatchText(text, defaultChain);
+        if (parsed.errors.length) {
+          showToast(parsed.errors[0]);
+        }
+        if (!parsed.items.length) {
+          showToast("没有可添加的行");
+          return;
+        }
+        const result = OkxFavorites.addItems(items, parsed.items, "batch");
+        if (!result.added.length) {
+          showToast("全部已在自选中");
+          return;
+        }
+        document.getElementById("batchInput").value = "";
+        await persist(
+          result.items,
+          `Add ${result.added.length} OKX watch tokens`,
+        );
+      }
+
+      async function removeToken(chainIndex, address) {
+        const next = OkxFavorites.removeItem(items, chainIndex, address);
+        await persist(next, "Remove OKX watch token");
+      }
+
+      document.getElementById("addOneBtn").addEventListener("click", addOne);
+      document.getElementById("addBatchBtn").addEventListener("click", addBatch);
+      document.getElementById("refreshBtn").addEventListener("click", loadAndRender);
+      document.getElementById("rangeBtn").addEventListener("click", () => {
+        klineRangeDays =
+          klineRangeDays === CONFIG.KLINE_RANGE_DAYS_DEFAULT
+            ? CONFIG.KLINE_RANGE_DAYS_EXTENDED
+            : CONFIG.KLINE_RANGE_DAYS_DEFAULT;
+        syncRangeButton();
+        loadAndRender();
+      });
+
+      document.querySelectorAll(".filter-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document
+            .querySelectorAll(".filter-btn")
+            .forEach((node) => node.classList.remove("active"));
+          btn.classList.add("active");
+          chainFilter = btn.dataset.filter;
+          renderAll();
+        });
+      });
+
+      syncRangeButton();
+      loadAndRender();
+    </script>
+  </body>
+</html>
