@@ -43,6 +43,8 @@ const TOKEN_GAP_MS = Math.max(
   200,
   Number(process.env.OKX_TOKEN_GAP_MS) || 600,
 );
+const OBS_CANDLES_KEY =
+  process.env.OBS_OKX_CANDLES_PATH || 'okx-candles-cache.json';
 const ALLOWED_CHAINS = new Set(
   String(process.env.OKX_CHAINS || '501,4663')
     .split(',')
