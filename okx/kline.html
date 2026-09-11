@@ -109,15 +109,40 @@
       }
       .panel {
         margin-bottom: 14px;
-        padding: 12px;
+        padding: 0;
         background: #fbfcfa;
         border: 1px solid #d8ddda;
         border-radius: 8px;
+        overflow: hidden;
       }
-      .panel-title {
+      .panel-toggle {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 12px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        text-align: left;
         font-size: 13px;
         font-weight: 600;
-        margin: 0 0 8px;
+        cursor: pointer;
+      }
+      .panel-toggle:hover {
+        background: #eef1ee;
+      }
+      .panel-toggle .chevron {
+        color: #78817f;
+        font-weight: 400;
+        font-size: 12px;
+      }
+      .panel-body {
+        padding: 0 12px 12px;
+      }
+      .panel.is-collapsed .panel-body {
+        display: none;
       }
       .row {
         display: flex;
@@ -334,39 +359,49 @@
         <button type="button" class="interval-btn" data-bar="1W">1周</button>
       </div>
 
-      <div class="panel">
-        <p class="panel-title">添加自选（Solana / Robinhood）</p>
-        <div class="row">
-          <select id="chainSelect" aria-label="链">
-            <option value="501">Solana (501)</option>
-            <option value="4663">Robinhood (4663)</option>
-          </select>
-          <input
-            id="addressInput"
-            type="text"
-            placeholder="合约地址"
-            autocomplete="off"
-          />
-          <input
-            id="symbolInput"
-            type="text"
-            placeholder="代号（可选）"
-            style="max-width: 140px"
-            autocomplete="off"
-          />
-          <button id="addOneBtn" type="button">添加</button>
-        </div>
-        <div class="row">
-          <textarea
-            id="batchInput"
-            placeholder="批量粘贴，一行一个&#10;501,合约,SYMBOL&#10;4663,0x...&#10;或仅合约（用上方所选链）"
-          ></textarea>
-        </div>
-        <div class="row">
-          <button id="addBatchBtn" type="button">批量添加</button>
-          <span class="meta" style="margin: 0"
-            >不会自动同步 OKX 站内自选，名单存在本仓库 okx/favorites.json</span
-          >
+      <div class="panel is-collapsed" id="addPanel">
+        <button
+          type="button"
+          class="panel-toggle"
+          id="addPanelToggle"
+          aria-expanded="false"
+        >
+          <span>添加自选（Solana / Robinhood）</span>
+          <span class="chevron" id="addPanelChevron">展开</span>
+        </button>
+        <div class="panel-body" id="addPanelBody">
+          <div class="row">
+            <select id="chainSelect" aria-label="链">
+              <option value="501">Solana (501)</option>
+              <option value="4663">Robinhood (4663)</option>
+            </select>
+            <input
+              id="addressInput"
+              type="text"
+              placeholder="合约地址"
+              autocomplete="off"
+            />
+            <input
+              id="symbolInput"
+              type="text"
+              placeholder="代号（可选）"
+              style="max-width: 140px"
+              autocomplete="off"
+            />
+            <button id="addOneBtn" type="button">添加</button>
+          </div>
+          <div class="row">
+            <textarea
+              id="batchInput"
+              placeholder="批量粘贴，一行一个&#10;501,合约,SYMBOL&#10;4663,0x...&#10;或仅合约（用上方所选链）"
+            ></textarea>
+          </div>
+          <div class="row">
+            <button id="addBatchBtn" type="button">批量添加</button>
+            <span class="meta" style="margin: 0"
+              >不会自动同步 OKX 站内自选，名单存在本仓库 okx/favorites.json</span
+            >
+          </div>
         </div>
       </div>
 
@@ -931,6 +966,23 @@
         await persist(next, "Remove OKX watch token");
       }
 
+      function syncAddPanel(open) {
+        const panel = document.getElementById("addPanel");
+        const toggle = document.getElementById("addPanelToggle");
+        const chevron = document.getElementById("addPanelChevron");
+        panel.classList.toggle("is-collapsed", !open);
+        toggle.setAttribute("aria-expanded", open ? "true" : "false");
+        chevron.textContent = open ? "收起" : "展开";
+        localStorage.setItem("okxAddPanelOpen", open ? "1" : "0");
+      }
+
+      document.getElementById("addPanelToggle").addEventListener("click", () => {
+        const open = document
+          .getElementById("addPanel")
+          .classList.contains("is-collapsed");
+        syncAddPanel(open);
+      });
+
       document.getElementById("addOneBtn").addEventListener("click", addOne);
       document.getElementById("addBatchBtn").addEventListener("click", addBatch);
       document.getElementById("refreshBtn").addEventListener("click", loadAndRender);
@@ -958,6 +1010,7 @@
       if (!CONFIG.BARS.some((item) => item.id === activeBar)) {
         activeBar = CONFIG.DEFAULT_BAR;
       }
+      syncAddPanel(localStorage.getItem("okxAddPanelOpen") === "1");
       syncIntervalButtons();
       loadAndRender();
     </script>
