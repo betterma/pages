@@ -81,9 +81,16 @@ function authHeaders(method, requestPath, body) {
     );
   }
   const timestamp = new Date().toISOString();
+  const bodyText = body == null ? '' : body;
   return {
     'OK-ACCESS-KEY': apiKey,
-    'OK-ACCESS-SIGN': sign(timestamp, method, requestPath, body, secretKey),
+    'OK-ACCESS-SIGN': sign(
+      timestamp,
+      method,
+      requestPath,
+      bodyText,
+      secretKey,
+    ),
     'OK-ACCESS-TIMESTAMP': timestamp,
     'OK-ACCESS-PASSPHRASE': passphrase,
     'Content-Type': 'application/json',
@@ -94,6 +101,22 @@ function normalizeAddress(chainIndex, address) {
   const raw = String(address || '').trim();
   if (!raw) return '';
   return String(chainIndex) === '501' ? raw : raw.toLowerCase();
+}
+
+function shortLabel(address) {
+  const text = String(address || '');
+  if (text.length <= 10) return text;
+  return `${text.slice(0, 4)}…${text.slice(-4)}`;
+}
+
+function isPlaceholderSymbol(symbol, address) {
+  const text = String(symbol || '').trim();
+  if (!text) return true;
+  const short = shortLabel(address);
+  if (text === short) return true;
+  // 0xd7…3b88 / CTPo…pump 这类截断地址
+  if (text.includes('…') && text.length <= 14) return true;
+  return false;
 }
 
 function mapCandleRow(row) {
@@ -108,6 +131,103 @@ function mapCandleRow(row) {
     volumeUsd: Number(row[6]),
     confirm: String(row[7] ?? ''),
   };
+}
+
+function isRateLimitError(error) {
+  const text = String((error && error.message) || error || '');
+  return (
+    text.includes('HTTP 429') ||
+    text.includes('"code":"50011"') ||
+    text.includes('Too Many Requests')
+  );
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withRetry(fn, options = {}) {
+  const retries = Number.isFinite(options.retries) ? options.retries : 4;
+  let delay = Number.isFinite(options.delayMs) ? options.delayMs : 800;
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (!isRateLimitError(error) || attempt === retries) throw error;
+      console.warn(
+        `OKX 429, retry ${attempt + 1}/${retries} after ${delay}ms`,
+      );
+      await sleep(delay);
+      delay = Math.min(8000, delay * 2);
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * POST /api/v6/dex/market/token/basic-info
+ * body: [{ chainIndex, tokenContractAddress }, ...]
+ */
+async function fetchTokenBasicInfo(tokens) {
+  const { baseUrl } = okxConfig();
+  const list = (Array.isArray(tokens) ? tokens : [])
+    .map((item) => {
+      const chainIndex = String(item.chainIndex || '').trim();
+      const tokenContractAddress = normalizeAddress(
+        chainIndex,
+        item.tokenContractAddress || item.address,
+      );
+      if (!chainIndex || !tokenContractAddress) return null;
+      return { chainIndex, tokenContractAddress };
+    })
+    .filter(Boolean);
+
+  if (!list.length) return new Map();
+
+  const requestPath = '/api/v6/dex/market/token/basic-info';
+  const body = JSON.stringify(list);
+  const headers = authHeaders('POST', requestPath, body);
+  const response = await requestRaw(`${baseUrl}${requestPath}`, {
+    method: 'POST',
+    headers,
+    body,
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `OKX basic-info HTTP ${response.status}: ${String(response.text || '').slice(0, 240)}`,
+    );
+  }
+  if (!response.data || String(response.data.code) !== '0') {
+    throw new Error(
+      `OKX basic-info error: ${JSON.stringify(response.data).slice(0, 240)}`,
+    );
+  }
+
+  const rows = Array.isArray(response.data.data) ? response.data.data : [];
+  const map = new Map();
+  rows.forEach((row) => {
+    if (!row || typeof row !== 'object') return;
+    const chainIndex = String(row.chainIndex || '').trim();
+    const tokenContractAddress = normalizeAddress(
+      chainIndex,
+      row.tokenContractAddress,
+    );
+    const key = `${chainIndex}:${tokenContractAddress}`;
+    const tokenSymbol = String(row.tokenSymbol || '').trim();
+    const tokenName = String(row.tokenName || '').trim();
+    if (!key || (!tokenSymbol && !tokenName)) return;
+    map.set(key, {
+      chainIndex,
+      tokenContractAddress,
+      tokenSymbol: tokenSymbol || tokenName,
+      tokenName: tokenName || tokenSymbol,
+      tokenLogoUrl: String(row.tokenLogoUrl || ''),
+    });
+  });
+  return map;
 }
 
 async function fetchHistoricalCandles(params) {
@@ -131,39 +251,59 @@ async function fetchHistoricalCandles(params) {
   if (params.before) query.set('before', String(params.before));
 
   const requestPath = `/api/v6/dex/market/historical-candles?${query.toString()}`;
-  const headers = authHeaders('GET', requestPath, '');
-  const response = await requestRaw(`${baseUrl}${requestPath}`, {
-    method: 'GET',
-    headers,
+  return withRetry(async () => {
+    const headers = authHeaders('GET', requestPath, '');
+    const response = await requestRaw(`${baseUrl}${requestPath}`, {
+      method: 'GET',
+      headers,
+    });
+
+    if (response.status === 429) {
+      throw new Error(
+        `OKX candles HTTP 429: ${String(response.text || '').slice(0, 240)}`,
+      );
+    }
+    if (!response.ok) {
+      throw new Error(
+        `OKX candles HTTP ${response.status}: ${String(response.text || '').slice(0, 240)}`,
+      );
+    }
+    if (!response.data || String(response.data.code) !== '0') {
+      const code = response.data && response.data.code;
+      if (String(code) === '50011') {
+        throw new Error(
+          `OKX candles HTTP 429: ${JSON.stringify(response.data).slice(0, 240)}`,
+        );
+      }
+      throw new Error(
+        `OKX candles error: ${JSON.stringify(response.data).slice(0, 240)}`,
+      );
+    }
+
+    const rows = Array.isArray(response.data.data) ? response.data.data : [];
+    const candles = rows
+      .map(mapCandleRow)
+      .filter(
+        (item) =>
+          item && Number.isFinite(item.time) && Number.isFinite(item.close),
+      )
+      .sort((a, b) => a.time - b.time);
+
+    return {
+      chainIndex,
+      tokenContractAddress,
+      bar: params.bar || '4H',
+      candles,
+    };
   });
-
-  if (!response.ok) {
-    throw new Error(
-      `OKX candles HTTP ${response.status}: ${String(response.text || '').slice(0, 240)}`,
-    );
-  }
-  if (!response.data || String(response.data.code) !== '0') {
-    throw new Error(
-      `OKX candles error: ${JSON.stringify(response.data).slice(0, 240)}`,
-    );
-  }
-
-  const rows = Array.isArray(response.data.data) ? response.data.data : [];
-  const candles = rows
-    .map(mapCandleRow)
-    .filter((item) => item && Number.isFinite(item.time) && Number.isFinite(item.close))
-    .sort((a, b) => a.time - b.time);
-
-  return {
-    chainIndex,
-    tokenContractAddress,
-    bar: params.bar || '4H',
-    candles,
-  };
 }
 
 module.exports = {
   okxConfig,
   fetchHistoricalCandles,
+  fetchTokenBasicInfo,
   normalizeAddress,
+  shortLabel,
+  isPlaceholderSymbol,
+  isRateLimitError,
 };

@@ -24,9 +24,11 @@
 | `OBS_BUCKET` | 默认 `mpctest` |
 | `OBS_ENDPOINT` | 默认 `obs.cn-north-4.myhuaweicloud.com` |
 | `OBS_OKX_CANDLES_PATH` | 可选，默认 `okx-candles-cache.json` |
-| `OKX_CANDLE_BAR` / `OKX_CANDLE_LIMIT` | 可选，默认 `4H` / `72` |
+| `OKX_CANDLE_BARS` | 可选，默认 `15m,2H,4H,1D,3D,1W` |
+| `OKX_LIMIT_15m` 等 | 可选，覆盖各周期根数上限 |
 
 ## 说明
 
 - 新加自选后，等下一次定时才有 K 线
 - 近 3 天 / 近 10 天在前端截取
+- 多周期改为**串行**请求，避免 OKX 429；失败会尽量沿用上一轮 OBS 缓存

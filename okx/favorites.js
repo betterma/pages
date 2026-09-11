@@ -74,6 +74,14 @@
     return `${text.slice(0, 4)}…${text.slice(-4)}`;
   }
 
+  function isPlaceholderSymbol(symbol, address) {
+    const text = String(symbol || "").trim();
+    if (!text) return true;
+    if (text === shortLabel(address)) return true;
+    if (text.includes("…") && text.length <= 14) return true;
+    return false;
+  }
+
   function normalizeList(raw) {
     const list = Array.isArray(raw)
       ? raw
@@ -347,5 +355,6 @@
     removeItem,
     parseBatchText,
     shortLabel,
+    isPlaceholderSymbol,
   };
 });

@@ -155,6 +155,23 @@
         background: #dfe8e4;
         border-color: #9eb0aa;
       }
+      .interval-bar {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin: 0 0 10px;
+        align-items: center;
+      }
+      .interval-bar .label {
+        font-size: 12px;
+        color: #78817f;
+        margin-right: 2px;
+      }
+      .interval-bar button.active {
+        background: #dfe8e4;
+        border-color: #9eb0aa;
+        font-weight: 600;
+      }
       .kline-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -199,8 +216,22 @@
         font: inherit;
         text-align: left;
       }
-      .kline-card-head .symbol-copy:hover {
-        text-decoration: underline;
+      .kline-card-head .meta-right {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+        min-width: 0;
+      }
+      .kline-card-head .price {
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        color: #28323a;
+        font-size: 12px;
+      }
+      .kline-card-head .change-line {
+        font-size: 12px;
+        white-space: nowrap;
       }
       .kline-card canvas {
         display: block;
@@ -278,7 +309,6 @@
           >
         </div>
         <div class="topbar-actions">
-          <button id="rangeBtn" type="button">近10天K线</button>
           <button id="refreshBtn" type="button">刷新</button>
         </div>
       </div>
@@ -288,9 +318,21 @@
         <span id="statusText">等待启动...</span>
       </div>
       <p class="hint">
-        自选 = 全部卡片 · 当前 4h 上涨在上、下跌在下 · 点名称复制合约 · ⊖ 移出自选 ·
-        K 线由定时云函数写入缓存（新加币需等下一轮）
+        自选 = 全部卡片 · 按当前周期涨跌分区 · 点名称复制合约 · ⊖ 移出自选 ·
+        K 线由定时云函数写入缓存（新加币 / 新周期需等下一轮）
       </p>
+
+      <div class="interval-bar" id="intervalBar">
+        <span class="label">周期</span>
+        <button type="button" class="interval-btn" data-bar="15m">15分</button>
+        <button type="button" class="interval-btn" data-bar="2H">2小时</button>
+        <button type="button" class="interval-btn active" data-bar="4H">
+          4小时
+        </button>
+        <button type="button" class="interval-btn" data-bar="1D">1天</button>
+        <button type="button" class="interval-btn" data-bar="3D">3天</button>
+        <button type="button" class="interval-btn" data-bar="1W">1周</button>
+      </div>
 
       <div class="panel">
         <p class="panel-title">添加自选（Solana / Robinhood）</p>
@@ -340,11 +382,11 @@
         </button>
       </div>
 
-      <h2 class="section-title">窗口上涨</h2>
+      <h2 class="section-title">周期上涨</h2>
       <div id="risingMeta" class="meta"></div>
       <div id="risingGrid" class="kline-grid"></div>
 
-      <h2 class="section-title">窗口下跌</h2>
+      <h2 class="section-title">周期下跌</h2>
       <div id="fallingMeta" class="meta"></div>
       <div id="fallingGrid" class="kline-grid"></div>
     </div>
@@ -356,27 +398,38 @@
       const CONFIG = {
         GITHUB_REPO: "betterma/pages",
         FAVORITES_PATH: "okx/favorites.json",
-        // 定时函数写入 OBS（与 watch-data 同桶）
         OBS_BASE: "https://mpctest.obs.cn-north-4.myhuaweicloud.com",
         CANDLES_OBS_KEY: "okx-candles-cache.json",
         CANDLES_URLS: [
           "https://mpctest.obs.cn-north-4.myhuaweicloud.com/okx-candles-cache.json",
           "./candles-cache.json",
         ],
-        KLINE_RANGE_DAYS_DEFAULT: 3,
-        KLINE_RANGE_DAYS_EXTENDED: 10,
-        KLINE_MAX_LIMIT: 299,
-        KLINE_BAR: "4H",
-        WINDOW_MS: 4 * 60 * 60 * 1000,
+        BARS: [
+          { id: "15m", label: "15分", ms: 15 * 60 * 1000 },
+          { id: "2H", label: "2小时", ms: 2 * 60 * 60 * 1000 },
+          { id: "4H", label: "4小时", ms: 4 * 60 * 60 * 1000 },
+          { id: "1D", label: "1天", ms: 24 * 60 * 60 * 1000 },
+          { id: "3D", label: "3天", ms: 3 * 24 * 60 * 60 * 1000 },
+          { id: "1W", label: "1周", ms: 7 * 24 * 60 * 60 * 1000 },
+        ],
+        DEFAULT_BAR: "4H",
       };
 
       let items = [];
       let candleCache = new Map();
       let chainFilter = "all";
-      let klineRangeDays = CONFIG.KLINE_RANGE_DAYS_DEFAULT;
+      let activeBar =
+        localStorage.getItem("okxKlineBar") || CONFIG.DEFAULT_BAR;
       let loading = false;
       let saving = false;
       let klineAbort = null;
+
+      function barMeta(barId) {
+        return (
+          CONFIG.BARS.find((item) => item.id === barId) ||
+          CONFIG.BARS.find((item) => item.id === CONFIG.DEFAULT_BAR)
+        );
+      }
 
       function setStatus(ok, text) {
         document.getElementById("statusDot").className =
@@ -400,6 +453,41 @@
           : "--";
       }
 
+      function formatPrice(value) {
+        if (!Number.isFinite(value)) return "--";
+        const abs = Math.abs(value);
+        if (abs >= 1000) {
+          return value.toLocaleString("en-US", {
+            maximumFractionDigits: 2,
+          });
+        }
+        if (abs >= 1) return value.toFixed(4);
+        if (abs >= 0.01) return value.toFixed(5);
+        if (abs >= 0.0001) return value.toFixed(6);
+        if (abs >= 1e-8) return value.toFixed(8);
+        return value.toExponential(2);
+      }
+
+      /** 现价优先用更短周期最新收盘，图表周期仍按 activeBar */
+      function latestPrice(row) {
+        if (!row) return null;
+        const prefer = ["15m", "2H", "4H", "1D", "3D", "1W"];
+        if (row.candlesByBar && typeof row.candlesByBar === "object") {
+          for (const bar of prefer) {
+            const candles = row.candlesByBar[bar];
+            if (!Array.isArray(candles) || !candles.length) continue;
+            const close = Number(candles[candles.length - 1].close);
+            if (Number.isFinite(close)) return close;
+          }
+        }
+        const fallback = candlesForToken(row);
+        if (fallback.length) {
+          const close = Number(fallback[fallback.length - 1].close);
+          if (Number.isFinite(close)) return close;
+        }
+        return null;
+      }
+
       function tokenId(item) {
         return OkxFavorites.tokenKey(
           item.chainIndex,
@@ -411,25 +499,26 @@
         return (OkxFavorites.CHAINS[chainIndex] || {}).code || chainIndex;
       }
 
-      function klineLimit() {
-        const rangeMs = klineRangeDays * 24 * 60 * 60 * 1000;
-        return Math.min(
-          CONFIG.KLINE_MAX_LIMIT,
-          Math.max(1, Math.ceil(rangeMs / CONFIG.WINDOW_MS)),
-        );
+      function syncIntervalButtons() {
+        document.querySelectorAll(".interval-btn").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.bar === activeBar);
+        });
       }
 
-      function syncRangeButton() {
-        const btn = document.getElementById("rangeBtn");
-        const isExtended =
-          klineRangeDays === CONFIG.KLINE_RANGE_DAYS_EXTENDED;
-        btn.textContent = isExtended ? "近3天K线" : "近10天K线";
-      }
-
-      function sliceCandles(candles) {
-        if (!Array.isArray(candles) || !candles.length) return [];
-        const need = klineLimit();
-        return candles.length > need ? candles.slice(-need) : candles.slice();
+      function candlesForToken(row) {
+        if (!row) return [];
+        if (row.candlesByBar && Array.isArray(row.candlesByBar[activeBar])) {
+          return row.candlesByBar[activeBar];
+        }
+        // 旧缓存：只有单一 candles 数组，仅在 4H 时可用
+        if (
+          activeBar === "4H" &&
+          Array.isArray(row.candles) &&
+          row.candles.length
+        ) {
+          return row.candles;
+        }
+        return [];
       }
 
       async function copyText(text) {
@@ -448,9 +537,10 @@
 
       function windowChangeFromCandles(candles) {
         if (!Array.isArray(candles) || !candles.length) return null;
+        const meta = barMeta(activeBar);
+        const windowMs = meta.ms;
         const now = Date.now();
-        const windowStart =
-          Math.floor(now / CONFIG.WINDOW_MS) * CONFIG.WINDOW_MS;
+        const windowStart = Math.floor(now / windowMs) * windowMs;
         const inWindow = candles.filter(
           (candle) =>
             Number.isFinite(candle.time) && candle.time >= windowStart,
@@ -586,7 +676,11 @@
         list.forEach((item) => {
           const key = tokenId(item);
           const row = candleCache.get(key);
-          const change = row && row.ok ? windowChangeFromCandles(row.candles) : null;
+          const candles = candlesForToken(row);
+          const change =
+            row && (row.ok || candles.length)
+              ? windowChangeFromCandles(candles)
+              : null;
           const packed = { item, change, key };
           if (Number.isFinite(change) && change > 0) rising.push(packed);
           else falling.push(packed);
@@ -598,12 +692,32 @@
 
       function buildCardHtml(packed) {
         const { item, change } = packed;
-        const label = item.symbol || OkxFavorites.shortLabel(item.tokenContractAddress);
+        const cacheRow = candleCache.get(packed.key);
+        let label =
+          item.symbol ||
+          OkxFavorites.shortLabel(item.tokenContractAddress);
+        if (
+          OkxFavorites.isPlaceholderSymbol(
+            label,
+            item.tokenContractAddress,
+          ) &&
+          cacheRow &&
+          cacheRow.symbol &&
+          !OkxFavorites.isPlaceholderSymbol(
+            cacheRow.symbol,
+            item.tokenContractAddress,
+          )
+        ) {
+          label = cacheRow.symbol;
+        }
         const chain = chainCode(item.chainIndex);
         const changeText = formatPercent(change);
         const changeClass =
           change > 0 ? "up" : change < 0 ? "price-down" : "neutral";
-        return `<div class="kline-card" data-key="${packed.key}" data-chain="${item.chainIndex}" data-address="${item.tokenContractAddress}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-copy="${item.tokenContractAddress}" title="点击复制合约">${label}<span class="chain-tag">${chain}</span></button><span style="display:inline-flex;align-items:center;gap:6px"><span data-kline-status class="${changeClass}">${changeText} · 4h</span><button type="button" class="remove-card-btn" title="移出自选" aria-label="移出自选">⊖</button></span></div><canvas></canvas></div>`;
+        const barLabel = barMeta(activeBar).label;
+        const price = latestPrice(cacheRow);
+        const priceText = formatPrice(price);
+        return `<div class="kline-card" data-key="${packed.key}" data-chain="${item.chainIndex}" data-address="${item.tokenContractAddress}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-copy="${item.tokenContractAddress}" title="点击复制合约">${label}<span class="chain-tag">${chain}</span></button><span style="display:inline-flex;align-items:center;gap:6px"><span class="meta-right"><span class="price" title="最新价（USD）">$${priceText}</span><span data-kline-status class="change-line ${changeClass}">${changeText} · ${barLabel}</span></span><button type="button" class="remove-card-btn" title="移出自选" aria-label="移出自选">⊖</button></span></div><canvas></canvas></div>`;
       }
 
       function bindCardInteractions(root) {
@@ -635,36 +749,50 @@
           if (!card) return;
           const canvas = card.querySelector("canvas");
           const row = candleCache.get(packed.key);
-          if (!row || !row.ok || !Array.isArray(row.candles)) {
+          const candles = candlesForToken(row);
+          if (!row || (!row.ok && !candles.length) || !candles.length) {
             const status = card.querySelector("[data-kline-status]");
+            const rawErr =
+              (row && row.errors && row.errors[activeBar]) ||
+              (row && row.error) ||
+              "";
+            const rateLimited = /429|Too Many Requests|50011/i.test(rawErr);
             if (status) {
-              status.textContent = row && row.error ? "加载失败" : "--";
+              status.textContent = rateLimited
+                ? "接口限流"
+                : row && row.error
+                  ? "加载失败"
+                  : rawErr
+                    ? "周期无数据"
+                    : "--";
               status.className = "price-down";
             }
             if (canvas) {
               canvas.replaceWith(
                 Object.assign(document.createElement("div"), {
                   className: "empty",
-                  textContent: (row && row.error) || "无 K 线",
+                  textContent: rateLimited
+                    ? "OKX 限流，等下一轮定时"
+                    : rawErr || `无 ${barMeta(activeBar).label} K线`,
                 }),
               );
             }
             return;
           }
-          drawKline(canvas, sliceCandles(row.candles));
+          drawKline(canvas, candles);
         });
       }
 
       async function renderAll() {
         const list = filteredItems();
         const { rising, falling } = splitByWindow(list);
-        const bars = klineLimit();
+        const barLabel = barMeta(activeBar).label;
         document.getElementById("risingMeta").textContent = rising.length
-          ? `上涨 ${rising.length} · ${CONFIG.KLINE_BAR} · 近${klineRangeDays}天约 ${bars} 根`
-          : "当前没有窗口上涨的自选";
+          ? `上涨 ${rising.length} · 周期 ${barLabel}`
+          : `当前没有 ${barLabel} 上涨的自选`;
         document.getElementById("fallingMeta").textContent = falling.length
-          ? `下跌/持平 ${falling.length} · ${CONFIG.KLINE_BAR} · 近${klineRangeDays}天约 ${bars} 根`
-          : "当前没有窗口下跌的自选";
+          ? `下跌/持平 ${falling.length} · 周期 ${barLabel}`
+          : `当前没有 ${barLabel} 下跌的自选`;
         await fillGrid(
           document.getElementById("risingGrid"),
           rising,
@@ -707,15 +835,17 @@
             : null;
           const missing = items.filter((item) => {
             const row = candleCache.get(tokenId(item));
-            return !row || !row.ok;
+            const candles = candlesForToken(row);
+            return !candles.length;
           }).length;
           const ageText =
             ageMin == null ? "缓存时间未知" : `缓存约 ${ageMin} 分钟前`;
+          const barLabel = barMeta(activeBar).label;
           setStatus(
             true,
             missing
-              ? `${ageText} · ${items.length - missing} 有K线 / ${missing} 待定时刷新`
-              : `${ageText} · ${items.length} 个自选`,
+              ? `${ageText} · ${barLabel} · ${items.length - missing} 有K线 / ${missing} 待刷新`
+              : `${ageText} · ${barLabel} · ${items.length} 个自选`,
           );
           if (!cache.updatedAt && !cache.map.size) {
             setStatus(
@@ -804,13 +934,14 @@
       document.getElementById("addOneBtn").addEventListener("click", addOne);
       document.getElementById("addBatchBtn").addEventListener("click", addBatch);
       document.getElementById("refreshBtn").addEventListener("click", loadAndRender);
-      document.getElementById("rangeBtn").addEventListener("click", () => {
-        klineRangeDays =
-          klineRangeDays === CONFIG.KLINE_RANGE_DAYS_DEFAULT
-            ? CONFIG.KLINE_RANGE_DAYS_EXTENDED
-            : CONFIG.KLINE_RANGE_DAYS_DEFAULT;
-        syncRangeButton();
-        loadAndRender();
+
+      document.querySelectorAll(".interval-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          activeBar = btn.dataset.bar;
+          localStorage.setItem("okxKlineBar", activeBar);
+          syncIntervalButtons();
+          renderAll();
+        });
       });
 
       document.querySelectorAll(".filter-btn").forEach((btn) => {
@@ -824,7 +955,10 @@
         });
       });
 
-      syncRangeButton();
+      if (!CONFIG.BARS.some((item) => item.id === activeBar)) {
+        activeBar = CONFIG.DEFAULT_BAR;
+      }
+      syncIntervalButtons();
       loadAndRender();
     </script>
   </body>
