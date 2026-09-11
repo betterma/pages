@@ -11,14 +11,26 @@
   "windowStartMs": 1789142400000,
   "entryPrice": 0.2525,
   "cooldownUntil": null,
-  "lastPrice": 0.2446,
-  "lastCheckAt": 1789164101688,
+  "lastPrice": 0.2457,
+  "lastCheckAt": 1789165879392,
   "lastAction": "wait_rebuy",
   "lastError": null,
-  "updatedAt": 1789164101848,
+  "updatedAt": 1789165879752,
   "startedAt": 1789095865702,
   "feesPaid": 6.005286477778396,
   "logs": [
+    {
+      "at": 1789165879751,
+      "source": "timer",
+      "level": "info",
+      "message": "等待回补：现价 0.2457，回补线 0.248242，现金 997.50"
+    },
+    {
+      "at": 1789165879392,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=flat_rebuy enabled=true"
+    },
     {
       "at": 1789164101848,
       "source": "timer",
@@ -1203,18 +1215,6 @@
     },
     {
       "at": 1789120891115,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=cooldown enabled=true"
-    },
-    {
-      "at": 1789120884234,
-      "source": "timer",
-      "level": "info",
-      "message": "冷静期中，约剩 10 分钟"
-    },
-    {
-      "at": 1789120884153,
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=FORMUSDT status=cooldown enabled=true"
