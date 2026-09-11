@@ -508,35 +508,71 @@
 
       async function loadCandlesCache(signal) {
         let lastError = null;
-        for (const base of CONFIG.CANDLES_URLS) {
+        const urls = CONFIG.CANDLES_URLS.filter(
+          (base) => !base.startsWith("./") && !base.startsWith("../"),
+        );
+        // 本地占位只作最后回退，且 updatedAt 为空时不算有效缓存
+        const localFallback = CONFIG.CANDLES_URLS.find((base) =>
+          base.startsWith("./"),
+        );
+
+        for (const base of urls) {
           const url = `${base}${base.includes("?") ? "&" : "?"}t=${Date.now()}`;
           try {
             const response = await fetch(url, { signal, cache: "no-store" });
             if (!response.ok) {
-              lastError = new Error(`HTTP ${response.status}`);
+              lastError = new Error(`OBS ${response.status}（${base}）`);
               continue;
             }
             const data = await response.json();
-            const tokens =
-              data && data.tokens && typeof data.tokens === "object"
-                ? data.tokens
-                : {};
-            const map = new Map();
-            Object.keys(tokens).forEach((key) => {
-              map.set(key, tokens[key]);
-            });
-            return {
-              map,
-              updatedAt: Number(data.updatedAt) || null,
-              okCount: Number(data.okCount) || 0,
-              failCount: Number(data.failCount) || 0,
-            };
+            return parseCandlesPayload(data, base);
           } catch (error) {
             if (error.name === "AbortError") throw error;
             lastError = error;
           }
         }
-        throw lastError || new Error("读取 K 线缓存失败");
+
+        if (localFallback) {
+          try {
+            const response = await fetch(
+              `${localFallback}?t=${Date.now()}`,
+              { signal, cache: "no-store" },
+            );
+            if (response.ok) {
+              const data = await response.json();
+              if (data && data.updatedAt) {
+                return parseCandlesPayload(data, localFallback);
+              }
+            }
+          } catch (error) {
+            if (error.name === "AbortError") throw error;
+          }
+        }
+
+        throw (
+          lastError ||
+          new Error(
+            "读不到 OBS K 线缓存。请确认定时函数已成功写入，且对象为公共读",
+          )
+        );
+      }
+
+      function parseCandlesPayload(data, source) {
+        const tokens =
+          data && data.tokens && typeof data.tokens === "object"
+            ? data.tokens
+            : {};
+        const map = new Map();
+        Object.keys(tokens).forEach((key) => {
+          map.set(key, tokens[key]);
+        });
+        return {
+          map,
+          source,
+          updatedAt: Number(data.updatedAt) || null,
+          okCount: Number(data.okCount) || 0,
+          failCount: Number(data.failCount) || 0,
+        };
       }
 
       function filteredItems() {
@@ -681,6 +717,12 @@
               ? `${ageText} · ${items.length - missing} 有K线 / ${missing} 待定时刷新`
               : `${ageText} · ${items.length} 个自选`,
           );
+          if (!cache.updatedAt && !cache.map.size) {
+            setStatus(
+              false,
+              "OBS 缓存为空或不可读 · 请先让定时函数成功跑完并确认公共读",
+            );
+          }
         } catch (error) {
           if (error.name === "AbortError") return;
           console.error(error);

@@ -9,7 +9,6 @@ function cleanCredential(value) {
     .trim()
     .replace(/^["']|["']$/g, '')
     .trim();
-  // 误把整段 Authorization 贴进变量时去掉前缀
   if (/^OBS\s+/i.test(text)) {
     text = text.replace(/^OBS\s+/i, '').trim();
   }
@@ -76,10 +75,21 @@ function requestRaw(url, options = {}) {
   });
 }
 
-function signObs({ method, contentType, date, resource, secretKey }) {
-  const stringToSign = [method, '', contentType || '', date, resource].join(
-    '\n',
-  );
+/**
+ * OBS V2 签名。obsHeaders 为已规范化的 x-obs-* 头（小写 key）。
+ */
+function signObs({ method, contentType, date, resource, secretKey, obsHeaders }) {
+  const canonicalHeaders = Object.keys(obsHeaders || {})
+    .sort()
+    .map((name) => `${name}:${obsHeaders[name]}\n`)
+    .join('');
+  const stringToSign =
+    `${method}\n` +
+    `\n` +
+    `${contentType || ''}\n` +
+    `${date}\n` +
+    `${canonicalHeaders}` +
+    `${resource}`;
   return crypto
     .createHmac('sha1', secretKey)
     .update(stringToSign, 'utf8')
@@ -115,18 +125,21 @@ async function putObjectJson(key, data) {
 
   const body = Buffer.from(JSON.stringify(data), 'utf8');
   const date = new Date().toUTCString();
-  // 签名与 Header 必须完全一致；避免 charset 空格带来的兼容问题
   const contentType = 'application/json';
   const resource = `/${bucket}/${key}`;
+  // 页面要匿名读，上传时直接设公共读（与 watch-data 可公网访问一致）
+  const obsHeaders = {
+    'x-obs-acl': 'public-read',
+  };
   const signature = signObs({
     method: 'PUT',
     contentType,
     date,
     resource,
     secretKey,
+    obsHeaders,
   });
 
-  // OBS 要求：Authorization 里 OBS 与 AK 之间有且仅有一个空格
   const authorization = `OBS ${accessKey}:${signature}`;
   if ((authorization.match(/ /g) || []).length !== 1) {
     throw new Error(
@@ -136,7 +149,7 @@ async function putObjectJson(key, data) {
 
   const url = `https://${bucket}.${endpoint}/${key}`;
   console.log(
-    `OBS PUT ${url} (${body.length} bytes) akLen=${accessKey.length}`,
+    `OBS PUT ${url} (${body.length} bytes) akLen=${accessKey.length} acl=public-read`,
   );
   const response = await requestRaw(url, {
     method: 'PUT',
@@ -145,6 +158,7 @@ async function putObjectJson(key, data) {
       Date: date,
       'Content-Type': contentType,
       'Content-Length': String(body.length),
+      'x-obs-acl': 'public-read',
       Authorization: authorization,
       'User-Agent': 'okx-candles-obs',
     },
