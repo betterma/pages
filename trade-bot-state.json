@@ -11,14 +11,26 @@
   "windowStartMs": 1789113600000,
   "entryPrice": 0.2556,
   "cooldownUntil": 1789121479469,
-  "lastPrice": 0.2545,
-  "lastCheckAt": 1789120879469,
-  "lastAction": "sell_stop",
+  "lastPrice": 0.2551,
+  "lastCheckAt": 1789120884153,
+  "lastAction": "cooldown",
   "lastError": null,
-  "updatedAt": 1789120879563,
+  "updatedAt": 1789120884234,
   "startedAt": 1789095865702,
   "feesPaid": 1.9947007042253522,
   "logs": [
+    {
+      "at": 1789120884234,
+      "source": "timer",
+      "level": "info",
+      "message": "冷静期中，约剩 10 分钟"
+    },
+    {
+      "at": 1789120884153,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=cooldown enabled=true"
+    },
     {
       "at": 1789120879562,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=FFUSDT status=holding enabled=true"
-    },
-    {
-      "at": 1789069929416,
-      "source": "page",
-      "level": "info",
-      "message": "持仓中：现价 0.16894，卖出线 0.163857，权益 1012.18"
-    },
-    {
-      "at": 1789068683946,
-      "source": "timer",
-      "level": "info",
-      "message": "持仓中：现价 0.1679，卖出线 0.163857，权益 1005.95"
     }
   ]
 }
