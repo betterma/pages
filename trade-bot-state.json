@@ -2,7 +2,7 @@
   "mode": "paper",
   "symbol": "FORMUSDT",
   "enabled": true,
-  "status": "cooldown",
+  "status": "flat_rebuy",
   "quoteAmount": 1000,
   "quantity": 0,
   "cash": 1008.6858673297597,
@@ -10,15 +10,27 @@
   "anchorPrice": 0.2516,
   "windowStartMs": 1789142400000,
   "entryPrice": 0.2455,
-  "cooldownUntil": 1789144879100,
-  "lastPrice": 0.2496,
-  "lastCheckAt": 1789144301613,
-  "lastAction": "cooldown",
+  "cooldownUntil": null,
+  "lastPrice": 0.2525,
+  "lastCheckAt": 1789146079173,
+  "lastAction": "cooldown_end",
   "lastError": null,
-  "updatedAt": 1789144301746,
+  "updatedAt": 1789146079401,
   "startedAt": 1789095865702,
   "feesPaid": 3.9981022706391314,
   "logs": [
+    {
+      "at": 1789146079400,
+      "source": "timer",
+      "level": "info",
+      "message": "冷静期结束，等待回补"
+    },
+    {
+      "at": 1789146079173,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=cooldown enabled=true"
+    },
     {
       "at": 1789144301745,
       "source": "timer",
@@ -1203,18 +1215,6 @@
     },
     {
       "at": 1789101079577,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=holding enabled=true"
-    },
-    {
-      "at": 1789099301490,
-      "source": "timer",
-      "level": "info",
-      "message": "持仓中：现价 0.2551，卖出线 0.253426，权益 997.05"
-    },
-    {
-      "at": 1789099301408,
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=FORMUSDT status=holding enabled=true"
