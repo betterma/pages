@@ -1348,16 +1348,11 @@
         const status = card.querySelector("[data-kline-status]");
         try {
           const candles = await fetchKlines(symbol, interval, signal);
-          const last = candles[candles.length - 1];
-          const first = candles[0];
-          const change =
-            first && first.open
-              ? ((last.close - first.open) / first.open) * 100
-              : null;
-          status.textContent = Number.isFinite(change)
-            ? `${formatPercent(change)} · ${interval}`
-            : interval;
-          status.className = change > 0 ? "up" : change < 0 ? "price-down" : "neutral";
+          const change24h = marketMap[symbol]?.change24h;
+          status.textContent = Number.isFinite(change24h)
+            ? `${formatPercent(change24h)} · 24h`
+            : "24h";
+          status.className = change24h > 0 ? "up" : change24h < 0 ? "price-down" : "neutral";
           drawKline(canvas, candles);
         } catch (error) {
           if (error.name === "AbortError") return;
@@ -1388,13 +1383,13 @@
           ? symbols
               .map((symbol) => {
                 const label = symbol.replace("USDT", "");
-                const change = momentum(symbol).price?.change;
+                const change24h = marketMap[symbol]?.change24h;
                 const isFavorite = favorites.has(symbol);
                 const favClass = isFavorite ? " is-favorite" : "";
                 const mark = isFavorite
                   ? '<span class="fav-mark">★</span>'
                   : "";
-                return `<div class="kline-card${favClass}" data-symbol="${symbol}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span style="display:inline-flex;align-items:center;gap:6px"><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span><button type="button" class="blacklist-button" data-symbol="${symbol}" title="加入黑名单" aria-label="加入黑名单">⊖</button></span></div>${mark}<canvas></canvas></div>`;
+                return `<div class="kline-card${favClass}" data-symbol="${symbol}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span style="display:inline-flex;align-items:center;gap:6px"><span data-kline-status>${Number.isFinite(change24h) ? formatPercent(change24h) : "--"}</span><button type="button" class="blacklist-button" data-symbol="${symbol}" title="加入黑名单" aria-label="加入黑名单">⊖</button></span></div>${mark}<canvas></canvas></div>`;
               })
               .join("")
           : '<div class="empty">暂无上涨币种</div>';

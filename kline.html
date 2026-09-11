@@ -493,15 +493,19 @@
         const rising = new Set(risingSymbols);
         const blocked = blacklistSymbols();
         const interval = CONFIG.KLINE_INTERVAL;
-        return favoriteItems
-          .map((item) => item.symbol)
-          .filter(
-            (symbol) =>
-              marketMap[symbol] &&
-              !rising.has(symbol) &&
-              !blocked.has(symbol) &&
-              hasWindowGain(symbol, interval),
-          );
+        const favSet = new Set(
+          favoriteItems
+            .map((item) => item.symbol)
+            .filter(
+              (symbol) =>
+                marketMap[symbol] &&
+                !rising.has(symbol) &&
+                !blocked.has(symbol) &&
+                hasWindowGain(symbol, interval),
+            ),
+        );
+        // Same order as the rising section: 24h change descending.
+        return ranking().filter((symbol) => favSet.has(symbol));
       }
 
       // Session-stable random colors for favorites that also appear in rising.
@@ -778,17 +782,12 @@
               CONFIG.SIGNAL_LIMIT,
             ),
           ]);
-          const last = candles[candles.length - 1];
-          const first = candles[0];
-          const change =
-            first && first.open
-              ? ((last.close - first.open) / first.open) * 100
-              : null;
-          status.textContent = Number.isFinite(change)
-            ? `${formatPercent(change)} · ${interval}`
-            : interval;
+          const change24h = marketMap[symbol]?.change24h;
+          status.textContent = Number.isFinite(change24h)
+            ? `${formatPercent(change24h)} · 24h`
+            : "24h";
           status.className =
-            change > 0 ? "up" : change < 0 ? "price-down" : "neutral";
+            change24h > 0 ? "up" : change24h < 0 ? "price-down" : "neutral";
           drawKline(canvas, candles);
           applyEarlyBadge(card, scoreEarlyMomentum(signalCandles));
         } catch (error) {
@@ -806,14 +805,14 @@
 
       function buildCardHtml(symbol, options) {
         const label = symbol.replace("USDT", "");
-        const change = windowPriceChange(symbol, CONFIG.KLINE_INTERVAL);
+        const change24h = marketMap[symbol]?.change24h;
         const favClass = options.isFavorite ? " is-favorite" : "";
         const pairClass = options.pairColor ? " is-pair" : "";
         const pairStyle = options.pairColor
           ? ` style="--pair-color:${options.pairColor}"`
           : "";
         const mark = options.showMark ? '<span class="fav-mark">★</span>' : "";
-        return `<div class="kline-card${favClass}${pairClass}" data-symbol="${symbol}" data-section="${options.section}"${pairStyle}><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span style="display:inline-flex;align-items:center;gap:6px"><span data-kline-status>${Number.isFinite(change) ? formatPercent(change) : "--"}</span><button type="button" class="blacklist-card-btn" data-symbol="${symbol}" title="加入黑名单" aria-label="加入黑名单">⊖</button></span></div>${mark}<canvas></canvas></div>`;
+        return `<div class="kline-card${favClass}${pairClass}" data-symbol="${symbol}" data-section="${options.section}"${pairStyle}><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span style="display:inline-flex;align-items:center;gap:6px"><span data-kline-status>${Number.isFinite(change24h) ? formatPercent(change24h) : "--"}</span><button type="button" class="blacklist-card-btn" data-symbol="${symbol}" title="加入黑名单" aria-label="加入黑名单">⊖</button></span></div>${mark}<canvas></canvas></div>`;
       }
 
       function bindCardInteractions(root) {
