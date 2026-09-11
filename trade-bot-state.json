@@ -2,23 +2,35 @@
   "mode": "paper",
   "symbol": "FORMUSDT",
   "enabled": true,
-  "status": "flat_rebuy",
+  "status": "holding",
   "quoteAmount": 1000,
-  "quantity": 0,
-  "cash": 993.7060035211268,
-  "equity": 993.7060035211268,
-  "anchorPrice": 0.2578,
-  "windowStartMs": 1789113600000,
-  "entryPrice": 0.2556,
+  "quantity": 4043.634613106337,
+  "cash": 0,
+  "equity": 992.7122975176057,
+  "anchorPrice": 0.2446,
+  "windowStartMs": 1789128000000,
+  "entryPrice": 0.2455,
   "cooldownUntil": null,
-  "lastPrice": 0.245,
-  "lastCheckAt": 1789126301465,
-  "lastAction": "wait_rebuy",
+  "lastPrice": 0.2455,
+  "lastCheckAt": 1789128079450,
+  "lastAction": "rebuy",
   "lastError": null,
-  "updatedAt": 1789126301631,
+  "updatedAt": 1789128079642,
   "startedAt": 1789095865702,
-  "feesPaid": 1.9947007042253522,
+  "feesPaid": 2.988406707746479,
   "logs": [
+    {
+      "at": 1789128079642,
+      "source": "timer",
+      "level": "info",
+      "message": "【paper回补】现价 0.2455 ≥ 0.245334，用 993.71 USDT，起步价 0.2446"
+    },
+    {
+      "at": 1789128079450,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=flat_rebuy enabled=true"
+    },
     {
       "at": 1789126301630,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "page",
       "level": "info",
       "message": "持仓中：现价 0.1707，卖出线 0.167936，权益 1022.73"
-    },
-    {
-      "at": 1789079479334,
-      "source": "timer",
-      "level": "info",
-      "message": "持仓中：现价 0.17043，卖出线 0.167936，权益 1021.11"
-    },
-    {
-      "at": 1789079479243,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=FFUSDT status=holding enabled=true"
     }
   ]
 }
