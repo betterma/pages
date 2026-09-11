@@ -6,19 +6,31 @@
   "quoteAmount": 1000,
   "quantity": 5991.363799928032,
   "cash": 0,
-  "equity": 1015.7159050017991,
+  "equity": 1015.056854983807,
   "anchorPrice": 0.16861,
   "windowStartMs": 1789084800000,
   "entryPrice": 0.16674,
   "cooldownUntil": null,
-  "lastPrice": 0.16953,
-  "lastCheckAt": 1789087929696,
-  "lastAction": "paper_hold",
+  "lastPrice": 0.16942,
+  "lastCheckAt": 1789088479423,
+  "lastAction": "hold",
   "lastError": null,
-  "updatedAt": 1789087930053,
+  "updatedAt": 1789088479896,
   "startedAt": 1789066253113,
   "feesPaid": 1,
   "logs": [
+    {
+      "at": 1789088479895,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.16942，卖出线 0.167767，权益 1015.06"
+    },
+    {
+      "at": 1789088479423,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=FFUSDT status=holding enabled=true"
+    },
     {
       "at": 1789087930053,
       "source": "page",
