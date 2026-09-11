@@ -142,6 +142,37 @@
         line-height: 1.3;
         cursor: help;
       }
+      .spotlight-badge {
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        z-index: 1;
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 0;
+        background: rgba(138, 98, 58, 0.92);
+        color: #f7f2ea;
+        font-size: 11px;
+        line-height: 1.3;
+        cursor: pointer;
+      }
+      .spotlight-badge:hover {
+        background: rgba(120, 82, 48, 0.95);
+      }
+      .spotlight-card-btn {
+        border: 0;
+        background: transparent;
+        color: #9aa3a0;
+        padding: 0 2px;
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+      .spotlight-card-btn.is-on,
+      .spotlight-card-btn:hover {
+        color: #8a623a;
+      }
       .fav-mark {
         position: absolute;
         top: 6px;
@@ -272,7 +303,7 @@
         <span id="statusDot" class="dot"></span>
         <span id="statusText">等待启动...</span>
       </div>
-      <p class="hint">长按收藏 · ⊖ 拉黑 · 点名称复制 · 「启动 N」=15m 早期分≥2（启发式，非预测）</p>
+      <p class="hint">长按收藏 · ☆ 特别关注（右下角可取消） · ⊖ 拉黑 · 点名称复制 · 「启动 N」=15m 早期分≥2（启发式，非预测）</p>
 
       <h2 class="section-title">窗口上涨</h2>
       <div id="risingMeta" class="meta"></div>
@@ -295,6 +326,7 @@
         OBS_BASE: "https://mpctest.obs.cn-north-4.myhuaweicloud.com",
         FAVORITES_PATH: "watch-favorites.json",
         BLACKLIST_PATH: "watch-blacklist.json",
+        SPOTLIGHT_PATH: "watch-spotlight.json",
         WATCH_POOL_RANK: 30,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
         KLINE_MAX_LIMIT: 1000,
@@ -317,10 +349,12 @@
       let watchPool = new Set();
       let favoriteItems = [];
       let blacklistItems = [];
+      let spotlightItems = [];
       let klineAbort = null;
       let loading = false;
       let favoriteSaving = false;
       let blacklistSaving = false;
+      let spotlightSaving = false;
       let klineRangeDays = CONFIG.KLINE_RANGE_DAYS_DEFAULT;
 
       function setStatus(ok, text) {
@@ -351,6 +385,10 @@
 
       function blacklistSymbols() {
         return WatchFavorites.blacklistToSymbolSet(blacklistItems);
+      }
+
+      function spotlightSymbols() {
+        return WatchFavorites.spotlightToSymbolSet(spotlightItems);
       }
 
       async function copyName(name) {
@@ -539,6 +577,7 @@
           watchPool = new Set();
           favoriteItems = [];
           blacklistItems = [];
+          spotlightItems = [];
           return;
         }
         if (!response.ok) {
@@ -572,6 +611,16 @@
         } catch (error) {
           console.warn(error);
           blacklistItems = [];
+        }
+        try {
+          const spotState = await WatchFavorites.loadSpotlightRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.SPOTLIGHT_PATH,
+          });
+          spotlightItems = spotState.spotlight;
+        } catch (error) {
+          console.warn(error);
+          spotlightItems = [];
         }
         pruneHistory();
       }
@@ -812,7 +861,12 @@
           ? ` style="--pair-color:${options.pairColor}"`
           : "";
         const mark = options.showMark ? '<span class="fav-mark">★</span>' : "";
-        return `<div class="kline-card${favClass}${pairClass}" data-symbol="${symbol}" data-section="${options.section}"${pairStyle}><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span style="display:inline-flex;align-items:center;gap:6px"><span data-kline-status>${Number.isFinite(change24h) ? formatPercent(change24h) : "--"}</span><button type="button" class="blacklist-card-btn" data-symbol="${symbol}" title="加入黑名单" aria-label="加入黑名单">⊖</button></span></div>${mark}<canvas></canvas></div>`;
+        const spotOn = !!options.isSpotlight;
+        const spotBtn = `<button type="button" class="spotlight-card-btn${spotOn ? " is-on" : ""}" data-symbol="${symbol}" title="${spotOn ? "取消特别关注" : "特别关注"}" aria-label="${spotOn ? "取消特别关注" : "特别关注"}">${spotOn ? "★" : "☆"}</button>`;
+        const spotBadge = spotOn
+          ? `<button type="button" class="spotlight-badge" data-symbol="${symbol}" title="点击取消特别关注">关注</button>`
+          : "";
+        return `<div class="kline-card${favClass}${pairClass}" data-symbol="${symbol}" data-section="${options.section}"${pairStyle}><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span style="display:inline-flex;align-items:center;gap:6px"><span data-kline-status>${Number.isFinite(change24h) ? formatPercent(change24h) : "--"}</span>${spotBtn}<button type="button" class="blacklist-card-btn" data-symbol="${symbol}" title="加入黑名单" aria-label="加入黑名单">⊖</button></span></div>${mark}${spotBadge}<canvas></canvas></div>`;
       }
 
       function bindCardInteractions(root) {
@@ -828,6 +882,14 @@
             addToBlacklist(btn.dataset.symbol);
           });
         });
+        root.querySelectorAll(".spotlight-card-btn, .spotlight-badge").forEach(
+          (btn) => {
+            btn.addEventListener("click", (event) => {
+              event.stopPropagation();
+              toggleSpotlightForSymbol(btn.dataset.symbol);
+            });
+          },
+        );
         root.querySelectorAll(".kline-card").forEach((card) => {
           bindLongPress(card);
         });
@@ -846,7 +908,13 @@
         };
 
         const start = (event) => {
-          if (event.target.closest(".symbol-copy, .blacklist-card-btn")) return;
+          if (
+            event.target.closest(
+              ".symbol-copy, .blacklist-card-btn, .spotlight-card-btn, .spotlight-badge",
+            )
+          ) {
+            return;
+          }
           if (event.pointerType === "mouse" && event.button !== 0) return;
           triggered = false;
           card.classList.add("is-pressed");
@@ -880,6 +948,7 @@
 
       async function fillGrid(grid, symbols, section, signal, pairColors) {
         const favSet = favoriteSymbols();
+        const spotSet = spotlightSymbols();
         const colors = pairColors || new Map();
         grid.innerHTML = symbols.length
           ? symbols
@@ -887,6 +956,7 @@
                 buildCardHtml(symbol, {
                   section,
                   isFavorite: favSet.has(symbol),
+                  isSpotlight: spotSet.has(symbol),
                   showMark: section === "rising" && favSet.has(symbol),
                   pairColor: colors.get(symbol) || "",
                 }),
@@ -973,9 +1043,46 @@
         );
         if (signal.aborted) return;
         const earlyCount = document.querySelectorAll(".early-badge").length;
-        if (earlyCount > 0) {
+        const spotCount = document.querySelectorAll(".spotlight-badge").length;
+        if (earlyCount > 0 || spotCount > 0) {
           const risingMeta = document.getElementById("risingMeta");
-          risingMeta.textContent = `${risingMeta.textContent} · 启动标记 ${earlyCount}`;
+          const extras = [];
+          if (earlyCount > 0) extras.push(`启动标记 ${earlyCount}`);
+          if (spotCount > 0) extras.push(`特别关注 ${spotCount}`);
+          risingMeta.textContent = `${risingMeta.textContent} · ${extras.join(" · ")}`;
+        }
+      }
+
+      async function toggleSpotlightForSymbol(symbol) {
+        if (!symbol || spotlightSaving) return;
+        spotlightSaving = true;
+        const label = symbol.replace("USDT", "");
+        try {
+          setStatus(false, `正在保存 ${label} 特别关注...`);
+          const result = await WatchFavorites.patchSpotlight({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.SPOTLIGHT_PATH,
+            message: `Update spotlight ${symbol}`,
+            mutate: (list) =>
+              WatchFavorites.toggleSpotlight(list, symbol, "kline"),
+          });
+          spotlightItems = result.spotlight;
+          const added = result.meta && result.meta.added;
+          showToast(added ? `${label} 已特别关注` : `${label} 已取消特别关注`);
+          await renderKlines();
+          setStatus(
+            true,
+            added
+              ? `${label} 特别关注已同步`
+              : `${label} 已取消特别关注`,
+          );
+        } catch (error) {
+          console.error(error);
+          showToast(error.message || "特别关注保存失败");
+          setStatus(false, error.message || "特别关注保存失败");
+          window.alert(error.message || "特别关注保存失败");
+        } finally {
+          spotlightSaving = false;
         }
       }
 
