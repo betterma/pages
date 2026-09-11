@@ -6,19 +6,37 @@
   "quoteAmount": 1000,
   "quantity": 4043.634613106337,
   "cash": 0,
-  "equity": 1030.3180994194947,
-  "anchorPrice": 0.2446,
-  "windowStartMs": 1789128000000,
+  "equity": 1024.657010961146,
+  "anchorPrice": 0.2516,
+  "windowStartMs": 1789142400000,
   "entryPrice": 0.2455,
   "cooldownUntil": null,
-  "lastPrice": 0.2548,
-  "lastCheckAt": 1789140701917,
+  "lastPrice": 0.2534,
+  "lastCheckAt": 1789142479411,
   "lastAction": "hold",
   "lastError": null,
-  "updatedAt": 1789140702005,
+  "updatedAt": 1789142479595,
   "startedAt": 1789095865702,
   "feesPaid": 2.988406707746479,
   "logs": [
+    {
+      "at": 1789142479594,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.2534，卖出线 0.250342，权益 1024.66"
+    },
+    {
+      "at": 1789142479594,
+      "source": "timer",
+      "level": "info",
+      "message": "换窗：起步价 0.2446 → 0.2516"
+    },
+    {
+      "at": 1789142479411,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=holding enabled=true"
+    },
     {
       "at": 1789140702005,
       "source": "timer",
@@ -1200,24 +1218,6 @@
       "source": "page",
       "level": "info",
       "message": "【模拟平仓】@ 0.16802，到账 1005.66 USDT，手续费 1.0067"
-    },
-    {
-      "at": 1789095701492,
-      "source": "timer",
-      "level": "info",
-      "message": "持仓中：现价 0.16837，卖出线 0.167767，权益 1008.77"
-    },
-    {
-      "at": 1789095701410,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=FFUSDT status=holding enabled=true"
-    },
-    {
-      "at": 1789095690495,
-      "source": "timer",
-      "level": "info",
-      "message": "持仓中：现价 0.16837，卖出线 0.167767，权益 1008.77"
     }
   ]
 }
