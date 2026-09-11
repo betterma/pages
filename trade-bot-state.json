@@ -6,19 +6,31 @@
   "quoteAmount": 1000,
   "quantity": 4043.634613106337,
   "cash": 0,
-  "equity": 1024.657010961146,
+  "equity": 1023.4439205772138,
   "anchorPrice": 0.2516,
   "windowStartMs": 1789142400000,
   "entryPrice": 0.2455,
   "cooldownUntil": null,
-  "lastPrice": 0.2534,
-  "lastCheckAt": 1789142484332,
+  "lastPrice": 0.2531,
+  "lastCheckAt": 1789142490370,
   "lastAction": "hold",
   "lastError": null,
-  "updatedAt": 1789142484491,
+  "updatedAt": 1789142490452,
   "startedAt": 1789095865702,
   "feesPaid": 2.988406707746479,
   "logs": [
+    {
+      "at": 1789142490452,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.2531，卖出线 0.250342，权益 1023.44"
+    },
+    {
+      "at": 1789142490370,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=holding enabled=true"
+    },
     {
       "at": 1789142484490,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "持仓中：现价 0.256，卖出线 0.253626，权益 1000.56"
-    },
-    {
-      "at": 1789097479371,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=holding enabled=true"
-    },
-    {
-      "at": 1789095865702,
-      "source": "page",
-      "level": "trade",
-      "message": "【模拟开仓】FORMUSDT 投入 1000 USDT @ 0.2556 → 数量 3908.4507；4h起步价 0.2549；手续费 1.0000 USDT；已开启定时检测"
     }
   ]
 }
