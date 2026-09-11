@@ -2,7 +2,7 @@
   "mode": "paper",
   "symbol": "FORMUSDT",
   "enabled": true,
-  "status": "cooldown",
+  "status": "flat_rebuy",
   "quoteAmount": 1000,
   "quantity": 0,
   "cash": 993.7060035211268,
@@ -10,15 +10,27 @@
   "anchorPrice": 0.2578,
   "windowStartMs": 1789113600000,
   "entryPrice": 0.2556,
-  "cooldownUntil": 1789121479469,
-  "lastPrice": 0.2548,
-  "lastCheckAt": 1789120901466,
-  "lastAction": "cooldown",
+  "cooldownUntil": null,
+  "lastPrice": 0.2537,
+  "lastCheckAt": 1789122679400,
+  "lastAction": "cooldown_end",
   "lastError": null,
-  "updatedAt": 1789120901551,
+  "updatedAt": 1789122679673,
   "startedAt": 1789095865702,
   "feesPaid": 1.9947007042253522,
   "logs": [
+    {
+      "at": 1789122679673,
+      "source": "timer",
+      "level": "info",
+      "message": "冷静期结束，等待回补"
+    },
+    {
+      "at": 1789122679400,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=cooldown enabled=true"
+    },
     {
       "at": 1789120901551,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "持仓中：现价 0.16944，卖出线 0.167936，权益 1015.18"
-    },
-    {
-      "at": 1789070490357,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=FFUSDT status=holding enabled=true"
-    },
-    {
-      "at": 1789070484036,
-      "source": "timer",
-      "level": "info",
-      "message": "持仓中：现价 0.16953，卖出线 0.167936，权益 1015.72"
     }
   ]
 }
