@@ -11,14 +11,26 @@
   "windowStartMs": 1789142400000,
   "entryPrice": 0.2525,
   "cooldownUntil": null,
-  "lastPrice": 0.2485,
-  "lastCheckAt": 1789149691087,
+  "lastPrice": 0.2484,
+  "lastCheckAt": 1789149701898,
   "lastAction": "wait_rebuy",
   "lastError": null,
-  "updatedAt": 1789149691262,
+  "updatedAt": 1789149702071,
   "startedAt": 1789095865702,
   "feesPaid": 6.005286477778396,
   "logs": [
+    {
+      "at": 1789149702070,
+      "source": "timer",
+      "level": "info",
+      "message": "等待回补：现价 0.2484，回补线 0.252355，现金 997.50"
+    },
+    {
+      "at": 1789149701898,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=flat_rebuy enabled=true"
+    },
     {
       "at": 1789149691261,
       "source": "timer",
@@ -1203,18 +1215,6 @@
     },
     {
       "at": 1789104690494,
-      "source": "timer",
-      "level": "info",
-      "message": "持仓中：现价 0.2555，卖出线 0.253426，权益 998.61"
-    },
-    {
-      "at": 1789104690408,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=holding enabled=true"
-    },
-    {
-      "at": 1789104683479,
       "source": "timer",
       "level": "info",
       "message": "持仓中：现价 0.2555，卖出线 0.253426，权益 998.61"
