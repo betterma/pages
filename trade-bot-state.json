@@ -2,23 +2,35 @@
   "mode": "paper",
   "symbol": "FORMUSDT",
   "enabled": true,
-  "status": "holding",
+  "status": "cooldown",
   "quoteAmount": 1000,
-  "quantity": 4043.634613106337,
-  "cash": 0,
-  "equity": 1023.4439205772138,
+  "quantity": 0,
+  "cash": 1008.6858673297597,
+  "equity": 1008.6858673297597,
   "anchorPrice": 0.2516,
   "windowStartMs": 1789142400000,
   "entryPrice": 0.2455,
-  "cooldownUntil": null,
-  "lastPrice": 0.2531,
-  "lastCheckAt": 1789142501398,
-  "lastAction": "hold",
+  "cooldownUntil": 1789144879100,
+  "lastPrice": 0.2497,
+  "lastCheckAt": 1789144279100,
+  "lastAction": "sell_stop",
   "lastError": null,
-  "updatedAt": 1789142501477,
+  "updatedAt": 1789144279204,
   "startedAt": 1789095865702,
-  "feesPaid": 2.988406707746479,
+  "feesPaid": 3.9981022706391314,
   "logs": [
+    {
+      "at": 1789144279203,
+      "source": "timer",
+      "level": "info",
+      "message": "【paper卖出】现价 0.2497 ≤ 0.250342，到账 1008.69，冷静 10 分钟"
+    },
+    {
+      "at": 1789144279100,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=holding enabled=true"
+    },
     {
       "at": 1789142501477,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "换窗：起步价 0.2549 → 0.2547"
-    },
-    {
-      "at": 1789099279248,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=holding enabled=true"
-    },
-    {
-      "at": 1789097484246,
-      "source": "timer",
-      "level": "info",
-      "message": "持仓中：现价 0.256，卖出线 0.253626，权益 1000.56"
     }
   ]
 }
