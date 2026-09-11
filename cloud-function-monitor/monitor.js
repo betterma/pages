@@ -14,8 +14,8 @@ const CONFIG = {
   TOP20: 20,
   WATCH_POOL_RANK: 30,
   MAX_EVENTS: 300,
-  // Keep snapshots lean (Top N ranks/prices per snapshot).
-  SNAPSHOT_MAX_RANK: 150,
+  // Store all USDT symbols in each snapshot (no Top-N trim).
+  // File size stays bounded by HISTORY_DURATION (~3 days of 15m snaps).
   DURATION_MS: {
     '15m': 15 * 60 * 1000,
     '30m': 30 * 60 * 1000,
@@ -312,7 +312,9 @@ function pruneHistory(history) {
 }
 
 function buildSnapshot(marketMap) {
-  const list = ranking(marketMap).slice(0, CONFIG.SNAPSHOT_MAX_RANK);
+  // Persist full USDT ranking so late breakouts still have baseline prices
+  // for window-gain / watch-pool detection.
+  const list = ranking(marketMap);
   const ranks = {};
   const prices = {};
   list.forEach((symbol, index) => {
@@ -329,9 +331,8 @@ function buildSnapshot(marketMap) {
 
 function slimSnapshot(snapshot) {
   if (!snapshot || !snapshot.ranks) return snapshot;
-  const ranked = Object.entries(snapshot.ranks)
-    .sort((a, b) => a[1] - b[1])
-    .slice(0, CONFIG.SNAPSHOT_MAX_RANK);
+  // Keep every symbol already present; only drop broken price entries.
+  const ranked = Object.entries(snapshot.ranks).sort((a, b) => a[1] - b[1]);
   const ranks = {};
   const prices = {};
   ranked.forEach(([symbol, rank]) => {
@@ -639,8 +640,11 @@ async function runMonitorOnce() {
   };
 
   const encodedSize = Buffer.byteLength(JSON.stringify(nextState), 'utf8');
+  const latestSymbols = history.length
+    ? Object.keys(history[history.length - 1].ranks || {}).length
+    : 0;
   console.log(
-    `Prepared state size ${(encodedSize / 1024).toFixed(1)}KB · snapshots=${history.length} · blacklist=${blacklist.size}`,
+    `Prepared state size ${(encodedSize / 1024).toFixed(1)}KB · snapshots=${history.length} · latestSymbols=${latestSymbols} · blacklist=${blacklist.size}`,
   );
 
   const key = await writeObsState(nextState);
