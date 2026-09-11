@@ -3,11 +3,30 @@
 const https = require('https');
 const crypto = require('crypto');
 
+function cleanCredential(value) {
+  let text = String(value || '')
+    .replace(/^\uFEFF/, '')
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .trim();
+  // 误把整段 Authorization 贴进变量时去掉前缀
+  if (/^OBS\s+/i.test(text)) {
+    text = text.replace(/^OBS\s+/i, '').trim();
+  }
+  return text;
+}
+
 function obsConfig() {
-  const bucket = process.env.OBS_BUCKET || 'mpctest';
-  const endpoint = process.env.OBS_ENDPOINT || 'obs.cn-north-4.myhuaweicloud.com';
-  const accessKey = process.env.OBS_ACCESS_KEY || process.env.OBS_AK || '';
-  const secretKey = process.env.OBS_SECRET_KEY || process.env.OBS_SK || '';
+  const bucket = String(process.env.OBS_BUCKET || 'mpctest').trim();
+  const endpoint = String(
+    process.env.OBS_ENDPOINT || 'obs.cn-north-4.myhuaweicloud.com',
+  ).trim();
+  const accessKey = cleanCredential(
+    process.env.OBS_ACCESS_KEY || process.env.OBS_AK || '',
+  );
+  const secretKey = cleanCredential(
+    process.env.OBS_SECRET_KEY || process.env.OBS_SK || '',
+  );
   const publicBase =
     process.env.OBS_PUBLIC_BASE || `https://${bucket}.${endpoint}`;
   return { bucket, endpoint, accessKey, secretKey, publicBase };
@@ -58,7 +77,9 @@ function requestRaw(url, options = {}) {
 }
 
 function signObs({ method, contentType, date, resource, secretKey }) {
-  const stringToSign = [method, '', contentType || '', date, resource].join('\n');
+  const stringToSign = [method, '', contentType || '', date, resource].join(
+    '\n',
+  );
   return crypto
     .createHmac('sha1', secretKey)
     .update(stringToSign, 'utf8')
@@ -86,10 +107,16 @@ async function putObjectJson(key, data) {
   if (!accessKey || !secretKey) {
     throw new Error('Missing OBS_ACCESS_KEY / OBS_SECRET_KEY');
   }
+  if (/\s/.test(accessKey)) {
+    throw new Error(
+      'OBS_ACCESS_KEY 含空格，请只粘贴 Access Key Id（不要带 OBS 前缀或首尾空格）',
+    );
+  }
 
   const body = Buffer.from(JSON.stringify(data), 'utf8');
   const date = new Date().toUTCString();
-  const contentType = 'application/json; charset=utf-8';
+  // 签名与 Header 必须完全一致；避免 charset 空格带来的兼容问题
+  const contentType = 'application/json';
   const resource = `/${bucket}/${key}`;
   const signature = signObs({
     method: 'PUT',
@@ -99,17 +126,27 @@ async function putObjectJson(key, data) {
     secretKey,
   });
 
+  // OBS 要求：Authorization 里 OBS 与 AK 之间有且仅有一个空格
+  const authorization = `OBS ${accessKey}:${signature}`;
+  if ((authorization.match(/ /g) || []).length !== 1) {
+    throw new Error(
+      `Authorization 空格数异常（AK 长度=${accessKey.length}），请检查 OBS_ACCESS_KEY`,
+    );
+  }
+
   const url = `https://${bucket}.${endpoint}/${key}`;
-  console.log(`OBS PUT ${url} (${body.length} bytes)`);
+  console.log(
+    `OBS PUT ${url} (${body.length} bytes) akLen=${accessKey.length}`,
+  );
   const response = await requestRaw(url, {
     method: 'PUT',
     timeout: 30000,
     headers: {
       Date: date,
       'Content-Type': contentType,
-      'Content-Length': body.length,
-      Authorization: `OBS ${accessKey}:${signature}`,
-      'User-Agent': 'binance-radar-obs',
+      'Content-Length': String(body.length),
+      Authorization: authorization,
+      'User-Agent': 'okx-candles-obs',
     },
     body,
   });
@@ -126,4 +163,5 @@ module.exports = {
   obsConfig,
   getObjectJson,
   putObjectJson,
+  cleanCredential,
 };
