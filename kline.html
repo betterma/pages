@@ -1117,7 +1117,7 @@
               section === "rising"
                 ? "暂无上涨币种"
                 : section === "pin"
-                  ? "还没有盯一下 · 长按卡片选「盯一下」即可钉住 12 小时"
+                  ? "暂无加入后上涨的盯一下 · 下跌/走平已隐藏"
                   : "暂无窗口上涨的收藏"
             }</div>`;
 
@@ -1167,8 +1167,21 @@
           pinSymbols().has(item.symbol),
         ).length;
         const pinMap = new Map(pinItems.map((item) => [item.symbol, item]));
-        const pinSymbolsList = pinItems
-          .filter((item) => !blocked.has(item.symbol))
+        const pinCandidates = pinItems.filter(
+          (item) => !blocked.has(item.symbol),
+        );
+        const pinHiddenDown = pinCandidates.filter((item) => {
+          if (WatchFavorites.isPinExpired(item)) return false;
+          const change = pinChangePercent(item);
+          return !Number.isFinite(change) || change <= 0;
+        }).length;
+        const pinSymbolsList = pinCandidates
+          .filter((item) => {
+            // Expired always shown so they can be cleared.
+            if (WatchFavorites.isPinExpired(item)) return true;
+            const change = pinChangePercent(item);
+            return Number.isFinite(change) && change > 0;
+          })
           .slice()
           .sort((a, b) => {
             const changeA = pinChangePercent(a);
@@ -1199,12 +1212,23 @@
 
         if (!pinItems.length) {
           document.getElementById("pinMeta").textContent =
-            "还没有盯一下 · 长按选「盯一下」· 企微每5分钟按涨幅汇报";
+            "还没有盯一下 · 长按选「盯一下」· 仅展示加入后上涨的币";
         } else {
           const heldInPins = pinItems.filter((item) =>
             positionSymbols().has(item.symbol),
           ).length;
-          const parts = [`盯一下 ${pinItems.length}`, "按盯住涨幅排序"];
+          const pinShownUp = pinCandidates.filter((item) => {
+            const change = pinChangePercent(item);
+            return Number.isFinite(change) && change > 0;
+          }).length;
+          const parts = [
+            `盯一下 ${pinItems.length}`,
+            `展示上涨 ${pinShownUp}`,
+            "按盯住涨幅排序",
+          ];
+          if (pinHiddenDown > 0) {
+            parts.push(`已隐藏下跌/走平 ${pinHiddenDown}`);
+          }
           if (heldInPins > 0) parts.push(`其中持仓 ${heldInPins}`);
           if (activePins > 0) parts.push(`有效 ${activePins}`);
           if (expiredPins > 0) parts.push(`过期待清 ${expiredPins}`);
