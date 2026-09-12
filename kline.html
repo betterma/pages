@@ -138,7 +138,11 @@
       .kline-card.is-expired:hover {
         opacity: 0.72;
       }
-      .pin-mark {
+      .kline-card.is-position {
+        border-color: #6b7f6e;
+      }
+      .pin-mark,
+      .pos-mark {
         position: absolute;
         top: 6px;
         right: 8px;
@@ -146,6 +150,11 @@
         font-size: 11px;
         line-height: 1;
         pointer-events: none;
+      }
+      .pos-mark {
+        right: 8px;
+        top: 22px;
+        color: #4f7a6e;
       }
       .kline-card.is-early .early-badge {
         position: absolute;
@@ -310,7 +319,7 @@
         <span id="statusDot" class="dot"></span>
         <span id="statusText">等待启动...</span>
       </div>
-      <p class="hint">长按卡片选 盯/收藏/拉黑 · 点名称复制 · 过期盯一下点卡片清除 · 「启动 N」=15m 早期分≥2</p>
+      <p class="hint">长按选 盯/购买/卖出/收藏/拉黑 · 点名称复制 · 过期盯一下点卡片清除 · 企微每5分钟推送盯一下与持仓</p>
 
       <h2 class="section-title">盯一下</h2>
       <div id="pinMeta" class="meta"></div>
@@ -338,6 +347,7 @@
         FAVORITES_PATH: "watch-favorites.json",
         BLACKLIST_PATH: "watch-blacklist.json",
         PINS_PATH: "watch-pins.json",
+        POSITIONS_PATH: "watch-positions.json",
         WATCH_POOL_RANK: 30,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
         KLINE_MAX_LIMIT: 1000,
@@ -361,11 +371,13 @@
       let favoriteItems = [];
       let blacklistItems = [];
       let pinItems = [];
+      let positionItems = [];
       let klineAbort = null;
       let loading = false;
       let favoriteSaving = false;
       let blacklistSaving = false;
       let pinSaving = false;
+      let positionSaving = false;
       let klineRangeDays = CONFIG.KLINE_RANGE_DAYS_DEFAULT;
 
       function setStatus(ok, text) {
@@ -400,6 +412,17 @@
 
       function pinSymbols() {
         return WatchFavorites.pinsToSymbolSet(pinItems);
+      }
+
+      function positionSymbols() {
+        return WatchFavorites.positionsToSymbolSet(positionItems);
+      }
+
+      function positionItemBySymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        return positionItems.find((item) => item.symbol === key) || null;
       }
 
       function pinItemBySymbol(symbol) {
@@ -610,6 +633,7 @@
           favoriteItems = [];
           blacklistItems = [];
           pinItems = [];
+          positionItems = [];
           return;
         }
         if (!response.ok) {
@@ -653,6 +677,16 @@
         } catch (error) {
           console.warn(error);
           pinItems = [];
+        }
+        try {
+          const posState = await WatchFavorites.loadPositionsRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.POSITIONS_PATH,
+          });
+          positionItems = posState.positions;
+        } catch (error) {
+          console.warn(error);
+          positionItems = [];
         }
         pruneHistory();
       }
@@ -904,12 +938,18 @@
         const favClass = options.isFavorite ? " is-favorite" : "";
         const pairClass = options.isPair ? " is-pair" : "";
         const pinClass = options.isPin ? " is-pin" : "";
+        const posClass = options.hasPosition ? " is-position" : "";
         const expiredClass = options.isExpired ? " is-expired" : "";
-        const mark = options.showMark
-          ? '<span class="fav-mark">★</span>'
-          : options.isPin
-            ? `<span class="pin-mark">${options.isExpired ? "过期" : "盯"}</span>`
-            : "";
+        const marks = [];
+        if (options.showMark) marks.push('<span class="fav-mark">★</span>');
+        if (options.isPin) {
+          marks.push(
+            `<span class="pin-mark">${options.isExpired ? "过期" : "盯"}</span>`,
+          );
+        }
+        if (options.hasPosition) {
+          marks.push('<span class="pos-mark">持仓</span>');
+        }
         const statusText = options.pinItem
           ? (() => {
               const rel = pinChangePercent(options.pinItem);
@@ -918,7 +958,7 @@
           : Number.isFinite(change24h)
             ? formatPercent(change24h)
             : "--";
-        return `<div class="kline-card${favClass}${pairClass}${pinClass}${expiredClass}" data-symbol="${symbol}" data-section="${options.section}"${options.isExpired ? ' data-expired="1"' : ""}><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${statusText}</span></div>${mark}<canvas></canvas></div>`;
+        return `<div class="kline-card${favClass}${pairClass}${pinClass}${posClass}${expiredClass}" data-symbol="${symbol}" data-section="${options.section}"${options.isExpired ? ' data-expired="1"' : ""}><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${statusText}</span></div>${marks.join("")}<canvas></canvas></div>`;
       }
 
       function closeCardActions() {
@@ -931,10 +971,15 @@
         if (!symbol) return;
         const pinned = pinSymbols().has(symbol);
         const favored = favoriteSymbols().has(symbol);
+        const held = positionSymbols().has(symbol);
         const sheet = document.createElement("div");
         sheet.className = "card-actions";
         sheet.innerHTML = [
           `<button type="button" data-action="pin">${pinned ? "取消盯一下" : "盯一下"}</button>`,
+          `<button type="button" data-action="buy">${held ? "更新买入价" : "购买"}</button>`,
+          held
+            ? `<button type="button" data-action="sell">卖出</button>`
+            : "",
           `<button type="button" data-action="fav">${favored ? "取消收藏" : "收藏"}</button>`,
           `<button type="button" data-action="blacklist" class="is-danger">拉黑</button>`,
           `<button type="button" data-action="close" class="is-muted">关闭</button>`,
@@ -950,6 +995,14 @@
           if (action === "pin") {
             if (pinned) await clearPinForSymbol(symbol);
             else await togglePinForSymbol(symbol);
+            return;
+          }
+          if (action === "buy") {
+            await buyPositionForSymbol(symbol);
+            return;
+          }
+          if (action === "sell") {
+            await sellPositionForSymbol(symbol);
             return;
           }
           if (action === "fav") {
@@ -1048,6 +1101,7 @@
                   isFavorite: favSet.has(symbol),
                   isPair: pairs.has(symbol),
                   isPin: section === "pin" || pinSymbols().has(symbol),
+                  hasPosition: positionSymbols().has(symbol),
                   isExpired: section === "pin" && expired,
                   pinItem: section === "pin" ? pinItem : null,
                   showMark: section === "rising" && favSet.has(symbol),
@@ -1136,9 +1190,13 @@
 
         if (!pinItems.length) {
           document.getElementById("pinMeta").textContent =
-            "还没有盯一下 · 长按卡片选「盯一下」，按相对钉住价涨跌排序";
+            "还没有盯一下 · 长按选「盯一下」· 企微每5分钟按涨幅汇报";
         } else {
+          const heldInPins = pinItems.filter((item) =>
+            positionSymbols().has(item.symbol),
+          ).length;
           const parts = [`盯一下 ${pinItems.length}`, "按盯住涨幅排序"];
+          if (heldInPins > 0) parts.push(`其中持仓 ${heldInPins}`);
           if (activePins > 0) parts.push(`有效 ${activePins}`);
           if (expiredPins > 0) parts.push(`过期待清 ${expiredPins}`);
           document.getElementById("pinMeta").textContent = parts.join(" · ");
@@ -1288,6 +1346,102 @@
         }
       }
 
+      async function buyPositionForSymbol(symbol) {
+        if (!symbol || positionSaving) return;
+        const label = symbol.replace("USDT", "");
+        const current = marketMap[symbol]?.price;
+        const existing = positionItemBySymbol(symbol);
+        const defaultPrice = Number.isFinite(existing?.buyPrice)
+          ? existing.buyPrice
+          : current;
+        const input = window.prompt(
+          `输入 ${label} 买入价（同步币安成交价）`,
+          Number.isFinite(defaultPrice) ? String(defaultPrice) : "",
+        );
+        if (input == null) return;
+        const buyPrice = Number(String(input).trim());
+        if (!Number.isFinite(buyPrice) || buyPrice <= 0) {
+          window.alert("买入价无效");
+          return;
+        }
+        positionSaving = true;
+        try {
+          setStatus(false, `正在保存 ${label} 持仓...`);
+          const result = await WatchFavorites.patchPositions({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.POSITIONS_PATH,
+            message: `Buy position ${symbol}`,
+            mutate: (list) => ({
+              list: WatchFavorites.upsertPosition(
+                list,
+                symbol,
+                buyPrice,
+                "kline",
+              ),
+              added: true,
+            }),
+          });
+          positionItems = result.positions;
+          if (!pinSymbols().has(symbol) && Number.isFinite(current)) {
+            try {
+              const pinResult = await WatchFavorites.patchPins({
+                repo: CONFIG.GITHUB_REPO,
+                path: CONFIG.PINS_PATH,
+                message: `Auto pin ${symbol} after buy`,
+                mutate: (list) => ({
+                  list: WatchFavorites.addPin(list, symbol, current, "buy"),
+                  added: true,
+                }),
+              });
+              pinItems = pinResult.pins;
+            } catch (error) {
+              console.warn("购买后自动盯一下失败", error);
+            }
+          }
+          showToast(`${label} 已记录买入 ${formatPinPrice(buyPrice)}`);
+          await renderKlines();
+          setStatus(true, `${label} 持仓已同步`);
+        } catch (error) {
+          console.error(error);
+          showToast(error.message || "持仓保存失败");
+          setStatus(false, error.message || "持仓保存失败");
+          window.alert(error.message || "持仓保存失败");
+        } finally {
+          positionSaving = false;
+        }
+      }
+
+      async function sellPositionForSymbol(symbol) {
+        if (!symbol || positionSaving) return;
+        if (!WatchFavorites.hasPosition(positionItems, symbol)) return;
+        const label = symbol.replace("USDT", "");
+        if (!window.confirm(`确认卖出并停止观测 ${label} 持仓？`)) return;
+        positionSaving = true;
+        try {
+          setStatus(false, `正在清除 ${label} 持仓...`);
+          const result = await WatchFavorites.patchPositions({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.POSITIONS_PATH,
+            message: `Sell position ${symbol}`,
+            mutate: (list) => ({
+              list: WatchFavorites.removePosition(list, symbol),
+              added: false,
+            }),
+          });
+          positionItems = result.positions;
+          showToast(`${label} 已卖出，停止持仓观测`);
+          await renderKlines();
+          setStatus(true, `${label} 持仓已清除`);
+        } catch (error) {
+          console.error(error);
+          showToast(error.message || "卖出保存失败");
+          setStatus(false, error.message || "卖出保存失败");
+          window.alert(error.message || "卖出保存失败");
+        } finally {
+          positionSaving = false;
+        }
+      }
+
       async function addToBlacklist(symbol) {
         if (!symbol || blacklistSaving) return;
         const label = symbol.replace("USDT", "");
@@ -1343,6 +1497,22 @@
               console.warn("拉黑后移除盯一下失败", error);
             }
           }
+          if (positionSymbols().has(symbol)) {
+            try {
+              const posResult = await WatchFavorites.patchPositions({
+                repo: CONFIG.GITHUB_REPO,
+                path: CONFIG.POSITIONS_PATH,
+                message: `Remove position ${symbol} after blacklist`,
+                mutate: (list) => ({
+                  list: WatchFavorites.removePosition(list, symbol),
+                  added: false,
+                }),
+              });
+              positionItems = posResult.positions;
+            } catch (error) {
+              console.warn("拉黑后移除持仓失败", error);
+            }
+          }
           showToast(`${label} 已加入黑名单`);
           await renderKlines();
           setStatus(true, `${label} 已拉黑并同步`);
@@ -1374,7 +1544,7 @@
           const rising = getRisingSymbols().length;
           setStatus(
             true,
-            `已更新 · 上涨 ${rising} · 盯 ${pinItems.length} · 收藏 ${favoriteItems.length} · ${new Date().toLocaleTimeString("zh-CN")}`,
+            `已更新 · 上涨 ${rising} · 盯 ${pinItems.length} · 持仓 ${positionItems.length} · 收藏 ${favoriteItems.length} · ${new Date().toLocaleTimeString("zh-CN")}`,
           );
         } catch (error) {
           console.error(error);

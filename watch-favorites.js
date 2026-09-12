@@ -764,11 +764,211 @@
     throw lastError || new Error("保存盯一下失败");
   }
 
+  // Positions / 已购入 — buy price tracking for WeCom alerts.
+  const POSITIONS_PATH = "watch-positions.json";
+
+  function normalizePositionItem(item) {
+    if (!item || typeof item !== "object" || !item.symbol) return null;
+    const symbol = String(item.symbol).trim().toUpperCase();
+    if (!symbol) return null;
+    const buyPrice = Number(item.buyPrice);
+    if (!Number.isFinite(buyPrice) || buyPrice <= 0) return null;
+    return {
+      symbol,
+      buyPrice,
+      boughtAt: Number.isFinite(Number(item.boughtAt))
+        ? Number(item.boughtAt)
+        : 0,
+      source: item.source ? String(item.source) : "legacy",
+    };
+  }
+
+  function normalizePositions(raw) {
+    if (!Array.isArray(raw)) return [];
+    const map = new Map();
+    raw.forEach((item) => {
+      const normalized = normalizePositionItem(item);
+      if (!normalized) return;
+      const prev = map.get(normalized.symbol);
+      if (!prev || normalized.boughtAt >= prev.boughtAt) {
+        map.set(normalized.symbol, normalized);
+      }
+    });
+    return [...map.values()].sort((a, b) => {
+      if (b.boughtAt !== a.boughtAt) return b.boughtAt - a.boughtAt;
+      return a.symbol.localeCompare(b.symbol);
+    });
+  }
+
+  function serializePositions(list) {
+    return normalizePositions(list).map((item) => ({
+      symbol: item.symbol,
+      buyPrice: item.buyPrice,
+      boughtAt: item.boughtAt,
+      source: item.source || "legacy",
+    }));
+  }
+
+  function positionsToSymbolSet(list) {
+    return new Set(normalizePositions(list).map((item) => item.symbol));
+  }
+
+  function hasPosition(list, symbol) {
+    const key = String(symbol || "")
+      .trim()
+      .toUpperCase();
+    return normalizePositions(list).some((item) => item.symbol === key);
+  }
+
+  function upsertPosition(list, symbol, buyPrice, source) {
+    const key = String(symbol || "")
+      .trim()
+      .toUpperCase();
+    const price = Number(buyPrice);
+    if (!key || !Number.isFinite(price) || price <= 0) {
+      return normalizePositions(list);
+    }
+    const next = normalizePositions(list).filter((item) => item.symbol !== key);
+    next.unshift({
+      symbol: key,
+      buyPrice: price,
+      boughtAt: Date.now(),
+      source: source || "manual",
+    });
+    return next;
+  }
+
+  function removePosition(list, symbol) {
+    const key = String(symbol || "")
+      .trim()
+      .toUpperCase();
+    return normalizePositions(list).filter((item) => item.symbol !== key);
+  }
+
+  async function loadPositionsRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || POSITIONS_PATH;
+
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          positions: normalizePositions(current.data.positions),
+          positionsUpdatedAt: Number.isFinite(
+            Number(current.data.positionsUpdatedAt),
+          )
+            ? Number(current.data.positionsUpdatedAt)
+            : null,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadPositions via API failed, trying raw", error);
+    }
+
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          positions: normalizePositions(data.positions),
+          positionsUpdatedAt: Number.isFinite(Number(data.positionsUpdatedAt))
+            ? Number(data.positionsUpdatedAt)
+            : null,
+          source: "raw-commit",
+        };
+      }
+      if (response.status !== 404) {
+        console.warn(`读取持仓 raw 失败: ${response.status}`);
+      }
+    } catch (error) {
+      console.warn("loadPositions via commit-raw failed", error);
+    }
+
+    return { positions: [], positionsUpdatedAt: null, source: "empty" };
+  }
+
+  async function patchPositions(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || POSITIONS_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = current.data || {
+          positions: [],
+          positionsUpdatedAt: null,
+        };
+        const positions = normalizePositions(base.positions);
+        let result;
+        if (typeof options.mutate === "function") {
+          result = options.mutate(positions.slice());
+        } else {
+          result = {
+            list: upsertPosition(
+              positions,
+              options.symbol,
+              options.buyPrice,
+              options.source || "manual",
+            ),
+            added: true,
+          };
+        }
+        const nextPositions = serializePositions(
+          result && result.list ? result.list : result,
+        );
+        const nextData = {
+          positions: nextPositions,
+          positionsUpdatedAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message:
+            options.message ||
+            `Update positions ${options.symbol || ""}`.trim(),
+        });
+        return {
+          positions: nextPositions,
+          positionsUpdatedAt: nextData.positionsUpdatedAt,
+          meta: result && typeof result === "object" ? result : null,
+        };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存持仓失败");
+  }
+
   return {
     DEFAULT_REPO,
     FAVORITES_PATH,
     BLACKLIST_PATH,
     PINS_PATH,
+    POSITIONS_PATH,
     PIN_TTL_MS,
     LEGACY_DATA_PATH,
     getGithubToken,
@@ -800,5 +1000,13 @@
     togglePin,
     loadPinsRaw,
     patchPins,
+    normalizePositions,
+    serializePositions,
+    positionsToSymbolSet,
+    hasPosition,
+    upsertPosition,
+    removePosition,
+    loadPositionsRaw,
+    patchPositions,
   };
 });
