@@ -12,13 +12,25 @@
   "entryPrice": null,
   "cooldownUntil": null,
   "lastPrice": 0.1105,
-  "lastCheckAt": 1789245101638,
+  "lastCheckAt": 1789246879312,
   "lastAction": "tick_skipped",
   "lastError": null,
-  "updatedAt": 1789245101638,
+  "updatedAt": 1789246879313,
   "startedAt": 1789183277680,
   "feesPaid": 5.902678760316166,
   "logs": [
+    {
+      "at": 1789246879313,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 检测跳过：自动检测已关闭"
+    },
+    {
+      "at": 1789246879312,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
+    },
     {
       "at": 1789245101638,
       "source": "timer",
@@ -1203,18 +1215,6 @@
     },
     {
       "at": 1789201891378,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=cooldown enabled=true"
-    },
-    {
-      "at": 1789201884567,
-      "source": "timer",
-      "level": "info",
-      "message": "冷静期中，约剩 10 分钟"
-    },
-    {
-      "at": 1789201884465,
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=MINAUSDT status=cooldown enabled=true"
