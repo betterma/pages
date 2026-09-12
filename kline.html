@@ -1058,7 +1058,7 @@
               section === "rising"
                 ? "暂无上涨币种"
                 : section === "pin"
-                  ? "还没有盯一下 · 点卡片上的「盯」即可钉住 12 小时"
+                  ? "还没有盯一下 · 长按卡片选「盯一下」即可钉住 12 小时"
                   : "暂无窗口上涨的收藏"
             }</div>`;
 
@@ -1106,6 +1106,16 @@
         const pinMap = new Map(pinItems.map((item) => [item.symbol, item]));
         const pinSymbolsList = pinItems
           .filter((item) => !blocked.has(item.symbol))
+          .slice()
+          .sort((a, b) => {
+            const changeA = pinChangePercent(a);
+            const changeB = pinChangePercent(b);
+            const hasA = Number.isFinite(changeA);
+            const hasB = Number.isFinite(changeB);
+            if (hasA && hasB && changeB !== changeA) return changeB - changeA;
+            if (hasA !== hasB) return hasA ? -1 : 1;
+            return b.pinnedAt - a.pinnedAt;
+          })
           .map((item) => item.symbol);
         const activePins = pinItems.filter(
           (item) =>
@@ -1126,9 +1136,9 @@
 
         if (!pinItems.length) {
           document.getElementById("pinMeta").textContent =
-            "还没有盯一下 · 点「盯」钉住 12 小时，显示相对钉住价涨跌";
+            "还没有盯一下 · 长按卡片选「盯一下」，按相对钉住价涨跌排序";
         } else {
-          const parts = [`盯一下 ${pinItems.length}`];
+          const parts = [`盯一下 ${pinItems.length}`, "按盯住涨幅排序"];
           if (activePins > 0) parts.push(`有效 ${activePins}`);
           if (expiredPins > 0) parts.push(`过期待清 ${expiredPins}`);
           document.getElementById("pinMeta").textContent = parts.join(" · ");
