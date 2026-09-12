@@ -12,13 +12,25 @@
   "entryPrice": null,
   "cooldownUntil": null,
   "lastPrice": 0.1105,
-  "lastCheckAt": 1789245079121,
+  "lastCheckAt": 1789245083841,
   "lastAction": "tick_skipped",
   "lastError": null,
-  "updatedAt": 1789245079122,
+  "updatedAt": 1789245083841,
   "startedAt": 1789183277680,
   "feesPaid": 5.902678760316166,
   "logs": [
+    {
+      "at": 1789245083841,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 检测跳过：自动检测已关闭"
+    },
+    {
+      "at": 1789245083841,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
+    },
     {
       "at": 1789245079121,
       "source": "timer",
@@ -1203,18 +1215,6 @@
     },
     {
       "at": 1789200101805,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=holding enabled=true"
-    },
-    {
-      "at": 1789200090996,
-      "source": "timer",
-      "level": "info",
-      "message": "持仓中：现价 0.1097，卖出线 0.109351，权益 1019.37"
-    },
-    {
-      "at": 1789200090913,
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=MINAUSDT status=holding enabled=true"
