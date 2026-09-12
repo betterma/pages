@@ -11,14 +11,26 @@
   "windowStartMs": 1789200000000,
   "entryPrice": 0.1077,
   "cooldownUntil": null,
-  "lastPrice": 0.109,
-  "lastCheckAt": 1789210890734,
+  "lastPrice": 0.1094,
+  "lastCheckAt": 1789210901929,
   "lastAction": "wait_rebuy",
   "lastError": null,
-  "updatedAt": 1789210890902,
+  "updatedAt": 1789210902356,
   "startedAt": 1789183277680,
   "feesPaid": 3.9756202417645516,
   "logs": [
+    {
+      "at": 1789210902355,
+      "source": "timer",
+      "level": "info",
+      "message": "等待回补：现价 0.1094，回补线 0.110230，现金 970.08"
+    },
+    {
+      "at": 1789210901929,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=flat_rebuy enabled=true"
+    },
     {
       "at": 1789210890902,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "等待回补：现价 0.2457，回补线 0.248242，现金 997.50"
-    },
-    {
-      "at": 1789167691354,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=flat_rebuy enabled=true"
-    },
-    {
-      "at": 1789167684735,
-      "source": "timer",
-      "level": "info",
-      "message": "等待回补：现价 0.2455，回补线 0.248242，现金 997.50"
     }
   ]
 }
