@@ -9,21 +9,49 @@ const {
 } = require('./github-wecom');
 const { buildSymbolChart } = require('./kline-chart');
 
+function webhookKeyHint(url) {
+  try {
+    const key = new URL(String(url || '')).searchParams.get('key') || '';
+    if (!key) return 'no-key';
+    return `${key.slice(0, 4)}…${key.slice(-4)}`;
+  } catch (error) {
+    return 'invalid-url';
+  }
+}
+
+function resolveWebhooks() {
+  const legacy = String(process.env.WECOM_WEBHOOK_URL || '').trim();
+  const pins = String(process.env.WECOM_WEBHOOK_PINS || '').trim();
+  const positions = String(process.env.WECOM_WEBHOOK_POSITIONS || '').trim();
+
+  // Explicit vars win. Legacy URL is only used when the specific var is empty.
+  const pinsUrl = pins || legacy;
+  const positionsUrl = positions || legacy;
+
+  return {
+    pinsUrl,
+    positionsUrl,
+    legacyUsedForPins: !pins && !!legacy,
+    legacyUsedForPositions: !positions && !!legacy,
+    sameTarget: !!(pinsUrl && positionsUrl && pinsUrl === positionsUrl),
+  };
+}
+
+const WEBHOOKS = resolveWebhooks();
+
 const CONFIG = {
   PINS_PATH: process.env.PINS_PATH || 'watch-pins.json',
   POSITIONS_PATH: process.env.POSITIONS_PATH || 'watch-positions.json',
   NOTIFY_STATE_PATH: process.env.NOTIFY_STATE_PATH || 'watch-notify-state.json',
-  // Pin report → WECOM_WEBHOOK_PINS (fallback: WECOM_WEBHOOK_URL)
-  // Position / drop alert → WECOM_WEBHOOK_POSITIONS (fallback: WECOM_WEBHOOK_URL)
-  WECOM_WEBHOOK_PINS:
-    process.env.WECOM_WEBHOOK_PINS || process.env.WECOM_WEBHOOK_URL || '',
-  WECOM_WEBHOOK_POSITIONS:
-    process.env.WECOM_WEBHOOK_POSITIONS || process.env.WECOM_WEBHOOK_URL || '',
+  WECOM_WEBHOOK_PINS: WEBHOOKS.pinsUrl,
+  WECOM_WEBHOOK_POSITIONS: WEBHOOKS.positionsUrl,
   DROP_THRESHOLD: Number(process.env.DROP_THRESHOLD || 0.05),
   DROP_COOLDOWN_MS: Number(
     process.env.DROP_COOLDOWN_MS || 2 * 60 * 60 * 1000,
   ),
   PIN_CHART_TOP: Number(process.env.PIN_CHART_TOP || 3),
+  // Skip duplicate runs if another invoke already sent within this window.
+  NOTIFY_DEBOUNCE_MS: Number(process.env.NOTIFY_DEBOUNCE_MS || 90 * 1000),
 };
 
 function labelOf(symbol) {
@@ -137,20 +165,30 @@ async function sendTopPinCharts(rows, webhook) {
   const topN = Math.max(0, CONFIG.PIN_CHART_TOP || 3);
   if (!topN || !rows.length || !webhook) return [];
   const top = rows.slice(0, topN);
+
+  // Build charts in parallel to reduce total runtime (avoids CF timeout retries).
+  const charts = await Promise.all(
+    top.map(async (row) => {
+      try {
+        const image = await buildSymbolChart(row.symbol, {
+          change: row.change,
+          pinPrice: row.pinPrice,
+        });
+        return { symbol: row.symbol, image };
+      } catch (error) {
+        console.warn(`pin chart failed ${row.symbol}`, error.message || error);
+        return null;
+      }
+    }),
+  );
+
   const sent = [];
-  for (let i = 0; i < top.length; i += 1) {
-    const row = top[i];
-    try {
-      const image = await buildSymbolChart(row.symbol, {
-        change: row.change,
-        pinPrice: row.pinPrice,
-      });
-      await sendWecomImage(image, webhook);
-      sent.push(row.symbol);
-      if (i < top.length - 1) await sleep(300);
-    } catch (error) {
-      console.warn(`pin chart failed ${row.symbol}`, error.message || error);
-    }
+  for (let i = 0; i < charts.length; i += 1) {
+    const item = charts[i];
+    if (!item) continue;
+    await sendWecomImage(item.image, webhook);
+    sent.push(item.symbol);
+    if (i < charts.length - 1) await sleep(200);
   }
   return sent;
 }
@@ -211,10 +249,70 @@ function buildPositionReport(positions, prices, dropAlerts, now) {
   return { text: blocks.join('\n').trimEnd(), nextDropAlerts };
 }
 
+async function tryAcquireNotifyLock(stateFile, now) {
+  const data = (stateFile && stateFile.data) || {};
+  const lastAt = Number(data.lastNotifyAt) || 0;
+  if (lastAt && now - lastAt < CONFIG.NOTIFY_DEBOUNCE_MS) {
+    return {
+      acquired: false,
+      reason: 'debounce',
+      lastAt,
+      ageMs: now - lastAt,
+    };
+  }
+
+  const nextData = {
+    dropAlerts: data.dropAlerts || {},
+    lastNotifyAt: now,
+    updatedAt: now,
+  };
+
+  try {
+    await saveJson(
+      CONFIG.NOTIFY_STATE_PATH,
+      nextData,
+      stateFile && stateFile.sha,
+      'Acquire watch notify lock',
+    );
+    const refreshed = await loadJson(CONFIG.NOTIFY_STATE_PATH);
+    return {
+      acquired: true,
+      stateFile: refreshed,
+      dropAlerts: nextData.dropAlerts,
+    };
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    if (/409|conflict|sha/i.test(message)) {
+      return { acquired: false, reason: 'conflict', error: message };
+    }
+    throw error;
+  }
+}
+
 async function main() {
   if (!CONFIG.WECOM_WEBHOOK_PINS && !CONFIG.WECOM_WEBHOOK_POSITIONS) {
     throw new Error(
       'Missing WECOM_WEBHOOK_PINS / WECOM_WEBHOOK_POSITIONS (or WECOM_WEBHOOK_URL)',
+    );
+  }
+
+  console.log(
+    'webhook routing',
+    JSON.stringify({
+      pins: CONFIG.WECOM_WEBHOOK_PINS
+        ? webhookKeyHint(CONFIG.WECOM_WEBHOOK_PINS)
+        : null,
+      positions: CONFIG.WECOM_WEBHOOK_POSITIONS
+        ? webhookKeyHint(CONFIG.WECOM_WEBHOOK_POSITIONS)
+        : null,
+      sameTarget: WEBHOOKS.sameTarget,
+      legacyUsedForPins: WEBHOOKS.legacyUsedForPins,
+      legacyUsedForPositions: WEBHOOKS.legacyUsedForPositions,
+    }),
+  );
+  if (WEBHOOKS.sameTarget) {
+    console.warn(
+      'pins/positions share the same webhook URL — dual-group split will not work',
     );
   }
 
@@ -224,12 +322,19 @@ async function main() {
     loadJson(CONFIG.NOTIFY_STATE_PATH),
   ]);
 
+  const now = Date.now();
+  const lock = await tryAcquireNotifyLock(stateFile, now);
+  if (!lock.acquired) {
+    console.log('notify skip: duplicate invoke', JSON.stringify(lock));
+    return { ok: true, skipped: true, reason: lock.reason, lock };
+  }
+
+  let activeStateFile = lock.stateFile || stateFile;
   const pins = normalizePins(pinsFile.data && pinsFile.data.pins);
   const positions = normalizePositions(
     positionsFile.data && positionsFile.data.positions,
   );
-  const dropAlerts =
-    (stateFile.data && stateFile.data.dropAlerts) || {};
+  let dropAlerts = lock.dropAlerts || {};
 
   if (!pins.length && !positions.length) {
     console.log('notify skip: empty pins and positions');
@@ -243,12 +348,9 @@ async function main() {
     ]),
   ];
   const prices = await fetchBinancePrices(symbols);
-  const now = Date.now();
 
   const pinRows = listPinUpRows(pins, prices);
-  const pinText = pinRows.length
-    ? buildPinReport(pins, prices)
-    : null;
+  const pinText = pinRows.length ? buildPinReport(pins, prices) : null;
   const { text: positionText, nextDropAlerts } = buildPositionReport(
     positions,
     prices,
@@ -287,9 +389,10 @@ async function main() {
       CONFIG.NOTIFY_STATE_PATH,
       {
         dropAlerts: nextDropAlerts,
-        updatedAt: now,
+        lastNotifyAt: now,
+        updatedAt: Date.now(),
       },
-      stateFile.sha,
+      activeStateFile.sha,
       'Update watch notify drop alert cooldown',
     );
   }

@@ -12,6 +12,10 @@ exports.handler = async (event, context) => {
     JSON.stringify({
       keys: event && typeof event === 'object' ? Object.keys(event) : [],
       requestId: context && context.requestId,
+      remainingTime:
+        context && typeof context.getRemainingTimeInMillis === 'function'
+          ? context.getRemainingTimeInMillis()
+          : null,
     }),
   );
   return main();
