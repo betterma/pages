@@ -11,6 +11,12 @@ const CONFIG = {
   PINS_PATH: process.env.PINS_PATH || 'watch-pins.json',
   POSITIONS_PATH: process.env.POSITIONS_PATH || 'watch-positions.json',
   NOTIFY_STATE_PATH: process.env.NOTIFY_STATE_PATH || 'watch-notify-state.json',
+  // Pin report → WECOM_WEBHOOK_PINS (fallback: WECOM_WEBHOOK_URL)
+  // Position / drop alert → WECOM_WEBHOOK_POSITIONS (fallback: WECOM_WEBHOOK_URL)
+  WECOM_WEBHOOK_PINS:
+    process.env.WECOM_WEBHOOK_PINS || process.env.WECOM_WEBHOOK_URL || '',
+  WECOM_WEBHOOK_POSITIONS:
+    process.env.WECOM_WEBHOOK_POSITIONS || process.env.WECOM_WEBHOOK_URL || '',
   DROP_THRESHOLD: Number(process.env.DROP_THRESHOLD || 0.05),
   DROP_COOLDOWN_MS: Number(
     process.env.DROP_COOLDOWN_MS || 2 * 60 * 60 * 1000,
@@ -172,8 +178,10 @@ function buildPositionReport(positions, prices, dropAlerts, now) {
 }
 
 async function main() {
-  if (!process.env.WECOM_WEBHOOK_URL) {
-    throw new Error('Missing WECOM_WEBHOOK_URL');
+  if (!CONFIG.WECOM_WEBHOOK_PINS && !CONFIG.WECOM_WEBHOOK_POSITIONS) {
+    throw new Error(
+      'Missing WECOM_WEBHOOK_PINS / WECOM_WEBHOOK_POSITIONS (or WECOM_WEBHOOK_URL)',
+    );
   }
 
   const [pinsFile, positionsFile, stateFile] = await Promise.all([
@@ -213,12 +221,20 @@ async function main() {
 
   const sent = [];
   if (pinText) {
-    await sendWecomText(pinText);
-    sent.push('pins');
+    if (!CONFIG.WECOM_WEBHOOK_PINS) {
+      console.warn('pin report skipped: missing WECOM_WEBHOOK_PINS');
+    } else {
+      await sendWecomText(pinText, CONFIG.WECOM_WEBHOOK_PINS);
+      sent.push('pins');
+    }
   }
   if (positionText) {
-    await sendWecomText(positionText);
-    sent.push('positions');
+    if (!CONFIG.WECOM_WEBHOOK_POSITIONS) {
+      console.warn('position report skipped: missing WECOM_WEBHOOK_POSITIONS');
+    } else {
+      await sendWecomText(positionText, CONFIG.WECOM_WEBHOOK_POSITIONS);
+      sent.push('positions');
+    }
   }
 
   const stateChanged =

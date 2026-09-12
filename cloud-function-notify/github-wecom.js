@@ -181,10 +181,9 @@ async function sendWecomMarkdown(content) {
   return data;
 }
 
-/** @deprecated prefer sendWecomMarkdown */
-async function sendWecomText(content) {
-  const webhook = process.env.WECOM_WEBHOOK_URL || '';
-  if (!webhook) throw new Error('Missing WECOM_WEBHOOK_URL');
+async function sendWecomText(content, webhookUrl) {
+  const webhook = webhookUrl || process.env.WECOM_WEBHOOK_URL || '';
+  if (!webhook) throw new Error('Missing WeCom webhook URL');
   const body = JSON.stringify({
     msgtype: 'text',
     text: { content: String(content || '').slice(0, 2000) },

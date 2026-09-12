@@ -14,7 +14,7 @@
 1. 打开 [企业微信](https://work.weixin.qq.com/) 并登录（个人可创建企业）  
 2. 建一个群（可以只有自己）  
 3. 群设置 → **群机器人** → 添加 → 复制 Webhook 地址  
-4. 填到云函数环境变量 `WECOM_WEBHOOK_URL`（整段 URL，含 `key=`）
+4. 两个群各复制 Webhook，分别填 `WECOM_WEBHOOK_PINS`、`WECOM_WEBHOOK_POSITIONS`（或临时共用 `WECOM_WEBHOOK_URL`）
 
 手机安装企业微信，打开消息通知；可选在「微信插件」里接收提醒。
 
@@ -26,11 +26,22 @@
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `WECOM_WEBHOOK_URL` | 是 | 企微机器人 Webhook 完整 URL |
+| `WECOM_WEBHOOK_PINS` | 二选一* | **盯一下**群机器人 Webhook |
+| `WECOM_WEBHOOK_POSITIONS` | 二选一* | **持仓/购入**群机器人 Webhook |
+| `WECOM_WEBHOOK_URL` | 否 | 兼容旧配置：上面两个都没填时，两类都推到这个地址 |
 | `GITHUB_TOKEN` | 是 | 读 pins/positions，写 notify-state |
 | `GITHUB_REPO` | 否 | 默认 `betterma/pages` |
 | `DROP_THRESHOLD` | 否 | 默认 `0.05`（-5%） |
 | `DROP_COOLDOWN_MS` | 否 | 默认 `7200000`（2 小时） |
+
+\* 至少配置一个可用 Webhook；推荐两个群各配一个。
+
+## 双群用法
+
+1. 建两个内部群，例如「盯一下」「持仓」  
+2. 各加一个消息推送/机器人，复制两份 Webhook  
+3. 云函数环境变量分别填入 `WECOM_WEBHOOK_PINS`、`WECOM_WEBHOOK_POSITIONS`  
+4. 重新部署后：上涨盯一下只进第一群，持仓与跌破告警只进第二群
 
 ## 数据文件（GitHub）
 
