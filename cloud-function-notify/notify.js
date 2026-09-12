@@ -3,7 +3,7 @@
 const {
   loadJson,
   saveJson,
-  fetchBinancePrices,
+  fetchBinanceTickers,
   sendWecomText,
   sendWecomImage,
 } = require('./github-wecom');
@@ -114,12 +114,18 @@ function normalizePositions(raw) {
     .filter(Boolean);
 }
 
-function listPinUpRows(pins, prices) {
+function listPinUpRows(pins, tickers) {
   return pins
     .map((item) => {
-      const current = prices[item.symbol];
+      const ticker = tickers[item.symbol] || {};
+      const current = ticker.price;
       const change = changeFrom(item.pinPrice, current);
-      return { ...item, current, change };
+      return {
+        ...item,
+        current,
+        change,
+        change24h: ticker.change24h,
+      };
     })
     .filter(
       (row) =>
@@ -134,8 +140,8 @@ function listPinUpRows(pins, prices) {
     });
 }
 
-function buildPinReport(pins, prices) {
-  const rows = listPinUpRows(pins, prices);
+function buildPinReport(pins, tickers) {
+  const rows = listPinUpRows(pins, tickers);
   if (!rows.length) return null;
 
   const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
@@ -147,7 +153,12 @@ function buildPinReport(pins, prices) {
   ];
 
   rows.forEach((row) => {
-    blocks.push(`${labelOf(row.symbol)} ${formatPercent(row.change)}`);
+    const day = Number.isFinite(row.change24h)
+      ? `24h ${formatPercent(row.change24h)}`
+      : '24h --';
+    blocks.push(
+      `${labelOf(row.symbol)} 盯${formatPercent(row.change)} · ${day}`,
+    );
     blocks.push(
       `${formatPrice(row.pinPrice)} → ${formatPrice(row.current)}`,
     );
@@ -172,7 +183,7 @@ async function sendTopPinCharts(rows, webhook) {
   }
 }
 
-function buildPositionReport(positions, prices, dropAlerts, now) {
+function buildPositionReport(positions, tickers, dropAlerts, now) {
   if (!positions.length) return { text: null, nextDropAlerts: dropAlerts || {} };
 
   const threshold = Number.isFinite(CONFIG.DROP_THRESHOLD)
@@ -185,9 +196,15 @@ function buildPositionReport(positions, prices, dropAlerts, now) {
   const drops = [];
 
   const rows = positions.map((item) => {
-    const current = prices[item.symbol];
+    const ticker = tickers[item.symbol] || {};
+    const current = ticker.price;
     const change = changeFrom(item.buyPrice, current);
-    return { ...item, current, change };
+    return {
+      ...item,
+      current,
+      change,
+      change24h: ticker.change24h,
+    };
   });
 
   rows.forEach((item) => {
@@ -213,7 +230,10 @@ function buildPositionReport(positions, prices, dropAlerts, now) {
       blocks.push('');
       return;
     }
-    blocks.push(`${name} ${formatPercent(row.change)}`);
+    const day = Number.isFinite(row.change24h)
+      ? `24h ${formatPercent(row.change24h)}`
+      : '24h --';
+    blocks.push(`${name} 买${formatPercent(row.change)} · ${day}`);
     blocks.push(
       `${formatPrice(row.buyPrice)} → ${formatPrice(row.current)}`,
     );
@@ -326,13 +346,13 @@ async function main() {
       ...positions.map((item) => item.symbol),
     ]),
   ];
-  const prices = await fetchBinancePrices(symbols);
+  const tickers = await fetchBinanceTickers(symbols);
 
-  const pinRows = listPinUpRows(pins, prices);
-  const pinText = pinRows.length ? buildPinReport(pins, prices) : null;
+  const pinRows = listPinUpRows(pins, tickers);
+  const pinText = pinRows.length ? buildPinReport(pins, tickers) : null;
   const { text: positionText, nextDropAlerts } = buildPositionReport(
     positions,
-    prices,
+    tickers,
     dropAlerts,
     now,
   );

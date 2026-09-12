@@ -126,35 +126,49 @@ async function saveJson(path, data, sha, message) {
 }
 
 async function fetchBinancePrices(symbols) {
+  const tickers = await fetchBinanceTickers(symbols);
+  const map = {};
+  Object.keys(tickers).forEach((symbol) => {
+    map[symbol] = tickers[symbol].price;
+  });
+  return map;
+}
+
+async function fetchBinanceTickers(symbols) {
   const set = new Set(
     (symbols || []).map((s) => String(s || '').toUpperCase()).filter(Boolean),
   );
   if (!set.size) return {};
   const endpoints = [
-    'https://data-api.binance.vision/api/v3/ticker/price',
-    'https://api.binance.com/api/v3/ticker/price',
+    'https://data-api.binance.vision/api/v3/ticker/24hr',
+    'https://api.binance.com/api/v3/ticker/24hr',
   ];
   let lastError = null;
   for (const endpoint of endpoints) {
     try {
       const response = await requestRaw(endpoint, { method: 'GET' });
       if (!response.ok) {
-        lastError = new Error(`Binance price ${response.status}`);
+        lastError = new Error(`Binance ticker ${response.status}`);
         continue;
       }
       const list = JSON.parse(response.text());
       const map = {};
       list.forEach((item) => {
         if (!item || !set.has(item.symbol)) return;
-        const price = Number(item.price);
-        if (Number.isFinite(price)) map[item.symbol] = price;
+        const price = Number(item.lastPrice);
+        const change24h = Number(item.priceChangePercent);
+        if (!Number.isFinite(price)) return;
+        map[item.symbol] = {
+          price,
+          change24h: Number.isFinite(change24h) ? change24h : null,
+        };
       });
       return map;
     } catch (error) {
       lastError = error;
     }
   }
-  throw lastError || new Error('Binance price fetch failed');
+  throw lastError || new Error('Binance ticker fetch failed');
 }
 
 async function sendWecomMarkdown(content) {
@@ -239,6 +253,7 @@ module.exports = {
   loadJson,
   saveJson,
   fetchBinancePrices,
+  fetchBinanceTickers,
   sendWecomMarkdown,
   sendWecomText,
   sendWecomImage,

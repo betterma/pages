@@ -932,16 +932,22 @@
           ]);
           if (pinItem) {
             const rel = pinChangePercent(pinItem);
+            const change24h = marketMap[symbol]?.change24h;
             const remain = formatRemaining(pinItem.expiresAt);
             const expired = WatchFavorites.isPinExpired(pinItem);
-            status.textContent = Number.isFinite(rel)
-              ? `${formatPercent(rel)} · 盯${expired ? "已过期" : remain}`
+            const pinText = Number.isFinite(rel)
+              ? `${formatPercent(rel)}盯`
               : expired
-                ? "盯住已过期"
-                : `盯住 ${formatPinPrice(pinItem.pinPrice)}`;
+                ? "盯已过期"
+                : `盯${formatPinPrice(pinItem.pinPrice)}`;
+            const dayText = Number.isFinite(change24h)
+              ? `${formatPercent(change24h)}24h`
+              : "24h--";
+            const lifeText = expired ? "已过期" : remain;
+            status.textContent = `${pinText} · ${dayText}${lifeText ? ` · ${lifeText}` : ""}`;
             status.className =
               rel > 0 ? "up" : rel < 0 ? "price-down" : "neutral";
-            status.title = `盯住价 ${formatPinPrice(pinItem.pinPrice)} · 现价 ${formatPinPrice(marketMap[symbol]?.price)}`;
+            status.title = `盯住价 ${formatPinPrice(pinItem.pinPrice)} · 现价 ${formatPinPrice(marketMap[symbol]?.price)} · 24h ${formatPercent(change24h)}`;
           } else {
             const change24h = marketMap[symbol]?.change24h;
             status.textContent = Number.isFinite(change24h)
@@ -986,7 +992,13 @@
         const statusText = options.pinItem
           ? (() => {
               const rel = pinChangePercent(options.pinItem);
-              return Number.isFinite(rel) ? formatPercent(rel) : "--";
+              const pinText = Number.isFinite(rel)
+                ? `${formatPercent(rel)}盯`
+                : "--盯";
+              const dayText = Number.isFinite(change24h)
+                ? `${formatPercent(change24h)}24h`
+                : "24h--";
+              return `${pinText} · ${dayText}`;
             })()
           : Number.isFinite(change24h)
             ? formatPercent(change24h)
