@@ -6,19 +6,31 @@
   "quoteAmount": 1000,
   "quantity": 9292.322239158273,
   "cash": 0,
-  "equity": 1046.3154841292217,
+  "equity": 1044.45701968139,
   "anchorPrice": 0.1068,
   "windowStartMs": 1789185600000,
   "entryPrice": 0.1077,
   "cooldownUntil": null,
-  "lastPrice": 0.1126,
-  "lastCheckAt": 1789191091522,
+  "lastPrice": 0.1124,
+  "lastCheckAt": 1789191101314,
   "lastAction": "hold",
   "lastError": null,
-  "updatedAt": 1789191091604,
+  "updatedAt": 1789191101400,
   "startedAt": 1789183277680,
   "feesPaid": 3.004572567772512,
   "logs": [
+    {
+      "at": 1789191101400,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.1124，卖出线 0.106266，权益 1044.46"
+    },
+    {
+      "at": 1789191101314,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=holding enabled=true"
+    },
     {
       "at": 1789191091603,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=FORMUSDT status=cooldown enabled=true"
-    },
-    {
-      "at": 1789147883488,
-      "source": "timer",
-      "level": "info",
-      "message": "【paper卖出】现价 0.2502 ≤ 0.250342，到账 997.50，冷静 10 分钟"
-    },
-    {
-      "at": 1789147883366,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=holding enabled=true"
     }
   ]
 }
