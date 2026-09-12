@@ -205,10 +205,41 @@ async function sendWecomText(content, webhookUrl) {
   return data;
 }
 
+async function sendWecomImage(image, webhookUrl) {
+  const webhook = webhookUrl || process.env.WECOM_WEBHOOK_URL || '';
+  if (!webhook) throw new Error('Missing WeCom webhook URL');
+  if (!image || !image.base64 || !image.md5) {
+    throw new Error('Invalid WeCom image payload');
+  }
+  const body = JSON.stringify({
+    msgtype: 'image',
+    image: {
+      base64: image.base64,
+      md5: image.md5,
+    },
+  });
+  const response = await requestRaw(webhook, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  });
+  if (!response.ok) {
+    throw new Error(
+      `WeCom image failed: ${response.status} ${response.text().slice(0, 200)}`,
+    );
+  }
+  const data = JSON.parse(response.text() || '{}');
+  if (data.errcode && data.errcode !== 0) {
+    throw new Error(`WeCom errcode ${data.errcode}: ${data.errmsg || ''}`);
+  }
+  return data;
+}
+
 module.exports = {
   loadJson,
   saveJson,
   fetchBinancePrices,
   sendWecomMarkdown,
   sendWecomText,
+  sendWecomImage,
 };

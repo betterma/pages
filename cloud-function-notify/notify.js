@@ -5,7 +5,9 @@ const {
   saveJson,
   fetchBinancePrices,
   sendWecomText,
+  sendWecomImage,
 } = require('./github-wecom');
+const { buildSymbolChart } = require('./kline-chart');
 
 const CONFIG = {
   PINS_PATH: process.env.PINS_PATH || 'watch-pins.json',
@@ -21,6 +23,7 @@ const CONFIG = {
   DROP_COOLDOWN_MS: Number(
     process.env.DROP_COOLDOWN_MS || 2 * 60 * 60 * 1000,
   ),
+  PIN_CHART_TOP: Number(process.env.PIN_CHART_TOP || 3),
 };
 
 function labelOf(symbol) {
@@ -83,8 +86,8 @@ function normalizePositions(raw) {
     .filter(Boolean);
 }
 
-function buildPinReport(pins, prices) {
-  const rows = pins
+function listPinUpRows(pins, prices) {
+  return pins
     .map((item) => {
       const current = prices[item.symbol];
       const change = changeFrom(item.pinPrice, current);
@@ -101,12 +104,17 @@ function buildPinReport(pins, prices) {
       if (b.change !== a.change) return b.change - a.change;
       return b.pinnedAt - a.pinnedAt;
     });
+}
 
+function buildPinReport(pins, prices) {
+  const rows = listPinUpRows(pins, prices);
   if (!rows.length) return null;
 
   const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  const topN = Math.max(1, CONFIG.PIN_CHART_TOP || 3);
   const blocks = [
     `【盯一下】${time} · 上涨 ${rows.length}`,
+    `附 K 线 Top${Math.min(topN, rows.length)}（4h）`,
     '',
   ];
 
@@ -119,6 +127,32 @@ function buildPinReport(pins, prices) {
   });
 
   return blocks.join('\n').trimEnd();
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function sendTopPinCharts(rows, webhook) {
+  const topN = Math.max(0, CONFIG.PIN_CHART_TOP || 3);
+  if (!topN || !rows.length || !webhook) return [];
+  const top = rows.slice(0, topN);
+  const sent = [];
+  for (let i = 0; i < top.length; i += 1) {
+    const row = top[i];
+    try {
+      const image = await buildSymbolChart(row.symbol, {
+        change: row.change,
+        pinPrice: row.pinPrice,
+      });
+      await sendWecomImage(image, webhook);
+      sent.push(row.symbol);
+      if (i < top.length - 1) await sleep(300);
+    } catch (error) {
+      console.warn(`pin chart failed ${row.symbol}`, error.message || error);
+    }
+  }
+  return sent;
 }
 
 function buildPositionReport(positions, prices, dropAlerts, now) {
@@ -211,7 +245,10 @@ async function main() {
   const prices = await fetchBinancePrices(symbols);
   const now = Date.now();
 
-  const pinText = buildPinReport(pins, prices);
+  const pinRows = listPinUpRows(pins, prices);
+  const pinText = pinRows.length
+    ? buildPinReport(pins, prices)
+    : null;
   const { text: positionText, nextDropAlerts } = buildPositionReport(
     positions,
     prices,
@@ -220,12 +257,18 @@ async function main() {
   );
 
   const sent = [];
+  let chartSymbols = [];
   if (pinText) {
     if (!CONFIG.WECOM_WEBHOOK_PINS) {
       console.warn('pin report skipped: missing WECOM_WEBHOOK_PINS');
     } else {
       await sendWecomText(pinText, CONFIG.WECOM_WEBHOOK_PINS);
       sent.push('pins');
+      chartSymbols = await sendTopPinCharts(
+        pinRows,
+        CONFIG.WECOM_WEBHOOK_PINS,
+      );
+      if (chartSymbols.length) sent.push(`charts:${chartSymbols.length}`);
     }
   }
   if (positionText) {
@@ -257,6 +300,7 @@ async function main() {
       pins: pins.length,
       positions: positions.length,
       sent,
+      charts: chartSymbols,
       dropsArmed: Object.keys(nextDropAlerts).length,
     }),
   );
@@ -266,7 +310,13 @@ async function main() {
     pins: pins.length,
     positions: positions.length,
     sent,
+    charts: chartSymbols,
   };
 }
 
-module.exports = { main, buildPinReport, buildPositionReport };
+module.exports = {
+  main,
+  buildPinReport,
+  buildPositionReport,
+  listPinUpRows,
+};
