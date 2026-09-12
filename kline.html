@@ -211,6 +211,34 @@
         color: #78817f;
         background: transparent;
       }
+      .card-actions.is-busy {
+        pointer-events: none;
+      }
+      .card-actions button.is-loading {
+        opacity: 0.9;
+        position: relative;
+        color: #5a6a68;
+      }
+      .card-actions button.is-loading::after {
+        content: "";
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        margin-left: 8px;
+        border: 2px solid #c9d0d0;
+        border-top-color: #5a6a68;
+        border-radius: 50%;
+        vertical-align: -1px;
+        animation: card-action-spin 0.7s linear infinite;
+      }
+      .card-actions button:disabled {
+        opacity: 0.45;
+      }
+      @keyframes card-action-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
       .kline-card-head {
         display: flex;
         align-items: baseline;
@@ -966,12 +994,41 @@
         return `<div class="kline-card${favClass}${pairClass}${pinClass}${posClass}${expiredClass}" data-symbol="${symbol}" data-section="${options.section}"${options.isExpired ? ' data-expired="1"' : ""}><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${statusText}</span></div>${marks.join("")}<canvas></canvas></div>`;
       }
 
-      function closeCardActions() {
-        document.querySelectorAll(".card-actions").forEach((el) => el.remove());
+      function closeCardActions(force) {
+        document.querySelectorAll(".card-actions").forEach((el) => {
+          if (!force && el.classList.contains("is-busy")) return;
+          el.remove();
+        });
+      }
+
+      function setCardActionsBusy(sheet, activeBtn, busyLabel) {
+        sheet.classList.add("is-busy");
+        sheet.querySelectorAll("button").forEach((btn) => {
+          btn.disabled = true;
+          if (btn === activeBtn) {
+            btn.classList.add("is-loading");
+            btn.dataset.labelBefore = btn.textContent;
+            btn.textContent = busyLabel || "处理中";
+          }
+        });
+      }
+
+      function clearCardActionsBusy(sheet) {
+        sheet.classList.remove("is-busy");
+        sheet.querySelectorAll("button").forEach((btn) => {
+          btn.disabled = false;
+          if (btn.classList.contains("is-loading")) {
+            btn.classList.remove("is-loading");
+            if (btn.dataset.labelBefore) {
+              btn.textContent = btn.dataset.labelBefore;
+              delete btn.dataset.labelBefore;
+            }
+          }
+        });
       }
 
       function openCardActions(card) {
-        closeCardActions();
+        closeCardActions(true);
         const symbol = card.dataset.symbol;
         if (!symbol) return;
         const pinned = pinSymbols().has(symbol);
@@ -992,30 +1049,49 @@
         sheet.addEventListener("pointerdown", (event) => event.stopPropagation());
         sheet.addEventListener("click", async (event) => {
           const btn = event.target.closest("button[data-action]");
-          if (!btn) return;
+          if (!btn || sheet.classList.contains("is-busy")) return;
           event.stopPropagation();
           const action = btn.dataset.action;
-          closeCardActions();
-          if (action === "close") return;
-          if (action === "pin") {
-            if (pinned) await clearPinForSymbol(symbol);
-            else await togglePinForSymbol(symbol);
+          if (action === "close") {
+            closeCardActions(true);
             return;
           }
-          if (action === "buy") {
-            await buyPositionForSymbol(symbol);
-            return;
-          }
-          if (action === "sell") {
-            await sellPositionForSymbol(symbol);
-            return;
-          }
-          if (action === "fav") {
-            await toggleFavoriteForSymbol(symbol);
-            return;
-          }
-          if (action === "blacklist") {
-            await addToBlacklist(symbol);
+
+          const busyLabels = {
+            pin: pinned ? "取消中" : "盯住中",
+            buy: "保存中",
+            sell: "卖出中",
+            fav: favored ? "取消中" : "收藏中",
+            blacklist: "拉黑中",
+          };
+          const needsConfirm = action === "buy" || action === "sell" || action === "blacklist";
+          const markBusy = () =>
+            setCardActionsBusy(sheet, btn, busyLabels[action] || "处理中");
+          if (!needsConfirm) markBusy();
+          try {
+            let done = true;
+            if (action === "pin") {
+              if (pinned) await clearPinForSymbol(symbol);
+              else await togglePinForSymbol(symbol);
+            } else if (action === "buy") {
+              done = await buyPositionForSymbol(symbol, { onSaving: markBusy });
+            } else if (action === "sell") {
+              done = await sellPositionForSymbol(symbol, { onSaving: markBusy });
+            } else if (action === "fav") {
+              await toggleFavoriteForSymbol(symbol);
+            } else if (action === "blacklist") {
+              done = await addToBlacklist(symbol, { onSaving: markBusy });
+            }
+            if (done === false) {
+              if (sheet.classList.contains("is-busy")) clearCardActionsBusy(sheet);
+              return;
+            }
+            // Successful actions usually re-render and remove the card sheet.
+            if (document.body.contains(sheet)) closeCardActions(true);
+          } catch (error) {
+            console.error(error);
+            clearCardActionsBusy(sheet);
+            showToast(error.message || "操作失败");
           }
         });
         card.appendChild(sheet);
@@ -1382,8 +1458,8 @@
         }
       }
 
-      async function buyPositionForSymbol(symbol) {
-        if (!symbol || positionSaving) return;
+      async function buyPositionForSymbol(symbol, options) {
+        if (!symbol || positionSaving) return false;
         const label = symbol.replace("USDT", "");
         const current = marketMap[symbol]?.price;
         const existing = positionItemBySymbol(symbol);
@@ -1394,12 +1470,13 @@
           `输入 ${label} 买入价（同步币安成交价）`,
           Number.isFinite(defaultPrice) ? String(defaultPrice) : "",
         );
-        if (input == null) return;
+        if (input == null) return false;
         const buyPrice = Number(String(input).trim());
         if (!Number.isFinite(buyPrice) || buyPrice <= 0) {
           window.alert("买入价无效");
-          return;
+          return false;
         }
+        if (options && typeof options.onSaving === "function") options.onSaving();
         positionSaving = true;
         try {
           setStatus(false, `正在保存 ${label} 持仓...`);
@@ -1437,21 +1514,24 @@
           showToast(`${label} 已记录买入 ${formatPinPrice(buyPrice)}`);
           await renderKlines();
           setStatus(true, `${label} 持仓已同步`);
+          return true;
         } catch (error) {
           console.error(error);
           showToast(error.message || "持仓保存失败");
           setStatus(false, error.message || "持仓保存失败");
           window.alert(error.message || "持仓保存失败");
+          throw error;
         } finally {
           positionSaving = false;
         }
       }
 
-      async function sellPositionForSymbol(symbol) {
-        if (!symbol || positionSaving) return;
-        if (!WatchFavorites.hasPosition(positionItems, symbol)) return;
+      async function sellPositionForSymbol(symbol, options) {
+        if (!symbol || positionSaving) return false;
+        if (!WatchFavorites.hasPosition(positionItems, symbol)) return false;
         const label = symbol.replace("USDT", "");
-        if (!window.confirm(`确认卖出并停止观测 ${label} 持仓？`)) return;
+        if (!window.confirm(`确认卖出并停止观测 ${label} 持仓？`)) return false;
+        if (options && typeof options.onSaving === "function") options.onSaving();
         positionSaving = true;
         try {
           setStatus(false, `正在清除 ${label} 持仓...`);
@@ -1468,20 +1548,23 @@
           showToast(`${label} 已卖出，停止持仓观测`);
           await renderKlines();
           setStatus(true, `${label} 持仓已清除`);
+          return true;
         } catch (error) {
           console.error(error);
           showToast(error.message || "卖出保存失败");
           setStatus(false, error.message || "卖出保存失败");
           window.alert(error.message || "卖出保存失败");
+          throw error;
         } finally {
           positionSaving = false;
         }
       }
 
-      async function addToBlacklist(symbol) {
-        if (!symbol || blacklistSaving) return;
+      async function addToBlacklist(symbol, options) {
+        if (!symbol || blacklistSaving) return false;
         const label = symbol.replace("USDT", "");
-        if (!window.confirm(`确定将 ${label} 加入黑名单？`)) return;
+        if (!window.confirm(`确定将 ${label} 加入黑名单？`)) return false;
+        if (options && typeof options.onSaving === "function") options.onSaving();
         blacklistSaving = true;
         try {
           setStatus(false, `正在拉黑 ${label}...`);
@@ -1552,11 +1635,13 @@
           showToast(`${label} 已加入黑名单`);
           await renderKlines();
           setStatus(true, `${label} 已拉黑并同步`);
+          return true;
         } catch (error) {
           console.error(error);
           showToast(error.message || "黑名单保存失败");
           setStatus(false, error.message || "黑名单保存失败");
           window.alert(error.message || "黑名单保存失败");
+          throw error;
         } finally {
           blacklistSaving = false;
         }
@@ -1624,7 +1709,9 @@
       });
       document.addEventListener("pointerdown", (event) => {
         if (event.target.closest(".card-actions")) return;
-        if (document.querySelector(".card-actions")) closeCardActions();
+        const open = document.querySelector(".card-actions");
+        if (open && open.classList.contains("is-busy")) return;
+        if (open) closeCardActions();
       });
       document.addEventListener("dblclick", (event) => {
         if (event.target.closest("button, a, input, select, textarea, label")) {
