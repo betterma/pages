@@ -300,13 +300,13 @@
       </div>
       <p class="hint">长按收藏 · 盯=12h钉住 · ⊖ 拉黑 · 点名称复制 · 过期盯一下点卡片清除 · 「启动 N」=15m 早期分≥2</p>
 
-      <h2 class="section-title">窗口上涨</h2>
-      <div id="risingMeta" class="meta"></div>
-      <div id="risingGrid" class="kline-grid"></div>
-
       <h2 class="section-title">盯一下</h2>
       <div id="pinMeta" class="meta"></div>
       <div id="pinGrid" class="kline-grid"></div>
+
+      <h2 class="section-title">窗口上涨</h2>
+      <div id="risingMeta" class="meta"></div>
+      <div id="risingGrid" class="kline-grid"></div>
 
       <h2 class="section-title">我的收藏</h2>
       <div id="favMeta" class="meta"></div>
@@ -1123,20 +1123,20 @@
         }
 
         await fillGrid(
-          document.getElementById("risingGrid"),
-          rising,
-          "rising",
-          signal,
-          pairSet,
-        );
-        if (signal.aborted) return;
-        await fillGrid(
           document.getElementById("pinGrid"),
           pinSymbolsList,
           "pin",
           signal,
           pairSet,
           pinMap,
+        );
+        if (signal.aborted) return;
+        await fillGrid(
+          document.getElementById("risingGrid"),
+          rising,
+          "rising",
+          signal,
+          pairSet,
         );
         if (signal.aborted) return;
         await fillGrid(
