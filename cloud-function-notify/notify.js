@@ -148,7 +148,7 @@ function buildPinReport(pins, tickers) {
   const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
   const blocks = [time, ''];
 
-  rows.forEach((row) => {
+  rows.forEach((row, index) => {
     const day = Number.isFinite(row.change24h)
       ? formatPercent(row.change24h)
       : '--';
@@ -159,7 +159,12 @@ function buildPinReport(pins, tickers) {
     blocks.push(
       `【${formatPercent(row.change)}】  ${formatPrice(row.pinPrice)}->${formatPrice(row.current)}`,
     );
-    blocks.push('');
+    if (index < rows.length - 1) {
+      blocks.push('<font color="comment">----------</font>');
+      blocks.push('');
+    } else {
+      blocks.push('');
+    }
   });
 
   return blocks.join('\n').trimEnd();
