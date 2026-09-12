@@ -12,13 +12,25 @@
   "entryPrice": null,
   "cooldownUntil": null,
   "lastPrice": 0.1105,
-  "lastCheckAt": 1789227079254,
+  "lastCheckAt": 1789227084412,
   "lastAction": "tick_skipped",
   "lastError": null,
-  "updatedAt": 1789227079255,
+  "updatedAt": 1789227084412,
   "startedAt": 1789183277680,
   "feesPaid": 5.902678760316166,
   "logs": [
+    {
+      "at": 1789227084412,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 检测跳过：自动检测已关闭"
+    },
+    {
+      "at": 1789227084412,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
+    },
     {
       "at": 1789227079255,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=MINAUSDT status=holding enabled=true"
-    },
-    {
-      "at": 1789183277680,
-      "source": "page",
-      "level": "trade",
-      "message": "【模拟开仓】MINAUSDT 投入 1000 USDT @ 0.1055 → 数量 9469.1943；4h起步价 0.1056；手续费 1.0000 USDT；已开启定时检测"
-    },
-    {
-      "at": 1789182847477,
-      "source": "page",
-      "level": "info",
-      "message": "已停止检测并结束本轮模拟"
     }
   ]
 }
