@@ -171,9 +171,9 @@ async function fetchBinanceTickers(symbols) {
   throw lastError || new Error('Binance ticker fetch failed');
 }
 
-async function sendWecomMarkdown(content) {
-  const webhook = process.env.WECOM_WEBHOOK_URL || '';
-  if (!webhook) throw new Error('Missing WECOM_WEBHOOK_URL');
+async function sendWecomMarkdown(content, webhookUrl) {
+  const webhook = webhookUrl || process.env.WECOM_WEBHOOK_URL || '';
+  if (!webhook) throw new Error('Missing WeCom webhook URL');
   const body = JSON.stringify({
     msgtype: 'markdown',
     markdown: { content: String(content || '').slice(0, 4000) },

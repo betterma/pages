@@ -5,6 +5,7 @@ const {
   saveJson,
   fetchBinanceTickers,
   sendWecomText,
+  sendWecomMarkdown,
   sendWecomImage,
 } = require('./github-wecom');
 const { buildTopChartsCollage } = require('./kline-chart');
@@ -151,9 +152,12 @@ function buildPinReport(pins, tickers) {
     const day = Number.isFinite(row.change24h)
       ? formatPercent(row.change24h)
       : '--';
-    blocks.push(`${labelOf(row.symbol)}  ${day}`);
+    // WeCom markdown only has 3 colors; "comment" is gray / lighter.
     blocks.push(
-      `${formatPercent(row.change)}  ${formatPrice(row.pinPrice)}->${formatPrice(row.current)}`,
+      `${labelOf(row.symbol)}  <font color="comment">${day}</font>`,
+    );
+    blocks.push(
+      `【${formatPercent(row.change)}】  ${formatPrice(row.pinPrice)}->${formatPrice(row.current)}`,
     );
     blocks.push('');
   });
@@ -356,7 +360,7 @@ async function main() {
     if (!CONFIG.WECOM_WEBHOOK_PINS) {
       console.warn('pin report skipped: missing WECOM_WEBHOOK_PINS');
     } else {
-      await sendWecomText(pinText, CONFIG.WECOM_WEBHOOK_PINS);
+      await sendWecomMarkdown(pinText, CONFIG.WECOM_WEBHOOK_PINS);
       sent.push('pins');
       chartSymbols = await sendTopPinCharts(
         pinRows,
