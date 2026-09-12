@@ -145,22 +145,15 @@ function buildPinReport(pins, tickers) {
   if (!rows.length) return null;
 
   const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
-  const topN = Math.max(1, CONFIG.PIN_CHART_TOP || 3);
-  const blocks = [
-    `【盯一下】${time} · 上涨 ${rows.length}`,
-    `附 K 线 Top${Math.min(topN, rows.length)}（4h · 合成一张图）`,
-    '',
-  ];
+  const blocks = [time, ''];
 
   rows.forEach((row) => {
     const day = Number.isFinite(row.change24h)
-      ? `24h ${formatPercent(row.change24h)}`
-      : '24h --';
+      ? formatPercent(row.change24h)
+      : '--';
+    blocks.push(`${labelOf(row.symbol)}  ${day}`);
     blocks.push(
-      `${labelOf(row.symbol)} 盯${formatPercent(row.change)} · ${day}`,
-    );
-    blocks.push(
-      `${formatPrice(row.pinPrice)} → ${formatPrice(row.current)}`,
+      `${formatPercent(row.change)}  ${formatPrice(row.pinPrice)}->${formatPrice(row.current)}`,
     );
     blocks.push('');
   });
