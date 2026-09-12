@@ -18,7 +18,9 @@
   // writes do not depend on the multi‑MB watch-data.json Contents API limit.
   const FAVORITES_PATH = "watch-favorites.json";
   const BLACKLIST_PATH = "watch-blacklist.json";
+  const PINS_PATH = "watch-pins.json";
   const LEGACY_DATA_PATH = "watch-data.json";
+  const PIN_TTL_MS = 12 * 60 * 60 * 1000;
 
   const TOKEN_PART_A = "gh";
   const TOKEN_PART_B = "p_Xrmz1DjzLfbjyiXZqFyJGd9O8aWFIq4D9758";
@@ -542,10 +544,232 @@
     throw lastError || new Error("保存黑名单失败");
   }
 
+  // Temporary pins / 盯一下 — 12h TTL; expired entries stay until cleared.
+  function normalizePinItem(item) {
+    if (!item || typeof item !== "object" || !item.symbol) return null;
+    const symbol = String(item.symbol).trim().toUpperCase();
+    if (!symbol) return null;
+    const pinnedAt = Number.isFinite(Number(item.pinnedAt))
+      ? Number(item.pinnedAt)
+      : 0;
+    const pinPrice = Number(item.pinPrice);
+    const expiresAt = Number.isFinite(Number(item.expiresAt))
+      ? Number(item.expiresAt)
+      : pinnedAt > 0
+        ? pinnedAt + PIN_TTL_MS
+        : 0;
+    return {
+      symbol,
+      pinnedAt,
+      expiresAt,
+      pinPrice: Number.isFinite(pinPrice) ? pinPrice : null,
+      source: item.source ? String(item.source) : "legacy",
+    };
+  }
+
+  function normalizePins(raw) {
+    if (!Array.isArray(raw)) return [];
+    const map = new Map();
+    raw.forEach((item) => {
+      const normalized = normalizePinItem(item);
+      if (!normalized) return;
+      const prev = map.get(normalized.symbol);
+      if (!prev || normalized.pinnedAt >= prev.pinnedAt) {
+        map.set(normalized.symbol, normalized);
+      }
+    });
+    return [...map.values()].sort((a, b) => {
+      if (b.pinnedAt !== a.pinnedAt) return b.pinnedAt - a.pinnedAt;
+      return a.symbol.localeCompare(b.symbol);
+    });
+  }
+
+  function serializePins(list) {
+    return normalizePins(list).map((item) => ({
+      symbol: item.symbol,
+      pinnedAt: item.pinnedAt,
+      expiresAt: item.expiresAt,
+      pinPrice: item.pinPrice,
+      source: item.source || "legacy",
+    }));
+  }
+
+  function pinsToSymbolSet(list) {
+    return new Set(normalizePins(list).map((item) => item.symbol));
+  }
+
+  function hasPin(list, symbol) {
+    const key = String(symbol || "")
+      .trim()
+      .toUpperCase();
+    return normalizePins(list).some((item) => item.symbol === key);
+  }
+
+  function isPinExpired(item, now) {
+    const ts = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+    const expiresAt = Number(item && item.expiresAt);
+    return Number.isFinite(expiresAt) && expiresAt > 0 && ts >= expiresAt;
+  }
+
+  function addPin(list, symbol, pinPrice, source, ttlMs) {
+    const key = String(symbol || "")
+      .trim()
+      .toUpperCase();
+    if (!key) return normalizePins(list);
+    const now = Date.now();
+    const ttl =
+      Number.isFinite(Number(ttlMs)) && Number(ttlMs) > 0
+        ? Number(ttlMs)
+        : PIN_TTL_MS;
+    const price = Number(pinPrice);
+    const next = normalizePins(list).filter((item) => item.symbol !== key);
+    next.unshift({
+      symbol: key,
+      pinnedAt: now,
+      expiresAt: now + ttl,
+      pinPrice: Number.isFinite(price) ? price : null,
+      source: source || "manual",
+    });
+    return next;
+  }
+
+  function removePin(list, symbol) {
+    const key = String(symbol || "")
+      .trim()
+      .toUpperCase();
+    return normalizePins(list).filter((item) => item.symbol !== key);
+  }
+
+  function togglePin(list, symbol, pinPrice, source, ttlMs) {
+    if (hasPin(list, symbol)) {
+      return { list: removePin(list, symbol), added: false };
+    }
+    return {
+      list: addPin(list, symbol, pinPrice, source, ttlMs),
+      added: true,
+    };
+  }
+
+  async function loadPinsRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || PINS_PATH;
+
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          pins: normalizePins(current.data.pins),
+          pinsUpdatedAt: Number.isFinite(Number(current.data.pinsUpdatedAt))
+            ? Number(current.data.pinsUpdatedAt)
+            : null,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadPins via API failed, trying raw", error);
+    }
+
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          pins: normalizePins(data.pins),
+          pinsUpdatedAt: Number.isFinite(Number(data.pinsUpdatedAt))
+            ? Number(data.pinsUpdatedAt)
+            : null,
+          source: "raw-commit",
+        };
+      }
+      if (response.status !== 404) {
+        console.warn(`读取盯一下 raw 失败: ${response.status}`);
+      }
+    } catch (error) {
+      console.warn("loadPins via commit-raw failed", error);
+    }
+
+    return { pins: [], pinsUpdatedAt: null, source: "empty" };
+  }
+
+  async function patchPins(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || PINS_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = current.data || {
+          pins: [],
+          pinsUpdatedAt: null,
+        };
+        const pins = normalizePins(base.pins);
+        let result;
+        if (typeof options.mutate === "function") {
+          result = options.mutate(pins.slice());
+        } else {
+          result = togglePin(
+            pins,
+            options.symbol,
+            options.pinPrice,
+            options.source || "manual",
+            options.ttlMs,
+          );
+        }
+        const nextPins = serializePins(
+          result && result.list ? result.list : result,
+        );
+        const nextData = {
+          pins: nextPins,
+          pinsUpdatedAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message:
+            options.message ||
+            `Update pins ${options.symbol || ""}`.trim(),
+        });
+        return {
+          pins: nextPins,
+          pinsUpdatedAt: nextData.pinsUpdatedAt,
+          meta: result && typeof result === "object" ? result : null,
+        };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存盯一下失败");
+  }
+
   return {
     DEFAULT_REPO,
     FAVORITES_PATH,
     BLACKLIST_PATH,
+    PINS_PATH,
+    PIN_TTL_MS,
     LEGACY_DATA_PATH,
     getGithubToken,
     normalizeFavorites,
@@ -566,5 +790,15 @@
     toggleBlacklist,
     loadBlacklistRaw,
     patchBlacklist,
+    normalizePins,
+    serializePins,
+    pinsToSymbolSet,
+    hasPin,
+    isPinExpired,
+    addPin,
+    removePin,
+    togglePin,
+    loadPinsRaw,
+    patchPins,
   };
 });
