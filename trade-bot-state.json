@@ -2,23 +2,35 @@
   "mode": "paper",
   "symbol": "MINAUSDT",
   "enabled": true,
-  "status": "flat_rebuy",
+  "status": "holding",
   "quoteAmount": 1000,
-  "quantity": 0,
-  "cash": 1001.7848900473934,
-  "equity": 1001.7848900473934,
+  "quantity": 9292.322239158273,
+  "cash": 0,
+  "equity": 1000.7831051573461,
   "anchorPrice": 0.1068,
   "windowStartMs": 1789185600000,
-  "entryPrice": 0.1055,
+  "entryPrice": 0.1077,
   "cooldownUntil": null,
   "lastPrice": 0.1077,
-  "lastCheckAt": 1789189279372,
-  "lastAction": "cooldown_end",
+  "lastCheckAt": 1789189285150,
+  "lastAction": "rebuy",
   "lastError": null,
-  "updatedAt": 1789189280013,
+  "updatedAt": 1789189285329,
   "startedAt": 1789183277680,
-  "feesPaid": 2.0027876777251183,
+  "feesPaid": 3.004572567772512,
   "logs": [
+    {
+      "at": 1789189285329,
+      "source": "timer",
+      "level": "info",
+      "message": "【paper回补】现价 0.1077 ≥ 0.107120，用 1001.78 USDT，起步价 0.1068"
+    },
+    {
+      "at": 1789189285150,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=flat_rebuy enabled=true"
+    },
     {
       "at": 1789189280012,
       "source": "timer",
@@ -1203,18 +1215,6 @@
     },
     {
       "at": 1789146079173,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=cooldown enabled=true"
-    },
-    {
-      "at": 1789144301745,
-      "source": "timer",
-      "level": "info",
-      "message": "冷静期中，约剩 10 分钟"
-    },
-    {
-      "at": 1789144301613,
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=FORMUSDT status=cooldown enabled=true"
