@@ -319,7 +319,7 @@
         <span id="statusDot" class="dot"></span>
         <span id="statusText">等待启动...</span>
       </div>
-      <p class="hint">长按选 盯/购买/卖出/收藏/拉黑 · 点名称复制 · 过期盯一下点卡片清除 · 企微每5分钟推送盯一下与持仓</p>
+      <p class="hint">长按选 盯/购买/卖出/收藏/拉黑 · 已盯住的不在上涨区/收藏区重复展示 · 企微每5分钟推送</p>
 
       <h2 class="section-title">盯一下</h2>
       <div id="pinMeta" class="meta"></div>
@@ -585,6 +585,7 @@
       function getRisingSymbols() {
         const interval = CONFIG.KLINE_INTERVAL;
         const blocked = blacklistSymbols();
+        const pinned = pinSymbols();
         const list = ranking();
         const ranked = list.filter((symbol) => watchPool.has(symbol));
         const unranked = [...watchPool].filter(
@@ -595,13 +596,16 @@
         );
         return [...ranked, ...unranked].filter(
           (symbol) =>
-            !blocked.has(symbol) && hasWindowGain(symbol, interval),
+            !blocked.has(symbol) &&
+            !pinned.has(symbol) &&
+            hasWindowGain(symbol, interval),
         );
       }
 
       function getFavoriteRisingSymbols(risingSymbols) {
         const rising = new Set(risingSymbols);
         const blocked = blacklistSymbols();
+        const pinned = pinSymbols();
         const interval = CONFIG.KLINE_INTERVAL;
         const favSet = new Set(
           favoriteItems
@@ -611,6 +615,7 @@
                 marketMap[symbol] &&
                 !rising.has(symbol) &&
                 !blocked.has(symbol) &&
+                !pinned.has(symbol) &&
                 hasWindowGain(symbol, interval),
             ),
         );
@@ -1153,10 +1158,14 @@
           return (
             marketMap[symbol] &&
             !blocked.has(symbol) &&
+            !pinSymbols().has(symbol) &&
             !hasWindowGain(symbol, interval) &&
             !rising.includes(symbol)
           );
         }).length;
+        const pinnedHiddenFav = favoriteItems.filter((item) =>
+          pinSymbols().has(item.symbol),
+        ).length;
         const pinMap = new Map(pinItems.map((item) => [item.symbol, item]));
         const pinSymbolsList = pinItems
           .filter((item) => !blocked.has(item.symbol))
@@ -1204,12 +1213,15 @@
 
         if (!favoriteItems.length) {
           document.getElementById("favMeta").textContent =
-            "还没有收藏 · 长按上方 K 线卡片即可加入";
+            "还没有收藏 · 长按卡片选「收藏」即可加入";
         } else {
           const parts = [
             `收藏 ${favoriteItems.length}`,
             `窗口上涨展示 ${favRising.length}`,
           ];
+          if (pinnedHiddenFav > 0) {
+            parts.push(`已盯住不重复展示 ${pinnedHiddenFav}`);
+          }
           if (overlap > 0) {
             parts.push(`另有 ${overlap} 个在上方 · 黑色边框标记`);
           }

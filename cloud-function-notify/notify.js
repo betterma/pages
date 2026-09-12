@@ -4,7 +4,7 @@ const {
   loadJson,
   saveJson,
   fetchBinancePrices,
-  sendWecomText,
+  sendWecomMarkdown,
 } = require('./github-wecom');
 
 const CONFIG = {
@@ -39,6 +39,20 @@ function changeFrom(base, current) {
     return null;
   }
   return ((current - base) / base) * 100;
+}
+
+function colorPercent(change) {
+  const text = formatPercent(change);
+  if (!Number.isFinite(change) || change === 0) {
+    return `<font color="comment">${text}</font>`;
+  }
+  if (change > 0) return `<font color="info">${text}</font>`;
+  return `<font color="warning">${text}</font>`;
+}
+
+function padName(name) {
+  const raw = String(name || '');
+  return `\`${raw.padEnd(6, ' ')}\``;
 }
 
 function normalizePins(raw) {
@@ -94,16 +108,36 @@ function buildPinReport(pins, prices) {
 
   if (!rows.length) return null;
 
-  const lines = rows.map((row) => {
-    const name = labelOf(row.symbol);
-    if (!Number.isFinite(row.current) || !Number.isFinite(row.pinPrice)) {
-      return `${name} 盯${formatPrice(row.pinPrice)} 现价缺失`;
-    }
-    return `${name} ${formatPrice(row.pinPrice)}→${formatPrice(row.current)} ${formatPercent(row.change)}`;
+  let up = 0;
+  let down = 0;
+  let flat = 0;
+  rows.forEach((row) => {
+    if (!Number.isFinite(row.change) || row.change === 0) flat += 1;
+    else if (row.change > 0) up += 1;
+    else down += 1;
   });
 
   const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
-  return `【盯一下】${time}\n${lines.join('\n')}`;
+  const lines = [
+    `### 盯一下`,
+    `>${time} · 共${rows.length} · <font color="info">涨${up}</font> / <font color="warning">跌${down}</font> / <font color="comment">平${flat}</font>`,
+    `>`,
+  ];
+
+  rows.forEach((row) => {
+    const name = padName(labelOf(row.symbol));
+    if (!Number.isFinite(row.current) || !Number.isFinite(row.pinPrice)) {
+      lines.push(
+        `>${name} 盯${formatPrice(row.pinPrice)} <font color="comment">现价缺失</font>`,
+      );
+      return;
+    }
+    lines.push(
+      `>${name} \`${formatPrice(row.pinPrice)} → ${formatPrice(row.current)}\` ${colorPercent(row.change)}`,
+    );
+  });
+
+  return lines.join('\n');
 }
 
 function buildPositionReport(positions, prices, dropAlerts, now) {
@@ -118,31 +152,54 @@ function buildPositionReport(positions, prices, dropAlerts, now) {
   const nextDropAlerts = { ...(dropAlerts || {}) };
   const drops = [];
 
-  const lines = positions.map((item) => {
+  const rows = positions.map((item) => {
     const current = prices[item.symbol];
     const change = changeFrom(item.buyPrice, current);
-    const name = labelOf(item.symbol);
-    if (!Number.isFinite(current)) {
-      return `${name} 买${formatPrice(item.buyPrice)} 现价缺失`;
-    }
-    if (Number.isFinite(change) && change <= -threshold * 100) {
+    return { ...item, current, change };
+  });
+
+  rows.forEach((item) => {
+    if (
+      Number.isFinite(item.change) &&
+      item.change <= -threshold * 100
+    ) {
       const lastAt = Number(nextDropAlerts[item.symbol]) || 0;
       if (!lastAt || now - lastAt >= cooldown) {
         drops.push(
-          `${name} 跌破买入价${(threshold * 100).toFixed(0)}%（${formatPercent(change)}）`,
+          `**${labelOf(item.symbol)}** 跌破${(threshold * 100).toFixed(0)}%（${formatPercent(item.change)}）`,
         );
         nextDropAlerts[item.symbol] = now;
       }
     }
-    return `${name} 买${formatPrice(item.buyPrice)} 现${formatPrice(current)} ${formatPercent(change)}`;
   });
 
   const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
-  let text = `【持仓】${time}\n${lines.join('\n')}`;
+  const lines = [
+    `### 持仓`,
+    `>${time} · 共${rows.length}`,
+    `>`,
+  ];
+
+  rows.forEach((row) => {
+    const name = padName(labelOf(row.symbol));
+    if (!Number.isFinite(row.current)) {
+      lines.push(
+        `>${name} 买\`${formatPrice(row.buyPrice)}\` <font color="comment">现价缺失</font>`,
+      );
+      return;
+    }
+    lines.push(
+      `>${name} 买\`${formatPrice(row.buyPrice)}\` 现\`${formatPrice(row.current)}\` ${colorPercent(row.change)}`,
+    );
+  });
+
   if (drops.length) {
-    text += `\n⚠️ ${drops.join('；')}`;
+    lines.push(`>`);
+    lines.push(`>**⚠️ 跌破告警**`);
+    drops.forEach((line) => lines.push(`>${line}`));
   }
-  return { text, nextDropAlerts };
+
+  return { text: lines.join('\n'), nextDropAlerts };
 }
 
 async function main() {
@@ -187,11 +244,11 @@ async function main() {
 
   const sent = [];
   if (pinText) {
-    await sendWecomText(pinText);
+    await sendWecomMarkdown(pinText);
     sent.push('pins');
   }
   if (positionText) {
-    await sendWecomText(positionText);
+    await sendWecomMarkdown(positionText);
     sent.push('positions');
   }
 

@@ -157,6 +157,31 @@ async function fetchBinancePrices(symbols) {
   throw lastError || new Error('Binance price fetch failed');
 }
 
+async function sendWecomMarkdown(content) {
+  const webhook = process.env.WECOM_WEBHOOK_URL || '';
+  if (!webhook) throw new Error('Missing WECOM_WEBHOOK_URL');
+  const body = JSON.stringify({
+    msgtype: 'markdown',
+    markdown: { content: String(content || '').slice(0, 4000) },
+  });
+  const response = await requestRaw(webhook, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  });
+  if (!response.ok) {
+    throw new Error(
+      `WeCom webhook failed: ${response.status} ${response.text().slice(0, 200)}`,
+    );
+  }
+  const data = JSON.parse(response.text() || '{}');
+  if (data.errcode && data.errcode !== 0) {
+    throw new Error(`WeCom errcode ${data.errcode}: ${data.errmsg || ''}`);
+  }
+  return data;
+}
+
+/** @deprecated prefer sendWecomMarkdown */
 async function sendWecomText(content) {
   const webhook = process.env.WECOM_WEBHOOK_URL || '';
   if (!webhook) throw new Error('Missing WECOM_WEBHOOK_URL');
@@ -185,5 +210,6 @@ module.exports = {
   loadJson,
   saveJson,
   fetchBinancePrices,
+  sendWecomMarkdown,
   sendWecomText,
 };
