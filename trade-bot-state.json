@@ -1,24 +1,36 @@
 {
   "mode": "paper",
   "symbol": "MINAUSDT",
-  "enabled": true,
-  "status": "holding",
+  "enabled": false,
+  "status": "idle",
   "quoteAmount": 1000,
-  "quantity": 8660.469612973453,
-  "cash": 0,
-  "equity": 950.0535165431878,
-  "anchorPrice": 0.109,
-  "windowStartMs": 1789214400000,
-  "entryPrice": 0.1119,
+  "quantity": 0,
+  "cash": 956.024910341333,
+  "equity": 956.024910341333,
+  "anchorPrice": null,
+  "windowStartMs": null,
+  "entryPrice": null,
   "cooldownUntil": null,
-  "lastPrice": 0.1097,
+  "lastPrice": 0.1105,
   "lastCheckAt": 1789221702174,
-  "lastAction": "hold",
+  "lastAction": "close_and_stop",
   "lastError": null,
-  "updatedAt": 1789221702258,
+  "updatedAt": 1789222045401,
   "startedAt": 1789183277680,
-  "feesPaid": 4.9456968680825995,
+  "feesPaid": 5.902678760316166,
   "logs": [
+    {
+      "at": 1789222045401,
+      "source": "page",
+      "level": "info",
+      "message": "已停止检测并结束本轮模拟"
+    },
+    {
+      "at": 1789222045400,
+      "source": "page",
+      "level": "info",
+      "message": "【模拟平仓】@ 0.1105，到账 956.02 USDT，手续费 0.9570"
+    },
     {
       "at": 1789221702258,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "持仓中：现价 0.2521，卖出线 0.248153，权益 1003.67"
-    },
-    {
-      "at": 1789178502084,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=holding enabled=true"
-    },
-    {
-      "at": 1789178491693,
-      "source": "timer",
-      "level": "info",
-      "message": "持仓中：现价 0.2519，卖出线 0.248153，权益 1002.87"
     }
   ]
 }
