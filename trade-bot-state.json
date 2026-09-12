@@ -6,19 +6,31 @@
   "quoteAmount": 1000,
   "quantity": 8660.469612973453,
   "cash": 0,
-  "equity": 969.1065496917294,
+  "equity": 969.9725966530267,
   "anchorPrice": 0.109,
   "windowStartMs": 1789214400000,
   "entryPrice": 0.1119,
   "cooldownUntil": null,
-  "lastPrice": 0.1119,
-  "lastCheckAt": 1789216279924,
-  "lastAction": "rebuy",
+  "lastPrice": 0.112,
+  "lastCheckAt": 1789216283474,
+  "lastAction": "hold",
   "lastError": null,
-  "updatedAt": 1789216280130,
+  "updatedAt": 1789216283564,
   "startedAt": 1789183277680,
   "feesPaid": 4.9456968680825995,
   "logs": [
+    {
+      "at": 1789216283564,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.112，卖出线 0.108455，权益 969.97"
+    },
+    {
+      "at": 1789216283474,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=holding enabled=true"
+    },
     {
       "at": 1789216280129,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "【paper回补】现价 0.2503 ≥ 0.250148，用 997.50 USDT，起步价 0.2494"
-    },
-    {
-      "at": 1789173079417,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=flat_rebuy enabled=true"
-    },
-    {
-      "at": 1789171301646,
-      "source": "timer",
-      "level": "info",
-      "message": "等待回补：现价 0.2493，回补线 0.250148，现金 997.50"
     }
   ]
 }
