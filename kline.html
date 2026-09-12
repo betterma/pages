@@ -991,7 +991,7 @@
           : Number.isFinite(change24h)
             ? formatPercent(change24h)
             : "--";
-        return `<div class="kline-card${favClass}${pairClass}${pinClass}${posClass}${expiredClass}" data-symbol="${symbol}" data-section="${options.section}"${options.isExpired ? ' data-expired="1"' : ""}><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${statusText}</span></div>${marks.join("")}<canvas></canvas></div>`;
+        return `<div class="kline-card${favClass}${pairClass}${pinClass}${posClass}${expiredClass}" data-symbol="${symbol}" data-section="${options.section}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${statusText}</span></div>${marks.join("")}<canvas></canvas></div>`;
       }
 
       function closeCardActions(force) {
@@ -1034,10 +1034,23 @@
         const pinned = pinSymbols().has(symbol);
         const favored = favoriteSymbols().has(symbol);
         const held = positionSymbols().has(symbol);
+        const expired = (() => {
+          const item = pinItemBySymbol(symbol);
+          return item ? WatchFavorites.isPinExpired(item) : false;
+        })();
         const sheet = document.createElement("div");
         sheet.className = "card-actions";
         sheet.innerHTML = [
-          `<button type="button" data-action="pin">${pinned ? "取消盯一下" : "盯一下"}</button>`,
+          expired
+            ? `<button type="button" data-action="renew">续盯（现价起算）</button>`
+            : "",
+          `<button type="button" data-action="pin">${
+            pinned
+              ? expired
+                ? "清除过期盯一下"
+                : "取消盯一下"
+              : "盯一下"
+          }</button>`,
           `<button type="button" data-action="buy">${held ? "更新买入价" : "购买"}</button>`,
           held
             ? `<button type="button" data-action="sell">卖出</button>`
@@ -1058,7 +1071,8 @@
           }
 
           const busyLabels = {
-            pin: pinned ? "取消中" : "盯住中",
+            renew: "续盯中",
+            pin: pinned ? (expired ? "清除中" : "取消中") : "盯住中",
             buy: "保存中",
             sell: "卖出中",
             fav: favored ? "取消中" : "收藏中",
@@ -1070,7 +1084,9 @@
           if (!needsConfirm) markBusy();
           try {
             let done = true;
-            if (action === "pin") {
+            if (action === "renew") {
+              done = await renewPinForSymbol(symbol);
+            } else if (action === "pin") {
               if (pinned) await clearPinForSymbol(symbol);
               else await togglePinForSymbol(symbol);
             } else if (action === "buy") {
@@ -1107,15 +1123,6 @@
         });
         root.querySelectorAll(".kline-card").forEach((card) => {
           bindLongPress(card);
-          if (card.dataset.expired === "1") {
-            card.addEventListener("click", (event) => {
-              if (event.target.closest(".symbol-copy, .card-actions, .early-badge")) {
-                return;
-              }
-              if (card.querySelector(".card-actions")) return;
-              clearPinForSymbol(card.dataset.symbol);
-            });
-          }
         });
       }
 
@@ -1453,6 +1460,44 @@
           showToast(error.message || "清除盯一下失败");
           setStatus(false, error.message || "清除盯一下失败");
           window.alert(error.message || "清除盯一下失败");
+        } finally {
+          pinSaving = false;
+        }
+      }
+
+      async function renewPinForSymbol(symbol) {
+        if (!symbol || pinSaving) return false;
+        const label = symbol.replace("USDT", "");
+        const price = marketMap[symbol]?.price;
+        if (!Number.isFinite(price) || price <= 0) {
+          window.alert(`${label} 暂无现价，无法续盯`);
+          return false;
+        }
+        pinSaving = true;
+        try {
+          setStatus(false, `正在续盯 ${label}...`);
+          const result = await WatchFavorites.patchPins({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.PINS_PATH,
+            message: `Renew pin ${symbol}`,
+            mutate: (list) => ({
+              list: WatchFavorites.addPin(list, symbol, price, "renew"),
+              added: true,
+            }),
+          });
+          pinItems = result.pins;
+          showToast(
+            `${label} 已续盯 12h · 现价起算 ${formatPinPrice(price)}`,
+          );
+          await renderKlines();
+          setStatus(true, `${label} 已续盯并同步`);
+          return true;
+        } catch (error) {
+          console.error(error);
+          showToast(error.message || "续盯失败");
+          setStatus(false, error.message || "续盯失败");
+          window.alert(error.message || "续盯失败");
+          throw error;
         } finally {
           pinSaving = false;
         }

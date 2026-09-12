@@ -260,7 +260,7 @@ function encodePng(width, height, pixels) {
   ]);
 }
 
-function renderCandlesPng(candles, options) {
+function renderCandlesPixels(candles, options) {
   const width = CHART.width;
   const height = CHART.height;
   const pixels = createPixels(width, height, CHART.bg);
@@ -273,12 +273,7 @@ function renderCandlesPng(candles, options) {
 
   if (!candles || !candles.length) {
     drawText(pixels, width, height, 12, height / 2, 'NO DATA', CHART.down, 2);
-    const png = encodePng(width, height, pixels);
-    return {
-      buffer: png,
-      base64: png.toString('base64'),
-      md5: crypto.createHash('md5').update(png).digest('hex'),
-    };
+    return { width, height, pixels };
   }
 
   const highs = candles.map((c) => c.high);
@@ -347,12 +342,50 @@ function renderCandlesPng(candles, options) {
     fillRect(pixels, width, height, x - bodyW / 2, top, bodyW, bodyH, color);
   });
 
+  return { width, height, pixels };
+}
+
+function pngFromPixels(width, height, pixels) {
   const png = encodePng(width, height, pixels);
   return {
     buffer: png,
     base64: png.toString('base64'),
     md5: crypto.createHash('md5').update(png).digest('hex'),
   };
+}
+
+function renderCandlesPng(candles, options) {
+  const frame = renderCandlesPixels(candles, options);
+  return pngFromPixels(frame.width, frame.height, frame.pixels);
+}
+
+function stitchFramesVertically(frames, gap) {
+  const list = (frames || []).filter(Boolean);
+  if (!list.length) return null;
+  const gapPx = Number.isFinite(gap) ? Math.max(0, gap) : 10;
+  const width = Math.max(...list.map((f) => f.width));
+  const height =
+    list.reduce((sum, f) => sum + f.height, 0) + gapPx * (list.length - 1);
+  const pixels = createPixels(width, height, CHART.bg);
+  let yOffset = 0;
+  list.forEach((frame, index) => {
+    for (let y = 0; y < frame.height; y += 1) {
+      for (let x = 0; x < frame.width; x += 1) {
+        const src = (y * frame.width + x) * 4;
+        const dst = ((yOffset + y) * width + x) * 4;
+        pixels[dst] = frame.pixels[src];
+        pixels[dst + 1] = frame.pixels[src + 1];
+        pixels[dst + 2] = frame.pixels[src + 2];
+        pixels[dst + 3] = frame.pixels[src + 3];
+      }
+    }
+    yOffset += frame.height;
+    if (index < list.length - 1 && gapPx > 0) {
+      fillRect(pixels, width, height, 0, yOffset, width, gapPx, [232, 234, 232, 255]);
+      yOffset += gapPx;
+    }
+  });
+  return pngFromPixels(width, height, pixels);
 }
 
 async function buildSymbolChart(symbol, options) {
@@ -364,16 +397,53 @@ async function buildSymbolChart(symbol, options) {
   const changeText = Number.isFinite(change)
     ? `${change > 0 ? '+' : ''}${change.toFixed(2)}%`
     : '';
-  const title = `${label} ${interval.toUpperCase()} ${changeText}`.trim();
+  const rank = options && options.rank;
+  const rankText = Number.isFinite(rank) ? `#${rank} ` : '';
+  const title = `${rankText}${label} ${interval.toUpperCase()} ${changeText}`.trim();
   return renderCandlesPng(candles, {
     title,
     pinPrice: options && options.pinPrice,
   });
 }
 
+async function buildTopChartsCollage(rows, options) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) return null;
+  const frames = await Promise.all(
+    list.map(async (row, index) => {
+      try {
+        const interval = (options && options.interval) || CHART.interval;
+        const limit = (options && options.limit) || CHART.limit;
+        const candles = await fetchKlines(row.symbol, interval, limit);
+        const label = String(row.symbol || '').replace(/USDT$/i, '');
+        const changeText = Number.isFinite(row.change)
+          ? `${row.change > 0 ? '+' : ''}${row.change.toFixed(2)}%`
+          : '';
+        const title = `#${index + 1} ${label} ${String(interval).toUpperCase()} ${changeText}`.trim();
+        return renderCandlesPixels(candles, {
+          title,
+          pinPrice: row.pinPrice,
+        });
+      } catch (error) {
+        console.warn(
+          `collage chart failed ${row.symbol}`,
+          error.message || error,
+        );
+        return null;
+      }
+    }),
+  );
+  const valid = frames.filter(Boolean);
+  if (!valid.length) return null;
+  return stitchFramesVertically(valid, 12);
+}
+
 module.exports = {
   fetchKlines,
   renderCandlesPng,
+  renderCandlesPixels,
+  stitchFramesVertically,
   buildSymbolChart,
+  buildTopChartsCollage,
   CHART,
 };

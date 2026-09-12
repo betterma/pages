@@ -7,7 +7,7 @@ const {
   sendWecomText,
   sendWecomImage,
 } = require('./github-wecom');
-const { buildSymbolChart } = require('./kline-chart');
+const { buildTopChartsCollage } = require('./kline-chart');
 
 function webhookKeyHint(url) {
   try {
@@ -142,7 +142,7 @@ function buildPinReport(pins, prices) {
   const topN = Math.max(1, CONFIG.PIN_CHART_TOP || 3);
   const blocks = [
     `【盯一下】${time} · 上涨 ${rows.length}`,
-    `附 K 线 Top${Math.min(topN, rows.length)}（4h）`,
+    `附 K 线 Top${Math.min(topN, rows.length)}（4h · 合成一张图）`,
     '',
   ];
 
@@ -157,40 +157,19 @@ function buildPinReport(pins, prices) {
   return blocks.join('\n').trimEnd();
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function sendTopPinCharts(rows, webhook) {
   const topN = Math.max(0, CONFIG.PIN_CHART_TOP || 3);
   if (!topN || !rows.length || !webhook) return [];
   const top = rows.slice(0, topN);
-
-  // Build charts in parallel to reduce total runtime (avoids CF timeout retries).
-  const charts = await Promise.all(
-    top.map(async (row) => {
-      try {
-        const image = await buildSymbolChart(row.symbol, {
-          change: row.change,
-          pinPrice: row.pinPrice,
-        });
-        return { symbol: row.symbol, image };
-      } catch (error) {
-        console.warn(`pin chart failed ${row.symbol}`, error.message || error);
-        return null;
-      }
-    }),
-  );
-
-  const sent = [];
-  for (let i = 0; i < charts.length; i += 1) {
-    const item = charts[i];
-    if (!item) continue;
-    await sendWecomImage(item.image, webhook);
-    sent.push(item.symbol);
-    if (i < charts.length - 1) await sleep(200);
+  try {
+    const collage = await buildTopChartsCollage(top);
+    if (!collage) return [];
+    await sendWecomImage(collage, webhook);
+    return top.map((row) => row.symbol);
+  } catch (error) {
+    console.warn('pin collage failed', error.message || error);
+    return [];
   }
-  return sent;
 }
 
 function buildPositionReport(positions, prices, dropAlerts, now) {
