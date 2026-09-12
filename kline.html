@@ -169,26 +169,38 @@
         line-height: 1;
         pointer-events: none;
       }
-      .blacklist-card-btn,
-      .pin-card-btn {
-        border: 0;
-        background: transparent;
-        color: #9aa3a0;
-        padding: 0 2px;
-        font-size: 13px;
-        line-height: 1;
+      .card-actions {
+        position: absolute;
+        inset: 0;
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px 14px;
+        background: rgba(244, 245, 243, 0.94);
+        border-radius: 8px;
+      }
+      .card-actions button {
+        width: 100%;
+        border: 1px solid #c9d0d0;
+        background: #fbfcfa;
+        color: #28323a;
+        padding: 10px 12px;
+        border-radius: 6px;
+        font-size: 14px;
         cursor: pointer;
-        flex-shrink: 0;
       }
-      .blacklist-card-btn:hover {
+      .card-actions button:hover {
+        background: #eef1ee;
+      }
+      .card-actions button.is-danger {
         color: #8d7771;
+        border-color: #d5cbc6;
       }
-      .pin-card-btn:hover {
-        color: #5a6a68;
-      }
-      .pin-card-btn.is-on {
-        color: #4f7a6e;
-        font-weight: 700;
+      .card-actions button.is-muted {
+        color: #78817f;
+        background: transparent;
       }
       .kline-card-head {
         display: flex;
@@ -298,7 +310,7 @@
         <span id="statusDot" class="dot"></span>
         <span id="statusText">等待启动...</span>
       </div>
-      <p class="hint">长按收藏 · 盯=12h钉住 · ⊖ 拉黑 · 点名称复制 · 过期盯一下点卡片清除 · 「启动 N」=15m 早期分≥2</p>
+      <p class="hint">长按卡片选 盯/收藏/拉黑 · 点名称复制 · 过期盯一下点卡片清除 · 「启动 N」=15m 早期分≥2</p>
 
       <h2 class="section-title">盯一下</h2>
       <div id="pinMeta" class="meta"></div>
@@ -333,7 +345,7 @@
         SIGNAL_INTERVAL: "15m",
         SIGNAL_LIMIT: 200,
         EARLY_SCORE_MIN: 2,
-        LONG_PRESS_MS: 450,
+        LONG_PRESS_MS: 550,
       };
       const DURATION_MS = {
         "15m": 15 * 60 * 1000,
@@ -898,11 +910,6 @@
           : options.isPin
             ? `<span class="pin-mark">${options.isExpired ? "过期" : "盯"}</span>`
             : "";
-        const pinned = pinSymbols().has(symbol);
-        const pinBtn =
-          options.section === "pin"
-            ? `<button type="button" class="pin-card-btn is-on" data-symbol="${symbol}" data-action="clear-pin" title="清除盯一下" aria-label="清除盯一下">清</button>`
-            : `<button type="button" class="pin-card-btn${pinned ? " is-on" : ""}" data-symbol="${symbol}" data-action="toggle-pin" title="${pinned ? "取消盯一下" : "盯一下 12 小时"}" aria-label="盯一下">${pinned ? "盯✓" : "盯"}</button>`;
         const statusText = options.pinItem
           ? (() => {
               const rel = pinChangePercent(options.pinItem);
@@ -911,43 +918,67 @@
           : Number.isFinite(change24h)
             ? formatPercent(change24h)
             : "--";
-        return `<div class="kline-card${favClass}${pairClass}${pinClass}${expiredClass}" data-symbol="${symbol}" data-section="${options.section}"${options.isExpired ? ' data-expired="1"' : ""}><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span style="display:inline-flex;align-items:center;gap:6px"><span data-kline-status>${statusText}</span>${pinBtn}<button type="button" class="blacklist-card-btn" data-symbol="${symbol}" title="加入黑名单" aria-label="加入黑名单">⊖</button></span></div>${mark}<canvas></canvas></div>`;
+        return `<div class="kline-card${favClass}${pairClass}${pinClass}${expiredClass}" data-symbol="${symbol}" data-section="${options.section}"${options.isExpired ? ' data-expired="1"' : ""}><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${statusText}</span></div>${mark}<canvas></canvas></div>`;
+      }
+
+      function closeCardActions() {
+        document.querySelectorAll(".card-actions").forEach((el) => el.remove());
+      }
+
+      function openCardActions(card) {
+        closeCardActions();
+        const symbol = card.dataset.symbol;
+        if (!symbol) return;
+        const pinned = pinSymbols().has(symbol);
+        const favored = favoriteSymbols().has(symbol);
+        const sheet = document.createElement("div");
+        sheet.className = "card-actions";
+        sheet.innerHTML = [
+          `<button type="button" data-action="pin">${pinned ? "取消盯一下" : "盯一下"}</button>`,
+          `<button type="button" data-action="fav">${favored ? "取消收藏" : "收藏"}</button>`,
+          `<button type="button" data-action="blacklist" class="is-danger">拉黑</button>`,
+          `<button type="button" data-action="close" class="is-muted">关闭</button>`,
+        ].join("");
+        sheet.addEventListener("pointerdown", (event) => event.stopPropagation());
+        sheet.addEventListener("click", async (event) => {
+          const btn = event.target.closest("button[data-action]");
+          if (!btn) return;
+          event.stopPropagation();
+          const action = btn.dataset.action;
+          closeCardActions();
+          if (action === "close") return;
+          if (action === "pin") {
+            if (pinned) await clearPinForSymbol(symbol);
+            else await togglePinForSymbol(symbol);
+            return;
+          }
+          if (action === "fav") {
+            await toggleFavoriteForSymbol(symbol);
+            return;
+          }
+          if (action === "blacklist") {
+            await addToBlacklist(symbol);
+          }
+        });
+        card.appendChild(sheet);
       }
 
       function bindCardInteractions(root) {
         root.querySelectorAll(".symbol-copy").forEach((btn) => {
           btn.addEventListener("click", (event) => {
             event.stopPropagation();
+            closeCardActions();
             copyName(btn.dataset.name);
-          });
-        });
-        root.querySelectorAll(".blacklist-card-btn").forEach((btn) => {
-          btn.addEventListener("click", (event) => {
-            event.stopPropagation();
-            addToBlacklist(btn.dataset.symbol);
-          });
-        });
-        root.querySelectorAll(".pin-card-btn").forEach((btn) => {
-          btn.addEventListener("click", (event) => {
-            event.stopPropagation();
-            if (btn.dataset.action === "clear-pin") {
-              clearPinForSymbol(btn.dataset.symbol);
-            } else {
-              togglePinForSymbol(btn.dataset.symbol);
-            }
           });
         });
         root.querySelectorAll(".kline-card").forEach((card) => {
           bindLongPress(card);
           if (card.dataset.expired === "1") {
             card.addEventListener("click", (event) => {
-              if (
-                event.target.closest(
-                  ".symbol-copy, .blacklist-card-btn, .pin-card-btn, .early-badge",
-                )
-              ) {
+              if (event.target.closest(".symbol-copy, .card-actions, .early-badge")) {
                 return;
               }
+              if (card.querySelector(".card-actions")) return;
               clearPinForSymbol(card.dataset.symbol);
             });
           }
@@ -967,21 +998,17 @@
         };
 
         const start = (event) => {
-          if (
-            event.target.closest(
-              ".symbol-copy, .blacklist-card-btn, .pin-card-btn",
-            )
-          ) {
+          if (event.target.closest(".symbol-copy, .card-actions, .early-badge")) {
             return;
           }
           if (event.pointerType === "mouse" && event.button !== 0) return;
           triggered = false;
           card.classList.add("is-pressed");
-          timer = setTimeout(async () => {
+          timer = setTimeout(() => {
             triggered = true;
             clear();
             if (navigator.vibrate) navigator.vibrate(20);
-            await toggleFavoriteForSymbol(card.dataset.symbol);
+            openCardActions(card);
           }, CONFIG.LONG_PRESS_MS);
         };
 
@@ -1355,8 +1382,12 @@
         }
       }
 
-      document.getElementById("refreshBtn").addEventListener("click", refreshAll);
+      document.getElementById("refreshBtn").addEventListener("click", () => {
+        closeCardActions();
+        refreshAll();
+      });
       document.getElementById("rangeBtn").addEventListener("click", async () => {
+        closeCardActions();
         if (loading) return;
         const extended = CONFIG.KLINE_RANGE_DAYS_EXTENDED;
         const defaults = CONFIG.KLINE_RANGE_DAYS_DEFAULT;
@@ -1374,6 +1405,10 @@
           console.error(error);
           setStatus(false, error.message || "切换 K 线范围失败");
         }
+      });
+      document.addEventListener("pointerdown", (event) => {
+        if (event.target.closest(".card-actions")) return;
+        if (document.querySelector(".card-actions")) closeCardActions();
       });
       document.addEventListener("dblclick", (event) => {
         if (event.target.closest("button, a, input, select, textarea, label")) {
