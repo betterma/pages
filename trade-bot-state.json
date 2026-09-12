@@ -12,13 +12,25 @@
   "entryPrice": 0.1077,
   "cooldownUntil": null,
   "lastPrice": 0.1094,
-  "lastCheckAt": 1789198291520,
+  "lastCheckAt": 1789198301504,
   "lastAction": "hold",
   "lastError": null,
-  "updatedAt": 1789198291605,
+  "updatedAt": 1789198301588,
   "startedAt": 1789183277680,
   "feesPaid": 3.004572567772512,
   "logs": [
+    {
+      "at": 1789198301587,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.1094，卖出线 0.106266，权益 1016.58"
+    },
+    {
+      "at": 1789198301504,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=holding enabled=true"
+    },
     {
       "at": 1789198291604,
       "source": "timer",
@@ -1203,18 +1215,6 @@
     },
     {
       "at": 1789155091309,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=FORMUSDT status=flat_rebuy enabled=true"
-    },
-    {
-      "at": 1789155084008,
-      "source": "timer",
-      "level": "info",
-      "message": "等待回补：现价 0.2468，回补线 0.252355，现金 997.50"
-    },
-    {
-      "at": 1789155083850,
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=FORMUSDT status=flat_rebuy enabled=true"
