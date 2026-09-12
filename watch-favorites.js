@@ -18,7 +18,6 @@
   // writes do not depend on the multi‑MB watch-data.json Contents API limit.
   const FAVORITES_PATH = "watch-favorites.json";
   const BLACKLIST_PATH = "watch-blacklist.json";
-  const SPOTLIGHT_PATH = "watch-spotlight.json";
   const LEGACY_DATA_PATH = "watch-data.json";
 
   const TOKEN_PART_A = "gh";
@@ -543,136 +542,10 @@
     throw lastError || new Error("保存黑名单失败");
   }
 
-  // Spotlight / 特别关注 — same item shape as favorites.
-  const normalizeSpotlight = normalizeFavorites;
-  const serializeSpotlight = serializeFavorites;
-  const spotlightToSymbolSet = favoritesToSymbolSet;
-  const hasSpotlight = hasFavorite;
-  const addSpotlight = addFavorite;
-  const removeSpotlight = removeFavorite;
-  const toggleSpotlight = toggleFavorite;
-
-  async function loadSpotlightRaw(options) {
-    const repo = (options && options.repo) || DEFAULT_REPO;
-    const path = (options && options.path) || SPOTLIGHT_PATH;
-
-    try {
-      const current = await fetchJsonFile({
-        repo,
-        path,
-        token: options && options.token,
-      });
-      if (current.data) {
-        return {
-          spotlight: normalizeSpotlight(current.data.spotlight),
-          spotlightUpdatedAt: Number.isFinite(
-            Number(current.data.spotlightUpdatedAt),
-          )
-            ? Number(current.data.spotlightUpdatedAt)
-            : null,
-          source: "api",
-        };
-      }
-    } catch (error) {
-      console.warn("loadSpotlight via API failed, trying raw", error);
-    }
-
-    try {
-      const commitSha = await getMainCommitSha({
-        repo,
-        token: options && options.token,
-      });
-      const response = await fetchRawJsonByCommit({
-        repo,
-        path,
-        commitSha,
-      });
-      if (response.ok) {
-        const data = await response.json();
-        return {
-          spotlight: normalizeSpotlight(data.spotlight),
-          spotlightUpdatedAt: Number.isFinite(
-            Number(data.spotlightUpdatedAt),
-          )
-            ? Number(data.spotlightUpdatedAt)
-            : null,
-          source: "raw-commit",
-        };
-      }
-      if (response.status !== 404) {
-        console.warn(`读取特别关注 raw 失败: ${response.status}`);
-      }
-    } catch (error) {
-      console.warn("loadSpotlight via commit-raw failed", error);
-    }
-
-    return { spotlight: [], spotlightUpdatedAt: null, source: "empty" };
-  }
-
-  async function patchSpotlight(options) {
-    const repo = (options && options.repo) || DEFAULT_REPO;
-    const path = (options && options.path) || SPOTLIGHT_PATH;
-    const maxAttempts = (options && options.maxAttempts) || 3;
-    let lastError = null;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      try {
-        const current = await fetchJsonFile({
-          repo,
-          path,
-          token: options && options.token,
-        });
-        const base = current.data || {
-          spotlight: [],
-          spotlightUpdatedAt: null,
-        };
-        const spotlight = normalizeSpotlight(base.spotlight);
-        let result;
-        if (typeof options.mutate === "function") {
-          result = options.mutate(spotlight.slice());
-        } else {
-          result = toggleSpotlight(
-            spotlight,
-            options.symbol,
-            options.source || "manual",
-          );
-        }
-        const nextSpotlight = serializeSpotlight(
-          result && result.list ? result.list : result,
-        );
-        const nextData = {
-          spotlight: nextSpotlight,
-          spotlightUpdatedAt: Date.now(),
-          updatedAt: Date.now(),
-        };
-        await writeJsonFile({
-          repo,
-          path,
-          token: options && options.token,
-          data: nextData,
-          sha: current.sha,
-          message:
-            options.message ||
-            `Update spotlight ${options.symbol || ""}`.trim(),
-        });
-        return {
-          spotlight: nextSpotlight,
-          spotlightUpdatedAt: nextData.spotlightUpdatedAt,
-          meta: result && typeof result === "object" ? result : null,
-        };
-      } catch (error) {
-        lastError = error;
-        if (error.code !== "conflict") throw error;
-      }
-    }
-    throw lastError || new Error("保存特别关注失败");
-  }
-
   return {
     DEFAULT_REPO,
     FAVORITES_PATH,
     BLACKLIST_PATH,
-    SPOTLIGHT_PATH,
     LEGACY_DATA_PATH,
     getGithubToken,
     normalizeFavorites,
@@ -693,14 +566,5 @@
     toggleBlacklist,
     loadBlacklistRaw,
     patchBlacklist,
-    normalizeSpotlight,
-    serializeSpotlight,
-    spotlightToSymbolSet,
-    hasSpotlight,
-    addSpotlight,
-    removeSpotlight,
-    toggleSpotlight,
-    loadSpotlightRaw,
-    patchSpotlight,
   };
 });
