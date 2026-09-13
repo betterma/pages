@@ -8,7 +8,7 @@ const {
   sendWecomMarkdown,
   sendWecomImage,
 } = require('./github-wecom');
-const { buildTopChartsCollage } = require('./kline-chart');
+const { buildTopChartsCollage, fetchKlines } = require('./kline-chart');
 
 function webhookKeyHint(url) {
   try {
@@ -50,9 +50,17 @@ const CONFIG = {
   DROP_COOLDOWN_MS: Number(
     process.env.DROP_COOLDOWN_MS || 2 * 60 * 60 * 1000,
   ),
-  PIN_CHART_TOP: Number(process.env.PIN_CHART_TOP || 3),
+  // 0 = all rising pins in one collage; set e.g. 3 to only take top N.
+  PIN_CHART_TOP: Number(
+    process.env.PIN_CHART_TOP === undefined || process.env.PIN_CHART_TOP === ''
+      ? 0
+      : process.env.PIN_CHART_TOP,
+  ),
+  PIN_CHART_MAX: Number(process.env.PIN_CHART_MAX || 25),
   // Skip duplicate runs if another invoke already sent within this window.
   NOTIFY_DEBOUNCE_MS: Number(process.env.NOTIFY_DEBOUNCE_MS || 90 * 1000),
+  // Parallel symbol fetches for 5m/15m momentum (each symbol = 2 kline calls).
+  MOMENTUM_CONCURRENCY: Number(process.env.MOMENTUM_CONCURRENCY || 5),
 };
 
 function labelOf(symbol) {
@@ -126,6 +134,8 @@ function listPinUpRows(pins, tickers) {
         current,
         change,
         change24h: ticker.change24h,
+        streak5: false,
+        heat15: false,
       };
     })
     .filter(
@@ -141,24 +151,122 @@ function listPinUpRows(pins, tickers) {
     });
 }
 
-function buildPinReport(pins, tickers) {
-  const rows = listPinUpRows(pins, tickers);
+/** Drop the still-forming candle; keep closed bar closes only. */
+function closedCloses(candles) {
+  if (!Array.isArray(candles) || candles.length < 2) return [];
+  return candles
+    .slice(0, -1)
+    .map((bar) => Number(bar && bar.close))
+    .filter((value) => Number.isFinite(value));
+}
+
+/** Last N bars vs previous close: true when close > prev close. */
+function lastBarRises(closes, bars) {
+  const need = bars + 1;
+  if (!Array.isArray(closes) || closes.length < need) return [];
+  const slice = closes.slice(-need);
+  const rises = [];
+  for (let i = 1; i < slice.length; i += 1) {
+    rises.push(slice[i] > slice[i - 1]);
+  }
+  return rises;
+}
+
+function momentumFromCloses(closes5, closes15) {
+  const rises5 = lastBarRises(closes5, 3);
+  const rises15 = lastBarRises(closes15, 3);
+  return {
+    streak5: rises5.length === 3 && rises5.every(Boolean),
+    heat15: rises15.length === 3 && rises15.filter(Boolean).length >= 2,
+  };
+}
+
+async function mapPool(items, concurrency, mapper) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return [];
+  const limit = Math.max(1, Math.min(concurrency || 5, list.length));
+  const results = new Array(list.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < list.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await mapper(list[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: limit }, () => worker()));
+  return results;
+}
+
+async function attachPinMomentum(rows) {
+  if (!rows.length) return rows;
+  await mapPool(rows, CONFIG.MOMENTUM_CONCURRENCY, async (row) => {
+    try {
+      const [candles5, candles15] = await Promise.all([
+        fetchKlines(row.symbol, '5m', 5),
+        fetchKlines(row.symbol, '15m', 5),
+      ]);
+      const flags = momentumFromCloses(
+        closedCloses(candles5),
+        closedCloses(candles15),
+      );
+      row.streak5 = flags.streak5;
+      row.heat15 = flags.heat15;
+    } catch (error) {
+      console.warn(
+        `momentum failed ${row.symbol}`,
+        error && error.message ? error.message : error,
+      );
+      row.streak5 = false;
+      row.heat15 = false;
+    }
+    return row;
+  });
+  return rows;
+}
+
+function formatPinNameLine(row) {
+  const day = Number.isFinite(row.change24h)
+    ? formatPercent(row.change24h)
+    : '--';
+  const name = labelOf(row.symbol);
+  const tags = [];
+  if (row.streak5) tags.push('5m↑');
+  if (row.heat15) tags.push('15m↑');
+  const tagText = tags.length ? ` ${tags.join(' ')}` : '';
+
+  // WeCom: info=green, warning=orange, comment=gray.
+  // 5m three-up is stronger → green; 15m 2/3 alone → orange; both → green + both tags.
+  let coloredName = name;
+  if (row.streak5) {
+    coloredName = `<font color="info">${name}${tagText}</font>`;
+  } else if (row.heat15) {
+    coloredName = `<font color="warning">${name}${tagText}</font>`;
+  }
+
+  return `${coloredName}  <font color="comment">${day}</font>`;
+}
+
+function formatPinChangeLine(row) {
+  const body = `【${formatPercent(row.change)}】  ${formatPrice(row.pinPrice)}->${formatPrice(row.current)}`;
+  if (row.streak5) {
+    return `<font color="info">${body}</font>`;
+  }
+  if (row.heat15) {
+    return `<font color="warning">${body}</font>`;
+  }
+  return body;
+}
+
+function buildPinReport(rows) {
   if (!rows.length) return null;
 
   const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
   const blocks = [time, ''];
 
   rows.forEach((row, index) => {
-    const day = Number.isFinite(row.change24h)
-      ? formatPercent(row.change24h)
-      : '--';
-    // WeCom markdown only has 3 colors; "comment" is gray / lighter.
-    blocks.push(
-      `${labelOf(row.symbol)}  <font color="comment">${day}</font>`,
-    );
-    blocks.push(
-      `【${formatPercent(row.change)}】  ${formatPrice(row.pinPrice)}->${formatPrice(row.current)}`,
-    );
+    blocks.push(formatPinNameLine(row));
+    blocks.push(formatPinChangeLine(row));
     if (index < rows.length - 1) {
       blocks.push('<font color="comment">----------</font>');
       blocks.push('');
@@ -171,11 +279,23 @@ function buildPinReport(pins, tickers) {
 }
 
 async function sendTopPinCharts(rows, webhook) {
-  const topN = Math.max(0, CONFIG.PIN_CHART_TOP || 3);
-  if (!topN || !rows.length || !webhook) return [];
-  const top = rows.slice(0, topN);
+  if (!rows.length || !webhook) return [];
+  const configured = CONFIG.PIN_CHART_TOP;
+  const hardMax = Math.max(1, CONFIG.PIN_CHART_MAX || 25);
+  const limit =
+    Number.isFinite(configured) && configured > 0
+      ? Math.min(configured, hardMax)
+      : hardMax;
+  const top = rows.slice(0, limit);
+  if (rows.length > top.length) {
+    console.warn(
+      `pin collage truncated ${rows.length} -> ${top.length} (PIN_CHART_MAX=${hardMax})`,
+    );
+  }
   try {
-    const collage = await buildTopChartsCollage(top);
+    // Slightly shorter panels when many charts, keeps WeCom image manageable.
+    const panelHeight = top.length >= 12 ? 200 : top.length >= 7 ? 240 : 320;
+    const collage = await buildTopChartsCollage(top, { height: panelHeight });
     if (!collage) return [];
     await sendWecomImage(collage, webhook);
     return top.map((row) => row.symbol);
@@ -351,7 +471,10 @@ async function main() {
   const tickers = await fetchBinanceTickers(symbols);
 
   const pinRows = listPinUpRows(pins, tickers);
-  const pinText = pinRows.length ? buildPinReport(pins, tickers) : null;
+  if (pinRows.length) {
+    await attachPinMomentum(pinRows);
+  }
+  const pinText = pinRows.length ? buildPinReport(pinRows) : null;
   const { text: positionText, nextDropAlerts } = buildPositionReport(
     positions,
     tickers,
@@ -361,6 +484,13 @@ async function main() {
 
   const sent = [];
   let chartSymbols = [];
+  const momentumHits = pinRows.filter((row) => row.streak5 || row.heat15).map(
+    (row) => ({
+      symbol: row.symbol,
+      streak5: row.streak5,
+      heat15: row.heat15,
+    }),
+  );
   if (pinText) {
     if (!CONFIG.WECOM_WEBHOOK_PINS) {
       console.warn('pin report skipped: missing WECOM_WEBHOOK_PINS');
@@ -405,6 +535,7 @@ async function main() {
       positions: positions.length,
       sent,
       charts: chartSymbols,
+      momentum: momentumHits,
       dropsArmed: Object.keys(nextDropAlerts).length,
     }),
   );
@@ -415,6 +546,7 @@ async function main() {
     positions: positions.length,
     sent,
     charts: chartSymbols,
+    momentum: momentumHits,
   };
 }
 
@@ -423,4 +555,8 @@ module.exports = {
   buildPinReport,
   buildPositionReport,
   listPinUpRows,
+  attachPinMomentum,
+  momentumFromCloses,
+  closedCloses,
+  lastBarRises,
 };

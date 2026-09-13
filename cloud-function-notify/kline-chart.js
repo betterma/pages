@@ -262,10 +262,15 @@ function encodePng(width, height, pixels) {
 
 function renderCandlesPixels(candles, options) {
   const width = CHART.width;
-  const height = CHART.height;
+  const height =
+    options && Number.isFinite(Number(options.height)) && Number(options.height) > 80
+      ? Number(options.height)
+      : CHART.height;
   const pixels = createPixels(width, height, CHART.bg);
   const title = options && options.title ? String(options.title) : '';
   const pinPrice = options && Number(options.pinPrice);
+  const padTop = Math.min(CHART.padTop, Math.max(28, Math.floor(height * 0.12)));
+  const padBottom = Math.min(CHART.padBottom, 12);
 
   if (title) {
     drawText(pixels, width, height, 12, 10, title, CHART.text, 2);
@@ -286,15 +291,14 @@ function renderCandlesPixels(candles, options) {
   }
   const range = max - min || max * 0.01 || 1;
   const chartW = width - CHART.padLeft - CHART.padRight;
-  const chartH = height - CHART.padTop - CHART.padBottom;
+  const chartH = height - padTop - padBottom;
   const slot = chartW / candles.length;
   const bodyW = Math.max(2, slot * 0.55);
-  const yOf = (price) =>
-    CHART.padTop + ((max - price) / range) * chartH;
+  const yOf = (price) => padTop + ((max - price) / range) * chartH;
 
   // grid lines
   for (let i = 0; i <= 4; i += 1) {
-    const y = CHART.padTop + (chartH * i) / 4;
+    const y = padTop + (chartH * i) / 4;
     drawLine(
       pixels,
       width,
@@ -423,6 +427,7 @@ async function buildTopChartsCollage(rows, options) {
         return renderCandlesPixels(candles, {
           title,
           pinPrice: row.pinPrice,
+          height: options && options.height,
         });
       } catch (error) {
         console.warn(
