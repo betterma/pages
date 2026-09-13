@@ -166,7 +166,7 @@
     if (!cachePayload) return;
     const fdvMin = Number(el.fdvMin.value) * 1e6;
     const fdvMax = Number(el.fdvMax.value) * 1e6;
-    const limit = Math.max(1, Math.min(60, Number(el.limit.value) || 24));
+    const limit = Math.max(1, Math.min(120, Number(el.limit.value) || 60));
     const orderBy = el.orderBy.value || 'volume_usd_24h';
 
     let items = (cachePayload.items || []).filter((t) => {
