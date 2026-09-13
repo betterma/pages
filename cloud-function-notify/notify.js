@@ -230,7 +230,7 @@ function formatPinNameLine(row) {
     ? formatPercent(row.change24h)
     : '--';
   const name = labelOf(row.symbol);
-  // WeCom: info=green, warning=orange, comment=gray.
+  // WeCom: info=green, warning=orange.
   // 5m three-up → green; 15m 2/3 alone → orange; both → green (name only).
   let coloredName = name;
   if (row.streak5) {
@@ -239,7 +239,29 @@ function formatPinNameLine(row) {
     coloredName = `<font color="warning">${name}</font>`;
   }
 
-  return `${coloredName}  <font color="comment">${day}</font>`;
+  return `${coloredName} ${day}`;
+}
+
+function attachPriceVsLast(rows, lastPinPrices) {
+  const prev = lastPinPrices || {};
+  rows.forEach((row) => {
+    const last = Number(prev[row.symbol]);
+    row.priceUpVsLast =
+      Number.isFinite(last) &&
+      Number.isFinite(row.current) &&
+      row.current > last;
+  });
+  return rows;
+}
+
+function nextLastPinPrices(lastPinPrices, rows) {
+  const next = { ...(lastPinPrices || {}) };
+  (rows || []).forEach((row) => {
+    if (row && row.symbol && Number.isFinite(row.current)) {
+      next[row.symbol] = row.current;
+    }
+  });
+  return next;
 }
 
 function buildPinReport(rows) {
@@ -249,10 +271,15 @@ function buildPinReport(rows) {
   const blocks = [time, ''];
 
   rows.forEach((row, index) => {
+    const currentText = formatPrice(row.current);
+    // @@@ = rose vs last pin message price ("小老鼠")
+    const currentLine = row.priceUpVsLast
+      ? `${currentText}@@@`
+      : currentText;
     blocks.push(formatPinNameLine(row));
-    blocks.push(
-      `【${formatPercent(row.change)}】  ${formatPrice(row.pinPrice)}->${formatPrice(row.current)}`,
-    );
+    blocks.push(`【${formatPercent(row.change)}】`);
+    blocks.push(formatPrice(row.pinPrice));
+    blocks.push(currentLine);
     if (index < rows.length - 1) {
       blocks.push('<font color="comment">----------</font>');
       blocks.push('');
@@ -370,6 +397,7 @@ async function tryAcquireNotifyLock(stateFile, now) {
 
   const nextData = {
     dropAlerts: data.dropAlerts || {},
+    lastPinPrices: data.lastPinPrices || {},
     lastNotifyAt: now,
     updatedAt: now,
   };
@@ -386,6 +414,7 @@ async function tryAcquireNotifyLock(stateFile, now) {
       acquired: true,
       stateFile: refreshed,
       dropAlerts: nextData.dropAlerts,
+      lastPinPrices: nextData.lastPinPrices,
     };
   } catch (error) {
     const message = error && error.message ? error.message : String(error);
@@ -442,6 +471,7 @@ async function main() {
     positionsFile.data && positionsFile.data.positions,
   );
   let dropAlerts = lock.dropAlerts || {};
+  let lastPinPrices = lock.lastPinPrices || {};
 
   if (!pins.length && !positions.length) {
     console.log('notify skip: empty pins and positions');
@@ -459,6 +489,7 @@ async function main() {
   const pinRows = listPinUpRows(pins, tickers);
   if (pinRows.length) {
     await attachPinMomentum(pinRows);
+    attachPriceVsLast(pinRows, lastPinPrices);
   }
   const pinText = pinRows.length ? buildPinReport(pinRows) : null;
   const { text: positionText, nextDropAlerts } = buildPositionReport(
@@ -499,18 +530,23 @@ async function main() {
     }
   }
 
+  const nextPinPrices = pinText
+    ? nextLastPinPrices(lastPinPrices, pinRows)
+    : lastPinPrices;
   const stateChanged =
-    JSON.stringify(nextDropAlerts) !== JSON.stringify(dropAlerts);
+    JSON.stringify(nextDropAlerts) !== JSON.stringify(dropAlerts) ||
+    JSON.stringify(nextPinPrices) !== JSON.stringify(lastPinPrices);
   if (stateChanged) {
     await saveJson(
       CONFIG.NOTIFY_STATE_PATH,
       {
         dropAlerts: nextDropAlerts,
+        lastPinPrices: nextPinPrices,
         lastNotifyAt: now,
         updatedAt: Date.now(),
       },
       activeStateFile.sha,
-      'Update watch notify drop alert cooldown',
+      'Update watch notify state',
     );
   }
 
@@ -542,6 +578,7 @@ module.exports = {
   buildPositionReport,
   listPinUpRows,
   attachPinMomentum,
+  attachPriceVsLast,
   momentumFromCloses,
   closedCloses,
   lastBarRises,
