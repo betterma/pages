@@ -2,7 +2,7 @@
   "mode": "paper",
   "symbol": "VTHOUSDT",
   "enabled": true,
-  "status": "cooldown",
+  "status": "flat_rebuy",
   "quoteAmount": 10000,
   "quantity": 0,
   "cash": 10097.904531515764,
@@ -10,15 +10,27 @@
   "anchorPrice": 0.000907,
   "windowStartMs": 1789286400000,
   "entryPrice": 0.000922,
-  "cooldownUntil": 1789299679414,
-  "lastPrice": 0.000899,
-  "lastCheckAt": 1789299101795,
-  "lastAction": "cooldown",
+  "cooldownUntil": null,
+  "lastPrice": 0.000896,
+  "lastCheckAt": 1789300879497,
+  "lastAction": "cooldown_end",
   "lastError": null,
-  "updatedAt": 1789299101880,
+  "updatedAt": 1789300879600,
   "startedAt": 1789279629168,
   "feesPaid": 41.082362228270355,
   "logs": [
+    {
+      "at": 1789300879599,
+      "source": "timer",
+      "level": "info",
+      "message": "冷静期结束，等待回补"
+    },
+    {
+      "at": 1789300879497,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=cooldown enabled=true"
+    },
     {
       "at": 1789299101880,
       "source": "timer",
@@ -1203,18 +1215,6 @@
     },
     {
       "at": 1789255879145,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789254101876,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789254101876,
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
