@@ -2,23 +2,347 @@
   "mode": "paper",
   "symbol": "VTHOUSDT",
   "enabled": true,
-  "status": "holding",
+  "status": "flat_rebuy",
   "quoteAmount": 10000,
-  "quantity": 11357317.465235759,
-  "cash": 0,
-  "equity": 10528.233290273549,
+  "quantity": 0,
+  "cash": 10097.904531515764,
+  "equity": 10097.904531515764,
   "anchorPrice": 0.000907,
   "windowStartMs": 1789286400000,
   "entryPrice": 0.000922,
   "cooldownUntil": null,
-  "lastPrice": 0.000927,
-  "lastCheckAt": 1789290094397,
-  "lastAction": "hold",
+  "lastPrice": 0.000863,
+  "lastCheckAt": 1789302702044,
+  "lastAction": "wait_rebuy",
   "lastError": null,
-  "updatedAt": 1789290094486,
+  "updatedAt": 1789302702223,
   "startedAt": 1789279629168,
-  "feesPaid": 30.97434968421053,
+  "feesPaid": 41.082362228270355,
   "logs": [
+    {
+      "at": 1789302702223,
+      "source": "timer",
+      "level": "info",
+      "message": "等待回补：现价 0.000863，回补线 0.000896682，现金 10097.90"
+    },
+    {
+      "at": 1789302702044,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=flat_rebuy enabled=true"
+    },
+    {
+      "at": 1789302690802,
+      "source": "timer",
+      "level": "info",
+      "message": "等待回补：现价 0.000862，回补线 0.000896682，现金 10097.90"
+    },
+    {
+      "at": 1789302690630,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=flat_rebuy enabled=true"
+    },
+    {
+      "at": 1789302684036,
+      "source": "timer",
+      "level": "info",
+      "message": "等待回补：现价 0.000863，回补线 0.000896682，现金 10097.90"
+    },
+    {
+      "at": 1789302683848,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=flat_rebuy enabled=true"
+    },
+    {
+      "at": 1789302679964,
+      "source": "timer",
+      "level": "info",
+      "message": "等待回补：现价 0.000865，回补线 0.000896682，现金 10097.90"
+    },
+    {
+      "at": 1789302679726,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=flat_rebuy enabled=true"
+    },
+    {
+      "at": 1789300901794,
+      "source": "timer",
+      "level": "info",
+      "message": "等待回补：现价 0.000895，回补线 0.000896682，现金 10097.90"
+    },
+    {
+      "at": 1789300901599,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=flat_rebuy enabled=true"
+    },
+    {
+      "at": 1789300891272,
+      "source": "timer",
+      "level": "info",
+      "message": "等待回补：现价 0.000895，回补线 0.000896682，现金 10097.90"
+    },
+    {
+      "at": 1789300891098,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=flat_rebuy enabled=true"
+    },
+    {
+      "at": 1789300883739,
+      "source": "timer",
+      "level": "info",
+      "message": "等待回补：现价 0.000895，回补线 0.000896682，现金 10097.90"
+    },
+    {
+      "at": 1789300883550,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=flat_rebuy enabled=true"
+    },
+    {
+      "at": 1789300879599,
+      "source": "timer",
+      "level": "info",
+      "message": "冷静期结束，等待回补"
+    },
+    {
+      "at": 1789300879497,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=cooldown enabled=true"
+    },
+    {
+      "at": 1789299101880,
+      "source": "timer",
+      "level": "info",
+      "message": "冷静期中，约剩 10 分钟"
+    },
+    {
+      "at": 1789299101795,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=cooldown enabled=true"
+    },
+    {
+      "at": 1789299090734,
+      "source": "timer",
+      "level": "info",
+      "message": "冷静期中，约剩 10 分钟"
+    },
+    {
+      "at": 1789299090649,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=cooldown enabled=true"
+    },
+    {
+      "at": 1789299083628,
+      "source": "timer",
+      "level": "info",
+      "message": "冷静期中，约剩 10 分钟"
+    },
+    {
+      "at": 1789299083542,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=cooldown enabled=true"
+    },
+    {
+      "at": 1789299079512,
+      "source": "timer",
+      "level": "info",
+      "message": "【paper卖出】现价 0.00089 ≤ 0.000902465，到账 10097.90，冷静 10 分钟"
+    },
+    {
+      "at": 1789299079414,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
+    {
+      "at": 1789297301571,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.00093，卖出线 0.000902465，权益 10562.31"
+    },
+    {
+      "at": 1789297301483,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
+    {
+      "at": 1789297291384,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000926，卖出线 0.000902465，权益 10516.88"
+    },
+    {
+      "at": 1789297291039,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
+    {
+      "at": 1789297283657,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000928，卖出线 0.000902465，权益 10539.59"
+    },
+    {
+      "at": 1789297283570,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
+    {
+      "at": 1789297279592,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000931，卖出线 0.000902465，权益 10573.66"
+    },
+    {
+      "at": 1789297279497,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
+    {
+      "at": 1789295502511,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000927，卖出线 0.000902465，权益 10528.23"
+    },
+    {
+      "at": 1789295502426,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
+    {
+      "at": 1789295490711,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000928，卖出线 0.000902465，权益 10539.59"
+    },
+    {
+      "at": 1789295490625,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
+    {
+      "at": 1789295483433,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000931，卖出线 0.000902465，权益 10573.66"
+    },
+    {
+      "at": 1789295483342,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
+    {
+      "at": 1789295479709,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000924，卖出线 0.000902465，权益 10494.16"
+    },
+    {
+      "at": 1789295479617,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
+    {
+      "at": 1789293702154,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.00091，卖出线 0.000902465，权益 10335.16"
+    },
+    {
+      "at": 1789293702070,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
+    {
+      "at": 1789293690436,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000911，卖出线 0.000902465，权益 10346.52"
+    },
+    {
+      "at": 1789293690345,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
+    {
+      "at": 1789293684283,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000908，卖出线 0.000902465，权益 10312.44"
+    },
+    {
+      "at": 1789293684199,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
+    {
+      "at": 1789293680094,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000906，卖出线 0.000902465，权益 10289.73"
+    },
+    {
+      "at": 1789293680001,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
+    {
+      "at": 1789291902420,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000955，卖出线 0.000902465，权益 10846.24"
+    },
+    {
+      "at": 1789291902335,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
+    {
+      "at": 1789291896725,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000956，卖出线 0.000902465，权益 10857.60"
+    },
+    {
+      "at": 1789291896639,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
+    {
+      "at": 1789291879653,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000958，卖出线 0.000902465，权益 10880.31"
+    },
+    {
+      "at": 1789291879552,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
     {
       "at": 1789290094486,
       "source": "timer",
@@ -891,330 +1215,6 @@
     },
     {
       "at": 1789257702286,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789257690403,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789257690403,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789257684327,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789257684326,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789257679132,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789257679130,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789255902278,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789255902278,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789255890735,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789255890734,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789255884533,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789255884532,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789255879146,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789255879145,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789254101876,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789254101876,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789254091053,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789254091052,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789254084083,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789254084083,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789254079425,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789254079424,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789252302491,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789252302491,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789252291234,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789252291233,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789252283856,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789252283856,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789252279407,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789252279407,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789250501490,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789250501490,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789250490650,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789250490650,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789250484861,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789250484861,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789250479097,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789250479096,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789248701439,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789248701439,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789248691170,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789248691169,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789248684083,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789248684083,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789248679500,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789248679499,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789246901421,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789246901420,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789246890630,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789246890630,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789246883602,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789246883602,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789246879313,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789246879312,
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
