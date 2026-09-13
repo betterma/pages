@@ -288,6 +288,18 @@ function buildPinReport(rows) {
     }
   });
 
+  const streak5Names = rows
+    .filter((row) => row.streak5)
+    .map((row) => labelOf(row.symbol));
+  if (streak5Names.length) {
+    blocks.push('<font color="comment">----------</font>');
+    blocks.push('');
+    blocks.push('<font color="info">5m</font>');
+    streak5Names.forEach((name) => {
+      blocks.push(`<font color="info">${name}</font>`);
+    });
+  }
+
   return blocks.join('\n').trimEnd();
 }
 
