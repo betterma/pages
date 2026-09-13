@@ -1,24 +1,30 @@
 {
   "mode": "paper",
-  "symbol": "MINAUSDT",
-  "enabled": false,
-  "status": "idle",
-  "quoteAmount": 1000,
-  "quantity": 0,
-  "cash": 956.024910341333,
-  "equity": 956.024910341333,
-  "anchorPrice": null,
-  "windowStartMs": null,
-  "entryPrice": null,
+  "symbol": "VTHOUSDT",
+  "enabled": true,
+  "status": "holding",
+  "quoteAmount": 10000,
+  "quantity": 11684210.52631579,
+  "cash": 0,
+  "equity": 9990,
+  "anchorPrice": 0.000755,
+  "windowStartMs": 1789272000000,
+  "entryPrice": 0.000855,
   "cooldownUntil": null,
-  "lastPrice": 0.1105,
-  "lastCheckAt": 1789279301396,
-  "lastAction": "tick_skipped",
+  "lastPrice": 0.000855,
+  "lastCheckAt": 1789279629168,
+  "lastAction": "paper_start",
   "lastError": null,
-  "updatedAt": 1789279301397,
-  "startedAt": 1789183277680,
-  "feesPaid": 5.902678760316166,
+  "updatedAt": 1789279629173,
+  "startedAt": 1789279629168,
+  "feesPaid": 10,
   "logs": [
+    {
+      "at": 1789279629172,
+      "source": "page",
+      "level": "trade",
+      "message": "【模拟开仓】VTHOUSDT 投入 10000 USDT @ 0.000855 → 数量 11684211；4h起步价 0.000755；手续费 10.0000 USDT；已开启定时检测"
+    },
     {
       "at": 1789279301397,
       "source": "timer",
@@ -1212,12 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789236079702,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
     }
   ]
 }
