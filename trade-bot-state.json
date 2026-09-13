@@ -6,19 +6,31 @@
   "quoteAmount": 10000,
   "quantity": 11357317.465235759,
   "cash": 0,
-  "equity": 10471.446702947369,
+  "equity": 10528.233290273549,
   "anchorPrice": 0.000907,
   "windowStartMs": 1789286400000,
   "entryPrice": 0.000922,
   "cooldownUntil": null,
-  "lastPrice": 0.000922,
-  "lastCheckAt": 1789290090537,
-  "lastAction": "rebuy",
+  "lastPrice": 0.000927,
+  "lastCheckAt": 1789290094397,
+  "lastAction": "hold",
   "lastError": null,
-  "updatedAt": 1789290090715,
+  "updatedAt": 1789290094486,
   "startedAt": 1789279629168,
   "feesPaid": 30.97434968421053,
   "logs": [
+    {
+      "at": 1789290094486,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000927，卖出线 0.000902465，权益 10528.23"
+    },
+    {
+      "at": 1789290094397,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
     {
       "at": 1789290090715,
       "source": "timer",
@@ -1203,18 +1215,6 @@
     },
     {
       "at": 1789246879312,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789245101638,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789245101638,
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
