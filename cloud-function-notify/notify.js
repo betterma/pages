@@ -230,32 +230,16 @@ function formatPinNameLine(row) {
     ? formatPercent(row.change24h)
     : '--';
   const name = labelOf(row.symbol);
-  const tags = [];
-  if (row.streak5) tags.push('5m↑');
-  if (row.heat15) tags.push('15m↑');
-  const tagText = tags.length ? ` ${tags.join(' ')}` : '';
-
   // WeCom: info=green, warning=orange, comment=gray.
-  // 5m three-up is stronger → green; 15m 2/3 alone → orange; both → green + both tags.
+  // 5m three-up → green; 15m 2/3 alone → orange; both → green (name only).
   let coloredName = name;
   if (row.streak5) {
-    coloredName = `<font color="info">${name}${tagText}</font>`;
+    coloredName = `<font color="info">${name}</font>`;
   } else if (row.heat15) {
-    coloredName = `<font color="warning">${name}${tagText}</font>`;
+    coloredName = `<font color="warning">${name}</font>`;
   }
 
   return `${coloredName}  <font color="comment">${day}</font>`;
-}
-
-function formatPinChangeLine(row) {
-  const body = `【${formatPercent(row.change)}】  ${formatPrice(row.pinPrice)}->${formatPrice(row.current)}`;
-  if (row.streak5) {
-    return `<font color="info">${body}</font>`;
-  }
-  if (row.heat15) {
-    return `<font color="warning">${body}</font>`;
-  }
-  return body;
 }
 
 function buildPinReport(rows) {
@@ -266,7 +250,9 @@ function buildPinReport(rows) {
 
   rows.forEach((row, index) => {
     blocks.push(formatPinNameLine(row));
-    blocks.push(formatPinChangeLine(row));
+    blocks.push(
+      `【${formatPercent(row.change)}】  ${formatPrice(row.pinPrice)}->${formatPrice(row.current)}`,
+    );
     if (index < rows.length - 1) {
       blocks.push('<font color="comment">----------</font>');
       blocks.push('');
