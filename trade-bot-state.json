@@ -2,23 +2,35 @@
   "mode": "paper",
   "symbol": "VTHOUSDT",
   "enabled": true,
-  "status": "flat_rebuy",
+  "status": "holding",
   "quoteAmount": 10000,
-  "quantity": 0,
-  "cash": 10481.928631578949,
-  "equity": 10481.928631578949,
+  "quantity": 11357317.465235759,
+  "cash": 0,
+  "equity": 10471.446702947369,
   "anchorPrice": 0.000907,
   "windowStartMs": 1789286400000,
-  "entryPrice": 0.000855,
+  "entryPrice": 0.000922,
   "cooldownUntil": null,
-  "lastPrice": 0.000921,
-  "lastCheckAt": 1789290079320,
-  "lastAction": "cooldown_end",
+  "lastPrice": 0.000922,
+  "lastCheckAt": 1789290090537,
+  "lastAction": "rebuy",
   "lastError": null,
-  "updatedAt": 1789290079497,
+  "updatedAt": 1789290090715,
   "startedAt": 1789279629168,
-  "feesPaid": 20.49242105263158,
+  "feesPaid": 30.97434968421053,
   "logs": [
+    {
+      "at": 1789290090715,
+      "source": "timer",
+      "level": "info",
+      "message": "【paper回补】现价 0.000922 ≥ 0.000909721，用 10481.93 USDT，起步价 0.000907"
+    },
+    {
+      "at": 1789290090537,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=flat_rebuy enabled=true"
+    },
     {
       "at": 1789290079496,
       "source": "timer",
@@ -1203,18 +1215,6 @@
     },
     {
       "at": 1789245101638,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789245090353,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789245090352,
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
