@@ -19,6 +19,13 @@ const CHART = {
   grid: [216, 221, 218, 255],
   text: [40, 50, 58, 255],
   pin: [90, 106, 104, 255],
+  // Match kline.html / WeCom markdown: 5m three-up green, 15m heat orange.
+  streak5: [47, 143, 110, 255],
+  heat15: [196, 122, 58, 255],
+  badgeFg: [244, 247, 245, 255],
+  badgeStreak5Bg: [47, 143, 110, 235],
+  badgeHeat15Bg: [196, 122, 58, 235],
+  badgeAtBg: [74, 108, 98, 235],
 };
 
 // Minimal 5x7 glyphs for chart titles (A-Z 0-9 . + - % space).
@@ -28,6 +35,7 @@ const GLYPHS = {
   '+': [0, 4, 4, 31, 4, 4, 0],
   '-': [0, 0, 0, 31, 0, 0, 0],
   '%': [17, 18, 4, 8, 17, 17, 0],
+  '@': [14, 17, 21, 21, 22, 16, 15],
   0: [14, 17, 19, 21, 25, 17, 14],
   1: [4, 12, 4, 4, 4, 4, 14],
   2: [14, 17, 1, 2, 4, 8, 31],
@@ -213,6 +221,72 @@ function drawText(pixels, width, height, x, y, text, rgba, scale) {
       }
       cursor += 6 * s;
     });
+  return cursor - x;
+}
+
+function textWidth(text, scale) {
+  const s = scale || 2;
+  return String(text || '').length * 6 * s;
+}
+
+function titleColorFromMomentum(options) {
+  if (options && options.streak5) return CHART.streak5;
+  if (options && options.heat15) return CHART.heat15;
+  return CHART.text;
+}
+
+/** Top-right badges: 5M (green), 15M (orange), @@@ — same flags as page/WeCom text. */
+function drawMomentumBadges(pixels, width, height, options) {
+  if (!options) return;
+  const badges = [];
+  if (options.streak5) {
+    badges.push({
+      text: '5M',
+      bg: CHART.badgeStreak5Bg,
+      fg: CHART.badgeFg,
+    });
+  }
+  if (options.heat15) {
+    badges.push({
+      text: '15M',
+      bg: CHART.badgeHeat15Bg,
+      fg: CHART.badgeFg,
+    });
+  }
+  if (options.priceUpVsLast) {
+    badges.push({
+      text: '@@@',
+      bg: CHART.badgeAtBg,
+      fg: CHART.badgeFg,
+    });
+  }
+  if (!badges.length) return;
+
+  const scale = 2;
+  const padX = 5;
+  const padY = 3;
+  const gap = 6;
+  const y = 8;
+  let x = width - CHART.padRight;
+  for (let i = badges.length - 1; i >= 0; i -= 1) {
+    const badge = badges[i];
+    const tw = textWidth(badge.text, scale);
+    const bw = tw + padX * 2;
+    const bh = 7 * scale + padY * 2;
+    x -= bw;
+    fillRect(pixels, width, height, x, y, bw, bh, badge.bg);
+    drawText(
+      pixels,
+      width,
+      height,
+      x + padX,
+      y + padY,
+      badge.text,
+      badge.fg,
+      scale,
+    );
+    x -= gap;
+  }
 }
 
 function crc32(buf) {
@@ -273,8 +347,18 @@ function renderCandlesPixels(candles, options) {
   const padBottom = Math.min(CHART.padBottom, 12);
 
   if (title) {
-    drawText(pixels, width, height, 12, 10, title, CHART.text, 2);
+    drawText(
+      pixels,
+      width,
+      height,
+      12,
+      10,
+      title,
+      titleColorFromMomentum(options),
+      2,
+    );
   }
+  drawMomentumBadges(pixels, width, height, options);
 
   if (!candles || !candles.length) {
     drawText(pixels, width, height, 12, height / 2, 'NO DATA', CHART.down, 2);
@@ -407,6 +491,9 @@ async function buildSymbolChart(symbol, options) {
   return renderCandlesPng(candles, {
     title,
     pinPrice: options && options.pinPrice,
+    streak5: !!(options && options.streak5),
+    heat15: !!(options && options.heat15),
+    priceUpVsLast: !!(options && options.priceUpVsLast),
   });
 }
 
@@ -428,6 +515,9 @@ async function buildTopChartsCollage(rows, options) {
           title,
           pinPrice: row.pinPrice,
           height: options && options.height,
+          streak5: !!row.streak5,
+          heat15: !!row.heat15,
+          priceUpVsLast: !!row.priceUpVsLast,
         });
       } catch (error) {
         console.warn(

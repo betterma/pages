@@ -279,6 +279,38 @@
         line-height: 1.3;
         cursor: help;
       }
+      /* Align with WeCom: 5m three-up = green, 15m 2/3 = orange */
+      .kline-card-head .symbol-copy.is-streak5 {
+        color: #2f8f6e;
+      }
+      .kline-card-head .symbol-copy.is-heat15 {
+        color: #c47a3a;
+      }
+      .mom-badge {
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        z-index: 1;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        line-height: 1.3;
+        cursor: help;
+        color: #f4f7f5;
+        pointer-events: auto;
+      }
+      .mom-badge.is-streak5 {
+        background: rgba(47, 143, 110, 0.92);
+      }
+      .mom-badge.is-heat15 {
+        background: rgba(196, 122, 58, 0.92);
+      }
+      .price-up-last-mark {
+        margin-left: 4px;
+        color: #2f8f6e;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
       .fav-mark {
         position: absolute;
         top: 6px;
@@ -527,6 +559,8 @@
         SIGNAL_LIMIT: 200,
         EARLY_SCORE_MIN: 2,
         LONG_PRESS_MS: 550,
+        MOMENTUM_5M_LIMIT: 5,
+        NOTIFY_STATE_PATH: "watch-notify-state.json",
       };
       const DURATION_MS = {
         "15m": 15 * 60 * 1000,
@@ -543,6 +577,7 @@
       let blacklistItems = [];
       let pinItems = [];
       let positionItems = [];
+      let lastPinPrices = {};
       let klineAbort = null;
       let loading = false;
       let favoriteSaving = false;
@@ -864,7 +899,29 @@
           console.warn(error);
           positionItems = [];
         }
+        try {
+          lastPinPrices = await loadLastPinPrices();
+        } catch (error) {
+          console.warn(error);
+          lastPinPrices = {};
+        }
         pruneHistory();
+      }
+
+      async function loadLastPinPrices() {
+        const path = CONFIG.NOTIFY_STATE_PATH;
+        try {
+          const url = `https://raw.githubusercontent.com/${CONFIG.GITHUB_REPO}/main/${path}?t=${Date.now()}`;
+          const response = await fetch(url, { cache: "no-store" });
+          if (!response.ok) return {};
+          const data = await response.json();
+          return data && typeof data.lastPinPrices === "object"
+            ? data.lastPinPrices
+            : {};
+        } catch (error) {
+          console.warn("loadLastPinPrices failed", error);
+          return {};
+        }
       }
 
       async function loadBinanceTicker() {
@@ -1019,6 +1076,88 @@
         card.appendChild(badge);
       }
 
+      /** Drop forming candle; closed closes only (same as WeCom notify). */
+      function closedCloses(candles) {
+        if (!Array.isArray(candles) || candles.length < 2) return [];
+        return candles
+          .slice(0, -1)
+          .map((bar) => Number(bar && bar.close))
+          .filter((value) => Number.isFinite(value));
+      }
+
+      function lastBarRises(closes, bars) {
+        const need = bars + 1;
+        if (!Array.isArray(closes) || closes.length < need) return [];
+        const slice = closes.slice(-need);
+        const rises = [];
+        for (let i = 1; i < slice.length; i += 1) {
+          rises.push(slice[i] > slice[i - 1]);
+        }
+        return rises;
+      }
+
+      function momentumFromCloses(closes5, closes15) {
+        const rises5 = lastBarRises(closes5, 3);
+        const rises15 = lastBarRises(closes15, 3);
+        return {
+          streak5: rises5.length === 3 && rises5.every(Boolean),
+          heat15: rises15.length === 3 && rises15.filter(Boolean).length >= 2,
+        };
+      }
+
+      function applyPinMomentum(card, flags) {
+        const nameBtn = card.querySelector(".symbol-copy");
+        const status = card.querySelector("[data-kline-status]");
+        card.classList.remove("is-streak5", "is-heat15", "is-price-up-last");
+        if (nameBtn) {
+          nameBtn.classList.remove("is-streak5", "is-heat15");
+        }
+        const oldBadge = card.querySelector(".mom-badge");
+        if (oldBadge) oldBadge.remove();
+        const oldMark = card.querySelector(".price-up-last-mark");
+        if (oldMark) oldMark.remove();
+
+        if (!flags) return;
+        const { streak5, heat15, priceUpVsLast } = flags;
+
+        if (streak5) {
+          card.classList.add("is-streak5");
+          if (nameBtn) nameBtn.classList.add("is-streak5");
+        } else if (heat15) {
+          card.classList.add("is-heat15");
+          if (nameBtn) nameBtn.classList.add("is-heat15");
+        }
+
+        if (streak5 || heat15) {
+          const badge = document.createElement("span");
+          badge.className = `mom-badge ${streak5 ? "is-streak5" : "is-heat15"}`;
+          const parts = [];
+          if (streak5) parts.push("5m连阳");
+          if (heat15) parts.push("15m热");
+          badge.textContent = parts.join(" · ");
+          badge.title = streak5
+            ? "近 3 根已收盘 5m 收盘价连续高于前收（与企微绿名一致）"
+            : "近 3 根已收盘 15m 至少 2 根收涨（与企微橙名一致）";
+          if (streak5 && heat15) {
+            badge.title =
+              "5m 三连阳 + 15m 热度（名称按企微规则显示绿色）";
+          }
+          badge.addEventListener("pointerdown", (event) =>
+            event.stopPropagation(),
+          );
+          card.appendChild(badge);
+        }
+
+        if (priceUpVsLast && status) {
+          card.classList.add("is-price-up-last");
+          const mark = document.createElement("span");
+          mark.className = "price-up-last-mark";
+          mark.textContent = "@@@";
+          mark.title = "现价高于上次企微推送价";
+          status.appendChild(mark);
+        }
+      }
+
       function drawKline(canvas, candles) {
         const rect = canvas.getBoundingClientRect();
         const width = Math.max(1, Math.floor(rect.width));
@@ -1064,7 +1203,7 @@
         const status = card.querySelector("[data-kline-status]");
         if (!canvas || !status) return;
         try {
-          const [candles, signalCandles] = await Promise.all([
+          const tasks = [
             fetchKlines(symbol, interval, signal),
             fetchKlines(
               symbol,
@@ -1072,7 +1211,13 @@
               signal,
               CONFIG.SIGNAL_LIMIT,
             ),
-          ]);
+          ];
+          if (pinItem) {
+            tasks.push(
+              fetchKlines(symbol, "5m", signal, CONFIG.MOMENTUM_5M_LIMIT),
+            );
+          }
+          const [candles, signalCandles, candles5] = await Promise.all(tasks);
           if (pinItem) {
             const rel = pinChangePercent(pinItem);
             const change24h = marketMap[symbol]?.change24h;
@@ -1098,9 +1243,27 @@
               : "24h";
             status.className =
               change24h > 0 ? "up" : change24h < 0 ? "price-down" : "neutral";
+            applyPinMomentum(card, null);
           }
           drawKline(canvas, candles);
           applyEarlyBadge(card, scoreEarlyMomentum(signalCandles));
+          if (pinItem) {
+            const mom = momentumFromCloses(
+              closedCloses(candles5),
+              closedCloses(signalCandles),
+            );
+            const last = Number(lastPinPrices[symbol]);
+            const current = marketMap[symbol]?.price;
+            const priceUpVsLast =
+              Number.isFinite(last) &&
+              Number.isFinite(current) &&
+              current > last;
+            applyPinMomentum(card, {
+              streak5: mom.streak5,
+              heat15: mom.heat15,
+              priceUpVsLast,
+            });
+          }
         } catch (error) {
           if (error.name === "AbortError") return;
           status.textContent = "加载失败";
@@ -1294,7 +1457,7 @@
         };
 
         const start = (event) => {
-          if (event.target.closest(".symbol-copy, .card-actions, .early-badge")) {
+          if (event.target.closest(".symbol-copy, .card-actions, .early-badge, .mom-badge, .price-up-last-mark")) {
             return;
           }
           if (event.pointerType === "mouse" && event.button !== 0) return;
