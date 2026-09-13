@@ -11,14 +11,26 @@
   "windowStartMs": 1789286400000,
   "entryPrice": 0.000855,
   "cooldownUntil": 1789288879458,
-  "lastPrice": 0.000898,
-  "lastCheckAt": 1789288284385,
+  "lastPrice": 0.000895,
+  "lastCheckAt": 1789288290383,
   "lastAction": "cooldown",
   "lastError": null,
-  "updatedAt": 1789288284476,
+  "updatedAt": 1789288290471,
   "startedAt": 1789279629168,
   "feesPaid": 20.49242105263158,
   "logs": [
+    {
+      "at": 1789288290471,
+      "source": "timer",
+      "level": "info",
+      "message": "冷静期中，约剩 10 分钟"
+    },
+    {
+      "at": 1789288290383,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=cooldown enabled=true"
+    },
     {
       "at": 1789288284475,
       "source": "timer",
@@ -1203,18 +1215,6 @@
     },
     {
       "at": 1789245079121,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789243301551,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789243301551,
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
