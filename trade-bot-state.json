@@ -11,14 +11,26 @@
   "windowStartMs": 1789329600000,
   "entryPrice": 0.000799,
   "cooldownUntil": 1789339279562,
-  "lastPrice": 0.000788,
-  "lastCheckAt": 1789338690759,
+  "lastPrice": 0.00079,
+  "lastCheckAt": 1789338701689,
   "lastAction": "cooldown",
   "lastError": null,
-  "updatedAt": 1789338690854,
+  "updatedAt": 1789338701771,
   "startedAt": 1789279629168,
   "feesPaid": 61.12919244447146,
   "logs": [
+    {
+      "at": 1789338701771,
+      "source": "timer",
+      "level": "info",
+      "message": "冷静期中，约剩 10 分钟"
+    },
+    {
+      "at": 1789338701689,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=cooldown enabled=true"
+    },
     {
       "at": 1789338690853,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "持仓中：现价 0.000924，卖出线 0.000902465，权益 10494.16"
-    },
-    {
-      "at": 1789295479617,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
-    },
-    {
-      "at": 1789293702154,
-      "source": "timer",
-      "level": "info",
-      "message": "持仓中：现价 0.00091，卖出线 0.000902465，权益 10335.16"
     }
   ]
 }
