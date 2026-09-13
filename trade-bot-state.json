@@ -12,13 +12,25 @@
   "entryPrice": null,
   "cooldownUntil": null,
   "lastPrice": 0.1105,
-  "lastCheckAt": 1789259491217,
+  "lastCheckAt": 1789259502124,
   "lastAction": "tick_skipped",
   "lastError": null,
-  "updatedAt": 1789259491218,
+  "updatedAt": 1789259502125,
   "startedAt": 1789183277680,
   "feesPaid": 5.902678760316166,
   "logs": [
+    {
+      "at": 1789259502125,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 检测跳过：自动检测已关闭"
+    },
+    {
+      "at": 1789259502124,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
+    },
     {
       "at": 1789259491218,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=MINAUSDT status=holding enabled=true"
-    },
-    {
-      "at": 1789216280129,
-      "source": "timer",
-      "level": "info",
-      "message": "【paper回补】现价 0.1119 ≥ 0.109327，用 970.08 USDT，起步价 0.109"
-    },
-    {
-      "at": 1789216279925,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=flat_rebuy enabled=true"
     }
   ]
 }
