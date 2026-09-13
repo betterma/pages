@@ -2,22 +2,14 @@
 
 (function () {
   const NETWORK = 'robinhood';
-  const PAPRIKA = 'https://api.dexpaprika.com';
-  const QUOTE_BLOCKLIST = new Set(
-    [
-      '0x5fc5360d0400a0fd4f2af552add042d716f1d168', // USDG
-      '0x0bd7d308f8e1639fab988df18a8011f41eacad73', // WETH
-      '0x0000000000000000000000000000000000000000', // ETH
-    ].map((s) => s.toLowerCase()),
-  );
+  const CACHE_URL =
+    (window.RH_CONFIG && window.RH_CONFIG.CACHE_URL) || './cache.json';
 
   const el = {
     fdvMin: document.getElementById('fdvMin'),
     fdvMax: document.getElementById('fdvMax'),
     limit: document.getElementById('limit'),
-    days: document.getElementById('days'),
     orderBy: document.getElementById('orderBy'),
-    proxy: document.getElementById('proxy'),
     reload: document.getElementById('reload'),
     grid: document.getElementById('grid'),
     empty: document.getElementById('empty'),
@@ -27,6 +19,7 @@
   };
 
   const charts = new Map();
+  let cachePayload = null;
 
   function money(n) {
     if (!Number.isFinite(n)) return '--';
@@ -38,8 +31,7 @@
 
   function pct(n) {
     if (!Number.isFinite(n)) return '--';
-    const s = `${n > 0 ? '+' : ''}${n.toFixed(2)}%`;
-    return s;
+    return `${n > 0 ? '+' : ''}${n.toFixed(2)}%`;
   }
 
   function setStatus(mode, text) {
@@ -47,157 +39,12 @@
     el.statusText.textContent = text || '';
   }
 
-  function proxyBase() {
-    const fromInput = String(el.proxy.value || '').trim();
-    const fromStore = String(localStorage.getItem('rhProxy') || '').trim();
-    const fromConfig = String(
-      (window.RH_CONFIG && window.RH_CONFIG.PROXY_URL) || '',
-    ).trim();
-    return (fromInput || fromStore || fromConfig).replace(/\/$/, '');
-  }
-
-  function isHostedPage() {
-    const host = String(location.hostname || '');
-    return (
-      host &&
-      host !== 'localhost' &&
-      host !== '127.0.0.1' &&
-      host !== '[::1]'
-    );
-  }
-
-  function saveProxy() {
-    const v = String(el.proxy.value || '').trim();
-    if (v) localStorage.setItem('rhProxy', v);
-    else localStorage.removeItem('rhProxy');
-  }
-
-  async function fetchJson(url) {
-    let res;
-    try {
-      res = await fetch(url, {
-        headers: { Accept: 'application/json' },
-      });
-    } catch (error) {
-      throw new Error(
-        '网络/CORS 失败。线上站点请部署 cloud-function-rh，并把 HTTP 地址填到「代理」。',
-      );
-    }
-    const text = await res.text();
-    let data = null;
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch (error) {
-      throw new Error(`非 JSON 响应 (${res.status})`);
-    }
-    if (!res.ok) {
-      const msg =
-        (data && (data.error || data.message)) || `HTTP ${res.status}`;
-      throw new Error(msg);
-    }
-    return data;
-  }
-
-  async function apiTokens(params) {
-    const proxy = proxyBase();
-    if (proxy) {
-      const q = new URLSearchParams({
-        fdvMin: String(params.fdvMin),
-        fdvMax: String(params.fdvMax),
-        limit: String(params.limit),
-        orderBy: params.orderBy,
-      });
-      return fetchJson(`${proxy}/tokens?${q}`);
-    }
-    const q = new URLSearchParams({
-      fdv_usd_min: String(params.fdvMin),
-      fdv_usd_max: String(params.fdvMax),
-      order_by: params.orderBy,
-      sort: 'desc',
-      limit: String(params.limit),
-      detailed: 'true',
-    });
-    return fetchJson(
-      `${PAPRIKA}/networks/${NETWORK}/tokens/search?${q}`,
-    );
-  }
-
-  async function apiBestPool(token) {
-    const proxy = proxyBase();
-    if (proxy) {
-      return fetchJson(
-        `${proxy}/pools?token=${encodeURIComponent(token)}&limit=3`,
-      );
-    }
-    const q = new URLSearchParams({
-      token_address: token,
-      order_by: 'liquidity_usd',
-      sort: 'desc',
-      limit: '3',
-    });
-    return fetchJson(
-      `${PAPRIKA}/networks/${NETWORK}/pools/search?${q}`,
-    );
-  }
-
-  async function apiOhlcv(pool, days) {
-    const proxy = proxyBase();
-    if (proxy) {
-      return fetchJson(
-        `${proxy}/ohlcv?pool=${encodeURIComponent(pool)}&days=${days}`,
-      );
-    }
-    const start = new Date();
-    start.setUTCDate(start.getUTCDate() - days);
-    const end = new Date().toISOString().slice(0, 10);
-    const q = new URLSearchParams({
-      start: start.toISOString().slice(0, 10),
-      end,
-      interval: '24h',
-      limit: String(days),
-    });
-    return fetchJson(
-      `${PAPRIKA}/networks/${NETWORK}/pools/${pool}/ohlcv?${q}`,
-    );
-  }
-
-  function normalizeBars(raw) {
-    const list = Array.isArray(raw) ? raw : [];
-    return list
-      .map((row) => {
-        const t = Math.floor(new Date(row.time_open || row.time).getTime() / 1000);
-        const open = Number(row.open);
-        const high = Number(row.high);
-        const low = Number(row.low);
-        const close = Number(row.close);
-        if (
-          !Number.isFinite(t) ||
-          !Number.isFinite(open) ||
-          !Number.isFinite(high) ||
-          !Number.isFinite(low) ||
-          !Number.isFinite(close)
-        ) {
-          return null;
-        }
-        return { time: t, open, high, low, close };
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.time - b.time);
-  }
-
-  async function mapPool(items, concurrency, worker) {
-    const out = new Array(items.length);
-    let i = 0;
-    async function run() {
-      while (i < items.length) {
-        const idx = i;
-        i += 1;
-        out[idx] = await worker(items[idx], idx);
-      }
-    }
-    const n = Math.max(1, Math.min(concurrency, items.length || 1));
-    await Promise.all(Array.from({ length: n }, () => run()));
-    return out;
+  function escapeHtml(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   function destroyCharts() {
@@ -211,45 +58,27 @@
     charts.clear();
   }
 
-  function renderCardShell(token) {
-    const card = document.createElement('article');
-    card.className = 'card';
-    card.dataset.address = token.address;
-
-    const chg = Number(token.price_change_percentage_24h);
-    const chgClass = Number.isFinite(chg)
-      ? chg >= 0
-        ? 'up'
-        : 'down'
-      : '';
-
-    card.innerHTML = `
-      <div class="card-head">
-        <div>
-          <h2>${escapeHtml(token.symbol || '--')}</h2>
-          <div class="sub" title="${escapeHtml(token.name || '')}">${escapeHtml(token.name || token.address)}</div>
-        </div>
-        <div class="meta">
-          <div>FDV ${money(Number(token.fdv_usd))}</div>
-          <div class="chg ${chgClass}">24h ${pct(chg)}</div>
-          <div>Vol ${money(Number(token.volume_usd_24h))}</div>
-        </div>
-      </div>
-      <div class="chart"><div class="placeholder">加载 K 线…</div></div>
-      <div class="card-foot">
-        <span class="pool">池子解析中</span>
-        <a class="dex" href="#" target="_blank" rel="noopener">DexScreener</a>
-      </div>
-    `;
-    return card;
+  async function loadCache() {
+    const url = `${CACHE_URL}${CACHE_URL.includes('?') ? '&' : '?'}t=${Date.now()}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`读取缓存失败 HTTP ${res.status}`);
+    return res.json();
   }
 
-  function escapeHtml(s) {
-    return String(s || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+  function sortItems(items, orderBy) {
+    const key =
+      orderBy === 'liquidity_usd'
+        ? 'liquidity_usd'
+        : orderBy === 'fdv_usd'
+          ? 'fdv_usd'
+          : 'volume_usd_24h';
+    return items.slice().sort((a, b) => {
+      const av = Number(a[key]);
+      const bv = Number(b[key]);
+      const aOk = Number.isFinite(av) ? av : -Infinity;
+      const bOk = Number.isFinite(bv) ? bv : -Infinity;
+      return bOk - aOk;
+    });
   }
 
   function paintChart(container, bars) {
@@ -258,7 +87,7 @@
       container.innerHTML = '<div class="placeholder">图表库未加载</div>';
       return null;
     }
-    if (!bars.length) {
+    if (!bars || !bars.length) {
       container.innerHTML = '<div class="placeholder">暂无日 K</div>';
       return null;
     }
@@ -288,92 +117,93 @@
     return chart;
   }
 
-  async function loadOneCard(card, token, days) {
-    const chartEl = card.querySelector('.chart');
-    const poolEl = card.querySelector('.pool');
-    const dexEl = card.querySelector('.dex');
-    try {
-      const poolRes = await apiBestPool(token.address);
-      const pool = (poolRes.results || [])[0];
-      if (!pool || !pool.id) {
-        chartEl.innerHTML = '<div class="placeholder">未找到流动性池</div>';
-        poolEl.textContent = '无池';
-        return;
-      }
-      poolEl.textContent = `Liq ${money(Number(pool.liquidity_usd))}`;
-      dexEl.href = `https://dexscreener.com/${NETWORK}/${pool.id}`;
-
-      const ohlcv = await apiOhlcv(pool.id, days);
-      const bars = normalizeBars(ohlcv);
-      const chart = paintChart(chartEl, bars);
-      if (chart) charts.set(token.address, chart);
-    } catch (error) {
-      chartEl.innerHTML = `<div class="placeholder">${escapeHtml(error.message || error)}</div>`;
-      poolEl.textContent = '失败';
-    }
-  }
-
-  async function reload() {
-    saveProxy();
+  function renderItems(items) {
     destroyCharts();
     el.grid.innerHTML = '';
-    el.empty.hidden = true;
-    el.reload.disabled = true;
-
-    if (isHostedPage() && !proxyBase()) {
+    if (!items.length) {
       el.empty.hidden = false;
-      el.empty.innerHTML =
-        '线上域名会被 DexPaprika <b>CORS</b> 拦截。<br/>请部署仓库里的 <code>cloud-function-rh</code>，把 HTTP 触发器地址填到上方「代理」，或写入 <code>RH/config.js</code> 的 <code>PROXY_URL</code>。';
-      setStatus('err', '需要代理');
-      el.reload.disabled = false;
+      el.empty.textContent = '缓存里没有符合当前 FDV 条件的代币';
       return;
     }
+    el.empty.hidden = true;
 
+    items.forEach((token) => {
+      const card = document.createElement('article');
+      card.className = 'card';
+      card.dataset.address = token.address;
+      const chg = Number(token.price_change_percentage_24h);
+      const chgClass = Number.isFinite(chg) ? (chg >= 0 ? 'up' : 'down') : '';
+      const dexHref = token.poolId
+        ? `https://dexscreener.com/${NETWORK}/${token.poolId}`
+        : `https://dexscreener.com/${NETWORK}/${token.address}`;
+
+      card.innerHTML = `
+        <div class="card-head">
+          <div>
+            <h2>${escapeHtml(token.symbol || '--')}</h2>
+            <div class="sub" title="${escapeHtml(token.name || '')}">${escapeHtml(token.name || token.address)}</div>
+          </div>
+          <div class="meta">
+            <div>FDV ${money(Number(token.fdv_usd))}</div>
+            <div class="chg ${chgClass}">24h ${pct(chg)}</div>
+            <div>Vol ${money(Number(token.volume_usd_24h))}</div>
+          </div>
+        </div>
+        <div class="chart"></div>
+        <div class="card-foot">
+          <span>Liq ${money(Number(token.liquidity_usd))}</span>
+          <a href="${dexHref}" target="_blank" rel="noopener">DexScreener</a>
+        </div>
+      `;
+      el.grid.appendChild(card);
+      const chartEl = card.querySelector('.chart');
+      const chart = paintChart(chartEl, token.bars || []);
+      if (chart) charts.set(token.address, chart);
+    });
+  }
+
+  function applyFilters() {
+    if (!cachePayload) return;
     const fdvMin = Number(el.fdvMin.value) * 1e6;
     const fdvMax = Number(el.fdvMax.value) * 1e6;
     const limit = Math.max(1, Math.min(60, Number(el.limit.value) || 24));
-    const days = Math.max(14, Math.min(180, Number(el.days.value) || 90));
     const orderBy = el.orderBy.value || 'volume_usd_24h';
 
-    setStatus('run', '拉取代币列表…');
-    el.countText.textContent = '';
+    let items = (cachePayload.items || []).filter((t) => {
+      const fdv = Number(t.fdv_usd);
+      return Number.isFinite(fdv) && fdv >= fdvMin && fdv <= fdvMax;
+    });
+    items = sortItems(items, orderBy).slice(0, limit);
+    renderItems(items);
 
+    const updatedAt = Number(cachePayload.updatedAt) || 0;
+    const when = updatedAt
+      ? new Date(updatedAt).toLocaleString('zh-CN', { hour12: false })
+      : '尚未生成';
+    el.countText.textContent = `显示 ${items.length} · 缓存 ${when}`;
+    setStatus(
+      updatedAt ? 'ok' : 'err',
+      updatedAt ? '缓存已加载' : '缓存为空，请先跑定时云函数',
+    );
+  }
+
+  async function reload() {
+    el.reload.disabled = true;
+    setStatus('run', '读取 cache.json…');
     try {
-      const data = await apiTokens({ fdvMin, fdvMax, limit: Math.min(100, limit + 10), orderBy });
-      const tokens = (data.results || [])
-        .filter((t) => t && t.address && !QUOTE_BLOCKLIST.has(String(t.address).toLowerCase()))
-        .filter((t) => {
-          const fdv = Number(t.fdv_usd);
-          return Number.isFinite(fdv) && fdv >= fdvMin && fdv <= fdvMax;
-        })
-        .slice(0, limit);
-
-      if (!tokens.length) {
-        el.empty.hidden = false;
-        setStatus('ok', '列表为空');
-        return;
+      cachePayload = await loadCache();
+      if (cachePayload.params) {
+        if (Number.isFinite(cachePayload.params.fdvMin)) {
+          el.fdvMin.value = cachePayload.params.fdvMin / 1e6;
+        }
+        if (Number.isFinite(cachePayload.params.fdvMax)) {
+          el.fdvMax.value = cachePayload.params.fdvMax / 1e6;
+        }
       }
-
-      const cards = tokens.map((t) => {
-        const card = renderCardShell(t);
-        el.grid.appendChild(card);
-        return { card, token: t };
-      });
-
-      el.countText.textContent = `${tokens.length} 个代币 · 日 K ${days} 根`;
-      setStatus('run', '拉取池子与日 K…');
-
-      let done = 0;
-      await mapPool(cards, 4, async (row) => {
-        await loadOneCard(row.card, row.token, days);
-        done += 1;
-        setStatus('run', `K 线 ${done}/${cards.length}`);
-      });
-
-      setStatus('ok', `完成 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`);
+      applyFilters();
     } catch (error) {
       el.empty.hidden = false;
-      el.empty.textContent = `加载失败：${error.message || error}。若是 CORS，请部署 cloud-function-rh 并填写代理。`;
+      el.empty.textContent = `加载失败：${error.message || error}`;
       setStatus('err', '失败');
     } finally {
       el.reload.disabled = false;
@@ -382,17 +212,22 @@
 
   window.addEventListener('resize', () => {
     charts.forEach((chart, address) => {
-      const card = el.grid.querySelector(`[data-address="${address}"] .chart`);
-      if (card && chart) {
-        chart.applyOptions({ width: card.clientWidth, height: card.clientHeight || 220 });
+      const node = el.grid.querySelector(
+        `[data-address="${CSS.escape(address)}"] .chart`,
+      );
+      if (node && chart) {
+        chart.applyOptions({
+          width: node.clientWidth,
+          height: node.clientHeight || 220,
+        });
       }
     });
   });
 
-  el.proxy.value =
-    localStorage.getItem('rhProxy') ||
-    (window.RH_CONFIG && window.RH_CONFIG.PROXY_URL) ||
-    '';
   el.reload.addEventListener('click', () => reload());
+  el.fdvMin.addEventListener('change', () => applyFilters());
+  el.fdvMax.addEventListener('change', () => applyFilters());
+  el.limit.addEventListener('change', () => applyFilters());
+  el.orderBy.addEventListener('change', () => applyFilters());
   reload();
 })();

@@ -56,7 +56,7 @@
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
         gap: 8px;
-        width: min(720px, 100%);
+        width: min(640px, 100%);
       }
       label {
         display: flex;
@@ -76,9 +76,6 @@
         background: var(--panel);
         color: var(--text);
         padding: 8px 10px;
-      }
-      label.proxy {
-        grid-column: 1 / -1;
       }
       button {
         cursor: pointer;
@@ -214,7 +211,7 @@
       <header>
         <div class="brand">
           <h1>RH 日 K</h1>
-          <p>Robinhood · 按 FDV 筛选后一次浏览全部日线（DexPaprika）</p>
+          <p>Robinhood · 读定时缓存，按 FDV 浏览日线（无需 HTTP / API Key）</p>
         </div>
         <div class="controls">
           <label>
@@ -230,35 +227,21 @@
             <input id="limit" type="number" value="24" min="1" max="60" />
           </label>
           <label>
-            日 K 根数
-            <input id="days" type="number" value="90" min="14" max="180" />
-          </label>
-          <label>
             排序
             <select id="orderBy">
               <option value="volume_usd_24h">24h 成交额</option>
               <option value="liquidity_usd">流动性</option>
               <option value="fdv_usd">FDV</option>
-              <option value="txns_24h">24h 笔数</option>
             </select>
           </label>
-          <button id="reload" type="button">刷新</button>
-          <label class="proxy">
-            代理（线上必填：云函数 HTTP 根地址）
-            <input
-              id="proxy"
-              type="url"
-              placeholder="https://xxxx.apig.cn-north-4.huaweicloudapis.com/rh"
-              autocomplete="off"
-            />
-          </label>
+          <button id="reload" type="button">刷新显示</button>
         </div>
       </header>
 
       <div class="status">
         <span><i class="dot" id="dot"></i> <span id="statusText">待命</span></span>
         <span id="countText"></span>
-        <span id="hintText">线上需填代理；本地 localhost 可直连试</span>
+        <span id="hintText">数据来自 RH/cache.json，由定时云函数更新</span>
       </div>
 
       <div id="grid" class="grid"></div>

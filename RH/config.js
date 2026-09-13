@@ -1,5 +1,4 @@
-// 线上站点必填：填华为云函数 HTTP 触发器根地址（能打开 /health 的那一层）
-// 例：https://swr-xxxxx.apig.cn-north-4.huaweicloudapis.com/rh
+// 页面只读 RH/cache.json（由定时云函数刷新），无需代理 / API Key
 window.RH_CONFIG = {
-  PROXY_URL: '',
+  CACHE_URL: './cache.json',
 };
