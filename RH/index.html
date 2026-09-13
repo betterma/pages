@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RH 日 K · Robinhood</title>
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+      :root {
+        --bg: #12161a;
+        --panel: #1a2128;
+        --line: #2a343e;
+        --text: #e6ebe8;
+        --muted: #8b9790;
+        --accent: #6f9e8c;
+        --up: #3d9a78;
+        --down: #c45c4a;
+        --warn: #c9a227;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background:
+          radial-gradient(1200px 500px at 10% -10%, #1c2a28 0%, transparent 55%),
+          var(--bg);
+        color: var(--text);
+        font-family: "IBM Plex Sans", "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+      .wrap {
+        width: min(1480px, calc(100% - 24px));
+        margin: 0 auto;
+        padding: 18px 0 40px;
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 20px;
+        align-items: flex-end;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+      .brand h1 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 650;
+        letter-spacing: 0.02em;
+      }
+      .brand p {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 8px;
+        width: min(720px, 100%);
+      }
+      label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 11px;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      input,
+      select,
+      button {
+        font: inherit;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+        padding: 8px 10px;
+      }
+      label.proxy {
+        grid-column: 1 / -1;
+      }
+      button {
+        cursor: pointer;
+        background: #24332e;
+        border-color: #355348;
+        color: #d7ebe2;
+        align-self: end;
+      }
+      button:hover {
+        background: #2c3f38;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .status {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 16px;
+        align-items: center;
+        margin: 8px 0 16px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #666;
+        display: inline-block;
+      }
+      .dot.ok {
+        background: var(--accent);
+        box-shadow: 0 0 8px rgba(111, 158, 140, 0.45);
+      }
+      .dot.err {
+        background: var(--down);
+      }
+      .dot.run {
+        background: var(--warn);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 14px;
+      }
+      .card {
+        background: linear-gradient(180deg, #1c242c, #171d23);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+        min-height: 280px;
+        display: flex;
+        flex-direction: column;
+      }
+      .card-head {
+        padding: 10px 12px 6px;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .card-head h2 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .card-head .sub {
+        margin-top: 2px;
+        font-size: 11px;
+        color: var(--muted);
+        max-width: 220px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .meta {
+        text-align: right;
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.35;
+      }
+      .chg.up {
+        color: var(--up);
+      }
+      .chg.down {
+        color: var(--down);
+      }
+      .chart {
+        flex: 1;
+        height: 220px;
+        position: relative;
+      }
+      .chart .placeholder {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .card-foot {
+        padding: 6px 12px 10px;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .card-foot a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .card-foot a:hover {
+        text-decoration: underline;
+      }
+      .empty {
+        padding: 40px 12px;
+        text-align: center;
+        color: var(--muted);
+        border: 1px dashed var(--line);
+        border-radius: 10px;
+      }
+      @media (max-width: 640px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="brand">
+          <h1>RH 日 K</h1>
+          <p>Robinhood · 按 FDV 筛选后一次浏览全部日线（DexPaprika）</p>
+        </div>
+        <div class="controls">
+          <label>
+            FDV 最小 (M)
+            <input id="fdvMin" type="number" value="5" min="0" step="0.5" />
+          </label>
+          <label>
+            FDV 最大 (M)
+            <input id="fdvMax" type="number" value="30" min="0" step="0.5" />
+          </label>
+          <label>
+            数量
+            <input id="limit" type="number" value="24" min="1" max="60" />
+          </label>
+          <label>
+            日 K 根数
+            <input id="days" type="number" value="90" min="14" max="180" />
+          </label>
+          <label>
+            排序
+            <select id="orderBy">
+              <option value="volume_usd_24h">24h 成交额</option>
+              <option value="liquidity_usd">流动性</option>
+              <option value="fdv_usd">FDV</option>
+              <option value="txns_24h">24h 笔数</option>
+            </select>
+          </label>
+          <button id="reload" type="button">刷新</button>
+          <label class="proxy">
+            代理（可选，云函数根地址）
+            <input
+              id="proxy"
+              type="url"
+              placeholder="https://your-fn.example/rh"
+              autocomplete="off"
+            />
+          </label>
+        </div>
+      </header>
+
+      <div class="status">
+        <span><i class="dot" id="dot"></i> <span id="statusText">待命</span></span>
+        <span id="countText"></span>
+        <span id="hintText">无需 API Key；若 CORS 失败再填代理</span>
+      </div>
+
+      <div id="grid" class="grid"></div>
+      <div id="empty" class="empty" hidden>没有符合条件的代币</div>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>
