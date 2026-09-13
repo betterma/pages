@@ -12,13 +12,25 @@
   "entryPrice": 0.000799,
   "cooldownUntil": null,
   "lastPrice": 0.000807,
-  "lastCheckAt": 1789326078950,
+  "lastCheckAt": 1789326084256,
   "lastAction": "hold",
   "lastError": null,
-  "updatedAt": 1789326079116,
+  "updatedAt": 1789326084337,
   "startedAt": 1789279629168,
   "feesPaid": 51.18026675978612,
   "logs": [
+    {
+      "at": 1789326084337,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000807，卖出线 0.000790030，权益 10188.81"
+    },
+    {
+      "at": 1789326084256,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
     {
       "at": 1789326079115,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "持仓中：现价 0.000898，卖出线 0.000751225，权益 10492.42"
-    },
-    {
-      "at": 1789281079514,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
-    },
-    {
-      "at": 1789279629172,
-      "source": "page",
-      "level": "trade",
-      "message": "【模拟开仓】VTHOUSDT 投入 10000 USDT @ 0.000855 → 数量 11684211；4h起步价 0.000755；手续费 10.0000 USDT；已开启定时检测"
     }
   ]
 }
