@@ -640,6 +640,11 @@
     return normalizePins(list).filter((item) => item.symbol !== key);
   }
 
+  function removeExpiredPins(list, now) {
+    const ts = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+    return normalizePins(list).filter((item) => !isPinExpired(item, ts));
+  }
+
   function togglePin(list, symbol, pinPrice, source, ttlMs) {
     if (hasPin(list, symbol)) {
       return { list: removePin(list, symbol), added: false };
@@ -997,6 +1002,7 @@
     isPinExpired,
     addPin,
     removePin,
+    removeExpiredPins,
     togglePin,
     loadPinsRaw,
     patchPins,

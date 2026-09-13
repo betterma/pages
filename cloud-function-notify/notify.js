@@ -125,7 +125,7 @@ function normalizePositions(raw) {
     .filter(Boolean);
 }
 
-function listPinUpRows(pins, tickers) {
+function listPinCandidateRows(pins, tickers) {
   return pins
     .map((item) => {
       const ticker = tickers[item.symbol] || {};
@@ -144,15 +144,28 @@ function listPinUpRows(pins, tickers) {
     })
     .filter(
       (row) =>
-        Number.isFinite(row.change) &&
-        row.change > 0 &&
-        Number.isFinite(row.current) &&
-        Number.isFinite(row.pinPrice),
+        Number.isFinite(row.current) && Number.isFinite(row.pinPrice),
     )
     .sort((a, b) => {
-      if (b.change !== a.change) return b.change - a.change;
+      const upA = Number.isFinite(a.change) && a.change > 0 ? 1 : 0;
+      const upB = Number.isFinite(b.change) && b.change > 0 ? 1 : 0;
+      if (upA !== upB) return upB - upA;
+      if (
+        Number.isFinite(a.change) &&
+        Number.isFinite(b.change) &&
+        b.change !== a.change
+      ) {
+        return b.change - a.change;
+      }
       return b.pinnedAt - a.pinnedAt;
     });
+}
+
+/** @deprecated use listPinCandidateRows + window filter */
+function listPinUpRows(pins, tickers) {
+  return listPinCandidateRows(pins, tickers).filter(
+    (row) => Number.isFinite(row.change) && row.change > 0,
+  );
 }
 
 /**
@@ -183,8 +196,13 @@ async function attachPinWindowGain(rows) {
   return rows;
 }
 
-function filterPinDoubleUp(rows) {
+function filterPinWindowUp(rows) {
   return (rows || []).filter((row) => row && row.windowUp);
+}
+
+/** Keep old name as alias for window-up filter (page/notify aligned). */
+function filterPinDoubleUp(rows) {
+  return filterPinWindowUp(rows);
 }
 
 /** Drop the still-forming candle; keep closed bar closes only. */
@@ -534,10 +552,10 @@ async function main() {
   ];
   const tickers = await fetchBinanceTickers(symbols);
 
-  let pinRows = listPinUpRows(pins, tickers);
+  let pinRows = listPinCandidateRows(pins, tickers);
   if (pinRows.length) {
     await attachPinWindowGain(pinRows);
-    pinRows = filterPinDoubleUp(pinRows);
+    pinRows = filterPinWindowUp(pinRows);
   }
   if (pinRows.length) {
     await attachPinMomentum(pinRows);
@@ -629,9 +647,11 @@ module.exports = {
   buildPinReport,
   buildPositionReport,
   listPinUpRows,
+  listPinCandidateRows,
   attachPinMomentum,
   attachPinWindowGain,
   filterPinDoubleUp,
+  filterPinWindowUp,
   attachPriceVsLast,
   momentumFromCloses,
   closedCloses,

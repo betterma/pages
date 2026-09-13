@@ -95,6 +95,116 @@
         font-size: 12px;
         margin-bottom: 10px;
       }
+      .pin-meta-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .pin-meta-row .meta {
+        margin-bottom: 0;
+        flex: 1;
+        min-width: 0;
+      }
+      .pin-meta-row button {
+        flex-shrink: 0;
+        font-size: 12px;
+        padding: 6px 10px;
+      }
+      .hidden-pin-tab {
+        position: fixed;
+        top: 42%;
+        right: 0;
+        z-index: 40;
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+        letter-spacing: 0.12em;
+        border: 1px solid #c9d0d0;
+        border-right: 0;
+        border-radius: 8px 0 0 8px;
+        background: #eef2ef;
+        color: #3d4a48;
+        padding: 14px 8px;
+        font-size: 13px;
+        cursor: pointer;
+        box-shadow: -2px 2px 10px rgba(40, 50, 48, 0.08);
+      }
+      .hidden-pin-tab:hover {
+        background: #e4ebe6;
+      }
+      .hidden-pin-tab[data-count="0"] {
+        opacity: 0.55;
+      }
+      .hidden-pin-tab .tab-count {
+        display: inline-block;
+        margin-top: 8px;
+        writing-mode: horizontal-tb;
+        font-size: 12px;
+        color: #5a6a68;
+      }
+      .hidden-pin-drawer {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        pointer-events: none;
+      }
+      .hidden-pin-drawer.is-open {
+        pointer-events: auto;
+      }
+      .hidden-pin-mask {
+        position: absolute;
+        inset: 0;
+        background: rgba(28, 34, 32, 0.35);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+      .hidden-pin-drawer.is-open .hidden-pin-mask {
+        opacity: 1;
+      }
+      .hidden-pin-panel {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: min(420px, 92vw);
+        height: 100%;
+        background: #f4f5f3;
+        border-left: 1px solid #d0d6d2;
+        box-shadow: -8px 0 28px rgba(20, 28, 26, 0.18);
+        transform: translateX(104%);
+        transition: transform 0.22s ease;
+        display: flex;
+        flex-direction: column;
+      }
+      .hidden-pin-drawer.is-open .hidden-pin-panel {
+        transform: translateX(0);
+      }
+      .hidden-pin-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 14px 14px 10px;
+        border-bottom: 1px solid #dce2de;
+      }
+      .hidden-pin-head h3 {
+        margin: 0;
+        font-size: 16px;
+      }
+      .hidden-pin-head p {
+        margin: 4px 0 0;
+        font-size: 12px;
+        color: #78817f;
+      }
+      .hidden-pin-body {
+        flex: 1;
+        overflow: auto;
+        padding: 12px;
+      }
+      .hidden-pin-body .kline-grid {
+        grid-template-columns: 1fr;
+      }
       .hint {
         color: #9aa3a0;
         font-size: 12px;
@@ -347,10 +457,15 @@
         <span id="statusDot" class="dot"></span>
         <span id="statusText">等待启动...</span>
       </div>
-      <p class="hint">长按选 盯/购买/卖出/收藏/拉黑 · 盯一下仅显示「盯住上涨且窗口上涨」· 企微每5分钟推送</p>
+      <p class="hint">长按选 盯/购买/卖出/收藏/拉黑 · 盯一下展示当前窗口上涨（可低于盯住价）· 右侧看窗口回落 · 企微同步</p>
 
       <h2 class="section-title">盯一下</h2>
-      <div id="pinMeta" class="meta"></div>
+      <div class="pin-meta-row">
+        <div id="pinMeta" class="meta"></div>
+        <button id="clearExpiredPinsBtn" type="button" hidden>
+          清除全部过期
+        </button>
+      </div>
       <div id="pinGrid" class="kline-grid"></div>
 
       <h2 class="section-title">窗口上涨</h2>
@@ -361,6 +476,34 @@
       <div id="favMeta" class="meta"></div>
       <div id="favGrid" class="kline-grid"></div>
     </div>
+
+    <button
+      type="button"
+      id="hiddenPinTab"
+      class="hidden-pin-tab"
+      data-count="0"
+      title="查看当前窗口未涨、已从盯一下区隐藏的币"
+    >
+      隐藏盯一下<span class="tab-count" id="hiddenPinTabCount">0</span>
+    </button>
+    <div id="hiddenPinDrawer" class="hidden-pin-drawer" aria-hidden="true">
+      <div class="hidden-pin-mask" data-close-hidden-pins></div>
+      <aside class="hidden-pin-panel" role="dialog" aria-label="隐藏的盯一下">
+        <div class="hidden-pin-head">
+          <div>
+            <h3>隐藏的盯一下</h3>
+            <p id="hiddenPinMeta">
+              当前窗口未涨 · 长按可取消/续盯 · 企微不推送
+            </p>
+          </div>
+          <button type="button" data-close-hidden-pins>关闭</button>
+        </div>
+        <div class="hidden-pin-body">
+          <div id="hiddenPinGrid" class="kline-grid"></div>
+        </div>
+      </aside>
+    </div>
+
     <script src="./watch-favorites.js"></script>
     <script>
       "use strict";
@@ -1189,6 +1332,7 @@
         const favSet = favoriteSymbols();
         const pairs = pairSet || new Set();
         const pins = pinMap || new Map();
+        const isPinSection = section === "pin" || section === "pin-hidden";
         grid.innerHTML = symbols.length
           ? symbols
               .map((symbol) => {
@@ -1200,10 +1344,10 @@
                   section,
                   isFavorite: favSet.has(symbol),
                   isPair: pairs.has(symbol),
-                  isPin: section === "pin" || pinSymbols().has(symbol),
+                  isPin: isPinSection || pinSymbols().has(symbol),
                   hasPosition: positionSymbols().has(symbol),
-                  isExpired: section === "pin" && expired,
-                  pinItem: section === "pin" ? pinItem : null,
+                  isExpired: isPinSection && expired,
+                  pinItem: isPinSection ? pinItem : null,
                   showMark: section === "rising" && favSet.has(symbol),
                 });
               })
@@ -1212,8 +1356,10 @@
               section === "rising"
                 ? "暂无上涨币种"
                 : section === "pin"
-                  ? "暂无「盯住上涨且窗口上涨」的币 · 窗口回落/盯住下跌已隐藏"
-                  : "暂无窗口上涨的收藏"
+                  ? "暂无当前窗口上涨的盯一下 · 右侧可看窗口回落项"
+                  : section === "pin-hidden"
+                    ? "当前没有隐藏的盯一下（窗口回落）"
+                    : "暂无窗口上涨的收藏"
             }</div>`;
 
         bindCardInteractions(grid);
@@ -1230,13 +1376,29 @@
                 card.dataset.symbol,
                 CONFIG.KLINE_INTERVAL,
                 signal,
-                section === "pin"
-                  ? pinItemBySymbol(card.dataset.symbol)
-                  : null,
+                isPinSection ? pinItemBySymbol(card.dataset.symbol) : null,
               ),
             ),
           );
         }
+      }
+
+      function setHiddenPinDrawerOpen(open) {
+        const drawer = document.getElementById("hiddenPinDrawer");
+        const tab = document.getElementById("hiddenPinTab");
+        if (!drawer) return;
+        drawer.classList.toggle("is-open", !!open);
+        drawer.setAttribute("aria-hidden", open ? "false" : "true");
+        if (tab) tab.setAttribute("aria-expanded", open ? "true" : "false");
+        document.body.style.overflow = open ? "hidden" : "";
+      }
+
+      function updateHiddenPinTab(count) {
+        const tab = document.getElementById("hiddenPinTab");
+        const badge = document.getElementById("hiddenPinTabCount");
+        const n = Number(count) || 0;
+        if (tab) tab.dataset.count = String(n);
+        if (badge) badge.textContent = String(n);
       }
 
       async function renderKlines() {
@@ -1265,28 +1427,35 @@
         const pinCandidates = pinItems.filter(
           (item) => !blocked.has(item.symbol),
         );
-        const pinHiddenDown = pinCandidates.filter((item) => {
-          if (WatchFavorites.isPinExpired(item)) return false;
-          const change = pinChangePercent(item);
-          const pinUp = Number.isFinite(change) && change > 0;
-          const windowUp = hasWindowGain(item.symbol, interval);
-          // Hidden when not (pin-up AND window-up).
-          return !(pinUp && windowUp);
-        }).length;
+        const pinHiddenItems = pinCandidates
+          .filter((item) => !hasWindowGain(item.symbol, interval))
+          .slice()
+          .sort((a, b) => {
+            const expA = WatchFavorites.isPinExpired(a) ? 1 : 0;
+            const expB = WatchFavorites.isPinExpired(b) ? 1 : 0;
+            if (expA !== expB) return expB - expA;
+            const changeA = pinChangePercent(a);
+            const changeB = pinChangePercent(b);
+            const hasA = Number.isFinite(changeA);
+            const hasB = Number.isFinite(changeB);
+            if (hasA && hasB && changeB !== changeA) return changeB - changeA;
+            if (hasA !== hasB) return hasA ? -1 : 1;
+            return b.pinnedAt - a.pinnedAt;
+          });
+        const pinHiddenDown = pinHiddenItems.length;
+        const pinHiddenList = pinHiddenItems.map((item) => item.symbol);
         const pinSymbolsList = pinCandidates
-          .filter((item) => {
-            // Expired always shown so they can be cleared / renewed.
-            if (WatchFavorites.isPinExpired(item)) return true;
-            const change = pinChangePercent(item);
-            const pinUp = Number.isFinite(change) && change > 0;
-            return pinUp && hasWindowGain(item.symbol, interval);
-          })
+          .filter((item) => hasWindowGain(item.symbol, interval))
           .slice()
           .sort((a, b) => {
             const changeA = pinChangePercent(a);
             const changeB = pinChangePercent(b);
             const hasA = Number.isFinite(changeA);
             const hasB = Number.isFinite(changeB);
+            // Window-up pins: pin-up first, then by pin change desc.
+            const upA = hasA && changeA > 0 ? 1 : 0;
+            const upB = hasB && changeB > 0 ? 1 : 0;
+            if (upA !== upB) return upB - upA;
             if (hasA && hasB && changeB !== changeA) return changeB - changeA;
             if (hasA !== hasB) return hasA ? -1 : 1;
             return b.pinnedAt - a.pinnedAt;
@@ -1300,6 +1469,10 @@
           (item) =>
             !blocked.has(item.symbol) && WatchFavorites.isPinExpired(item),
         ).length;
+        const expiredHidden = pinCandidates.filter((item) => {
+          if (!WatchFavorites.isPinExpired(item)) return false;
+          return !hasWindowGain(item.symbol, interval);
+        }).length;
 
         if (klineAbort) klineAbort.abort();
         klineAbort = new AbortController();
@@ -1309,34 +1482,53 @@
           ? `窗口上涨 ${rising.length} / 观察池 ${watchPool.size} · ${interval} · ${rangeText} ${bars} 根`
           : `当前没有窗口上涨的观察池币种 · 观察池 ${watchPool.size} 个`;
 
+        const clearExpiredBtn = document.getElementById("clearExpiredPinsBtn");
         if (!pinItems.length) {
           document.getElementById("pinMeta").textContent =
-            "还没有盯一下 · 长按选「盯一下」· 仅展示盯住上涨且当前窗口上涨";
+            "还没有盯一下 · 长按选「盯一下」· 当前窗口上涨即展示（可低于盯住价）";
+          if (clearExpiredBtn) clearExpiredBtn.hidden = true;
         } else {
           const heldInPins = pinItems.filter((item) =>
             positionSymbols().has(item.symbol),
           ).length;
-          const pinShownUp = pinCandidates.filter((item) => {
-            if (WatchFavorites.isPinExpired(item)) return false;
+          const pinShownWindow = pinCandidates.filter((item) =>
+            hasWindowGain(item.symbol, interval),
+          ).length;
+          const pinShownBelowPin = pinCandidates.filter((item) => {
+            if (!hasWindowGain(item.symbol, interval)) return false;
             const change = pinChangePercent(item);
-            return (
-              Number.isFinite(change) &&
-              change > 0 &&
-              hasWindowGain(item.symbol, interval)
-            );
+            return Number.isFinite(change) && change <= 0;
           }).length;
           const parts = [
             `盯一下 ${pinItems.length}`,
-            `展示双涨 ${pinShownUp}`,
-            "盯住涨幅·窗口涨幅都要 >0",
+            `窗口上涨展示 ${pinShownWindow}`,
+            "窗口涨即可显示（含低于盯住价）",
           ];
+          if (pinShownBelowPin > 0) {
+            parts.push(`其中低于盯住价 ${pinShownBelowPin}`);
+          }
           if (pinHiddenDown > 0) {
-            parts.push(`已隐藏窗口回落/盯住下跌 ${pinHiddenDown}`);
+            parts.push(`已隐藏窗口回落 ${pinHiddenDown}`);
           }
           if (heldInPins > 0) parts.push(`其中持仓 ${heldInPins}`);
           if (activePins > 0) parts.push(`有效 ${activePins}`);
-          if (expiredPins > 0) parts.push(`过期待清 ${expiredPins}`);
+          if (expiredPins > 0) {
+            parts.push(
+              expiredHidden > 0
+                ? `过期 ${expiredPins}（隐藏 ${expiredHidden}）`
+                : `过期 ${expiredPins}`,
+            );
+          }
           document.getElementById("pinMeta").textContent = parts.join(" · ");
+          if (clearExpiredBtn) clearExpiredBtn.hidden = expiredPins <= 0;
+        }
+
+        updateHiddenPinTab(pinHiddenDown);
+        const hiddenPinMeta = document.getElementById("hiddenPinMeta");
+        if (hiddenPinMeta) {
+          hiddenPinMeta.textContent = pinHiddenDown
+            ? `${pinHiddenDown} 个当前窗口未涨（企微不会推送）· 长按可取消/续盯`
+            : "当前没有隐藏的盯一下";
         }
 
         if (!favoriteItems.length) {
@@ -1361,6 +1553,15 @@
           document.getElementById("pinGrid"),
           pinSymbolsList,
           "pin",
+          signal,
+          pairSet,
+          pinMap,
+        );
+        if (signal.aborted) return;
+        await fillGrid(
+          document.getElementById("hiddenPinGrid"),
+          pinHiddenList,
+          "pin-hidden",
           signal,
           pairSet,
           pinMap,
@@ -1481,6 +1682,50 @@
           showToast(error.message || "清除盯一下失败");
           setStatus(false, error.message || "清除盯一下失败");
           window.alert(error.message || "清除盯一下失败");
+        } finally {
+          pinSaving = false;
+        }
+      }
+
+      async function clearAllExpiredPins() {
+        if (pinSaving) return;
+        const expired = pinItems.filter((item) =>
+          WatchFavorites.isPinExpired(item),
+        );
+        if (!expired.length) {
+          showToast("没有过期盯一下");
+          return;
+        }
+        if (
+          !window.confirm(
+            `清除全部 ${expired.length} 个过期盯一下？\n${expired
+              .map((item) => item.symbol.replace(/USDT$/i, ""))
+              .join("、")}`,
+          )
+        ) {
+          return;
+        }
+        pinSaving = true;
+        try {
+          setStatus(false, `正在清除 ${expired.length} 个过期盯一下...`);
+          const result = await WatchFavorites.patchPins({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.PINS_PATH,
+            message: `Clear ${expired.length} expired pins`,
+            mutate: (list) => ({
+              list: WatchFavorites.removeExpiredPins(list),
+              added: false,
+            }),
+          });
+          pinItems = result.pins;
+          showToast(`已清除 ${expired.length} 个过期盯一下`);
+          await renderKlines();
+          setStatus(true, `已清除 ${expired.length} 个过期盯一下`);
+        } catch (error) {
+          console.error(error);
+          showToast(error.message || "清除过期盯一下失败");
+          setStatus(false, error.message || "清除过期盯一下失败");
+          window.alert(error.message || "清除过期盯一下失败");
         } finally {
           pinSaving = false;
         }
@@ -1743,6 +1988,9 @@
             `<div class="empty">${error.message || "加载失败"}</div>`;
           document.getElementById("pinGrid").innerHTML = "";
           document.getElementById("favGrid").innerHTML = "";
+          document.getElementById("hiddenPinGrid").innerHTML = "";
+          updateHiddenPinTab(0);
+          setHiddenPinDrawerOpen(false);
         } finally {
           loading = false;
           btn.disabled = false;
@@ -1752,6 +2000,28 @@
       document.getElementById("refreshBtn").addEventListener("click", () => {
         closeCardActions();
         refreshAll();
+      });
+      document
+        .getElementById("clearExpiredPinsBtn")
+        .addEventListener("click", () => {
+          closeCardActions();
+          clearAllExpiredPins();
+        });
+      document.getElementById("hiddenPinTab").addEventListener("click", () => {
+        closeCardActions();
+        setHiddenPinDrawerOpen(true);
+      });
+      document.getElementById("hiddenPinDrawer").addEventListener("click", (event) => {
+        if (event.target && event.target.hasAttribute("data-close-hidden-pins")) {
+          closeCardActions();
+          setHiddenPinDrawerOpen(false);
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          closeCardActions();
+          setHiddenPinDrawerOpen(false);
+        }
       });
       document.getElementById("rangeBtn").addEventListener("click", async () => {
         closeCardActions();
