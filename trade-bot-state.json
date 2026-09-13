@@ -2,7 +2,7 @@
   "mode": "paper",
   "symbol": "VTHOUSDT",
   "enabled": true,
-  "status": "cooldown",
+  "status": "flat_rebuy",
   "quoteAmount": 10000,
   "quantity": 0,
   "cash": 9938.976759000654,
@@ -10,15 +10,27 @@
   "anchorPrice": 0.000804,
   "windowStartMs": 1789329600000,
   "entryPrice": 0.000799,
-  "cooldownUntil": 1789339279562,
-  "lastPrice": 0.00079,
-  "lastCheckAt": 1789338701689,
-  "lastAction": "cooldown",
+  "cooldownUntil": null,
+  "lastPrice": 0.000791,
+  "lastCheckAt": 1789340479324,
+  "lastAction": "cooldown_end",
   "lastError": null,
-  "updatedAt": 1789338701771,
+  "updatedAt": 1789340479492,
   "startedAt": 1789279629168,
   "feesPaid": 61.12919244447146,
   "logs": [
+    {
+      "at": 1789340479491,
+      "source": "timer",
+      "level": "info",
+      "message": "冷静期结束，等待回补"
+    },
+    {
+      "at": 1789340479324,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=cooldown enabled=true"
+    },
     {
       "at": 1789338701771,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "持仓中：现价 0.000931，卖出线 0.000902465，权益 10573.66"
-    },
-    {
-      "at": 1789295483342,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
-    },
-    {
-      "at": 1789295479709,
-      "source": "timer",
-      "level": "info",
-      "message": "持仓中：现价 0.000924，卖出线 0.000902465，权益 10494.16"
     }
   ]
 }
