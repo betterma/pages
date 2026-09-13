@@ -69,12 +69,20 @@ function requestJson(url) {
 
 function parseEvent(event) {
   const rawPath =
-    (event && (event.path || event.rawPath || event.requestURI)) || '/';
-  const path = String(rawPath).split('?')[0].replace(/\/+$/, '') || '/';
+    (event &&
+      (event.path ||
+        event.rawPath ||
+        event.requestURI ||
+        (event.requestContext && event.requestContext.path))) ||
+    '/';
+  let path = String(rawPath).split('?')[0].replace(/\/+$/, '') || '/';
   const method = String(
     (event &&
       (event.httpMethod ||
-        event.requestContext?.http?.method ||
+        (event.requestContext &&
+          event.requestContext.http &&
+          event.requestContext.http.method) ||
+        (event.requestContext && event.requestContext.httpMethod) ||
         event.method)) ||
       'GET',
   ).toUpperCase();
@@ -84,19 +92,34 @@ function parseEvent(event) {
       if (q[k] == null && Array.isArray(v) && v.length) q[k] = v[0];
     });
   }
-  // Some gateways nest path after stage; keep last meaningful segment chain.
+  // Huawei APIG may pass body as query-less path only; allow ?route=tokens fallback.
+  const viaQuery = String(q.route || q.action || '')
+    .trim()
+    .replace(/^\//, '')
+    .toLowerCase();
+  if (
+    viaQuery === 'tokens' ||
+    viaQuery === 'pools' ||
+    viaQuery === 'ohlcv' ||
+    viaQuery === 'health'
+  ) {
+    return { method, route: `/${viaQuery}`, q };
+  }
   const parts = path.split('/').filter(Boolean);
-  const tail = parts[parts.length - 1] || '';
+  const tail = (parts[parts.length - 1] || '').toLowerCase();
   const route =
-    tail === 'tokens' || tail === 'pools' || tail === 'ohlcv' || tail === 'health'
+    tail === 'tokens' ||
+    tail === 'pools' ||
+    tail === 'ohlcv' ||
+    tail === 'health'
       ? `/${tail}`
-      : path.endsWith('/tokens')
+      : path.includes('/tokens')
         ? '/tokens'
-        : path.endsWith('/pools')
+        : path.includes('/pools')
           ? '/pools'
-          : path.endsWith('/ohlcv')
+          : path.includes('/ohlcv')
             ? '/ohlcv'
-            : path.endsWith('/health')
+            : path.includes('/health')
               ? '/health'
               : path;
   return { method, route, q };

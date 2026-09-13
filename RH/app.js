@@ -48,9 +48,22 @@
   }
 
   function proxyBase() {
-    return String(el.proxy.value || localStorage.getItem('rhProxy') || '')
-      .trim()
-      .replace(/\/$/, '');
+    const fromInput = String(el.proxy.value || '').trim();
+    const fromStore = String(localStorage.getItem('rhProxy') || '').trim();
+    const fromConfig = String(
+      (window.RH_CONFIG && window.RH_CONFIG.PROXY_URL) || '',
+    ).trim();
+    return (fromInput || fromStore || fromConfig).replace(/\/$/, '');
+  }
+
+  function isHostedPage() {
+    const host = String(location.hostname || '');
+    return (
+      host &&
+      host !== 'localhost' &&
+      host !== '127.0.0.1' &&
+      host !== '[::1]'
+    );
   }
 
   function saveProxy() {
@@ -60,9 +73,16 @@
   }
 
   async function fetchJson(url) {
-    const res = await fetch(url, {
-      headers: { Accept: 'application/json' },
-    });
+    let res;
+    try {
+      res = await fetch(url, {
+        headers: { Accept: 'application/json' },
+      });
+    } catch (error) {
+      throw new Error(
+        '网络/CORS 失败。线上站点请部署 cloud-function-rh，并把 HTTP 地址填到「代理」。',
+      );
+    }
     const text = await res.text();
     let data = null;
     try {
@@ -300,6 +320,15 @@
     el.empty.hidden = true;
     el.reload.disabled = true;
 
+    if (isHostedPage() && !proxyBase()) {
+      el.empty.hidden = false;
+      el.empty.innerHTML =
+        '线上域名会被 DexPaprika <b>CORS</b> 拦截。<br/>请部署仓库里的 <code>cloud-function-rh</code>，把 HTTP 触发器地址填到上方「代理」，或写入 <code>RH/config.js</code> 的 <code>PROXY_URL</code>。';
+      setStatus('err', '需要代理');
+      el.reload.disabled = false;
+      return;
+    }
+
     const fdvMin = Number(el.fdvMin.value) * 1e6;
     const fdvMax = Number(el.fdvMax.value) * 1e6;
     const limit = Math.max(1, Math.min(60, Number(el.limit.value) || 24));
@@ -360,7 +389,10 @@
     });
   });
 
-  el.proxy.value = localStorage.getItem('rhProxy') || '';
+  el.proxy.value =
+    localStorage.getItem('rhProxy') ||
+    (window.RH_CONFIG && window.RH_CONFIG.PROXY_URL) ||
+    '';
   el.reload.addEventListener('click', () => reload());
   reload();
 })();

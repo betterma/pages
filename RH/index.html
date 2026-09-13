@@ -244,11 +244,11 @@
           </label>
           <button id="reload" type="button">刷新</button>
           <label class="proxy">
-            代理（可选，云函数根地址）
+            代理（线上必填：云函数 HTTP 根地址）
             <input
               id="proxy"
               type="url"
-              placeholder="https://your-fn.example/rh"
+              placeholder="https://xxxx.apig.cn-north-4.huaweicloudapis.com/rh"
               autocomplete="off"
             />
           </label>
@@ -258,12 +258,13 @@
       <div class="status">
         <span><i class="dot" id="dot"></i> <span id="statusText">待命</span></span>
         <span id="countText"></span>
-        <span id="hintText">无需 API Key；若 CORS 失败再填代理</span>
+        <span id="hintText">线上需填代理；本地 localhost 可直连试</span>
       </div>
 
       <div id="grid" class="grid"></div>
       <div id="empty" class="empty" hidden>没有符合条件的代币</div>
     </div>
+    <script src="./config.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

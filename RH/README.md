@@ -19,18 +19,17 @@
 
 DexScreener 公开 API **没有**「按市值列全表」和「OHLCV」，所以列表/K 线用 DexPaprika；卡片上保留跳转 DexScreener。
 
-## 若浏览器报 CORS
+## 若浏览器报 CORS（线上必现）
 
-直连 `api.dexpaprika.com` 若被跨域拦截：
+`www.zhangyixuan.space` 直连 DexPaprika 会被跨域拦截，**必须**部署代理：
 
-1. 部署本仓库 `cloud-function-rh/`（华为云函数等均可）
-2. 在页面「代理」输入框填函数 HTTP 触发地址（末尾不要多余路径）
-3. 点「刷新」
+1. 部署本仓库 `cloud-function-rh/`（华为云函数 + **HTTP 触发器**）  
+2. 浏览器访问 `{触发器}/health` 确认通  
+3. 把触发器根地址填进页面「代理」，或写入 `RH/config.js` 的 `PROXY_URL`  
 
-云函数 **不需要** API Key（DexPaprika 免费档即可）。若日后额度不够，可在函数环境变量加：
+本地用 `localhost` 打开时仍可尝试直连；线上域名会强制提示填代理。
 
-- `DEXPAPRIKA_API_KEY`（可选）
-- 请求改打 `https://api-pro.dexpaprika.com`（按官方文档）
+云函数 **不需要** API Key。
 
 ## 可选升级（暂未做）
 
