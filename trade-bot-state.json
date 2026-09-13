@@ -12,13 +12,25 @@
   "entryPrice": 0.000799,
   "cooldownUntil": null,
   "lastPrice": 0.000822,
-  "lastCheckAt": 1789322479269,
+  "lastCheckAt": 1789322483835,
   "lastAction": "hold",
   "lastError": null,
-  "updatedAt": 1789322479355,
+  "updatedAt": 1789322483919,
   "startedAt": 1789279629168,
   "feesPaid": 51.18026675978612,
   "logs": [
+    {
+      "at": 1789322483919,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000822，卖出线 0.000790030，权益 10378.19"
+    },
+    {
+      "at": 1789322483835,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
     {
       "at": 1789322479355,
       "source": "timer",
@@ -1203,18 +1215,6 @@
     },
     {
       "at": 1789277483800,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1789277479299,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1789277479299,
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=MINAUSDT status=idle enabled=false"
