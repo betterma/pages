@@ -57,6 +57,8 @@ const CONFIG = {
       : process.env.PIN_CHART_TOP,
   ),
   PIN_CHART_MAX: Number(process.env.PIN_CHART_MAX || 25),
+  // Align pin notify with kline.html: require current K-line window gain (default 4h).
+  PIN_WINDOW_INTERVAL: process.env.PIN_WINDOW_INTERVAL || '4h',
   // Skip duplicate runs if another invoke already sent within this window.
   NOTIFY_DEBOUNCE_MS: Number(process.env.NOTIFY_DEBOUNCE_MS || 90 * 1000),
   // Parallel symbol fetches for 5m/15m momentum (each symbol = 2 kline calls).
@@ -136,6 +138,8 @@ function listPinUpRows(pins, tickers) {
         change24h: ticker.change24h,
         streak5: false,
         heat15: false,
+        windowChange: null,
+        windowUp: false,
       };
     })
     .filter(
@@ -149,6 +153,38 @@ function listPinUpRows(pins, tickers) {
       if (b.change !== a.change) return b.change - a.change;
       return b.pinnedAt - a.pinnedAt;
     });
+}
+
+/**
+ * Same idea as kline.html hasWindowGain for 4h:
+ * current price vs open of the forming window candle.
+ */
+async function attachPinWindowGain(rows) {
+  if (!rows.length) return rows;
+  const interval = CONFIG.PIN_WINDOW_INTERVAL || '4h';
+  await mapPool(rows, CONFIG.MOMENTUM_CONCURRENCY, async (row) => {
+    try {
+      const candles = await fetchKlines(row.symbol, interval, 2);
+      const forming = candles && candles[candles.length - 1];
+      const open = Number(forming && forming.open);
+      const windowChange = changeFrom(open, row.current);
+      row.windowChange = windowChange;
+      row.windowUp = Number.isFinite(windowChange) && windowChange > 0;
+    } catch (error) {
+      console.warn(
+        `window gain failed ${row.symbol}`,
+        error && error.message ? error.message : error,
+      );
+      row.windowChange = null;
+      row.windowUp = false;
+    }
+    return row;
+  });
+  return rows;
+}
+
+function filterPinDoubleUp(rows) {
+  return (rows || []).filter((row) => row && row.windowUp);
 }
 
 /** Drop the still-forming candle; keep closed bar closes only. */
@@ -498,7 +534,11 @@ async function main() {
   ];
   const tickers = await fetchBinanceTickers(symbols);
 
-  const pinRows = listPinUpRows(pins, tickers);
+  let pinRows = listPinUpRows(pins, tickers);
+  if (pinRows.length) {
+    await attachPinWindowGain(pinRows);
+    pinRows = filterPinDoubleUp(pinRows);
+  }
   if (pinRows.length) {
     await attachPinMomentum(pinRows);
     attachPriceVsLast(pinRows, lastPinPrices);
@@ -590,6 +630,8 @@ module.exports = {
   buildPositionReport,
   listPinUpRows,
   attachPinMomentum,
+  attachPinWindowGain,
+  filterPinDoubleUp,
   attachPriceVsLast,
   momentumFromCloses,
   closedCloses,

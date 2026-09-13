@@ -347,7 +347,7 @@
         <span id="statusDot" class="dot"></span>
         <span id="statusText">等待启动...</span>
       </div>
-      <p class="hint">长按选 盯/购买/卖出/收藏/拉黑 · 已盯住的不在上涨区/收藏区重复展示 · 企微每5分钟推送</p>
+      <p class="hint">长按选 盯/购买/卖出/收藏/拉黑 · 盯一下仅显示「盯住上涨且窗口上涨」· 企微每5分钟推送</p>
 
       <h2 class="section-title">盯一下</h2>
       <div id="pinMeta" class="meta"></div>
@@ -1212,7 +1212,7 @@
               section === "rising"
                 ? "暂无上涨币种"
                 : section === "pin"
-                  ? "暂无加入后上涨的盯一下 · 下跌/走平已隐藏"
+                  ? "暂无「盯住上涨且窗口上涨」的币 · 窗口回落/盯住下跌已隐藏"
                   : "暂无窗口上涨的收藏"
             }</div>`;
 
@@ -1268,14 +1268,18 @@
         const pinHiddenDown = pinCandidates.filter((item) => {
           if (WatchFavorites.isPinExpired(item)) return false;
           const change = pinChangePercent(item);
-          return !Number.isFinite(change) || change <= 0;
+          const pinUp = Number.isFinite(change) && change > 0;
+          const windowUp = hasWindowGain(item.symbol, interval);
+          // Hidden when not (pin-up AND window-up).
+          return !(pinUp && windowUp);
         }).length;
         const pinSymbolsList = pinCandidates
           .filter((item) => {
-            // Expired always shown so they can be cleared.
+            // Expired always shown so they can be cleared / renewed.
             if (WatchFavorites.isPinExpired(item)) return true;
             const change = pinChangePercent(item);
-            return Number.isFinite(change) && change > 0;
+            const pinUp = Number.isFinite(change) && change > 0;
+            return pinUp && hasWindowGain(item.symbol, interval);
           })
           .slice()
           .sort((a, b) => {
@@ -1307,22 +1311,27 @@
 
         if (!pinItems.length) {
           document.getElementById("pinMeta").textContent =
-            "还没有盯一下 · 长按选「盯一下」· 仅展示加入后上涨的币";
+            "还没有盯一下 · 长按选「盯一下」· 仅展示盯住上涨且当前窗口上涨";
         } else {
           const heldInPins = pinItems.filter((item) =>
             positionSymbols().has(item.symbol),
           ).length;
           const pinShownUp = pinCandidates.filter((item) => {
+            if (WatchFavorites.isPinExpired(item)) return false;
             const change = pinChangePercent(item);
-            return Number.isFinite(change) && change > 0;
+            return (
+              Number.isFinite(change) &&
+              change > 0 &&
+              hasWindowGain(item.symbol, interval)
+            );
           }).length;
           const parts = [
             `盯一下 ${pinItems.length}`,
-            `展示上涨 ${pinShownUp}`,
-            "按盯住涨幅排序",
+            `展示双涨 ${pinShownUp}`,
+            "盯住涨幅·窗口涨幅都要 >0",
           ];
           if (pinHiddenDown > 0) {
-            parts.push(`已隐藏下跌/走平 ${pinHiddenDown}`);
+            parts.push(`已隐藏窗口回落/盯住下跌 ${pinHiddenDown}`);
           }
           if (heldInPins > 0) parts.push(`其中持仓 ${heldInPins}`);
           if (activePins > 0) parts.push(`有效 ${activePins}`);
