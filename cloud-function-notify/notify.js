@@ -56,7 +56,7 @@ const CONFIG = {
       ? 0
       : process.env.PIN_CHART_TOP,
   ),
-  PIN_CHART_MAX: Number(process.env.PIN_CHART_MAX || 25),
+  PIN_CHART_MAX: Number(process.env.PIN_CHART_MAX || 50),
   // Align pin notify with kline.html: require current K-line window gain (default 4h).
   PIN_WINDOW_INTERVAL: process.env.PIN_WINDOW_INTERVAL || '4h',
   // Skip duplicate runs if another invoke already sent within this window.
