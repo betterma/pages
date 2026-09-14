@@ -323,15 +323,15 @@
         bottom: 12px;
         z-index: 40;
         width: min(360px, calc(100vw - 24px));
-        max-height: min(52vh, 480px);
+        max-height: min(48vh, 440px);
         display: flex;
         flex-direction: column;
-        border: 1px solid rgba(90, 106, 104, 0.28);
-        border-radius: 10px;
-        background: rgba(244, 245, 243, 0.72);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        box-shadow: 0 10px 28px rgba(40, 50, 58, 0.12);
+        border: 1px solid rgba(90, 106, 104, 0.22);
+        border-radius: 12px;
+        background: rgba(244, 245, 243, 0.42);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 8px 24px rgba(40, 50, 58, 0.1);
       }
       .notify-float[hidden] {
         display: none !important;
@@ -342,12 +342,15 @@
         justify-content: space-between;
         gap: 8px;
         padding: 8px 10px;
-        border-bottom: 1px solid rgba(220, 226, 222, 0.85);
+        border-bottom: 1px solid rgba(220, 226, 222, 0.55);
         flex-shrink: 0;
+        background: rgba(255, 255, 255, 0.18);
+        border-radius: 12px 12px 0 0;
       }
       .notify-float-head strong {
         font-size: 13px;
         font-weight: 650;
+        min-width: 0;
       }
       .notify-float-head .notify-time {
         margin-left: 6px;
@@ -357,24 +360,29 @@
       }
       .notify-float-close {
         border: none;
-        background: transparent;
+        background: rgba(90, 106, 104, 0.08);
         color: #5a6a68;
-        padding: 2px 8px;
-        font-size: 16px;
+        padding: 4px 10px;
+        min-width: 36px;
+        min-height: 32px;
+        font-size: 18px;
         line-height: 1;
-        border-radius: 4px;
+        border-radius: 8px;
+        flex-shrink: 0;
       }
       .notify-float-close:hover {
-        background: rgba(90, 106, 104, 0.12);
+        background: rgba(90, 106, 104, 0.16);
       }
       .notify-float-body {
         overflow: auto;
+        -webkit-overflow-scrolling: touch;
         padding: 10px 12px 12px;
         font-size: 12px;
         line-height: 1.55;
         color: #28323a;
         white-space: pre-wrap;
         word-break: break-word;
+        overscroll-behavior: contain;
       }
       .notify-float-body .nc-info {
         color: #2f8f6e;
@@ -388,6 +396,7 @@
         color: #9aa3a0;
       }
       .notify-float-body .notify-coin {
+        display: inline;
         border: none;
         background: transparent;
         padding: 0;
@@ -398,8 +407,10 @@
         text-decoration: underline;
         text-underline-offset: 2px;
         cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
       }
-      .notify-float-body .notify-coin:hover {
+      .notify-float-body .notify-coin:hover,
+      .notify-float-body .notify-coin:active {
         color: #1f6b52;
       }
       .notify-float-tab {
@@ -407,18 +418,38 @@
         left: 12px;
         bottom: 12px;
         z-index: 40;
-        border: 1px solid rgba(90, 106, 104, 0.3);
-        background: rgba(244, 245, 243, 0.78);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(90, 106, 104, 0.28);
+        background: rgba(244, 245, 243, 0.5);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
         color: #5a6a68;
-        padding: 8px 12px;
+        padding: 10px 14px;
+        min-height: 40px;
         border-radius: 999px;
         font-size: 12px;
         box-shadow: 0 6px 18px rgba(40, 50, 58, 0.1);
       }
       .notify-float-tab[hidden] {
         display: none !important;
+      }
+      @media (max-width: 640px) {
+        .notify-float {
+          left: 8px;
+          right: 8px;
+          bottom: 8px;
+          width: auto;
+          max-height: min(42vh, 360px);
+          background: rgba(244, 245, 243, 0.38);
+        }
+        .notify-float-body {
+          font-size: 11px;
+          padding: 8px 10px 10px;
+        }
+        .notify-float-tab {
+          left: 8px;
+          bottom: 8px;
+          padding: 10px 14px;
+        }
       }
       .fav-mark {
         position: absolute;
@@ -654,8 +685,8 @@
           type="button"
           class="notify-float-close"
           id="notifyFloatClose"
-          title="关闭"
-          aria-label="关闭"
+          title="关闭，可再点左下角打开"
+          aria-label="关闭通知浮层"
         >
           ×
         </button>
@@ -1749,18 +1780,30 @@
           const label = key.replace(/USDT$/i, "");
           if (label) labelMap.set(label.toUpperCase(), key);
         });
+        // Longer tickers first so BTT wins over T / BT, etc.
         const labels = [...labelMap.keys()].sort((a, b) => b.length - a.length);
 
         const linkify = (escaped) => {
-          let out = escaped;
+          const slots = [];
+          let out = String(escaped || "");
           labels.forEach((label) => {
             const symbol = labelMap.get(label);
-            const re = new RegExp(`(${escapeRegExp(label)})`, "gi");
-            out = out.replace(re, (match) => {
-              return `<button type="button" class="notify-coin" data-jump="${symbol}">${match}</button>`;
+            // Ticker boundary only — never touch already-inserted markup.
+            const re = new RegExp(
+              `(^|[^A-Za-z0-9])(${escapeRegExp(label)})(?=[^A-Za-z0-9]|$)`,
+              "g",
+            );
+            out = out.replace(re, (full, pre, match) => {
+              const index = slots.length;
+              slots.push(
+                `<a href="#card-pin-${symbol}" class="notify-coin" data-jump="${symbol}">${match}</a>`,
+              );
+              return `${pre}\u0001${index}\u0001`;
             });
           });
-          return out;
+          return out.replace(/\u0001(\d+)\u0001/g, (_, index) => {
+            return slots[Number(index)] || "";
+          });
         };
 
         const src = String(markdown || "");
@@ -2475,10 +2518,10 @@
       document
         .getElementById("notifyFloatBody")
         .addEventListener("click", (event) => {
-          const btn = event.target.closest(".notify-coin");
-          if (!btn) return;
+          const link = event.target.closest(".notify-coin");
+          if (!link) return;
           event.preventDefault();
-          jumpToNotifySymbol(btn.dataset.jump);
+          jumpToNotifySymbol(link.dataset.jump);
         });
       document
         .getElementById("clearExpiredPinsBtn")
