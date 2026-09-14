@@ -12,13 +12,25 @@
   "entryPrice": null,
   "cooldownUntil": null,
   "lastPrice": 0.000686,
-  "lastCheckAt": 1789419684225,
+  "lastCheckAt": 1789419690351,
   "lastAction": "tick_skipped",
   "lastError": null,
-  "updatedAt": 1789419684225,
+  "updatedAt": 1789419690351,
   "startedAt": 1789279629168,
   "feesPaid": 115.79091758882544,
   "logs": [
+    {
+      "at": 1789419690351,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 检测跳过：自动检测已关闭"
+    },
+    {
+      "at": 1789419690351,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=idle enabled=false"
+    },
     {
       "at": 1789419684225,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "冷静期中，约剩 10 分钟"
-    },
-    {
-      "at": 1789374701441,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=cooldown enabled=true"
-    },
-    {
-      "at": 1789374691224,
-      "source": "timer",
-      "level": "info",
-      "message": "【paper卖出】现价 0.000739 ≤ 0.000739285，到账 9012.15，冷静 10 分钟"
     }
   ]
 }
