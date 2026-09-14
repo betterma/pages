@@ -2,7 +2,7 @@
   "mode": "paper",
   "symbol": "VTHOUSDT",
   "enabled": true,
-  "status": "cooldown",
+  "status": "flat_rebuy",
   "quoteAmount": 10000,
   "quantity": 0,
   "cash": 9042.419840277395,
@@ -10,15 +10,27 @@
   "anchorPrice": 0.000781,
   "windowStartMs": 1789344000000,
   "entryPrice": 0.000792,
-  "cooldownUntil": 1789353679691,
-  "lastPrice": 0.000718,
-  "lastCheckAt": 1789353102345,
-  "lastAction": "cooldown",
+  "cooldownUntil": null,
+  "lastPrice": 0.000747,
+  "lastCheckAt": 1789354879351,
+  "lastAction": "cooldown_end",
   "lastError": null,
-  "updatedAt": 1789353102447,
+  "updatedAt": 1789354879450,
   "startedAt": 1789279629168,
   "feesPaid": 80.11964051506109,
   "logs": [
+    {
+      "at": 1789354879449,
+      "source": "timer",
+      "level": "info",
+      "message": "冷静期结束，等待回补"
+    },
+    {
+      "at": 1789354879351,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=cooldown enabled=true"
+    },
     {
       "at": 1789353102446,
       "source": "timer",
@@ -1203,18 +1215,6 @@
     },
     {
       "at": 1789309884418,
-      "source": "timer",
-      "level": "info",
-      "message": "等待回补：现价 0.000802，回补线 0.000896682，现金 10097.90"
-    },
-    {
-      "at": 1789309884118,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=flat_rebuy enabled=true"
-    },
-    {
-      "at": 1789309879406,
       "source": "timer",
       "level": "info",
       "message": "等待回补：现价 0.000802，回补线 0.000896682，现金 10097.90"
