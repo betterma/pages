@@ -2,7 +2,7 @@
   "mode": "paper",
   "symbol": "VTHOUSDT",
   "enabled": true,
-  "status": "cooldown",
+  "status": "flat_rebuy",
   "quoteAmount": 10000,
   "quantity": 0,
   "cash": 8586.942558238788,
@@ -10,15 +10,27 @@
   "anchorPrice": 0.000743,
   "windowStartMs": 1789372800000,
   "entryPrice": 0.000751,
-  "cooldownUntil": 1789382479367,
-  "lastPrice": 0.000717,
-  "lastCheckAt": 1789381902220,
-  "lastAction": "cooldown",
+  "cooldownUntil": null,
+  "lastPrice": 0.000711,
+  "lastCheckAt": 1789383679655,
+  "lastAction": "cooldown_end",
   "lastError": null,
-  "updatedAt": 1789381902303,
+  "updatedAt": 1789383679908,
   "startedAt": 1789279629168,
   "feesPaid": 115.79091758882544,
   "logs": [
+    {
+      "at": 1789383679907,
+      "source": "timer",
+      "level": "info",
+      "message": "冷静期结束，等待回补"
+    },
+    {
+      "at": 1789383679655,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=cooldown enabled=true"
+    },
     {
       "at": 1789381902303,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "冷静期中，约剩 10 分钟"
-    },
-    {
-      "at": 1789338684261,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=cooldown enabled=true"
-    },
-    {
-      "at": 1789338679655,
-      "source": "timer",
-      "level": "info",
-      "message": "【paper卖出】现价 0.000788 ≤ 0.000799980，到账 9938.98，冷静 10 分钟"
     }
   ]
 }
