@@ -2,23 +2,35 @@
   "mode": "paper",
   "symbol": "VTHOUSDT",
   "enabled": true,
-  "status": "flat_rebuy",
+  "status": "holding",
   "quoteAmount": 10000,
-  "quantity": 0,
-  "cash": 9938.976759000654,
-  "equity": 9938.976759000654,
-  "anchorPrice": 0.000804,
-  "windowStartMs": 1789329600000,
-  "entryPrice": 0.000799,
+  "quantity": 12536663.866466736,
+  "cash": 0,
+  "equity": 9929.037782241654,
+  "anchorPrice": 0.000781,
+  "windowStartMs": 1789344000000,
+  "entryPrice": 0.000792,
   "cooldownUntil": null,
-  "lastPrice": 0.000787,
-  "lastCheckAt": 1789342301996,
-  "lastAction": "wait_rebuy",
+  "lastPrice": 0.000792,
+  "lastCheckAt": 1789344079363,
+  "lastAction": "rebuy",
   "lastError": null,
-  "updatedAt": 1789342302165,
+  "updatedAt": 1789344079576,
   "startedAt": 1789279629168,
-  "feesPaid": 61.12919244447146,
+  "feesPaid": 71.06816920347211,
   "logs": [
+    {
+      "at": 1789344079575,
+      "source": "timer",
+      "level": "info",
+      "message": "【paper回补】现价 0.000792 ≥ 0.000783343，用 9938.98 USDT，起步价 0.000781"
+    },
+    {
+      "at": 1789344079363,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=flat_rebuy enabled=true"
+    },
     {
       "at": 1789342302164,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "冷静期中，约剩 10 分钟"
-    },
-    {
-      "at": 1789299083542,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=cooldown enabled=true"
-    },
-    {
-      "at": 1789299079512,
-      "source": "timer",
-      "level": "info",
-      "message": "【paper卖出】现价 0.00089 ≤ 0.000902465，到账 10097.90，冷静 10 分钟"
     }
   ]
 }
