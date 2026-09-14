@@ -1014,5 +1014,8 @@
     removePosition,
     loadPositionsRaw,
     patchPositions,
+    fetchJsonFile,
+    getMainCommitSha,
+    fetchRawJsonByCommit,
   };
 });

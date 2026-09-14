@@ -358,6 +358,13 @@
         color: #78817f;
         font-weight: 400;
       }
+      .notify-float-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+      }
+      .notify-float-refresh,
       .notify-float-close {
         border: none;
         background: rgba(90, 106, 104, 0.08);
@@ -365,13 +372,21 @@
         padding: 4px 10px;
         min-width: 36px;
         min-height: 32px;
-        font-size: 18px;
+        font-size: 14px;
         line-height: 1;
         border-radius: 8px;
         flex-shrink: 0;
       }
+      .notify-float-close {
+        font-size: 18px;
+      }
+      .notify-float-refresh:hover,
       .notify-float-close:hover {
         background: rgba(90, 106, 104, 0.16);
+      }
+      .notify-float-refresh:disabled {
+        opacity: 0.55;
+        cursor: wait;
       }
       .notify-float-body {
         overflow: auto;
@@ -681,15 +696,26 @@
         <strong
           >最近企微通知<span class="notify-time" id="notifyFloatTime"></span
         ></strong>
-        <button
-          type="button"
-          class="notify-float-close"
-          id="notifyFloatClose"
-          title="关闭，可再点左下角打开"
-          aria-label="关闭通知浮层"
-        >
-          ×
-        </button>
+        <div class="notify-float-actions">
+          <button
+            type="button"
+            class="notify-float-refresh"
+            id="notifyFloatRefresh"
+            title="立即从 GitHub 拉取最新企微文案"
+            aria-label="刷新企微通知"
+          >
+            刷新
+          </button>
+          <button
+            type="button"
+            class="notify-float-close"
+            id="notifyFloatClose"
+            title="关闭，可再点左下角打开"
+            aria-label="关闭通知浮层"
+          >
+            ×
+          </button>
+        </div>
       </div>
       <div class="notify-float-body" id="notifyFloatBody"></div>
     </div>
@@ -698,7 +724,7 @@
       class="notify-float-tab"
       id="notifyFloatTab"
       hidden
-      title="打开最近企微通知"
+          title="打开并刷新最近企微通知"
     >
       企微通知
     </button>
@@ -728,6 +754,8 @@
         LONG_PRESS_MS: 550,
         MOMENTUM_5M_LIMIT: 5,
         NOTIFY_STATE_PATH: "watch-notify-state.json",
+        // WeCom notify runs ~5m; poll often enough without hammering GitHub.
+        NOTIFY_POLL_MS: 60 * 1000,
       };
       const DURATION_MS = {
         "15m": 15 * 60 * 1000,
@@ -746,6 +774,8 @@
       let positionItems = [];
       let lastPinPrices = {};
       let lastPinNotify = null;
+      let notifyFloatRefreshing = false;
+      let notifyPollTimer = null;
       let klineAbort = null;
       let loading = false;
       let favoriteSaving = false;
@@ -1079,29 +1109,131 @@
         pruneHistory();
       }
 
+      function parseNotifyStateData(data) {
+        return {
+          lastPinPrices:
+            data && typeof data.lastPinPrices === "object"
+              ? data.lastPinPrices
+              : {},
+          lastPinNotify:
+            data && data.lastPinNotify && typeof data.lastPinNotify === "object"
+              ? data.lastPinNotify
+              : null,
+        };
+      }
+
+      function applyNotifyState(state, options) {
+        const prevAt =
+          lastPinNotify && Number.isFinite(Number(lastPinNotify.at))
+            ? Number(lastPinNotify.at)
+            : 0;
+        lastPinPrices = (state && state.lastPinPrices) || {};
+        lastPinNotify = (state && state.lastPinNotify) || null;
+        const nextAt =
+          lastPinNotify && Number.isFinite(Number(lastPinNotify.at))
+            ? Number(lastPinNotify.at)
+            : 0;
+        const isNewer = prevAt > 0 && nextAt > prevAt;
+        if (isNewer || (options && options.forceOpen)) {
+          // New push supersedes a previous dismiss.
+          localStorage.removeItem(notifyDismissStorageKey());
+        }
+        updateNotifyFloatPanel();
+        return { isNewer, at: nextAt };
+      }
+
       async function loadNotifyState() {
         const path = CONFIG.NOTIFY_STATE_PATH;
+        const repo = CONFIG.GITHUB_REPO;
+
+        // 1) GitHub Contents API — freshest (no raw CDN lag).
         try {
-          const url = `https://raw.githubusercontent.com/${CONFIG.GITHUB_REPO}/main/${path}?t=${Date.now()}`;
-          const response = await fetch(url, { cache: "no-store" });
+          const current = await WatchFavorites.fetchJsonFile({ repo, path });
+          if (current && current.data) {
+            return parseNotifyStateData(current.data);
+          }
+        } catch (error) {
+          console.warn("loadNotifyState via API failed", error);
+        }
+
+        // 2) raw pinned to latest main commit sha — bypasses /main CDN cache.
+        try {
+          const commitSha = await WatchFavorites.getMainCommitSha({ repo });
+          const response = await WatchFavorites.fetchRawJsonByCommit({
+            repo,
+            path,
+            commitSha,
+          });
+          if (response.ok) {
+            return parseNotifyStateData(await response.json());
+          }
+        } catch (error) {
+          console.warn("loadNotifyState via commit-raw failed", error);
+        }
+
+        // 3) last resort: raw /main with cache buster.
+        try {
+          const url = `https://raw.githubusercontent.com/${repo}/main/${path}?t=${Date.now()}`;
+          const response = await fetch(url, {
+            cache: "no-store",
+            headers: {
+              "Cache-Control": "no-cache",
+              Pragma: "no-cache",
+            },
+          });
           if (!response.ok) {
             return { lastPinPrices: {}, lastPinNotify: null };
           }
-          const data = await response.json();
-          return {
-            lastPinPrices:
-              data && typeof data.lastPinPrices === "object"
-                ? data.lastPinPrices
-                : {},
-            lastPinNotify:
-              data && data.lastPinNotify && typeof data.lastPinNotify === "object"
-                ? data.lastPinNotify
-                : null,
-          };
+          return parseNotifyStateData(await response.json());
         } catch (error) {
           console.warn("loadNotifyState failed", error);
           return { lastPinPrices: {}, lastPinNotify: null };
         }
+      }
+
+      async function refreshNotifyFloat(options) {
+        if (notifyFloatRefreshing) return;
+        notifyFloatRefreshing = true;
+        const btn = document.getElementById("notifyFloatRefresh");
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "…";
+        }
+        try {
+          const state = await loadNotifyState();
+          const result = applyNotifyState(state, {
+            forceOpen: !!(options && options.forceOpen),
+          });
+          if (options && options.silent) return result;
+          if (result.isNewer) {
+            showToast("已更新到最新企微通知");
+          } else if (lastPinNotify && lastPinNotify.markdown) {
+            showToast("已是最新企微文案");
+          } else {
+            showToast("暂无企微通知文案");
+          }
+          return result;
+        } catch (error) {
+          console.warn(error);
+          if (!(options && options.silent)) {
+            showToast(error.message || "刷新企微通知失败");
+          }
+          return null;
+        } finally {
+          notifyFloatRefreshing = false;
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = "刷新";
+          }
+        }
+      }
+
+      function startNotifyPoll() {
+        if (notifyPollTimer) return;
+        notifyPollTimer = window.setInterval(() => {
+          if (document.visibilityState === "hidden") return;
+          refreshNotifyFloat({ silent: true });
+        }, CONFIG.NOTIFY_POLL_MS);
       }
 
       async function loadBinanceTicker() {
@@ -2512,8 +2644,14 @@
         .addEventListener("click", () => {
           dismissNotifyFloat();
         });
+      document
+        .getElementById("notifyFloatRefresh")
+        .addEventListener("click", () => {
+          refreshNotifyFloat();
+        });
       document.getElementById("notifyFloatTab").addEventListener("click", () => {
         reopenNotifyFloat();
+        refreshNotifyFloat({ silent: true });
       });
       document
         .getElementById("notifyFloatBody")
@@ -2523,6 +2661,12 @@
           event.preventDefault();
           jumpToNotifySymbol(link.dataset.jump);
         });
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          refreshNotifyFloat({ silent: true });
+        }
+      });
+      startNotifyPoll();
       document
         .getElementById("clearExpiredPinsBtn")
         .addEventListener("click", () => {
