@@ -1,24 +1,30 @@
 {
   "mode": "paper",
   "symbol": "VTHOUSDT",
-  "enabled": true,
-  "status": "flat_rebuy",
+  "enabled": false,
+  "status": "idle",
   "quoteAmount": 10000,
   "quantity": 0,
   "cash": 8586.942558238788,
   "equity": 8586.942558238788,
-  "anchorPrice": 0.000743,
-  "windowStartMs": 1789372800000,
-  "entryPrice": 0.000751,
+  "anchorPrice": null,
+  "windowStartMs": null,
+  "entryPrice": null,
   "cooldownUntil": null,
-  "lastPrice": 0.000691,
+  "lastPrice": 0.000686,
   "lastCheckAt": 1789399901492,
-  "lastAction": "wait_rebuy",
+  "lastAction": "close_and_stop",
   "lastError": null,
-  "updatedAt": 1789399901661,
+  "updatedAt": 1789401307956,
   "startedAt": 1789279629168,
   "feesPaid": 115.79091758882544,
   "logs": [
+    {
+      "at": 1789401307956,
+      "source": "page",
+      "level": "info",
+      "message": "已停止检测并结束本轮模拟"
+    },
     {
       "at": 1789399901660,
       "source": "timer",
@@ -1212,12 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=flat_rebuy enabled=true"
-    },
-    {
-      "at": 1789356679802,
-      "source": "timer",
-      "level": "info",
-      "message": "等待回补：现价 0.000734，回补线 0.000783343，现金 9042.42"
     }
   ]
 }
