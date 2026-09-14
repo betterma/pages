@@ -171,12 +171,65 @@ async function fetchBinanceTickers(symbols) {
   throw lastError || new Error('Binance ticker fetch failed');
 }
 
-async function sendWecomMarkdown(content, webhookUrl) {
-  const webhook = webhookUrl || process.env.WECOM_WEBHOOK_URL || '';
-  if (!webhook) throw new Error('Missing WeCom webhook URL');
+function utf8ByteLength(text) {
+  return Buffer.byteLength(String(text || ''), 'utf8');
+}
+
+/** Truncate on UTF-8 byte boundary (WeCom markdown limit is 4096 bytes). */
+function truncateUtf8(text, maxBytes) {
+  const raw = String(text || '');
+  const buf = Buffer.from(raw, 'utf8');
+  if (buf.length <= maxBytes) return raw;
+  let end = maxBytes;
+  while (end > 0 && (buf[end - 1] & 0xc0) === 0x80) end -= 1;
+  return buf.slice(0, end).toString('utf8');
+}
+
+/**
+ * Split markdown into chunks under maxBytes (default 3800, leave room under 4096).
+ * Prefers line breaks so coin blocks stay readable.
+ */
+function splitMarkdownByBytes(text, maxBytes) {
+  const limit = Math.max(256, Number(maxBytes) || 3800);
+  const raw = String(text || '').trimEnd();
+  if (!raw) return [];
+  if (utf8ByteLength(raw) <= limit) return [raw];
+
+  const lines = raw.split('\n');
+  const chunks = [];
+  let current = [];
+  let currentBytes = 0;
+
+  const flush = () => {
+    if (!current.length) return;
+    chunks.push(current.join('\n'));
+    current = [];
+    currentBytes = 0;
+  };
+
+  for (const line of lines) {
+    const lineBytes = utf8ByteLength(line);
+    if (lineBytes > limit) {
+      flush();
+      chunks.push(truncateUtf8(line, limit));
+      continue;
+    }
+    const extra = current.length ? 1 : 0; // newline joiner
+    if (current.length && currentBytes + extra + lineBytes > limit) {
+      flush();
+    }
+    if (current.length) currentBytes += 1;
+    current.push(line);
+    currentBytes += lineBytes;
+  }
+  flush();
+  return chunks;
+}
+
+async function postWecomMarkdownOnce(content, webhook) {
   const body = JSON.stringify({
     msgtype: 'markdown',
-    markdown: { content: String(content || '').slice(0, 4000) },
+    markdown: { content: truncateUtf8(content, 4000) },
   });
   const response = await requestRaw(webhook, {
     method: 'POST',
@@ -195,12 +248,32 @@ async function sendWecomMarkdown(content, webhookUrl) {
   return data;
 }
 
+async function sendWecomMarkdown(content, webhookUrl) {
+  const webhook = webhookUrl || process.env.WECOM_WEBHOOK_URL || '';
+  if (!webhook) throw new Error('Missing WeCom webhook URL');
+
+  // Leave headroom for "(n/m)\n" prefix and WeCom's 4096-byte markdown cap.
+  const chunks = splitMarkdownByBytes(content, 3600);
+  if (!chunks.length) return [];
+
+  const results = [];
+  for (let index = 0; index < chunks.length; index += 1) {
+    let part = chunks[index];
+    if (chunks.length > 1) {
+      const prefix = `(${index + 1}/${chunks.length})\n`;
+      part = truncateUtf8(prefix + part, 4000);
+    }
+    results.push(await postWecomMarkdownOnce(part, webhook));
+  }
+  return results;
+}
+
 async function sendWecomText(content, webhookUrl) {
   const webhook = webhookUrl || process.env.WECOM_WEBHOOK_URL || '';
   if (!webhook) throw new Error('Missing WeCom webhook URL');
   const body = JSON.stringify({
     msgtype: 'text',
-    text: { content: String(content || '').slice(0, 2000) },
+    text: { content: truncateUtf8(String(content || ''), 2000) },
   });
   const response = await requestRaw(webhook, {
     method: 'POST',
@@ -257,4 +330,6 @@ module.exports = {
   sendWecomMarkdown,
   sendWecomText,
   sendWecomImage,
+  splitMarkdownByBytes,
+  truncateUtf8,
 };

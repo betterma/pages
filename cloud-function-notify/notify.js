@@ -360,7 +360,7 @@ function buildPinReport(rows) {
 async function sendTopPinCharts(rows, webhook) {
   if (!rows.length || !webhook) return [];
   const configured = CONFIG.PIN_CHART_TOP;
-  const hardMax = Math.max(1, CONFIG.PIN_CHART_MAX || 25);
+  const hardMax = Math.max(1, CONFIG.PIN_CHART_MAX || 50);
   const limit =
     Number.isFinite(configured) && configured > 0
       ? Math.min(configured, hardMax)
@@ -464,6 +464,7 @@ async function tryAcquireNotifyLock(stateFile, now) {
   const nextData = {
     dropAlerts: data.dropAlerts || {},
     lastPinPrices: data.lastPinPrices || {},
+    lastPinNotify: data.lastPinNotify || null,
     lastNotifyAt: now,
     updatedAt: now,
   };
@@ -603,15 +604,29 @@ async function main() {
   const nextPinPrices = pinText
     ? nextLastPinPrices(lastPinPrices, pinRows)
     : lastPinPrices;
+  const prevNotify =
+    (activeStateFile &&
+      activeStateFile.data &&
+      activeStateFile.data.lastPinNotify) ||
+    null;
+  const lastPinNotify = pinText
+    ? {
+        at: now,
+        markdown: pinText,
+        symbols: pinRows.map((row) => row.symbol),
+      }
+    : prevNotify;
   const stateChanged =
     JSON.stringify(nextDropAlerts) !== JSON.stringify(dropAlerts) ||
-    JSON.stringify(nextPinPrices) !== JSON.stringify(lastPinPrices);
-  if (stateChanged) {
+    JSON.stringify(nextPinPrices) !== JSON.stringify(lastPinPrices) ||
+    JSON.stringify(lastPinNotify) !== JSON.stringify(prevNotify);
+  if (stateChanged || sent.length) {
     await saveJson(
       CONFIG.NOTIFY_STATE_PATH,
       {
         dropAlerts: nextDropAlerts,
         lastPinPrices: nextPinPrices,
+        lastPinNotify,
         lastNotifyAt: now,
         updatedAt: Date.now(),
       },

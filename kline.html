@@ -311,6 +311,115 @@
         font-weight: 700;
         letter-spacing: -0.02em;
       }
+      .kline-card.is-jump-target {
+        outline: 2px solid #2f8f6e;
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(47, 143, 110, 0.18);
+        transition: outline 0.2s ease, box-shadow 0.2s ease;
+      }
+      .notify-float {
+        position: fixed;
+        left: 12px;
+        bottom: 12px;
+        z-index: 40;
+        width: min(360px, calc(100vw - 24px));
+        max-height: min(52vh, 480px);
+        display: flex;
+        flex-direction: column;
+        border: 1px solid rgba(90, 106, 104, 0.28);
+        border-radius: 10px;
+        background: rgba(244, 245, 243, 0.72);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        box-shadow: 0 10px 28px rgba(40, 50, 58, 0.12);
+      }
+      .notify-float[hidden] {
+        display: none !important;
+      }
+      .notify-float-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(220, 226, 222, 0.85);
+        flex-shrink: 0;
+      }
+      .notify-float-head strong {
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .notify-float-head .notify-time {
+        margin-left: 6px;
+        font-size: 11px;
+        color: #78817f;
+        font-weight: 400;
+      }
+      .notify-float-close {
+        border: none;
+        background: transparent;
+        color: #5a6a68;
+        padding: 2px 8px;
+        font-size: 16px;
+        line-height: 1;
+        border-radius: 4px;
+      }
+      .notify-float-close:hover {
+        background: rgba(90, 106, 104, 0.12);
+      }
+      .notify-float-body {
+        overflow: auto;
+        padding: 10px 12px 12px;
+        font-size: 12px;
+        line-height: 1.55;
+        color: #28323a;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .notify-float-body .nc-info {
+        color: #2f8f6e;
+        font-weight: 650;
+      }
+      .notify-float-body .nc-warning {
+        color: #c47a3a;
+        font-weight: 650;
+      }
+      .notify-float-body .nc-comment {
+        color: #9aa3a0;
+      }
+      .notify-float-body .notify-coin {
+        border: none;
+        background: transparent;
+        padding: 0;
+        margin: 0;
+        color: inherit;
+        font: inherit;
+        font-weight: 700;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        cursor: pointer;
+      }
+      .notify-float-body .notify-coin:hover {
+        color: #1f6b52;
+      }
+      .notify-float-tab {
+        position: fixed;
+        left: 12px;
+        bottom: 12px;
+        z-index: 40;
+        border: 1px solid rgba(90, 106, 104, 0.3);
+        background: rgba(244, 245, 243, 0.78);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        color: #5a6a68;
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        box-shadow: 0 6px 18px rgba(40, 50, 58, 0.1);
+      }
+      .notify-float-tab[hidden] {
+        display: none !important;
+      }
       .fav-mark {
         position: absolute;
         top: 6px;
@@ -536,6 +645,33 @@
       </aside>
     </div>
 
+    <div id="notifyFloat" class="notify-float" hidden>
+      <div class="notify-float-head">
+        <strong
+          >最近企微通知<span class="notify-time" id="notifyFloatTime"></span
+        ></strong>
+        <button
+          type="button"
+          class="notify-float-close"
+          id="notifyFloatClose"
+          title="关闭"
+          aria-label="关闭"
+        >
+          ×
+        </button>
+      </div>
+      <div class="notify-float-body" id="notifyFloatBody"></div>
+    </div>
+    <button
+      type="button"
+      class="notify-float-tab"
+      id="notifyFloatTab"
+      hidden
+      title="打开最近企微通知"
+    >
+      企微通知
+    </button>
+
     <script src="./watch-favorites.js"></script>
     <script>
       "use strict";
@@ -578,6 +714,7 @@
       let pinItems = [];
       let positionItems = [];
       let lastPinPrices = {};
+      let lastPinNotify = null;
       let klineAbort = null;
       let loading = false;
       let favoriteSaving = false;
@@ -900,27 +1037,39 @@
           positionItems = [];
         }
         try {
-          lastPinPrices = await loadLastPinPrices();
+          const notifyState = await loadNotifyState();
+          lastPinPrices = notifyState.lastPinPrices || {};
+          lastPinNotify = notifyState.lastPinNotify || null;
         } catch (error) {
           console.warn(error);
           lastPinPrices = {};
+          lastPinNotify = null;
         }
         pruneHistory();
       }
 
-      async function loadLastPinPrices() {
+      async function loadNotifyState() {
         const path = CONFIG.NOTIFY_STATE_PATH;
         try {
           const url = `https://raw.githubusercontent.com/${CONFIG.GITHUB_REPO}/main/${path}?t=${Date.now()}`;
           const response = await fetch(url, { cache: "no-store" });
-          if (!response.ok) return {};
+          if (!response.ok) {
+            return { lastPinPrices: {}, lastPinNotify: null };
+          }
           const data = await response.json();
-          return data && typeof data.lastPinPrices === "object"
-            ? data.lastPinPrices
-            : {};
+          return {
+            lastPinPrices:
+              data && typeof data.lastPinPrices === "object"
+                ? data.lastPinPrices
+                : {},
+            lastPinNotify:
+              data && data.lastPinNotify && typeof data.lastPinNotify === "object"
+                ? data.lastPinNotify
+                : null,
+          };
         } catch (error) {
-          console.warn("loadLastPinPrices failed", error);
-          return {};
+          console.warn("loadNotifyState failed", error);
+          return { lastPinPrices: {}, lastPinNotify: null };
         }
       }
 
@@ -1309,7 +1458,7 @@
           : Number.isFinite(change24h)
             ? formatPercent(change24h)
             : "--";
-        return `<div class="kline-card${favClass}${pairClass}${pinClass}${posClass}${expiredClass}" data-symbol="${symbol}" data-section="${options.section}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${statusText}</span></div>${marks.join("")}<canvas></canvas></div>`;
+        return `<div class="kline-card${favClass}${pairClass}${pinClass}${posClass}${expiredClass}" id="card-${options.section}-${symbol}" data-symbol="${symbol}" data-section="${options.section}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${statusText}</span></div>${marks.join("")}<canvas></canvas></div>`;
       }
 
       function closeCardActions(force) {
@@ -1564,6 +1713,155 @@
         if (badge) badge.textContent = String(n);
       }
 
+      function notifyDismissStorageKey() {
+        return "kline.notifyFloat.dismissAt";
+      }
+
+      function escapeHtml(text) {
+        return String(text || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function escapeRegExp(text) {
+        return String(text || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }
+
+      function formatNotifyAt(at) {
+        const ts = Number(at);
+        if (!Number.isFinite(ts) || ts <= 0) return "";
+        try {
+          return new Date(ts).toLocaleString("zh-CN", { hour12: false });
+        } catch (error) {
+          return "";
+        }
+      }
+
+      function renderWecomNotifyHtml(markdown, symbols) {
+        const labelMap = new Map();
+        (Array.isArray(symbols) ? symbols : []).forEach((symbol) => {
+          const key = String(symbol || "")
+            .trim()
+            .toUpperCase();
+          if (!key) return;
+          const label = key.replace(/USDT$/i, "");
+          if (label) labelMap.set(label.toUpperCase(), key);
+        });
+        const labels = [...labelMap.keys()].sort((a, b) => b.length - a.length);
+
+        const linkify = (escaped) => {
+          let out = escaped;
+          labels.forEach((label) => {
+            const symbol = labelMap.get(label);
+            const re = new RegExp(`(${escapeRegExp(label)})`, "gi");
+            out = out.replace(re, (match) => {
+              return `<button type="button" class="notify-coin" data-jump="${symbol}">${match}</button>`;
+            });
+          });
+          return out;
+        };
+
+        const src = String(markdown || "");
+        const fontRe =
+          /<font\s+color="(info|warning|comment)">([\s\S]*?)<\/font>/gi;
+        const parts = [];
+        let last = 0;
+        let match = fontRe.exec(src);
+        while (match) {
+          parts.push(linkify(escapeHtml(src.slice(last, match.index))));
+          parts.push(
+            `<span class="nc-${match[1]}">${linkify(escapeHtml(match[2]))}</span>`,
+          );
+          last = match.index + match[0].length;
+          match = fontRe.exec(src);
+        }
+        parts.push(linkify(escapeHtml(src.slice(last))));
+        return parts.join("").replace(/\n/g, "<br>");
+      }
+
+      function jumpToNotifySymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        const order = ["pin", "rising", "favorite", "pin-hidden"];
+        const cards = [
+          ...document.querySelectorAll(`.kline-card[data-symbol="${key}"]`),
+        ].sort(
+          (a, b) =>
+            order.indexOf(a.dataset.section) - order.indexOf(b.dataset.section),
+        );
+        const card = cards[0];
+        if (!card) {
+          showToast(`${key.replace(/USDT$/i, "")} 当前页面未展示`);
+          return;
+        }
+        if (card.dataset.section === "pin-hidden") {
+          setHiddenPinDrawerOpen(true);
+        }
+        card.scrollIntoView({ behavior: "smooth", block: "center" });
+        card.classList.add("is-jump-target");
+        window.setTimeout(() => card.classList.remove("is-jump-target"), 1600);
+      }
+
+      function isNotifyFloatDismissed(notify) {
+        if (!notify || !Number.isFinite(Number(notify.at))) return true;
+        const dismissed = Number(
+          localStorage.getItem(notifyDismissStorageKey()) || 0,
+        );
+        return dismissed === Number(notify.at);
+      }
+
+      function updateNotifyFloatPanel() {
+        const panel = document.getElementById("notifyFloat");
+        const tab = document.getElementById("notifyFloatTab");
+        const body = document.getElementById("notifyFloatBody");
+        const timeEl = document.getElementById("notifyFloatTime");
+        if (!panel || !tab || !body) return;
+
+        const notify = lastPinNotify;
+        const hasText =
+          notify &&
+          typeof notify.markdown === "string" &&
+          notify.markdown.trim();
+        if (!hasText) {
+          panel.hidden = true;
+          tab.hidden = true;
+          body.innerHTML = "";
+          if (timeEl) timeEl.textContent = "";
+          return;
+        }
+
+        const dismissed = isNotifyFloatDismissed(notify);
+        panel.hidden = dismissed;
+        tab.hidden = !dismissed;
+        if (timeEl) {
+          const label = formatNotifyAt(notify.at);
+          timeEl.textContent = label ? ` · ${label}` : "";
+        }
+        body.innerHTML = renderWecomNotifyHtml(
+          notify.markdown,
+          notify.symbols || [],
+        );
+      }
+
+      function dismissNotifyFloat() {
+        if (lastPinNotify && Number.isFinite(Number(lastPinNotify.at))) {
+          localStorage.setItem(
+            notifyDismissStorageKey(),
+            String(lastPinNotify.at),
+          );
+        }
+        updateNotifyFloatPanel();
+      }
+
+      function reopenNotifyFloat() {
+        localStorage.removeItem(notifyDismissStorageKey());
+        updateNotifyFloatPanel();
+      }
+
       async function renderKlines() {
         const interval = CONFIG.KLINE_INTERVAL;
         const bars = klineLimit(interval);
@@ -1751,6 +2049,7 @@
           const risingMeta = document.getElementById("risingMeta");
           risingMeta.textContent = `${risingMeta.textContent} · 启动标记 ${earlyCount}`;
         }
+        updateNotifyFloatPanel();
       }
 
       async function toggleFavoriteForSymbol(symbol) {
@@ -2129,6 +2428,7 @@
         try {
           setStatus(false, "1/3 读取 GitHub 快照 / 观察池 / 收藏...");
           await loadGithubStorage();
+          updateNotifyFloatPanel();
 
           setStatus(false, "2/3 拉取币安最新行情...");
           await loadBinanceTicker();
@@ -2164,6 +2464,22 @@
         closeCardActions();
         refreshAll();
       });
+      document
+        .getElementById("notifyFloatClose")
+        .addEventListener("click", () => {
+          dismissNotifyFloat();
+        });
+      document.getElementById("notifyFloatTab").addEventListener("click", () => {
+        reopenNotifyFloat();
+      });
+      document
+        .getElementById("notifyFloatBody")
+        .addEventListener("click", (event) => {
+          const btn = event.target.closest(".notify-coin");
+          if (!btn) return;
+          event.preventDefault();
+          jumpToNotifySymbol(btn.dataset.jump);
+        });
       document
         .getElementById("clearExpiredPinsBtn")
         .addEventListener("click", () => {
