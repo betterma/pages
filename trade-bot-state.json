@@ -11,14 +11,26 @@
   "windowStartMs": 1789372800000,
   "entryPrice": 0.000751,
   "cooldownUntil": null,
-  "lastPrice": 0.000683,
-  "lastCheckAt": 1789396302461,
+  "lastPrice": 0.000692,
+  "lastCheckAt": 1789398079134,
   "lastAction": "wait_rebuy",
   "lastError": null,
-  "updatedAt": 1789396302845,
+  "updatedAt": 1789398079461,
   "startedAt": 1789279629168,
   "feesPaid": 115.79091758882544,
   "logs": [
+    {
+      "at": 1789398079461,
+      "source": "timer",
+      "level": "info",
+      "message": "等待回补：现价 0.000692，回补线 0.000706112，现金 8586.94"
+    },
+    {
+      "at": 1789398079134,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=flat_rebuy enabled=true"
+    },
     {
       "at": 1789396302844,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "冷静期中，约剩 10 分钟"
-    },
-    {
-      "at": 1789353083409,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=cooldown enabled=true"
-    },
-    {
-      "at": 1789353079834,
-      "source": "timer",
-      "level": "info",
-      "message": "【paper卖出】现价 0.000722 ≤ 0.000777095，到账 9042.42，冷静 10 分钟"
     }
   ]
 }
