@@ -12,13 +12,25 @@
   "entryPrice": 0.00074,
   "cooldownUntil": null,
   "lastPrice": 0.000741,
-  "lastCheckAt": 1789358490659,
+  "lastCheckAt": 1789358502192,
   "lastAction": "hold",
   "lastError": null,
-  "updatedAt": 1789358490745,
+  "updatedAt": 1789358502278,
   "startedAt": 1789279629168,
   "feesPaid": 89.16206035533848,
   "logs": [
+    {
+      "at": 1789358502277,
+      "source": "timer",
+      "level": "info",
+      "message": "持仓中：现价 0.000741，卖出线 0.000733315，权益 9045.58"
+    },
+    {
+      "at": 1789358502192,
+      "source": "timer",
+      "level": "info",
+      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=holding enabled=true"
+    },
     {
       "at": 1789358490745,
       "source": "timer",
@@ -1206,18 +1218,6 @@
       "source": "timer",
       "level": "info",
       "message": "【paper回补】现价 0.000799 ≥ 0.000796382，用 10097.90 USDT，起步价 0.000794"
-    },
-    {
-      "at": 1789315279322,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=flat_rebuy enabled=true"
-    },
-    {
-      "at": 1789313502848,
-      "source": "timer",
-      "level": "info",
-      "message": "等待回补：现价 0.000797，回补线 0.000896682，现金 10097.90"
     }
   ]
 }
