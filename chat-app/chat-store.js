@@ -101,7 +101,16 @@
       raw = decodeBase64Utf8(blob.content || "");
     }
     if (!raw.trim()) return { data: null, sha: file.sha || null };
-    return { data: JSON.parse(raw), sha: file.sha };
+    try {
+      return { data: JSON.parse(raw), sha: file.sha };
+    } catch (error) {
+      if (/^<<<<<<<|^=======|^>>>>>>>/m.test(raw)) {
+        throw new Error(
+          `${path} 含 git 冲突标记，请先修好 JSON 再保存（不要把 <<<<<<< 提交进仓库）`,
+        );
+      }
+      throw new Error(`${path} 不是合法 JSON: ${error.message}`);
+    }
   }
 
   async function writeJsonFile(options) {
@@ -185,11 +194,8 @@
     const repo = (options && options.repo) || DEFAULT_REPO;
     const path = options.path;
     const commitSha = options.commitSha;
-    const url = `https://raw.githubusercontent.com/${repo}/${commitSha}/${path}`;
-    return fetch(url, {
-      cache: "no-store",
-      headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
-    });
+    const url = `https://raw.githubusercontent.com/${repo}/${commitSha}/${path}?t=${Date.now()}`;
+    return fetch(url, { cache: "no-store" });
   }
 
   function hashHue(key) {
