@@ -1,7 +1,7 @@
 (function (global) {
   "use strict";
 
-  const READ_KEY = "chat-app.readMap";
+  const AS_KEY = "chat-app.asMap";
 
   function qs(id) {
     return document.getElementById(id);
@@ -20,9 +20,9 @@
     showToast._t = setTimeout(() => el.classList.remove("show"), 1800);
   }
 
-  function getReadMap() {
+  function getAsMap() {
     try {
-      const raw = sessionStorage.getItem(READ_KEY);
+      const raw = localStorage.getItem(AS_KEY);
       const data = raw ? JSON.parse(raw) : {};
       return data && typeof data === "object" ? data : {};
     } catch (error) {
@@ -30,32 +30,26 @@
     }
   }
 
-  function markThreadRead(threadId) {
-    const map = getReadMap();
-    map[String(threadId)] = Date.now();
-    sessionStorage.setItem(READ_KEY, JSON.stringify(map));
+  function viewerIdFor(thread) {
+    const map = getAsMap();
+    const saved = map[thread && thread.id];
+    if (saved && ChatStore.memberById(thread, saved)) return saved;
+    return ChatStore.ME_ID;
   }
 
-  function effectiveUnread(thread) {
+  function setViewerId(threadId, memberId) {
+    const map = getAsMap();
+    map[String(threadId)] = memberId;
+    localStorage.setItem(AS_KEY, JSON.stringify(map));
+  }
+
+  function unreadFor(thread, viewerId) {
     if (!thread) return 0;
-    const map = getReadMap();
-    if (map[thread.id]) return 0;
-    return Number(thread.unread) || 0;
-  }
-
-  function initials(title) {
-    const t = String(title || "?").trim();
-    if (!t) return "?";
-    return t.slice(0, 1).toUpperCase();
-  }
-
-  function avatarHtml(thread, className) {
-    const cls = className || "avatar";
-    const title = (thread && thread.title) || "";
-    if (thread && thread.avatar) {
-      return `<div class="${cls}"><img src="${escapeAttr(thread.avatar)}" alt="" /></div>`;
+    const id = viewerId || ChatStore.ME_ID;
+    if (thread.unreadBy && Number.isFinite(Number(thread.unreadBy[id]))) {
+      return Number(thread.unreadBy[id]) || 0;
     }
-    return `<div class="${cls}">${escapeHtml(initials(title))}</div>`;
+    return id === ChatStore.ME_ID ? Number(thread.unread) || 0 : 0;
   }
 
   function escapeHtml(text) {
@@ -68,6 +62,44 @@
 
   function escapeAttr(text) {
     return escapeHtml(text).replace(/'/g, "&#39;");
+  }
+
+  function personForAvatar(thread, member) {
+    if (member) return member;
+    if (!thread) return { id: "?", name: "?", color: ChatStore.colorForId("?") };
+    if (thread.avatar) {
+      return {
+        id: thread.id,
+        name: thread.title,
+        avatar: thread.avatar,
+        color: ChatStore.colorForId(thread.id),
+      };
+    }
+    if (thread.type === "group") {
+      return {
+        id: thread.id,
+        name: thread.title,
+        color: ChatStore.colorForId(thread.id),
+      };
+    }
+    return ChatStore.peerMember(thread) || {
+      id: thread.id,
+      name: thread.title,
+      color: ChatStore.colorForId(thread.id),
+    };
+  }
+
+  function avatarHtml(person, className) {
+    const cls = className || "avatar";
+    const p = person || { id: "?", name: "?" };
+    if (p.avatar) {
+      return `<div class="${cls}"><img src="${escapeAttr(p.avatar)}" alt="" /></div>`;
+    }
+    const color = p.color || ChatStore.colorForId(p.id || p.name);
+    const text = ChatStore.avatarText(p.name);
+    return `<div class="${cls}" style="background:${escapeAttr(
+      color,
+    )}">${escapeHtml(text)}</div>`;
   }
 
   function formatListTime(ts) {
@@ -144,20 +176,25 @@
       }
       listEl.innerHTML = threads
         .map((thread) => {
-          const unread = effectiveUnread(thread);
+          const unread = unreadFor(thread, ChatStore.ME_ID);
           const badge =
             unread > 0
               ? `<span class="badge${thread.muted ? " muted" : ""}">${
                   unread > 99 ? "99+" : unread
                 }</span>`
               : "";
+          const face = personForAvatar(thread);
+          const tag =
+            thread.type === "group"
+              ? `<span class="thread-tag">群</span>`
+              : "";
           return `<a class="thread-item${
             thread.pinned ? " is-pinned" : ""
           }" href="./chat.html?id=${encodeURIComponent(thread.id)}">
-            ${avatarHtml(thread)}
+            ${avatarHtml(face)}
             <div class="thread-main">
               <div class="thread-row">
-                <div class="thread-title">${escapeHtml(thread.title)}</div>
+                <div class="thread-title">${tag}${escapeHtml(thread.title)}</div>
                 <div class="thread-time">${escapeHtml(
                   formatListTime(thread.lastAt),
                 )}</div>
@@ -202,10 +239,61 @@
     return Math.abs(Number(at) - Number(prevAt)) >= 5 * 60 * 1000;
   }
 
+  function receiptHtml(msg, thread, viewerId) {
+    if (msg.senderId !== viewerId) return "";
+    const rec = ChatStore.receiptForMessage(msg, thread, viewerId);
+    if (rec.kind === "group") {
+      const tip = rec.readNames.length
+        ? `已读：${rec.readNames.join("、")}`
+        : "还没有人读";
+      return `<div class="receipt" title="${escapeAttr(tip)}">已读 ${
+        rec.read
+      }人 · 未读 ${rec.unread}人</div>`;
+    }
+    return `<div class="receipt">${rec.read ? "已读" : "未读"}</div>`;
+  }
+
+  function renderMessagesHtml(thread, messages, viewerId) {
+    if (!messages.length) {
+      return '<div class="empty-state">暂无消息，发一条试试</div>';
+    }
+    let prevAt = 0;
+    return messages
+      .map((msg) => {
+        const sep = shouldShowTimeSep(prevAt, msg.at)
+          ? `<div class="time-sep">${escapeHtml(formatMsgTime(msg.at))}</div>`
+          : "";
+        prevAt = msg.at;
+        const mine = msg.senderId === viewerId;
+        const who =
+          ChatStore.memberById(thread, msg.senderId) || {
+            id: msg.senderId,
+            name: msg.senderId,
+            color: ChatStore.colorForId(msg.senderId),
+          };
+        const name =
+          thread.type === "group" && !mine
+            ? `<div class="msg-name">${escapeHtml(who.name)}</div>`
+            : "";
+        return `${sep}<div class="msg-row ${mine ? "me" : "peer"}">
+            ${avatarHtml(who, "msg-avatar")}
+            <div class="msg-col">
+              ${name}
+              <div class="bubble">${escapeHtml(msg.text)}</div>
+              ${receiptHtml(msg, thread, viewerId)}
+            </div>
+          </div>`;
+      })
+      .join("");
+  }
+
   async function runChatPage() {
     const threadId = queryParam("id");
     const scroller = qs("msgScroller");
     const titleEl = qs("chatTitle");
+    const asSelect = qs("asSelect");
+    const sendBtn = qs("sendBtn");
+    const input = qs("composerInput");
     if (!scroller) return;
 
     if (!threadId) {
@@ -214,44 +302,68 @@
     }
 
     scroller.innerHTML = skeletonList(5);
-    markThreadRead(threadId);
 
     let thread = null;
-    try {
+    let messages = [];
+    let sending = false;
+    let marking = false;
+
+    const paint = () => {
+      const viewerId = viewerIdFor(thread);
+      if (titleEl) {
+        const extra =
+          thread.type === "group"
+            ? ` (${(thread.members || []).length})`
+            : "";
+        titleEl.textContent = `${thread.title || threadId}${extra}`;
+      }
+      if (asSelect) {
+        asSelect.innerHTML = (thread.members || [])
+          .map((m) => {
+            const sel = m.id === viewerId ? " selected" : "";
+            return `<option value="${escapeAttr(m.id)}"${sel}>以 ${escapeHtml(
+              m.name,
+            )} 发送</option>`;
+          })
+          .join("");
+      }
+      scroller.innerHTML = renderMessagesHtml(thread, messages, viewerId);
+      scroller.scrollTop = scroller.scrollHeight;
+    };
+
+    const loadRoom = async (opts) => {
       const threadsFile = await ChatStore.loadThreads();
-      thread = (threadsFile.threads || []).find((t) => t.id === threadId) || {
-        id: threadId,
-        title: threadId,
-        avatar: "",
-      };
-      if (titleEl) titleEl.textContent = thread.title || threadId;
-    } catch (error) {
-      if (titleEl) titleEl.textContent = threadId;
-    }
+      thread = (threadsFile.threads || []).find((t) => t.id === threadId);
+      if (!thread) {
+        thread = ChatStore.normalizeThread({
+          id: threadId,
+          title: threadId,
+          type: "direct",
+        });
+      }
+      const file = await ChatStore.loadMessages(threadId, { thread });
+      messages = file.messages || [];
+      paint();
+      if (opts && opts.skipMark) return;
+      const viewerId = viewerIdFor(thread);
+      if (marking) return;
+      marking = true;
+      try {
+        const result = await ChatStore.markRead(threadId, { viewerId });
+        if (result && result.changed) {
+          thread = result.thread || thread;
+          messages = result.messages || messages;
+          paint();
+        }
+      } catch (error) {
+        console.warn("markRead failed", error);
+      } finally {
+        marking = false;
+      }
+    };
 
     try {
-      const file = await ChatStore.loadMessages(threadId);
-      const messages = file.messages || [];
-      if (!messages.length) {
-        scroller.innerHTML = '<div class="empty-state">暂无消息</div>';
-        return;
-      }
-      let prevAt = 0;
-      const meThread = { title: "我", avatar: "" };
-      scroller.innerHTML = messages
-        .map((msg) => {
-          const sep = shouldShowTimeSep(prevAt, msg.at)
-            ? `<div class="time-sep">${escapeHtml(formatMsgTime(msg.at))}</div>`
-            : "";
-          prevAt = msg.at;
-          const who = msg.role === "me" ? meThread : thread;
-          return `${sep}<div class="msg-row ${msg.role}">
-            ${avatarHtml(who, "msg-avatar")}
-            <div class="bubble">${escapeHtml(msg.text)}</div>
-          </div>`;
-        })
-        .join("");
-      scroller.scrollTop = scroller.scrollHeight;
+      await loadRoom();
     } catch (error) {
       console.error(error);
       scroller.innerHTML = `<div class="empty-state">${escapeHtml(
@@ -259,13 +371,58 @@
       )}</div>`;
     }
 
-    qs("sendBtn")?.addEventListener("click", () => {
-      showToast("演示版不可发送");
+    asSelect?.addEventListener("change", async () => {
+      setViewerId(threadId, asSelect.value);
+      paint();
+      try {
+        const result = await ChatStore.markRead(threadId, {
+          viewerId: asSelect.value,
+        });
+        if (result && result.changed) {
+          thread = result.thread || thread;
+          messages = result.messages || messages;
+          paint();
+        }
+      } catch (error) {
+        console.warn(error);
+      }
     });
-    qs("composerInput")?.addEventListener("keydown", (event) => {
+
+    const send = async () => {
+      const text = (input?.value || "").trim();
+      if (!text || sending || !thread) return;
+      sending = true;
+      if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.textContent = "…";
+      }
+      try {
+        const viewerId = viewerIdFor(thread);
+        const result = await ChatStore.sendMessage(threadId, {
+          text,
+          senderId: viewerId,
+        });
+        thread = result.thread || thread;
+        messages = result.messages || messages;
+        if (input) input.value = "";
+        paint();
+      } catch (error) {
+        console.error(error);
+        showToast(error.message || "发送失败");
+      } finally {
+        sending = false;
+        if (sendBtn) {
+          sendBtn.disabled = false;
+          sendBtn.textContent = "发送";
+        }
+      }
+    };
+
+    sendBtn?.addEventListener("click", () => send());
+    input?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
-        showToast("演示版不可发送");
+        send();
       }
     });
   }
@@ -279,9 +436,9 @@
     escapeHtml,
     formatListTime,
     formatMsgTime,
-    markThreadRead,
-    effectiveUnread,
+    unreadFor,
     avatarHtml,
-    initials,
+    personForAvatar,
+    viewerIdFor,
   };
 })(typeof globalThis !== "undefined" ? globalThis : window);

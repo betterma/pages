@@ -23,16 +23,18 @@
           ‹
         </button>
         <h1 id="chatTitle">聊天</h1>
-        <button type="button" class="nav-btn" style="visibility: hidden">
-          ·
-        </button>
+        <select
+          id="asSelect"
+          class="as-select"
+          title="切换当前身份（发送 / 已读）"
+        ></select>
       </header>
       <div id="msgScroller" class="msg-scroller"></div>
       <div class="composer">
         <input
           id="composerInput"
           type="text"
-          placeholder="演示版不可发送"
+          placeholder="发消息"
           autocomplete="off"
         />
         <button type="button" class="send-btn" id="sendBtn">发送</button>

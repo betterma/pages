@@ -1,22 +1,57 @@
 {
-  "updatedAt": 1740000000000,
+  "updatedAt": 1740003600000,
   "threads": [
     {
       "id": "t_demo_1",
       "title": "张三",
+      "type": "direct",
       "avatar": "",
+      "members": [
+        {
+          "id": "u_me",
+          "name": "我"
+        },
+        {
+          "id": "u_zhang",
+          "name": "张三"
+        }
+      ],
       "lastMessage": "晚上见，老地方。",
       "lastAt": 1740003600000,
+      "unreadBy": {
+        "u_me": 2,
+        "u_zhang": 0
+      },
       "unread": 2,
       "pinned": true,
       "muted": false
     },
     {
       "id": "t_demo_2",
-      "title": "项目群 · 演示",
+      "title": "项目群",
+      "type": "group",
       "avatar": "",
+      "members": [
+        {
+          "id": "u_me",
+          "name": "我"
+        },
+        {
+          "id": "u_li",
+          "name": "李四"
+        },
+        {
+          "id": "u_wang",
+          "name": "王小明"
+        }
+      ],
       "lastMessage": "收到，我这边先按这个排期。",
       "lastAt": 1740000000000,
+      "unreadBy": {
+        "u_me": 0,
+        "u_li": 1,
+        "u_wang": 1
+      },
       "unread": 0,
       "pinned": false,
       "muted": false

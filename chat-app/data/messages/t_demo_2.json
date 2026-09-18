@@ -4,21 +4,24 @@
   "messages": [
     {
       "id": "g1",
-      "role": "peer",
+      "senderId": "u_li",
       "text": "各位，这周演示排期发一下。",
-      "at": 1739998800000
+      "at": 1739998800000,
+      "readBy": ["u_li", "u_me", "u_wang"]
     },
     {
       "id": "g2",
-      "role": "me",
+      "senderId": "u_me",
       "text": "我周三下午可以。",
-      "at": 1739999400000
+      "at": 1739999400000,
+      "readBy": ["u_me", "u_wang"]
     },
     {
       "id": "g3",
-      "role": "peer",
+      "senderId": "u_wang",
       "text": "收到，我这边先按这个排期。",
-      "at": 1740000000000
+      "at": 1740000000000,
+      "readBy": ["u_wang", "u_me"]
     }
   ]
 }

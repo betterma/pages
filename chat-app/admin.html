@@ -48,18 +48,26 @@
       <div class="admin-card">
         <h2 id="threadFormTitle">新建会话</h2>
         <input type="hidden" id="threadId" />
-        <label>昵称 / 标题</label>
-        <input id="threadTitle" type="text" placeholder="张三" />
-        <label>头像 URL（可空，用首字）</label>
+        <label>类型</label>
+        <select id="threadType">
+          <option value="direct">单聊</option>
+          <option value="group">群聊</option>
+        </select>
+        <label>昵称 / 群名</label>
+        <input id="threadTitle" type="text" placeholder="张三 / 项目群" />
+        <label>头像 URL（可空，用彩色字）</label>
         <input id="threadAvatar" type="url" placeholder="https://..." />
-        <label>未读数</label>
-        <input id="threadUnread" type="number" min="0" value="0" />
-        <label
-          ><input id="threadPinned" type="checkbox" /> 置顶</label
-        >
-        <label
-          ><input id="threadMuted" type="checkbox" /> 免打扰</label
-        >
+        <label>置顶 / 免打扰</label>
+        <label><input id="threadPinned" type="checkbox" /> 置顶</label>
+        <label><input id="threadMuted" type="checkbox" /> 免打扰</label>
+        <div id="membersBox">
+          <label>成员（「我」会自动保留）</label>
+          <ul class="admin-list" id="memberAdminList"></ul>
+          <div class="admin-row">
+            <input id="newMemberName" type="text" placeholder="新成员姓名" />
+            <button type="button" id="addMemberBtn">添加成员</button>
+          </div>
+        </div>
         <div class="admin-row">
           <button type="button" class="primary" id="upsertThreadBtn">
             写入列表（未落盘）
@@ -74,11 +82,8 @@
       <div class="admin-card">
         <h2>消息 · <span id="msgThreadLabel">未选择</span></h2>
         <ul class="admin-list" id="msgAdminList"></ul>
-        <label>发送方</label>
-        <select id="msgRole">
-          <option value="peer">对方</option>
-          <option value="me">我</option>
-        </select>
+        <label>发送成员</label>
+        <select id="msgRole"></select>
         <label>时间（本地）</label>
         <input id="msgAt" type="datetime-local" />
         <label>正文</label>
