@@ -311,10 +311,7 @@
     const paint = () => {
       const viewerId = viewerIdFor(thread);
       if (titleEl) {
-        const extra =
-          thread.type === "group"
-            ? ` (${(thread.members || []).length})`
-            : "";
+        const extra ="";
         titleEl.textContent = `${thread.title || threadId}${extra}`;
       }
       if (asSelect) {
