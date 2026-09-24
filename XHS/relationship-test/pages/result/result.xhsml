@@ -1,0 +1,20 @@
+<view class="page">
+  <view class="header">
+    <text class="eyebrow">你的关系画像</text>
+    <text class="title">{{title}}</text>
+  </view>
+
+  <view class="scores">
+    <view class="score-row" xhs:for="{{scoreList}}" xhs:key="key">
+      <view class="score-meta">
+        <text class="score-label">{{item.label}}</text>
+        <text class="score-value">{{item.value}}</text>
+      </view>
+      <view class="bar">
+        <view class="bar-fill" style="width: {{item.value}}%;"></view>
+      </view>
+    </view>
+  </view>
+
+  <button class="btn btn-primary" bindtap="onBackHome">返回首页</button>
+</view>

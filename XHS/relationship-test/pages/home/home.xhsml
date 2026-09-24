@@ -1,0 +1,29 @@
+<view class="page">
+  <view class="hero">
+    <text class="title">{{title}}</text>
+    <text class="subtitle">{{subtitle}}</text>
+    <text class="price">价格：{{priceText}}</text>
+  </view>
+
+  <view class="status" xhs:if="{{purchased}}">
+    <text class="status-text">你已购买此测评</text>
+  </view>
+
+  <view class="progress-box" xhs:if="{{hasProgress}}">
+    <text class="progress-title">检测到一份未完成的测评</text>
+    <text class="progress-meta">已完成 {{answered}} / {{total}} 题</text>
+  </view>
+
+  <view class="actions">
+    <button class="btn btn-primary" bindtap="onPrimaryTap">{{primaryText}}</button>
+    <button
+      xhs:if="{{hasProgress}}"
+      class="btn btn-secondary"
+      bindtap="onRestartTap"
+    >重新开始</button>
+  </view>
+
+  <view class="disclaimer">
+    <text>本测试仅用于娱乐和自我探索，不用于心理疾病诊断或医疗判断。</text>
+  </view>
+</view>

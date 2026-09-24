@@ -1,0 +1,64 @@
+.page {
+  min-height: 100vh;
+  padding: 48rpx 40rpx 80rpx;
+  background: #f7f5f2;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-bottom: 48rpx;
+}
+
+.eyebrow {
+  font-size: 24rpx;
+  color: #888;
+}
+
+.title {
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.scores {
+  background: #ffffff;
+  border-radius: 16rpx;
+  padding: 32rpx 28rpx;
+  margin-bottom: 48rpx;
+}
+
+.score-row + .score-row {
+  margin-top: 28rpx;
+}
+
+.score-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+
+.score-label {
+  font-size: 28rpx;
+  color: #333;
+}
+
+.score-value {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #ff2442;
+}
+
+.bar {
+  height: 16rpx;
+  background: #efeae4;
+  border-radius: 999rpx;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: #ff2442;
+  border-radius: 999rpx;
+}

@@ -1,0 +1,31 @@
+<view class="page" xhs:if="{{question}}">
+  <view class="progress">第 {{currentNo}} / {{total}} 题</view>
+
+  <view class="stem">{{question.stem}}</view>
+
+  <view class="options">
+    <view
+      xhs:for="{{question.options}}"
+      xhs:key="key"
+      class="option {{selectedKey === item.key ? 'option-active' : ''}}"
+      data-key="{{item.key}}"
+      bindtap="onSelect"
+    >
+      <text class="option-key">{{item.key}}</text>
+      <text class="option-text">{{item.text}}</text>
+    </view>
+  </view>
+
+  <view class="nav">
+    <button
+      class="btn btn-secondary {{isFirst ? 'btn-disabled' : ''}}"
+      disabled="{{isFirst}}"
+      bindtap="onPrev"
+    >上一题</button>
+    <button
+      class="btn btn-primary {{canNext ? '' : 'btn-disabled'}}"
+      disabled="{{!canNext}}"
+      bindtap="onNext"
+    >{{isLast ? '提交分析' : '下一题'}}</button>
+  </view>
+</view>

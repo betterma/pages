@@ -1,0 +1,65 @@
+.page {
+  min-height: 100vh;
+  padding: 40rpx 40rpx 80rpx;
+  background: #f7f5f2;
+  display: flex;
+  flex-direction: column;
+}
+
+.progress {
+  font-size: 24rpx;
+  color: #888;
+  margin-bottom: 32rpx;
+}
+
+.stem {
+  font-size: 34rpx;
+  font-weight: 600;
+  line-height: 1.5;
+  margin-bottom: 40rpx;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.option {
+  display: flex;
+  align-items: flex-start;
+  gap: 20rpx;
+  padding: 28rpx 24rpx;
+  background: #ffffff;
+  border-radius: 14rpx;
+  border: 2rpx solid transparent;
+}
+
+.option-active {
+  border-color: #ff2442;
+  background: #fff5f6;
+}
+
+.option-key {
+  width: 40rpx;
+  font-weight: 700;
+  color: #ff2442;
+}
+
+.option-text {
+  flex: 1;
+  font-size: 28rpx;
+  line-height: 1.5;
+  color: #333;
+}
+
+.nav {
+  margin-top: auto;
+  padding-top: 48rpx;
+  display: flex;
+  gap: 20rpx;
+}
+
+.nav .btn {
+  flex: 1;
+}

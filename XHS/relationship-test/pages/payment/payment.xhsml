@@ -1,0 +1,9 @@
+<view class="page">
+  <view class="card">
+    <text class="title">{{title}}</text>
+    <text class="price">{{priceText}}</text>
+    <text class="hint">开发测试模式：不会产生真实扣款</text>
+  </view>
+
+  <button class="btn btn-primary" bindtap="onMockPay">模拟购买</button>
+</view>
