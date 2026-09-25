@@ -68,6 +68,24 @@
         opacity: 0.55;
         cursor: not-allowed;
       }
+      select.range-select {
+        border: 1px solid #c9d0d0;
+        background: #fbfcfa;
+        color: #28323a;
+        padding: 8px 10px;
+        border-radius: 6px;
+        cursor: pointer;
+        font: inherit;
+        font-size: 13px;
+        max-width: min(220px, 52vw);
+      }
+      select.range-select:hover {
+        background: #eef1ee;
+      }
+      select.range-select:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
       .status {
         display: flex;
         align-items: center;
@@ -108,10 +126,45 @@
         flex: 1;
         min-width: 0;
       }
-      .pin-meta-row button {
+      .pin-meta-row button,
+      .maint-panel button {
         flex-shrink: 0;
         font-size: 12px;
         padding: 6px 10px;
+      }
+      .maint-toggle {
+        color: #78817f;
+        border-color: transparent;
+        background: transparent;
+        padding: 4px 8px;
+      }
+      .maint-toggle:hover {
+        background: #eef1ee;
+        border-color: #c9d0d0;
+      }
+      .maint-toggle[aria-expanded="true"] {
+        color: #3d4a48;
+        border-color: #c9d0d0;
+        background: #eef1ee;
+      }
+      .maint-panel {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: -4px 0 10px;
+      }
+      .maint-panel[hidden] {
+        display: none !important;
+      }
+      .maint-panel .maint-empty {
+        font-size: 12px;
+        color: #9aa3a0;
+      }
+      .maint-panel button.is-danger {
+        color: #7a4a42;
+        border-color: #d4b8b2;
       }
       .hidden-pin-tab {
         position: fixed;
@@ -306,10 +359,54 @@
         background: rgba(196, 122, 58, 0.92);
       }
       .price-up-last-mark {
-        margin-left: 4px;
         color: #2f8f6e;
         font-weight: 700;
         letter-spacing: -0.02em;
+      }
+      .pin-stats {
+        display: block;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        font-size: 10px;
+        line-height: 1.4;
+        color: #5a6a68;
+        font-weight: 400;
+        white-space: normal;
+      }
+      .pin-stats .pin-stat-row {
+        display: block;
+      }
+      .pin-stats .pin-flags {
+        margin-top: 1px;
+        color: #78817f;
+      }
+      .pin-stats .pin-flag {
+        font-weight: 650;
+      }
+      .pin-stats .pin-flag.is-remain {
+        color: #5a6a68;
+      }
+      .pin-stats .pin-flag.is-at {
+        color: #2f8f6e;
+      }
+      .pin-stats .pin-flag.is-5m {
+        color: #2f8f6e;
+      }
+      .pin-stats .pin-flag.is-15m {
+        color: #c47a3a;
+      }
+      .pin-stats .pin-flag.is-expired {
+        color: #8d7771;
+      }
+      .kline-card-head.is-pin-head {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
+        padding-right: 28px;
+      }
+      .kline-card-head.is-pin-head .symbol-copy {
+        font-size: 13px;
       }
       .kline-card.is-jump-target {
         outline: 2px solid #2f8f6e;
@@ -339,7 +436,6 @@
       .notify-float-head {
         display: flex;
         align-items: center;
-        justify-content: space-between;
         gap: 8px;
         padding: 8px 10px;
         border-bottom: 1px solid rgba(220, 226, 222, 0.55);
@@ -348,21 +444,16 @@
         border-radius: 12px 12px 0 0;
       }
       .notify-float-head strong {
+        flex: 1;
+        min-width: 0;
         font-size: 13px;
         font-weight: 650;
-        min-width: 0;
       }
       .notify-float-head .notify-time {
         margin-left: 6px;
         font-size: 11px;
         color: #78817f;
         font-weight: 400;
-      }
-      .notify-float-actions {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        flex-shrink: 0;
       }
       .notify-float-refresh,
       .notify-float-close {
@@ -634,9 +725,15 @@
           <a class="nav-link" href="./okx/kline.html">OKX 自选</a>
         </div>
         <div class="topbar-actions">
-          <button id="rangeBtn" type="button" title="切换 K 线时间范围（4h 周期不变）">
-            近10天K线
-          </button>
+          <select
+            id="rangeSelect"
+            class="range-select"
+            title="切换 K 线范围与周期（观察池/窗口涨跌仍按 4h）"
+          >
+            <option value="3d-4h">近3天 · 4h</option>
+            <option value="10d-4h">近10天 · 4h</option>
+            <option value="10d-1d">近10天 · 1天</option>
+          </select>
           <button id="refreshBtn" type="button">刷新</button>
         </div>
       </div>
@@ -649,8 +746,30 @@
       <h2 class="section-title">盯一下</h2>
       <div class="pin-meta-row">
         <div id="pinMeta" class="meta"></div>
+        <button
+          id="maintToggleBtn"
+          class="maint-toggle"
+          type="button"
+          aria-expanded="false"
+          aria-controls="maintPanel"
+          title="展开低频清理操作"
+        >
+          清理 ▾
+        </button>
+      </div>
+      <div id="maintPanel" class="maint-panel" hidden>
+        <span id="maintEmptyHint" class="maint-empty" hidden>暂无可清理项</span>
         <button id="clearExpiredPinsBtn" type="button" hidden>
           清除全部过期
+        </button>
+        <button
+          id="clearAllPositionsBtn"
+          class="is-danger"
+          type="button"
+          hidden
+          title="清空 GitHub 上全部持仓记录（不影响盯一下）"
+        >
+          清除全部持仓
         </button>
       </div>
       <div id="pinGrid" class="kline-grid"></div>
@@ -693,29 +812,27 @@
 
     <div id="notifyFloat" class="notify-float" hidden>
       <div class="notify-float-head">
+        <button
+          type="button"
+          class="notify-float-refresh"
+          id="notifyFloatRefresh"
+          title="立即从 GitHub 拉取最新企微文案"
+          aria-label="刷新企微通知"
+        >
+          刷新
+        </button>
         <strong
           >最近企微通知<span class="notify-time" id="notifyFloatTime"></span
         ></strong>
-        <div class="notify-float-actions">
-          <button
-            type="button"
-            class="notify-float-refresh"
-            id="notifyFloatRefresh"
-            title="立即从 GitHub 拉取最新企微文案"
-            aria-label="刷新企微通知"
-          >
-            刷新
-          </button>
-          <button
-            type="button"
-            class="notify-float-close"
-            id="notifyFloatClose"
-            title="关闭，可再点左下角打开"
-            aria-label="关闭通知浮层"
-          >
-            ×
-          </button>
-        </div>
+        <button
+          type="button"
+          class="notify-float-close"
+          id="notifyFloatClose"
+          title="关闭，可再点左下角打开"
+          aria-label="关闭通知浮层"
+        >
+          ×
+        </button>
       </div>
       <div class="notify-float-body" id="notifyFloatBody"></div>
     </div>
@@ -763,6 +880,24 @@
         "1h": 60 * 60 * 1000,
         "2h": 2 * 60 * 60 * 1000,
         "4h": 4 * 60 * 60 * 1000,
+        "1d": 24 * 60 * 60 * 1000,
+      };
+      const KLINE_VIEWS = {
+        "3d-4h": {
+          days: 3,
+          chartInterval: "4h",
+          label: "近3天 · 4h",
+        },
+        "10d-4h": {
+          days: 10,
+          chartInterval: "4h",
+          label: "近10天 · 4h",
+        },
+        "10d-1d": {
+          days: 10,
+          chartInterval: "1d",
+          label: "近10天 · 1天",
+        },
       };
 
       const marketMap = {};
@@ -782,7 +917,19 @@
       let blacklistSaving = false;
       let pinSaving = false;
       let positionSaving = false;
-      let klineRangeDays = CONFIG.KLINE_RANGE_DAYS_DEFAULT;
+      let klineViewKey = "3d-4h";
+
+      function currentKlineView() {
+        return KLINE_VIEWS[klineViewKey] || KLINE_VIEWS["3d-4h"];
+      }
+
+      function chartInterval() {
+        return currentKlineView().chartInterval;
+      }
+
+      function klineRangeDays() {
+        return currentKlineView().days;
+      }
 
       function setStatus(ok, text) {
         document.getElementById("statusDot").className =
@@ -867,6 +1014,54 @@
         return `剩 ${Math.max(1, mins)}m`;
       }
 
+      function formatRemainCompact(expiresAt) {
+        const ms = Number(expiresAt) - Date.now();
+        if (!Number.isFinite(ms)) return "--";
+        if (ms <= 0) return "已过期";
+        const hours = Math.floor(ms / (60 * 60 * 1000));
+        const mins = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
+        if (hours >= 1) return mins ? `${hours}h${mins}m` : `${hours}h`;
+        return `${Math.max(1, mins)}m`;
+      }
+
+      function pctClass(value) {
+        if (!Number.isFinite(value) || value === 0) return "neutral";
+        return value > 0 ? "up" : "price-down";
+      }
+
+      function buildPinStatusHtml(pinItem, symbol, flags) {
+        const rel = pinChangePercent(pinItem);
+        const current = marketMap[symbol]?.price;
+        const change24h = marketMap[symbol]?.change24h;
+        const expired = WatchFavorites.isPinExpired(pinItem);
+        const remain = formatRemainCompact(pinItem.expiresAt);
+        const flagParts = [];
+        flagParts.push(
+          `<span class="pin-flag ${expired ? "is-expired" : "is-remain"}" title="观察剩余时间">${escapeHtml(remain)}</span>`,
+        );
+        if (flags && flags.priceUpVsLast) {
+          flagParts.push(
+            `<span class="pin-flag is-at" title="现价高于上次企微推送价">@@@</span>`,
+          );
+        }
+        if (flags && flags.streak5) {
+          flagParts.push(
+            `<span class="pin-flag is-5m" title="近 3 根已收盘 5m 收盘价连续高于前收">5m</span>`,
+          );
+        } else if (flags && flags.heat15) {
+          flagParts.push(
+            `<span class="pin-flag is-15m" title="近 3 根已收盘 15m 至少 2 根收涨">15m</span>`,
+          );
+        }
+        return [
+          `<span class="pin-stat-row">盯住价格：${escapeHtml(formatPinPrice(pinItem.pinPrice))}</span>`,
+          `<span class="pin-stat-row">现在价格：${escapeHtml(formatPinPrice(current))}</span>`,
+          `<span class="pin-stat-row">盯住涨幅：<span class="${pctClass(rel)}">${escapeHtml(formatPercent(rel))}</span></span>`,
+          `<span class="pin-stat-row">24h涨幅：<span class="${pctClass(change24h)}">${escapeHtml(formatPercent(change24h))}</span></span>`,
+          `<span class="pin-stat-row pin-flags">${flagParts.join(" / ")}</span>`,
+        ].join("");
+      }
+
       async function copyName(name) {
         try {
           await navigator.clipboard.writeText(name);
@@ -882,27 +1077,24 @@
       }
 
       function klineRangeLabel() {
-        return `近${klineRangeDays}天`;
+        return currentKlineView().label;
       }
 
       function klineLimit(interval) {
         const duration = DURATION_MS[interval];
         if (!duration) return 1;
-        const rangeMs = klineRangeDays * 24 * 60 * 60 * 1000;
+        const rangeMs = klineRangeDays() * 24 * 60 * 60 * 1000;
         return Math.min(
           CONFIG.KLINE_MAX_LIMIT,
           Math.max(1, Math.ceil(rangeMs / duration)),
         );
       }
 
-      function syncRangeButton() {
-        const btn = document.getElementById("rangeBtn");
-        const isExtended =
-          klineRangeDays === CONFIG.KLINE_RANGE_DAYS_EXTENDED;
-        btn.textContent = isExtended ? "近3天K线" : "近10天K线";
-        btn.title = isExtended
-          ? "切换回近3天 K 线（4h 周期不变）"
-          : "切换到近10天 K 线（4h 周期不变）";
+      function syncRangeSelect() {
+        const select = document.getElementById("rangeSelect");
+        if (!select) return;
+        if (!KLINE_VIEWS[klineViewKey]) klineViewKey = "3d-4h";
+        select.value = klineViewKey;
       }
 
       function pruneHistory() {
@@ -1420,6 +1612,8 @@
       function applyPinMomentum(card, flags) {
         const nameBtn = card.querySelector(".symbol-copy");
         const status = card.querySelector("[data-kline-status]");
+        const inlinePinStats =
+          status && status.classList.contains("pin-stats");
         card.classList.remove("is-streak5", "is-heat15", "is-price-up-last");
         if (nameBtn) {
           nameBtn.classList.remove("is-streak5", "is-heat15");
@@ -1438,6 +1632,12 @@
         } else if (heat15) {
           card.classList.add("is-heat15");
           if (nameBtn) nameBtn.classList.add("is-heat15");
+        }
+
+        // Pin cards fold 5m / @@@ into the multi-line status block.
+        if (inlinePinStats) {
+          if (priceUpVsLast) card.classList.add("is-price-up-last");
+          return;
         }
 
         if (streak5 || heat15) {
@@ -1470,7 +1670,7 @@
         }
       }
 
-      function drawKline(canvas, candles) {
+      function drawKline(canvas, candles, pinPrice) {
         const rect = canvas.getBoundingClientRect();
         const width = Math.max(1, Math.floor(rect.width));
         const height = Math.max(1, Math.floor(rect.height));
@@ -1487,12 +1687,30 @@
         const chartH = height - pad.top - pad.bottom;
         const highs = candles.map((item) => item.high);
         const lows = candles.map((item) => item.low);
-        const max = Math.max(...highs);
-        const min = Math.min(...lows);
+        let max = Math.max(...highs);
+        let min = Math.min(...lows);
+        const pin = Number(pinPrice);
+        const hasPin = Number.isFinite(pin) && pin > 0;
+        if (hasPin) {
+          max = Math.max(max, pin);
+          min = Math.min(min, pin);
+        }
         const range = max - min || max * 0.01 || 1;
         const slot = chartW / candles.length;
         const bodyW = Math.max(1, slot * 0.62);
         const yOf = (price) => pad.top + ((max - price) / range) * chartH;
+
+        if (hasPin) {
+          const y = yOf(pin);
+          ctx.save();
+          ctx.strokeStyle = "#5a6a68";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(pad.left, y);
+          ctx.lineTo(pad.left + chartW, y);
+          ctx.stroke();
+          ctx.restore();
+        }
 
         candles.forEach((candle, index) => {
           const x = pad.left + slot * index + slot / 2;
@@ -1531,35 +1749,6 @@
           }
           const [candles, signalCandles, candles5] = await Promise.all(tasks);
           if (pinItem) {
-            const rel = pinChangePercent(pinItem);
-            const change24h = marketMap[symbol]?.change24h;
-            const remain = formatRemaining(pinItem.expiresAt);
-            const expired = WatchFavorites.isPinExpired(pinItem);
-            const pinText = Number.isFinite(rel)
-              ? `${formatPercent(rel)}盯`
-              : expired
-                ? "盯已过期"
-                : `盯${formatPinPrice(pinItem.pinPrice)}`;
-            const dayText = Number.isFinite(change24h)
-              ? `${formatPercent(change24h)}24h`
-              : "24h--";
-            const lifeText = expired ? "已过期" : remain;
-            status.textContent = `${pinText} · ${dayText}${lifeText ? ` · ${lifeText}` : ""}`;
-            status.className =
-              rel > 0 ? "up" : rel < 0 ? "price-down" : "neutral";
-            status.title = `盯住价 ${formatPinPrice(pinItem.pinPrice)} · 现价 ${formatPinPrice(marketMap[symbol]?.price)} · 24h ${formatPercent(change24h)}`;
-          } else {
-            const change24h = marketMap[symbol]?.change24h;
-            status.textContent = Number.isFinite(change24h)
-              ? `${formatPercent(change24h)} · 24h`
-              : "24h";
-            status.className =
-              change24h > 0 ? "up" : change24h < 0 ? "price-down" : "neutral";
-            applyPinMomentum(card, null);
-          }
-          drawKline(canvas, candles);
-          applyEarlyBadge(card, scoreEarlyMomentum(signalCandles));
-          if (pinItem) {
             const mom = momentumFromCloses(
               closedCloses(candles5),
               closedCloses(signalCandles),
@@ -1570,12 +1759,34 @@
               Number.isFinite(last) &&
               Number.isFinite(current) &&
               current > last;
-            applyPinMomentum(card, {
+            const flags = {
               streak5: mom.streak5,
               heat15: mom.heat15,
               priceUpVsLast,
-            });
+            };
+            status.className = "pin-stats";
+            status.innerHTML = buildPinStatusHtml(pinItem, symbol, flags);
+            status.title = [
+              `盯住价 ${formatPinPrice(pinItem.pinPrice)}`,
+              `现价 ${formatPinPrice(current)}`,
+              `盯幅 ${formatPercent(pinChangePercent(pinItem))}`,
+              `24h ${formatPercent(marketMap[symbol]?.change24h)}`,
+              formatRemaining(pinItem.expiresAt) || "",
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            applyPinMomentum(card, flags);
+          } else {
+            const change24h = marketMap[symbol]?.change24h;
+            status.textContent = Number.isFinite(change24h)
+              ? `${formatPercent(change24h)} · 24h`
+              : "24h";
+            status.className =
+              change24h > 0 ? "up" : change24h < 0 ? "price-down" : "neutral";
+            applyPinMomentum(card, null);
           }
+          drawKline(canvas, candles, pinItem ? pinItem.pinPrice : null);
+          applyEarlyBadge(card, scoreEarlyMomentum(signalCandles));
         } catch (error) {
           if (error.name === "AbortError") return;
           status.textContent = "加载失败";
@@ -1608,20 +1819,15 @@
           marks.push('<span class="pos-mark">持仓</span>');
         }
         const statusText = options.pinItem
-          ? (() => {
-              const rel = pinChangePercent(options.pinItem);
-              const pinText = Number.isFinite(rel)
-                ? `${formatPercent(rel)}盯`
-                : "--盯";
-              const dayText = Number.isFinite(change24h)
-                ? `${formatPercent(change24h)}24h`
-                : "24h--";
-              return `${pinText} · ${dayText}`;
-            })()
+          ? buildPinStatusHtml(options.pinItem, symbol, null)
           : Number.isFinite(change24h)
             ? formatPercent(change24h)
             : "--";
-        return `<div class="kline-card${favClass}${pairClass}${pinClass}${posClass}${expiredClass}" id="card-${options.section}-${symbol}" data-symbol="${symbol}" data-section="${options.section}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status>${statusText}</span></div>${marks.join("")}<canvas></canvas></div>`;
+        const headClass = options.pinItem
+          ? "kline-card-head is-pin-head"
+          : "kline-card-head";
+        const statusClass = options.pinItem ? ' class="pin-stats"' : "";
+        return `<div class="kline-card${favClass}${pairClass}${pinClass}${posClass}${expiredClass}" id="card-${options.section}-${symbol}" data-symbol="${symbol}" data-section="${options.section}"><div class="${headClass}"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status${statusClass}>${statusText}</span></div>${marks.join("")}<canvas></canvas></div>`;
       }
 
       function closeCardActions(force) {
@@ -1849,7 +2055,7 @@
               renderKlineCard(
                 card,
                 card.dataset.symbol,
-                CONFIG.KLINE_INTERVAL,
+                chartInterval(),
                 signal,
                 isPinSection ? pinItemBySymbol(card.dataset.symbol) : null,
               ),
@@ -2039,7 +2245,8 @@
 
       async function renderKlines() {
         const interval = CONFIG.KLINE_INTERVAL;
-        const bars = klineLimit(interval);
+        const chartIv = chartInterval();
+        const bars = klineLimit(chartIv);
         const rangeText = klineRangeLabel();
         const rising = getRisingSymbols();
         const favRising = getFavoriteRisingSymbols(rising);
@@ -2115,14 +2322,22 @@
         const { signal } = klineAbort;
 
         document.getElementById("risingMeta").textContent = rising.length
-          ? `窗口上涨 ${rising.length} / 观察池 ${watchPool.size} · ${interval} · ${rangeText} ${bars} 根`
+          ? `窗口上涨 ${rising.length} / 观察池 ${watchPool.size} · ${rangeText} · ${bars} 根`
           : `当前没有窗口上涨的观察池币种 · 观察池 ${watchPool.size} 个`;
 
         const clearExpiredBtn = document.getElementById("clearExpiredPinsBtn");
+        const clearPositionsBtn = document.getElementById("clearAllPositionsBtn");
+        const maintEmptyHint = document.getElementById("maintEmptyHint");
+        const positionCount = positionItems.length;
+        if (clearExpiredBtn) clearExpiredBtn.hidden = expiredPins <= 0;
+        if (clearPositionsBtn) clearPositionsBtn.hidden = positionCount <= 0;
+        if (maintEmptyHint) {
+          maintEmptyHint.hidden = expiredPins > 0 || positionCount > 0;
+        }
+
         if (!pinItems.length) {
           document.getElementById("pinMeta").textContent =
             "还没有盯一下 · 长按选「盯一下」· 当前窗口上涨即展示（可低于盯住价）";
-          if (clearExpiredBtn) clearExpiredBtn.hidden = true;
         } else {
           const heldInPins = pinItems.filter((item) =>
             positionSymbols().has(item.symbol),
@@ -2156,7 +2371,6 @@
             );
           }
           document.getElementById("pinMeta").textContent = parts.join(" · ");
-          if (clearExpiredBtn) clearExpiredBtn.hidden = expiredPins <= 0;
         }
 
         updateHiddenPinTab(pinHiddenDown);
@@ -2366,6 +2580,55 @@
         } finally {
           pinSaving = false;
         }
+      }
+
+      async function clearAllPositions() {
+        if (positionSaving) return;
+        const held = positionItems.slice();
+        if (!held.length) {
+          showToast("没有持仓记录");
+          return;
+        }
+        if (
+          !window.confirm(
+            `清除全部 ${held.length} 条持仓记录？\n（不影响盯一下）\n${held
+              .map((item) => item.symbol.replace(/USDT$/i, ""))
+              .join("、")}`,
+          )
+        ) {
+          return;
+        }
+        positionSaving = true;
+        try {
+          setStatus(false, `正在清除 ${held.length} 条持仓...`);
+          const result = await WatchFavorites.patchPositions({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.POSITIONS_PATH,
+            message: `Clear all ${held.length} positions`,
+            mutate: () => ({ list: [], added: false }),
+          });
+          positionItems = result.positions;
+          showToast(`已清除 ${held.length} 条持仓`);
+          await renderKlines();
+          setStatus(true, `已清除 ${held.length} 条持仓`);
+        } catch (error) {
+          console.error(error);
+          showToast(error.message || "清除持仓失败");
+          setStatus(false, error.message || "清除持仓失败");
+          window.alert(error.message || "清除持仓失败");
+        } finally {
+          positionSaving = false;
+        }
+      }
+
+      function setMaintPanelOpen(open) {
+        const panel = document.getElementById("maintPanel");
+        const btn = document.getElementById("maintToggleBtn");
+        if (!panel || !btn) return;
+        panel.hidden = !open;
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+        btn.textContent = open ? "清理 ▴" : "清理 ▾";
+        btn.title = open ? "收起清理操作" : "展开低频清理操作";
       }
 
       async function renewPinForSymbol(symbol) {
@@ -2599,7 +2862,9 @@
         if (loading) return;
         loading = true;
         const btn = document.getElementById("refreshBtn");
+        const rangeSelect = document.getElementById("rangeSelect");
         btn.disabled = true;
+        if (rangeSelect) rangeSelect.disabled = true;
         try {
           setStatus(false, "1/3 读取 GitHub 快照 / 观察池 / 收藏...");
           await loadGithubStorage();
@@ -2632,6 +2897,7 @@
         } finally {
           loading = false;
           btn.disabled = false;
+          if (rangeSelect) rangeSelect.disabled = false;
         }
       }
 
@@ -2673,6 +2939,17 @@
           closeCardActions();
           clearAllExpiredPins();
         });
+      document
+        .getElementById("clearAllPositionsBtn")
+        .addEventListener("click", () => {
+          closeCardActions();
+          clearAllPositions();
+        });
+      document.getElementById("maintToggleBtn").addEventListener("click", () => {
+        closeCardActions();
+        const panel = document.getElementById("maintPanel");
+        setMaintPanelOpen(panel && panel.hidden);
+      });
       document.getElementById("hiddenPinTab").addEventListener("click", () => {
         closeCardActions();
         setHiddenPinDrawerOpen(true);
@@ -2687,28 +2964,44 @@
         if (event.key === "Escape") {
           closeCardActions();
           setHiddenPinDrawerOpen(false);
+          setMaintPanelOpen(false);
         }
       });
-      document.getElementById("rangeBtn").addEventListener("click", async () => {
-        closeCardActions();
-        if (loading) return;
-        const extended = CONFIG.KLINE_RANGE_DAYS_EXTENDED;
-        const defaults = CONFIG.KLINE_RANGE_DAYS_DEFAULT;
-        klineRangeDays =
-          klineRangeDays === extended ? defaults : extended;
-        syncRangeButton();
-        setStatus(false, `正在加载${klineRangeLabel()} ${CONFIG.KLINE_INTERVAL} K线...`);
-        try {
-          await renderKlines();
-          setStatus(
-            true,
-            `已切换为${klineRangeLabel()} · ${CONFIG.KLINE_INTERVAL} · ${new Date().toLocaleTimeString("zh-CN")}`,
-          );
-        } catch (error) {
-          console.error(error);
-          setStatus(false, error.message || "切换 K 线范围失败");
-        }
-      });
+      document
+        .getElementById("rangeSelect")
+        .addEventListener("change", async (event) => {
+          closeCardActions();
+          const select = event.target;
+          if (loading) {
+            syncRangeSelect();
+            return;
+          }
+          const next = select.value;
+          if (!KLINE_VIEWS[next] || next === klineViewKey) {
+            syncRangeSelect();
+            return;
+          }
+          const prev = klineViewKey;
+          klineViewKey = next;
+          syncRangeSelect();
+          const view = currentKlineView();
+          select.disabled = true;
+          setStatus(false, `正在加载${view.label} K线...`);
+          try {
+            await renderKlines();
+            setStatus(
+              true,
+              `已切换为${view.label} · ${new Date().toLocaleTimeString("zh-CN")}`,
+            );
+          } catch (error) {
+            console.error(error);
+            klineViewKey = prev;
+            syncRangeSelect();
+            setStatus(false, error.message || "切换 K 线范围失败");
+          } finally {
+            select.disabled = false;
+          }
+        });
       document.addEventListener("pointerdown", (event) => {
         if (event.target.closest(".card-actions")) return;
         const open = document.querySelector(".card-actions");
@@ -2721,7 +3014,7 @@
         }
         window.location.href = "./watch.html";
       });
-      syncRangeButton();
+      syncRangeSelect();
       refreshAll();
     </script>
   </body>
