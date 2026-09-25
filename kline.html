@@ -126,6 +126,25 @@
         flex: 1;
         min-width: 0;
       }
+      .pin-momentum-meta {
+        margin: -2px 0 10px;
+        font-size: 12px;
+        line-height: 1.45;
+        color: #3d4a48;
+      }
+      .pin-momentum-meta[hidden] {
+        display: none !important;
+      }
+      .pin-momentum-meta .mom-label {
+        color: #78817f;
+      }
+      .pin-momentum-meta .mom-hot {
+        color: #2f8f6e;
+        font-weight: 650;
+      }
+      .pin-momentum-meta .mom-cool {
+        color: #8d7771;
+      }
       .pin-meta-row button,
       .maint-panel button {
         flex-shrink: 0;
@@ -757,6 +776,12 @@
           清理 ▾
         </button>
       </div>
+      <div
+        id="pinMomentumMeta"
+        class="meta pin-momentum-meta"
+        hidden
+        title="主看近2小时谁高；近1小时用来判断有没有熄火。仅作排行提示，不改变下方卡片顺序"
+      ></div>
       <div id="maintPanel" class="maint-panel" hidden>
         <span id="maintEmptyHint" class="maint-empty" hidden>暂无可清理项</span>
         <button id="clearExpiredPinsBtn" type="button" hidden>
@@ -1589,6 +1614,96 @@
           .filter((value) => Number.isFinite(value));
       }
 
+      /** % change vs closed 15m close from `hours` ago; now prefers live ticker. */
+      function changeOverHours(candles, hours, currentPrice) {
+        const closes = closedCloses(candles);
+        const bars = Math.max(1, Math.round(Number(hours) * 4));
+        if (closes.length < bars) return null;
+        const past = closes[closes.length - bars];
+        const now = Number.isFinite(currentPrice)
+          ? currentPrice
+          : closes[closes.length - 1];
+        if (!Number.isFinite(past) || past === 0 || !Number.isFinite(now)) {
+          return null;
+        }
+        return ((now - past) / past) * 100;
+      }
+
+      async function loadPinHourScores(symbols, signal) {
+        const scores = new Map();
+        const list = [...new Set((symbols || []).filter(Boolean))];
+        const batchSize = 4;
+        for (let index = 0; index < list.length; index += batchSize) {
+          if (signal && signal.aborted) return scores;
+          const batch = list.slice(index, index + batchSize);
+          await Promise.all(
+            batch.map(async (symbol) => {
+              try {
+                const candles = await fetchKlines(
+                  symbol,
+                  "15m",
+                  signal,
+                  20,
+                );
+                const price = marketMap[symbol]?.price;
+                scores.set(symbol, {
+                  change1h: changeOverHours(candles, 1, price),
+                  change2h: changeOverHours(candles, 2, price),
+                });
+              } catch (error) {
+                if (error && error.name === "AbortError") throw error;
+                scores.set(symbol, { change1h: null, change2h: null });
+              }
+            }),
+          );
+        }
+        return scores;
+      }
+
+      function formatHourRankLine(scores, symbols, key, limit) {
+        const rows = symbols
+          .map((symbol) => {
+            const score = scores.get(symbol);
+            const value = score ? score[key] : null;
+            return {
+              symbol,
+              label: String(symbol).replace(/USDT$/i, ""),
+              value,
+            };
+          })
+          .filter((row) => Number.isFinite(row.value))
+          .sort((a, b) => b.value - a.value)
+          .slice(0, limit || 5);
+        if (!rows.length) return "暂无";
+        return rows
+          .map((row, index) => {
+            const cls =
+              row.value >= 2 ? "mom-hot" : row.value < 0 ? "mom-cool" : "";
+            const text = `${row.label} ${formatPercent(row.value)}`;
+            return cls
+              ? `<span class="${cls}">${index === 0 && key === "change2h" ? "① " : ""}${text}</span>`
+              : `${index === 0 && key === "change2h" ? "① " : ""}${text}`;
+          })
+          .join(" · ");
+      }
+
+      function updatePinMomentumMeta(scores, symbols) {
+        const el = document.getElementById("pinMomentumMeta");
+        if (!el) return;
+        if (!symbols.length) {
+          el.hidden = true;
+          el.innerHTML = "";
+          return;
+        }
+        const line2h = formatHourRankLine(scores, symbols, "change2h", 6);
+        const line1h = formatHourRankLine(scores, symbols, "change1h", 6);
+        el.hidden = false;
+        el.innerHTML = [
+          `<div><span class="mom-label">近2h谁高（主看·仅排行，不改卡片顺序）</span> ${line2h}</div>`,
+          `<div><span class="mom-label">近1h（瞟一眼有没有熄火）</span> ${line1h}</div>`,
+        ].join("");
+      }
+
       function lastBarRises(closes, bars) {
         const need = bars + 1;
         if (!Array.isArray(closes) || closes.length < need) return [];
@@ -2287,7 +2402,7 @@
           });
         const pinHiddenDown = pinHiddenItems.length;
         const pinHiddenList = pinHiddenItems.map((item) => item.symbol);
-        const pinSymbolsList = pinCandidates
+        let pinSymbolsList = pinCandidates
           .filter((item) => hasWindowGain(item.symbol, interval))
           .slice()
           .sort((a, b) => {
@@ -2321,6 +2436,14 @@
         klineAbort = new AbortController();
         const { signal } = klineAbort;
 
+        let pinHourScores = new Map();
+        if (pinSymbolsList.length) {
+          setStatus(false, "计算盯一下近1h/2h动量...");
+          pinHourScores = await loadPinHourScores(pinSymbolsList, signal);
+          if (signal.aborted) return;
+        }
+        updatePinMomentumMeta(pinHourScores, pinSymbolsList);
+
         document.getElementById("risingMeta").textContent = rising.length
           ? `窗口上涨 ${rising.length} / 观察池 ${watchPool.size} · ${rangeText} · ${bars} 根`
           : `当前没有窗口上涨的观察池币种 · 观察池 ${watchPool.size} 个`;
@@ -2338,6 +2461,7 @@
         if (!pinItems.length) {
           document.getElementById("pinMeta").textContent =
             "还没有盯一下 · 长按选「盯一下」· 当前窗口上涨即展示（可低于盯住价）";
+          updatePinMomentumMeta(new Map(), []);
         } else {
           const heldInPins = pinItems.filter((item) =>
             positionSymbols().has(item.symbol),
@@ -2887,6 +3011,11 @@
           document.getElementById("risingMeta").textContent = "";
           document.getElementById("pinMeta").textContent = "";
           document.getElementById("favMeta").textContent = "";
+          const pinMom = document.getElementById("pinMomentumMeta");
+          if (pinMom) {
+            pinMom.hidden = true;
+            pinMom.innerHTML = "";
+          }
           document.getElementById("risingGrid").innerHTML =
             `<div class="empty">${error.message || "加载失败"}</div>`;
           document.getElementById("pinGrid").innerHTML = "";
