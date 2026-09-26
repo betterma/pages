@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Range100 · 24h 第21–100 潜伏雷达</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f4f5f3;
+        color: #28323a;
+        font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+      .page {
+        width: min(920px, calc(100% - 20px));
+        margin: 12px auto 28px;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+      .topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      h1 {
+        margin: 0;
+        font-size: 20px;
+      }
+      .nav-link {
+        color: #5a6a68;
+        font-size: 13px;
+        text-decoration: none;
+      }
+      .nav-link:hover {
+        text-decoration: underline;
+      }
+      .friend-links {
+        position: relative;
+        font-size: 13px;
+        color: #5a6a68;
+      }
+      .friend-links > summary {
+        list-style: none;
+        cursor: pointer;
+        user-select: none;
+        padding: 4px 2px;
+      }
+      .friend-links > summary::-webkit-details-marker {
+        display: none;
+      }
+      .friend-links > summary::after {
+        content: " ▾";
+        font-size: 11px;
+        opacity: 0.7;
+      }
+      .friend-links[open] > summary::after {
+        content: " ▴";
+      }
+      .friend-links-panel {
+        position: absolute;
+        left: 0;
+        top: calc(100% + 4px);
+        z-index: 30;
+        min-width: 140px;
+        padding: 6px;
+        border: 1px solid rgba(90, 106, 104, 0.22);
+        border-radius: 10px;
+        background: rgba(251, 252, 250, 0.96);
+        box-shadow: 0 8px 20px rgba(40, 50, 58, 0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .friend-links-panel a {
+        color: #28323a;
+        text-decoration: none;
+        padding: 8px 10px;
+        border-radius: 8px;
+        font-size: 13px;
+      }
+      .friend-links-panel a:hover {
+        background: rgba(90, 106, 104, 0.1);
+      }
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      button {
+        border: 1px solid #c9d0d0;
+        background: #fbfcfa;
+        color: #28323a;
+        padding: 8px 13px;
+        border-radius: 8px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #eef1ee;
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: wait;
+      }
+      button.is-pin {
+        padding: 5px 10px;
+        font-size: 12px;
+        color: #2f8f6e;
+        border-color: rgba(47, 143, 110, 0.35);
+        background: rgba(47, 143, 110, 0.08);
+      }
+      button.is-pin:hover {
+        background: rgba(47, 143, 110, 0.16);
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        font-size: 13px;
+        color: #5a6a68;
+        flex-wrap: wrap;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #9aa3a0;
+        flex-shrink: 0;
+      }
+      .dot.is-busy {
+        background: #c47a3a;
+      }
+      .dot.is-ok {
+        background: #2f8f6e;
+      }
+      .dot.is-err {
+        background: #b45a4a;
+      }
+      .meta {
+        font-size: 12px;
+        color: #78817f;
+        margin-bottom: 10px;
+        line-height: 1.5;
+      }
+      .list {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        border: 1px solid rgba(90, 106, 104, 0.16);
+        border-radius: 12px;
+        background: rgba(251, 252, 250, 0.7);
+        overflow: hidden;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 44px minmax(72px, 1fr) 72px 72px 72px 48px minmax(88px, 1.1fr) 64px;
+        gap: 8px;
+        align-items: center;
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(220, 226, 222, 0.7);
+        font-size: 12px;
+      }
+      .row:last-child {
+        border-bottom: 0;
+      }
+      .row.is-head {
+        font-size: 11px;
+        color: #78817f;
+        font-weight: 650;
+        letter-spacing: 0.03em;
+        background: rgba(244, 245, 243, 0.9);
+        position: sticky;
+        top: 0;
+        z-index: 2;
+      }
+      .row.is-climb {
+        background: rgba(47, 143, 110, 0.06);
+      }
+      .sym {
+        font-weight: 700;
+        color: #28323a;
+      }
+      .pct.is-hot {
+        color: #2f8f6e;
+        font-weight: 700;
+      }
+      .pct.is-cool {
+        color: #8d7771;
+        font-weight: 650;
+      }
+      .status-tag {
+        font-size: 11px;
+        font-weight: 650;
+        color: #78817f;
+      }
+      .status-tag.is-climb {
+        color: #2f8f6e;
+      }
+      .status-tag.is-flat {
+        color: #78817f;
+      }
+      .status-tag.is-fade {
+        color: #c47a3a;
+      }
+      .status-tag.is-other {
+        color: #9aa3a0;
+        font-weight: 500;
+      }
+      .trail {
+        display: flex;
+        align-items: flex-end;
+        gap: 3px;
+        height: 18px;
+      }
+      .step {
+        flex: 1;
+        min-width: 0;
+        height: calc(var(--h, 0.2) * 100%);
+        border-radius: 2px 2px 0 0;
+        background: rgba(90, 106, 104, 0.28);
+      }
+      .step.is-last {
+        background: rgba(47, 143, 110, 0.55);
+      }
+      .step.is-neg {
+        background: rgba(141, 119, 113, 0.4);
+      }
+      .step.is-last.is-neg {
+        background: rgba(141, 119, 113, 0.55);
+      }
+      .row.is-climb .step.is-last {
+        background: rgba(47, 143, 110, 0.72);
+      }
+      .empty {
+        padding: 28px 16px;
+        text-align: center;
+        color: #9aa3a0;
+        font-size: 13px;
+      }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        background: rgba(40, 50, 58, 0.92);
+        color: #f4f7f5;
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        z-index: 50;
+        pointer-events: none;
+      }
+      @media (max-width: 720px) {
+        .row {
+          grid-template-columns: 36px minmax(64px, 1fr) 64px 56px 40px 1fr 56px;
+          gap: 6px;
+          padding: 10px 10px;
+        }
+        .row .col-1h {
+          display: none;
+        }
+        h1 {
+          font-size: 17px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1>Range100</h1>
+          <a class="nav-link" href="./kline.html">币安观察</a>
+          <details class="friend-links">
+            <summary>友情链接</summary>
+            <div class="friend-links-panel">
+              <a href="./okx/kline.html">OKX 自选</a>
+              <a href="./watch.html">冲榜雷达</a>
+            </div>
+          </details>
+        </div>
+        <div class="topbar-actions">
+          <button id="refreshBtn" type="button">刷新</button>
+        </div>
+      </div>
+      <div class="status">
+        <span id="statusDot" class="dot"></span>
+        <span id="statusText">等待启动...</span>
+      </div>
+      <div id="meta" class="meta">
+        24h 涨幅第 21–100 · 排除已盯一下 / 拉黑 · 默认爬升优先
+      </div>
+      <div id="list" class="list">
+        <div class="empty">点击刷新加载潜伏池</div>
+      </div>
+    </div>
+
+    <script src="./watch-favorites.js"></script>
+    <script>
+      "use strict";
+
+      const CONFIG = {
+        GITHUB_REPO: "betterma/pages",
+        PINS_PATH: "watch-pins.json",
+        BLACKLIST_PATH: "watch-blacklist.json",
+        RANK_START: 21,
+        RANK_END: 100,
+        BATCH_SIZE: 4,
+        MOMENTUM_TREND: {
+          klineLimit: 24,
+          trailPoints: 5,
+          bars2h: 8,
+          minDeltaPts: 1.5,
+          minStepPts: 0.3,
+          dropFromPeakPts: 2,
+        },
+      };
+
+      const MOMENTUM_STATUS_RANK = {
+        climb: 0,
+        flat: 1,
+        fade: 2,
+        other: 3,
+      };
+
+      const marketMap = {};
+      let pinItems = [];
+      let blacklistItems = [];
+      let rows = [];
+      let loading = false;
+      let abortCtrl = null;
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function formatPercent(value) {
+        return Number.isFinite(value)
+          ? `${value > 0 ? "+" : ""}${value.toFixed(2)}%`
+          : "--";
+      }
+
+      function showToast(message) {
+        const existing = document.querySelector(".toast");
+        if (existing) existing.remove();
+        const toast = document.createElement("div");
+        toast.className = "toast";
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 1600);
+      }
+
+      function setStatus(kind, text) {
+        const dot = document.getElementById("statusDot");
+        const el = document.getElementById("statusText");
+        if (dot) {
+          dot.className = "dot" + (kind ? ` is-${kind}` : "");
+        }
+        if (el) el.textContent = text;
+      }
+
+      function pinSymbols() {
+        return WatchFavorites.pinsToSymbolSet(pinItems);
+      }
+
+      function blacklistSymbols() {
+        return WatchFavorites.blacklistToSymbolSet(blacklistItems);
+      }
+
+      function ranking() {
+        const blocked = blacklistSymbols();
+        return Object.entries(marketMap)
+          .filter(([symbol]) => !blocked.has(symbol))
+          .sort((a, b) => b[1].change24h - a[1].change24h)
+          .map(([symbol]) => symbol);
+      }
+
+      /** 24h ranks 21–100, then drop already-pinned. */
+      function range100Symbols() {
+        const pinned = pinSymbols();
+        const start = CONFIG.RANK_START - 1;
+        const end = CONFIG.RANK_END;
+        return ranking()
+          .slice(start, end)
+          .map((symbol, index) => ({
+            symbol,
+            rank24h: start + index + 1,
+          }))
+          .filter((item) => !pinned.has(item.symbol));
+      }
+
+      async function loadGithubSide() {
+        try {
+          const [pinState, blackState] = await Promise.all([
+            WatchFavorites.loadPinsRaw({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.PINS_PATH,
+            }),
+            WatchFavorites.loadBlacklistRaw({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.BLACKLIST_PATH,
+            }),
+          ]);
+          pinItems = pinState.pins || [];
+          blacklistItems = blackState.blacklist || [];
+        } catch (error) {
+          pinItems = [];
+          blacklistItems = [];
+          console.warn("github side load failed", error);
+        }
+      }
+
+      async function loadBinanceTicker() {
+        const endpoints = [
+          "https://data-api.binance.vision/api/v3/ticker/24hr",
+          "https://api.binance.com/api/v3/ticker/24hr",
+        ];
+        let lastError = null;
+        for (const url of endpoints) {
+          try {
+            const response = await fetch(url, { cache: "no-store" });
+            if (!response.ok) {
+              lastError = new Error(`HTTP ${response.status}`);
+              continue;
+            }
+            const data = await response.json();
+            Object.keys(marketMap).forEach((key) => delete marketMap[key]);
+            data.forEach((ticker) => {
+              if (!ticker.symbol.endsWith("USDT")) return;
+              const price = Number(ticker.lastPrice);
+              const change = Number(ticker.priceChangePercent);
+              if (Number.isFinite(price) && Number.isFinite(change)) {
+                marketMap[ticker.symbol] = { price, change24h: change };
+              }
+            });
+            return;
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("行情请求失败");
+      }
+
+      async function fetchKlines(symbol, interval, signal, limit) {
+        const query = `symbol=${symbol}&interval=${interval}&limit=${limit}`;
+        const endpoints = [
+          `https://data-api.binance.vision/api/v3/klines?${query}`,
+          `https://api.binance.com/api/v3/klines?${query}`,
+        ];
+        let lastError = null;
+        for (const url of endpoints) {
+          try {
+            const response = await fetch(url, { signal, cache: "no-store" });
+            if (!response.ok) {
+              lastError = new Error(`HTTP ${response.status}`);
+              continue;
+            }
+            const data = await response.json();
+            if (!Array.isArray(data) || !data.length) {
+              lastError = new Error("K线为空");
+              continue;
+            }
+            return data.map((row) => ({
+              time: Number(row[0]),
+              open: Number(row[1]),
+              high: Number(row[2]),
+              low: Number(row[3]),
+              close: Number(row[4]),
+              volume: Number(row[5]),
+            }));
+          } catch (error) {
+            if (error && error.name === "AbortError") throw error;
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("K线请求失败");
+      }
+
+      function closedCloses(candles) {
+        if (!Array.isArray(candles) || candles.length < 2) return [];
+        return candles
+          .slice(0, -1)
+          .map((bar) => Number(bar && bar.close))
+          .filter((value) => Number.isFinite(value));
+      }
+
+      function changeAtClosedEnd(closes, bars, endIndex, livePrice) {
+        if (!Array.isArray(closes) || bars < 1) return null;
+        if (endIndex < 0 || endIndex >= closes.length) return null;
+        const pastIndex = endIndex + 1 - bars;
+        if (pastIndex < 0 || pastIndex > endIndex) return null;
+        const past = closes[pastIndex];
+        const now = Number.isFinite(livePrice) ? livePrice : closes[endIndex];
+        if (!Number.isFinite(past) || past === 0 || !Number.isFinite(now)) {
+          return null;
+        }
+        return ((now - past) / past) * 100;
+      }
+
+      function changeOverHours(candles, hours, currentPrice) {
+        const closes = closedCloses(candles);
+        const bars = Math.max(1, Math.round(Number(hours) * 4));
+        if (!closes.length) return null;
+        return changeAtClosedEnd(closes, bars, closes.length - 1, currentPrice);
+      }
+
+      function build2hTrail(candles, currentPrice) {
+        const cfg = CONFIG.MOMENTUM_TREND;
+        const closes = closedCloses(candles);
+        const points = cfg.trailPoints;
+        const bars = cfg.bars2h;
+        const need = bars + (points - 2);
+        if (closes.length < Math.max(need, bars)) return null;
+        const last = closes.length - 1;
+        const trail = [];
+        for (let i = 0; i < points; i += 1) {
+          const endIndex = last - (points - 1 - i);
+          const live = i === points - 1 ? currentPrice : undefined;
+          trail.push(changeAtClosedEnd(closes, bars, endIndex, live));
+        }
+        if (trail.some((value) => !Number.isFinite(value))) return null;
+        return trail;
+      }
+
+      function classifyMomentumTrend(trail, change1h) {
+        const cfg = CONFIG.MOMENTUM_TREND;
+        const empty = {
+          status: "other",
+          label: "其它",
+          delta: null,
+          recentUpSteps: 0,
+          peakDrop: null,
+          incomplete: true,
+        };
+        if (!Array.isArray(trail) || trail.length !== cfg.trailPoints) {
+          return empty;
+        }
+        if (trail.some((value) => !Number.isFinite(value))) return empty;
+
+        const v0 = trail[0];
+        const v2 = trail[2];
+        const v3 = trail[3];
+        const v4 = trail[4];
+        const delta = v4 - v0;
+        const minStep = cfg.minStepPts;
+        let recentUpSteps = 0;
+        if (v3 - v2 >= minStep) recentUpSteps += 1;
+        if (v4 - v3 >= minStep) recentUpSteps += 1;
+
+        const peakBefore = Math.max(trail[0], trail[1], trail[2], trail[3]);
+        const peakDrop = peakBefore - v4;
+        const peakVeto = peakDrop >= cfg.dropFromPeakPts;
+        const h1Ok = !Number.isFinite(change1h) || change1h >= 0;
+
+        if (
+          v4 > 0 &&
+          h1Ok &&
+          delta >= cfg.minDeltaPts &&
+          recentUpSteps >= 1 &&
+          !peakVeto
+        ) {
+          return {
+            status: "climb",
+            label: "爬升",
+            delta,
+            recentUpSteps,
+            peakDrop,
+            incomplete: false,
+          };
+        }
+        if (
+          peakVeto ||
+          delta <= -cfg.minDeltaPts ||
+          (v4 < v3 - minStep && v3 < v2 - minStep)
+        ) {
+          return {
+            status: "fade",
+            label: "衰减",
+            delta,
+            recentUpSteps,
+            peakDrop,
+            incomplete: false,
+          };
+        }
+        if (v4 > 0 && Math.abs(delta) < cfg.minDeltaPts) {
+          return {
+            status: "flat",
+            label: "横盘",
+            delta,
+            recentUpSteps,
+            peakDrop,
+            incomplete: false,
+          };
+        }
+        return {
+          status: "other",
+          label: "其它",
+          delta,
+          recentUpSteps,
+          peakDrop,
+          incomplete: false,
+        };
+      }
+
+      function formatTrailTip(trail, trend) {
+        if (!Array.isArray(trail) || !trail.length) return "";
+        const parts = trail.map((value) => formatPercent(value)).join(" → ");
+        const deltaText = Number.isFinite(trend && trend.delta)
+          ? ` · Δ ${trend.delta >= 0 ? "+" : ""}${trend.delta.toFixed(1)}pt`
+          : "";
+        return `${parts}${deltaText}`;
+      }
+
+      function hourClass(value) {
+        if (!Number.isFinite(value)) return "";
+        if (value >= 2) return "is-hot";
+        if (value < 0) return "is-cool";
+        return "";
+      }
+
+      function sortRows(list) {
+        return [...list].sort((a, b) => {
+          const ra =
+            MOMENTUM_STATUS_RANK[a.trend && a.trend.status] ??
+            MOMENTUM_STATUS_RANK.other;
+          const rb =
+            MOMENTUM_STATUS_RANK[b.trend && b.trend.status] ??
+            MOMENTUM_STATUS_RANK.other;
+          if (ra !== rb) return ra - rb;
+          const aInc = !!(a.trend && a.trend.incomplete);
+          const bInc = !!(b.trend && b.trend.incomplete);
+          if (aInc !== bInc) return aInc ? 1 : -1;
+          const da = Number.isFinite(a.trend && a.trend.delta)
+            ? a.trend.delta
+            : -Infinity;
+          const db = Number.isFinite(b.trend && b.trend.delta)
+            ? b.trend.delta
+            : -Infinity;
+          if (db !== da) return db - da;
+          const va = Number.isFinite(a.change2h) ? a.change2h : -Infinity;
+          const vb = Number.isFinite(b.change2h) ? b.change2h : -Infinity;
+          if (vb !== va) return vb - va;
+          const a1 = Number.isFinite(a.change1h) ? a.change1h : -Infinity;
+          const b1 = Number.isFinite(b.change1h) ? b.change1h : -Infinity;
+          return b1 - a1;
+        });
+      }
+
+      function renderTrail(trail, trend) {
+        if (!Array.isArray(trail) || !trail.length) {
+          return `<span class="status-tag is-other">--</span>`;
+        }
+        const maxAbs = Math.max(...trail.map((v) => Math.abs(v)), 0.01);
+        const steps = trail
+          .map((value, index) => {
+            const h = Math.max(0.14, Math.min(1, Math.abs(value) / maxAbs));
+            const classes = [
+              "step",
+              index === trail.length - 1 ? "is-last" : "",
+              value < 0 ? "is-neg" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            return `<span class="${classes}" style="--h:${h.toFixed(3)}"></span>`;
+          })
+          .join("");
+        const tip = escapeHtml(formatTrailTip(trail, trend));
+        return `<div class="trail" title="${tip}">${steps}</div>`;
+      }
+
+      function renderList() {
+        const root = document.getElementById("list");
+        const meta = document.getElementById("meta");
+        if (!root) return;
+        const climbN = rows.filter((r) => r.trend && r.trend.status === "climb")
+          .length;
+        if (meta) {
+          meta.textContent = `24h 第 ${CONFIG.RANK_START}–${CONFIG.RANK_END} · 候选 ${rows.length} · 爬升 ${climbN} · 已排除盯一下/拉黑 · 列表按爬升优先`;
+        }
+        if (!rows.length) {
+          root.innerHTML = `<div class="empty">暂无候选（或仍在计算）</div>`;
+          return;
+        }
+        const head = `<div class="row is-head">
+          <div>#24h</div>
+          <div>币种</div>
+          <div>24h</div>
+          <div>近2h</div>
+          <div class="col-1h">近1h</div>
+          <div>状态</div>
+          <div>2h轨迹</div>
+          <div></div>
+        </div>`;
+        const body = sortRows(rows)
+          .map((row) => {
+            const label = String(row.symbol).replace(/USDT$/i, "");
+            const trend = row.trend || { status: "other", label: "其它" };
+            const climbClass = trend.status === "climb" ? " is-climb" : "";
+            return `<div class="row${climbClass}" data-symbol="${escapeHtml(row.symbol)}">
+              <div>${row.rank24h}</div>
+              <div class="sym">${escapeHtml(label)}</div>
+              <div class="pct ${hourClass(row.change24h)}">${escapeHtml(formatPercent(row.change24h))}</div>
+              <div class="pct ${hourClass(row.change2h)}">${escapeHtml(formatPercent(row.change2h))}</div>
+              <div class="col-1h pct ${hourClass(row.change1h)}">${escapeHtml(formatPercent(row.change1h))}</div>
+              <div class="status-tag is-${escapeHtml(trend.status)}">${escapeHtml(trend.label)}</div>
+              <div>${renderTrail(row.trail2h, trend)}</div>
+              <div><button type="button" class="is-pin" data-pin="${escapeHtml(row.symbol)}">盯一下</button></div>
+            </div>`;
+          })
+          .join("");
+        root.innerHTML = head + body;
+      }
+
+      async function scoreSymbol(symbol, rank24h, signal) {
+        const price = marketMap[symbol]?.price;
+        const change24h = marketMap[symbol]?.change24h ?? null;
+        try {
+          const candles = await fetchKlines(
+            symbol,
+            "15m",
+            signal,
+            CONFIG.MOMENTUM_TREND.klineLimit,
+          );
+          const change1h = changeOverHours(candles, 1, price);
+          const change2h = changeOverHours(candles, 2, price);
+          const trail2h = build2hTrail(candles, price);
+          const trend = classifyMomentumTrend(trail2h, change1h);
+          return {
+            symbol,
+            rank24h,
+            change24h,
+            change1h,
+            change2h,
+            trail2h,
+            trend,
+          };
+        } catch (error) {
+          if (error && error.name === "AbortError") throw error;
+          return {
+            symbol,
+            rank24h,
+            change24h,
+            change1h: null,
+            change2h: null,
+            trail2h: null,
+            trend: classifyMomentumTrend(null, null),
+          };
+        }
+      }
+
+      async function loadScores(candidates, signal) {
+        rows = [];
+        renderList();
+        const total = candidates.length;
+        let done = 0;
+        for (let i = 0; i < candidates.length; i += CONFIG.BATCH_SIZE) {
+          if (signal.aborted) return;
+          const batch = candidates.slice(i, i + CONFIG.BATCH_SIZE);
+          const scored = await Promise.all(
+            batch.map((item) =>
+              scoreSymbol(item.symbol, item.rank24h, signal),
+            ),
+          );
+          rows.push(...scored);
+          done += scored.length;
+          setStatus("busy", `计算轨迹 ${done}/${total}...`);
+          renderList();
+        }
+      }
+
+      async function refreshAll() {
+        if (loading) return;
+        loading = true;
+        if (abortCtrl) abortCtrl.abort();
+        abortCtrl = new AbortController();
+        const signal = abortCtrl.signal;
+        const btn = document.getElementById("refreshBtn");
+        if (btn) btn.disabled = true;
+        try {
+          setStatus("busy", "加载盯一下 / 拉黑...");
+          await loadGithubSide();
+          setStatus("busy", "拉取 24h 行情...");
+          await loadBinanceTicker();
+          const candidates = range100Symbols();
+          setStatus(
+            "busy",
+            `候选 ${candidates.length} · 开始算近2h轨迹...`,
+          );
+          await loadScores(candidates, signal);
+          if (signal.aborted) return;
+          const climbN = rows.filter(
+            (r) => r.trend && r.trend.status === "climb",
+          ).length;
+          setStatus(
+            "ok",
+            `完成 · ${rows.length} 个 · 爬升 ${climbN} · ${new Date().toLocaleTimeString()}`,
+          );
+        } catch (error) {
+          if (error && error.name === "AbortError") return;
+          setStatus("err", error.message || "加载失败");
+        } finally {
+          loading = false;
+          if (btn) btn.disabled = false;
+        }
+      }
+
+      async function pinSymbol(symbol) {
+        const price = marketMap[symbol]?.price;
+        if (!Number.isFinite(price)) {
+          showToast("无现价，无法盯一下");
+          return;
+        }
+        try {
+          setStatus("busy", `正在盯 ${symbol.replace(/USDT$/i, "")}...`);
+          const result = await WatchFavorites.patchPins({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.PINS_PATH,
+            message: `Update pin ${symbol}`,
+            mutate: (list) =>
+              WatchFavorites.hasPin(list, symbol)
+                ? list
+                : WatchFavorites.togglePin(list, symbol, price, "range100"),
+          });
+          pinItems = result.pins;
+          rows = rows.filter((row) => row.symbol !== symbol);
+          renderList();
+          showToast(`已盯 ${symbol.replace(/USDT$/i, "")} · 可去币安观察`);
+          setStatus("ok", `已盯 ${symbol.replace(/USDT$/i, "")}`);
+        } catch (error) {
+          showToast(error.message || "盯一下失败");
+          setStatus("err", error.message || "盯一下失败");
+        }
+      }
+
+      document.getElementById("refreshBtn").addEventListener("click", () => {
+        refreshAll();
+      });
+
+      document.getElementById("list").addEventListener("click", (event) => {
+        const btn = event.target.closest("[data-pin]");
+        if (!btn || btn.disabled) return;
+        const symbol = btn.getAttribute("data-pin");
+        if (!symbol) return;
+        btn.disabled = true;
+        pinSymbol(symbol).finally(() => {
+          btn.disabled = false;
+        });
+      });
+
+      document.addEventListener("click", (event) => {
+        const open = document.querySelector("details.friend-links[open]");
+        if (!open) return;
+        if (!open.contains(event.target)) open.removeAttribute("open");
+      });
+
+      refreshAll();
+    </script>
+  </body>
+</html>

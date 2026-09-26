@@ -48,6 +48,53 @@
       .nav-link:hover {
         text-decoration: underline;
       }
+      .friend-links {
+        position: relative;
+        font-size: 13px;
+        color: #5a6a68;
+      }
+      .friend-links > summary {
+        list-style: none;
+        cursor: pointer;
+        user-select: none;
+        padding: 4px 2px;
+      }
+      .friend-links > summary::-webkit-details-marker {
+        display: none;
+      }
+      .friend-links > summary::after {
+        content: " ▾";
+        font-size: 11px;
+        opacity: 0.7;
+      }
+      .friend-links[open] > summary::after {
+        content: " ▴";
+      }
+      .friend-links-panel {
+        position: absolute;
+        left: 0;
+        top: calc(100% + 4px);
+        z-index: 30;
+        min-width: 140px;
+        padding: 6px;
+        border: 1px solid rgba(90, 106, 104, 0.22);
+        border-radius: 10px;
+        background: rgba(251, 252, 250, 0.96);
+        box-shadow: 0 8px 20px rgba(40, 50, 58, 0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .friend-links-panel a {
+        color: #28323a;
+        text-decoration: none;
+        padding: 8px 10px;
+        border-radius: 8px;
+        font-size: 13px;
+      }
+      .friend-links-panel a:hover {
+        background: rgba(90, 106, 104, 0.1);
+      }
       .topbar-actions {
         display: flex;
         align-items: center;
@@ -882,8 +929,13 @@
       <div class="topbar">
         <div class="topbar-left">
           <h1>币安观察</h1>
-          <a class="nav-link" href="./trade.html">模拟交易</a>
-          <a class="nav-link" href="./okx/kline.html">OKX 自选</a>
+          <details class="friend-links">
+            <summary>友情链接</summary>
+            <div class="friend-links-panel">
+              <a href="./range100.html">Range100 潜伏</a>
+              <a href="./okx/kline.html">OKX 自选</a>
+            </div>
+          </details>
         </div>
         <div class="topbar-actions">
           <select
@@ -3624,6 +3676,11 @@
       document.getElementById("refreshBtn").addEventListener("click", () => {
         closeCardActions();
         refreshAll({ reason: "manual" });
+      });
+      document.addEventListener("click", (event) => {
+        const open = document.querySelector("details.friend-links[open]");
+        if (!open) return;
+        if (!open.contains(event.target)) open.removeAttribute("open");
       });
       document
         .getElementById("notifyFloatClose")
