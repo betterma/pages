@@ -465,6 +465,7 @@ async function tryAcquireNotifyLock(stateFile, now) {
     dropAlerts: data.dropAlerts || {},
     lastPinPrices: data.lastPinPrices || {},
     lastPinNotify: data.lastPinNotify || null,
+    lastPositionNotify: data.lastPositionNotify || null,
     lastNotifyAt: now,
     updatedAt: now,
   };
@@ -609,6 +610,11 @@ async function main() {
       activeStateFile.data &&
       activeStateFile.data.lastPinNotify) ||
     null;
+  const prevPositionNotify =
+    (activeStateFile &&
+      activeStateFile.data &&
+      activeStateFile.data.lastPositionNotify) ||
+    null;
   const lastPinNotify = pinText
     ? {
         at: now,
@@ -616,10 +622,18 @@ async function main() {
         symbols: pinRows.map((row) => row.symbol),
       }
     : prevNotify;
+  const lastPositionNotify = positionText
+    ? {
+        at: now,
+        text: positionText,
+        symbols: positions.map((item) => item.symbol),
+      }
+    : prevPositionNotify;
   const stateChanged =
     JSON.stringify(nextDropAlerts) !== JSON.stringify(dropAlerts) ||
     JSON.stringify(nextPinPrices) !== JSON.stringify(lastPinPrices) ||
-    JSON.stringify(lastPinNotify) !== JSON.stringify(prevNotify);
+    JSON.stringify(lastPinNotify) !== JSON.stringify(prevNotify) ||
+    JSON.stringify(lastPositionNotify) !== JSON.stringify(prevPositionNotify);
   if (stateChanged || sent.length) {
     await saveJson(
       CONFIG.NOTIFY_STATE_PATH,
@@ -627,6 +641,7 @@ async function main() {
         dropAlerts: nextDropAlerts,
         lastPinPrices: nextPinPrices,
         lastPinNotify,
+        lastPositionNotify,
         lastNotifyAt: now,
         updatedAt: Date.now(),
       },

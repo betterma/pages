@@ -89,10 +89,26 @@
       .status {
         display: flex;
         align-items: center;
+        flex-wrap: wrap;
         gap: 8px;
         font-size: 13px;
         color: #78817f;
         margin-bottom: 10px;
+      }
+      .status #statusText {
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+      .data-as-of {
+        flex-shrink: 0;
+        font-size: 12px;
+        color: #5a6a68;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(113, 139, 136, 0.12);
+      }
+      .data-as-of:empty {
+        display: none;
       }
       .dot {
         width: 9px;
@@ -436,10 +452,10 @@
       .notify-float {
         position: fixed;
         left: 12px;
-        bottom: 12px;
+        bottom: 56px;
         z-index: 40;
-        width: min(360px, calc(100vw - 24px));
-        max-height: min(48vh, 440px);
+        width: min(680px, calc(100vw - 24px));
+        max-height: min(52vh, 480px);
         display: flex;
         flex-direction: column;
         border: 1px solid rgba(90, 106, 104, 0.22);
@@ -451,6 +467,9 @@
       }
       .notify-float[hidden] {
         display: none !important;
+      }
+      .notify-float.is-momentum {
+        width: min(420px, calc(100vw - 24px));
       }
       .notify-float-head {
         display: flex;
@@ -509,6 +528,36 @@
         word-break: break-word;
         overscroll-behavior: contain;
       }
+      .notify-float-split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+        padding: 0;
+        white-space: normal;
+      }
+      .notify-col {
+        min-width: 0;
+        padding: 10px 12px 12px;
+        overflow: auto;
+        max-height: min(44vh, 420px);
+        -webkit-overflow-scrolling: touch;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .notify-col + .notify-col {
+        border-left: 1px solid rgba(220, 226, 222, 0.55);
+      }
+      .notify-col-title {
+        font-size: 11px;
+        font-weight: 650;
+        color: #78817f;
+        margin-bottom: 8px;
+        letter-spacing: 0.04em;
+      }
+      .notify-col-empty {
+        color: #9aa3a0;
+        font-size: 12px;
+      }
       .notify-float-body .nc-info {
         color: #2f8f6e;
         font-weight: 650;
@@ -538,11 +587,43 @@
       .notify-float-body .notify-coin:active {
         color: #1f6b52;
       }
-      .notify-float-tab {
+      .mom-row {
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(220, 226, 222, 0.55);
+      }
+      .mom-row:last-child {
+        border-bottom: 0;
+        margin-bottom: 0;
+        padding-bottom: 0;
+      }
+      .mom-row .mom-name {
+        font-weight: 700;
+      }
+      .mom-row .mom-hours {
+        margin-top: 4px;
+        font-size: 12px;
+      }
+      .mom-row .mom-hours .is-hot {
+        color: #2f8f6e;
+        font-weight: 700;
+      }
+      .mom-row .mom-hours .is-cool {
+        color: #8d7771;
+        font-weight: 650;
+      }
+      .float-tabs {
         position: fixed;
         left: 12px;
         bottom: 12px;
-        z-index: 40;
+        z-index: 41;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        max-width: calc(100vw - 24px);
+      }
+      .notify-float-tab {
+        position: static;
         border: 1px solid rgba(90, 106, 104, 0.28);
         background: rgba(244, 245, 243, 0.5);
         backdrop-filter: blur(10px);
@@ -553,27 +634,42 @@
         border-radius: 999px;
         font-size: 12px;
         box-shadow: 0 6px 18px rgba(40, 50, 58, 0.1);
+        cursor: pointer;
       }
       .notify-float-tab[hidden] {
         display: none !important;
+      }
+      .notify-float-tab.is-active {
+        background: rgba(113, 139, 136, 0.22);
+        border-color: rgba(113, 139, 136, 0.45);
+        color: #3d4a48;
       }
       @media (max-width: 640px) {
         .notify-float {
           left: 8px;
           right: 8px;
-          bottom: 8px;
+          bottom: 52px;
           width: auto;
-          max-height: min(42vh, 360px);
+          max-height: min(48vh, 400px);
           background: rgba(244, 245, 243, 0.38);
+        }
+        .notify-float-split {
+          grid-template-columns: 1fr;
+        }
+        .notify-col + .notify-col {
+          border-left: 0;
+          border-top: 1px solid rgba(220, 226, 222, 0.55);
         }
         .notify-float-body {
           font-size: 11px;
+        }
+        .notify-col {
+          max-height: min(28vh, 240px);
           padding: 8px 10px 10px;
         }
-        .notify-float-tab {
+        .float-tabs {
           left: 8px;
           bottom: 8px;
-          padding: 10px 14px;
         }
       }
       .fav-mark {
@@ -759,8 +855,15 @@
       <div class="status">
         <span id="statusDot" class="dot"></span>
         <span id="statusText">等待启动...</span>
+        <span
+          id="dataAsOf"
+          class="data-as-of"
+          title="行情与 K 线最近一次成功刷新的本地时间"
+        ></span>
       </div>
+      <!-- 指引已隐藏：熟悉操作后收起，需要时再解开
       <p class="hint">长按选 盯/购买/卖出/收藏/拉黑 · 盯一下展示当前窗口上涨（可低于盯住价）· 右侧看窗口回落 · 企微同步</p>
+      -->
 
       <h2 class="section-title">盯一下</h2>
       <div class="pin-meta-row">
@@ -776,12 +879,14 @@
           清理 ▾
         </button>
       </div>
+      <!-- 近2h/1h 改由左下角浮窗展示，顶栏排行收起
       <div
         id="pinMomentumMeta"
         class="meta pin-momentum-meta"
         hidden
         title="主看近2小时谁高；近1小时用来判断有没有熄火。仅作排行提示，不改变下方卡片顺序"
       ></div>
+      -->
       <div id="maintPanel" class="maint-panel" hidden>
         <span id="maintEmptyHint" class="maint-empty" hidden>暂无可清理项</span>
         <button id="clearExpiredPinsBtn" type="button" hidden>
@@ -823,9 +928,8 @@
         <div class="hidden-pin-head">
           <div>
             <h3>隐藏的盯一下</h3>
-            <p id="hiddenPinMeta">
-              当前窗口未涨 · 长按可取消/续盯 · 企微不推送
-            </p>
+            <!-- <p id="hiddenPinMeta">当前窗口未涨 · 长按可取消/续盯 · 企微不推送</p> -->
+            <p id="hiddenPinMeta"></p>
           </div>
           <button type="button" data-close-hidden-pins>关闭</button>
         </div>
@@ -847,7 +951,7 @@
           刷新
         </button>
         <strong
-          >最近企微通知<span class="notify-time" id="notifyFloatTime"></span
+          >企微通知<span class="notify-time" id="notifyFloatTime"></span
         ></strong>
         <button
           type="button"
@@ -859,17 +963,65 @@
           ×
         </button>
       </div>
-      <div class="notify-float-body" id="notifyFloatBody"></div>
+      <div class="notify-float-body notify-float-split" id="notifyFloatBody">
+        <div class="notify-col">
+          <div class="notify-col-title">盯一下</div>
+          <div id="notifyFloatPins"></div>
+        </div>
+        <div class="notify-col">
+          <div class="notify-col-title">持仓</div>
+          <div id="notifyFloatPositions"></div>
+        </div>
+      </div>
     </div>
-    <button
-      type="button"
-      class="notify-float-tab"
-      id="notifyFloatTab"
-      hidden
-          title="打开并刷新最近企微通知"
-    >
-      企微通知
-    </button>
+
+    <div id="momentumFloat" class="notify-float is-momentum" hidden>
+      <div class="notify-float-head">
+        <button
+          type="button"
+          class="notify-float-refresh"
+          id="momentumFloatRefresh"
+          title="按当前盯一下重算近1h/2h"
+          aria-label="刷新近2h/1h"
+        >
+          刷新
+        </button>
+        <strong
+          >近2h / 1h<span class="notify-time" id="momentumFloatTime"></span
+        ></strong>
+        <button
+          type="button"
+          class="notify-float-close"
+          id="momentumFloatClose"
+          title="关闭"
+          aria-label="关闭动量浮层"
+        >
+          ×
+        </button>
+      </div>
+      <div class="notify-float-body" id="momentumFloatBody"></div>
+    </div>
+
+    <div class="float-tabs">
+      <button
+        type="button"
+        class="notify-float-tab"
+        id="notifyFloatTab"
+        hidden
+        title="打开企微同步（盯一下 / 持仓）"
+      >
+        企微通知
+      </button>
+      <button
+        type="button"
+        class="notify-float-tab"
+        id="momentumFloatTab"
+        hidden
+        title="打开近2h/1h 动量快照"
+      >
+        近2h/1h
+      </button>
+    </div>
 
     <script src="./watch-favorites.js"></script>
     <script>
@@ -898,6 +1050,8 @@
         NOTIFY_STATE_PATH: "watch-notify-state.json",
         // WeCom notify runs ~5m; poll often enough without hammering GitHub.
         NOTIFY_POLL_MS: 60 * 1000,
+        // Skip focus auto-refresh if data is still fresher than this.
+        DATA_FOCUS_REFRESH_MIN_MS: 45 * 1000,
       };
       const DURATION_MS = {
         "15m": 15 * 60 * 1000,
@@ -934,10 +1088,14 @@
       let positionItems = [];
       let lastPinPrices = {};
       let lastPinNotify = null;
+      let lastPositionNotify = null;
+      let lastMomentumSnapshot = null;
       let notifyFloatRefreshing = false;
+      let momentumFloatRefreshing = false;
       let notifyPollTimer = null;
       let klineAbort = null;
       let loading = false;
+      let lastDataAt = 0;
       let favoriteSaving = false;
       let blacklistSaving = false;
       let pinSaving = false;
@@ -960,6 +1118,28 @@
         document.getElementById("statusDot").className =
           `dot ${ok ? "online" : "offline"}`;
         document.getElementById("statusText").textContent = text;
+      }
+
+      function formatClock(ts) {
+        const value = Number(ts);
+        if (!Number.isFinite(value) || value <= 0) return "";
+        try {
+          return new Date(value).toLocaleTimeString("zh-CN", { hour12: false });
+        } catch (error) {
+          return "";
+        }
+      }
+
+      function updateDataAsOf(ts) {
+        const at = Number.isFinite(Number(ts)) ? Number(ts) : Date.now();
+        lastDataAt = at;
+        const el = document.getElementById("dataAsOf");
+        if (!el) return;
+        const clock = formatClock(at);
+        el.textContent = clock ? `数据截至 ${clock}` : "";
+        el.title = clock
+          ? `行情与 K 线最近一次成功刷新：${new Date(at).toLocaleString("zh-CN", { hour12: false })}`
+          : "尚未成功刷新";
       }
 
       function showToast(message) {
@@ -1318,10 +1498,12 @@
           const notifyState = await loadNotifyState();
           lastPinPrices = notifyState.lastPinPrices || {};
           lastPinNotify = notifyState.lastPinNotify || null;
+          lastPositionNotify = notifyState.lastPositionNotify || null;
         } catch (error) {
           console.warn(error);
           lastPinPrices = {};
           lastPinNotify = null;
+          lastPositionNotify = null;
         }
         pruneHistory();
       }
@@ -1336,23 +1518,49 @@
             data && data.lastPinNotify && typeof data.lastPinNotify === "object"
               ? data.lastPinNotify
               : null,
+          lastPositionNotify:
+            data &&
+            data.lastPositionNotify &&
+            typeof data.lastPositionNotify === "object"
+              ? data.lastPositionNotify
+              : null,
         };
       }
 
+      function notifyContentAt(state) {
+        const pin = state && state.lastPinNotify;
+        const pos = state && state.lastPositionNotify;
+        const pinAt = pin && Number.isFinite(Number(pin.at)) ? Number(pin.at) : 0;
+        const posAt = pos && Number.isFinite(Number(pos.at)) ? Number(pos.at) : 0;
+        return Math.max(pinAt, posAt);
+      }
+
+      function hasNotifyContent(pinNotify, posNotify) {
+        const hasPin =
+          pinNotify &&
+          typeof pinNotify.markdown === "string" &&
+          pinNotify.markdown.trim();
+        const hasPos =
+          posNotify &&
+          typeof posNotify.text === "string" &&
+          posNotify.text.trim();
+        return !!(hasPin || hasPos);
+      }
+
       function applyNotifyState(state, options) {
-        const prevAt =
-          lastPinNotify && Number.isFinite(Number(lastPinNotify.at))
-            ? Number(lastPinNotify.at)
-            : 0;
+        const prevAt = notifyContentAt({
+          lastPinNotify,
+          lastPositionNotify,
+        });
         lastPinPrices = (state && state.lastPinPrices) || {};
         lastPinNotify = (state && state.lastPinNotify) || null;
-        const nextAt =
-          lastPinNotify && Number.isFinite(Number(lastPinNotify.at))
-            ? Number(lastPinNotify.at)
-            : 0;
+        lastPositionNotify = (state && state.lastPositionNotify) || null;
+        const nextAt = notifyContentAt({
+          lastPinNotify,
+          lastPositionNotify,
+        });
         const isNewer = prevAt > 0 && nextAt > prevAt;
         if (isNewer || (options && options.forceOpen)) {
-          // New push supersedes a previous dismiss.
           localStorage.removeItem(notifyDismissStorageKey());
         }
         updateNotifyFloatPanel();
@@ -1399,12 +1607,20 @@
             },
           });
           if (!response.ok) {
-            return { lastPinPrices: {}, lastPinNotify: null };
+            return {
+              lastPinPrices: {},
+              lastPinNotify: null,
+              lastPositionNotify: null,
+            };
           }
           return parseNotifyStateData(await response.json());
         } catch (error) {
           console.warn("loadNotifyState failed", error);
-          return { lastPinPrices: {}, lastPinNotify: null };
+          return {
+            lastPinPrices: {},
+            lastPinNotify: null,
+            lastPositionNotify: null,
+          };
         }
       }
 
@@ -1424,7 +1640,7 @@
           if (options && options.silent) return result;
           if (result.isNewer) {
             showToast("已更新到最新企微通知");
-          } else if (lastPinNotify && lastPinNotify.markdown) {
+          } else if (hasNotifyContent(lastPinNotify, lastPositionNotify)) {
             showToast("已是最新企微文案");
           } else {
             showToast("暂无企微通知文案");
@@ -1687,21 +1903,158 @@
           .join(" · ");
       }
 
-      function updatePinMomentumMeta(scores, symbols) {
-        const el = document.getElementById("pinMomentumMeta");
-        if (!el) return;
-        if (!symbols.length) {
-          el.hidden = true;
-          el.innerHTML = "";
+      function buildMomentumSnapshot(scores, symbols) {
+        const at = Date.now();
+        const rows = symbols
+          .map((symbol) => {
+            const score = scores.get(symbol) || {};
+            const pinItem = pinItemBySymbol(symbol);
+            return {
+              symbol,
+              label: String(symbol).replace(/USDT$/i, ""),
+              change24h: marketMap[symbol]?.change24h ?? null,
+              pinChange: pinItem ? pinChangePercent(pinItem) : null,
+              pinPrice: pinItem ? Number(pinItem.pinPrice) : null,
+              current: marketMap[symbol]?.price ?? null,
+              change1h: score.change1h ?? null,
+              change2h: score.change2h ?? null,
+            };
+          })
+          .filter(
+            (row) =>
+              Number.isFinite(row.change2h) || Number.isFinite(row.change1h),
+          )
+          .sort((a, b) => {
+            const va = Number.isFinite(a.change2h) ? a.change2h : -Infinity;
+            const vb = Number.isFinite(b.change2h) ? b.change2h : -Infinity;
+            if (vb !== va) return vb - va;
+            const a1 = Number.isFinite(a.change1h) ? a.change1h : -Infinity;
+            const b1 = Number.isFinite(b.change1h) ? b.change1h : -Infinity;
+            return b1 - a1;
+          });
+        return { at, rows };
+      }
+
+      function hourClass(value) {
+        if (!Number.isFinite(value)) return "";
+        if (value >= 2) return "is-hot";
+        if (value < 0) return "is-cool";
+        return "";
+      }
+
+      function renderMomentumFloatHtml(snapshot) {
+        const rows = (snapshot && snapshot.rows) || [];
+        if (!rows.length) {
+          return `<div class="notify-col-empty">暂无近2h/1h 数据</div>`;
+        }
+        return rows
+          .map((row) => {
+            const day = formatPercent(row.change24h);
+            const pinPct = formatPercent(row.pinChange);
+            const c2 = formatPercent(row.change2h);
+            const c1 = formatPercent(row.change1h);
+            const cls2 = hourClass(row.change2h);
+            const cls1 = hourClass(row.change1h);
+            return [
+              `<div class="mom-row">`,
+              `<div><a href="#card-pin-${row.symbol}" class="notify-coin mom-name" data-jump="${row.symbol}">${escapeHtml(row.label)}</a> ${escapeHtml(day)}</div>`,
+              `<div>【${escapeHtml(pinPct)}】</div>`,
+              `<div>${escapeHtml(formatPinPrice(row.pinPrice))}</div>`,
+              `<div>${escapeHtml(formatPinPrice(row.current))}</div>`,
+              `<div class="mom-hours"><span class="${cls2}">近2h ${escapeHtml(c2)}</span> · <span class="${cls1}">近1h ${escapeHtml(c1)}</span></div>`,
+              `</div>`,
+            ].join("");
+          })
+          .join("");
+      }
+
+      function setMomentumFloatOpen(open) {
+        const panel = document.getElementById("momentumFloat");
+        const tab = document.getElementById("momentumFloatTab");
+        const body = document.getElementById("momentumFloatBody");
+        if (!panel) return;
+        if (open) {
+          hideNotifyFloatKeepTab();
+          panel.hidden = false;
+          if (tab) tab.classList.add("is-active");
+          if (body) {
+            body.innerHTML = renderMomentumFloatHtml(lastMomentumSnapshot);
+          }
+          updateMomentumFloatPanel();
+        } else {
+          panel.hidden = true;
+          if (tab) tab.classList.remove("is-active");
+        }
+      }
+
+      function hideNotifyFloatKeepTab() {
+        const panel = document.getElementById("notifyFloat");
+        const tab = document.getElementById("notifyFloatTab");
+        if (panel) panel.hidden = true;
+        if (tab) {
+          tab.classList.remove("is-active");
+          if (hasNotifyContent(lastPinNotify, lastPositionNotify)) {
+            tab.hidden = false;
+          }
+        }
+      }
+
+      function setNotifyFloatOpen(open) {
+        const panel = document.getElementById("notifyFloat");
+        const tab = document.getElementById("notifyFloatTab");
+        if (!panel) return;
+        if (open) {
+          setMomentumFloatOpen(false);
+          localStorage.removeItem(notifyDismissStorageKey());
+          updateNotifyFloatPanel();
+          panel.hidden = false;
+          if (tab) {
+            tab.hidden = true;
+            tab.classList.add("is-active");
+          }
+        } else {
+          panel.hidden = true;
+          if (tab) tab.classList.remove("is-active");
+        }
+      }
+
+      function updateMomentumFloatPanel() {
+        const panel = document.getElementById("momentumFloat");
+        const tab = document.getElementById("momentumFloatTab");
+        const body = document.getElementById("momentumFloatBody");
+        const timeEl = document.getElementById("momentumFloatTime");
+        if (!panel || !tab || !body) return;
+
+        const snap = lastMomentumSnapshot;
+        const hasRows = snap && Array.isArray(snap.rows) && snap.rows.length;
+        tab.hidden = !hasRows;
+        if (!hasRows) {
+          if (!panel.hidden) panel.hidden = true;
+          body.innerHTML = "";
+          if (timeEl) timeEl.textContent = "";
+          tab.classList.remove("is-active");
           return;
         }
-        const line2h = formatHourRankLine(scores, symbols, "change2h", 6);
-        const line1h = formatHourRankLine(scores, symbols, "change1h", 6);
-        el.hidden = false;
-        el.innerHTML = [
-          `<div><span class="mom-label">近2h谁高（主看·仅排行，不改卡片顺序）</span> ${line2h}</div>`,
-          `<div><span class="mom-label">近1h（瞟一眼有没有熄火）</span> ${line1h}</div>`,
-        ].join("");
+
+        if (timeEl) {
+          const label = formatNotifyAt(snap.at);
+          timeEl.textContent = label ? ` · ${label}` : "";
+        }
+        // Only refresh body if panel is open or first paint.
+        if (!panel.hidden) {
+          body.innerHTML = renderMomentumFloatHtml(snap);
+        }
+      }
+
+      function updatePinMomentumMeta(scores, symbols) {
+        // Top meta strip retired — keep snapshot for the 近2h/1h float.
+        lastMomentumSnapshot = buildMomentumSnapshot(scores, symbols);
+        const panel = document.getElementById("momentumFloat");
+        const body = document.getElementById("momentumFloatBody");
+        if (panel && body && !panel.hidden) {
+          body.innerHTML = renderMomentumFloatHtml(lastMomentumSnapshot);
+        }
+        updateMomentumFloatPanel();
       }
 
       function lastBarRises(closes, bars) {
@@ -2302,60 +2655,93 @@
         window.setTimeout(() => card.classList.remove("is-jump-target"), 1600);
       }
 
-      function isNotifyFloatDismissed(notify) {
-        if (!notify || !Number.isFinite(Number(notify.at))) return true;
+      function renderPlainNotifyHtml(text, symbols) {
+        return renderWecomNotifyHtml(String(text || ""), symbols || []);
+      }
+
+      function isNotifyFloatDismissed() {
+        const at = notifyContentAt({
+          lastPinNotify,
+          lastPositionNotify,
+        });
+        if (!at) return true;
         const dismissed = Number(
           localStorage.getItem(notifyDismissStorageKey()) || 0,
         );
-        return dismissed === Number(notify.at);
+        return dismissed === at;
       }
 
       function updateNotifyFloatPanel() {
         const panel = document.getElementById("notifyFloat");
         const tab = document.getElementById("notifyFloatTab");
-        const body = document.getElementById("notifyFloatBody");
+        const pinsEl = document.getElementById("notifyFloatPins");
+        const posEl = document.getElementById("notifyFloatPositions");
         const timeEl = document.getElementById("notifyFloatTime");
-        if (!panel || !tab || !body) return;
+        if (!panel || !tab || !pinsEl || !posEl) return;
 
-        const notify = lastPinNotify;
-        const hasText =
-          notify &&
-          typeof notify.markdown === "string" &&
-          notify.markdown.trim();
-        if (!hasText) {
+        const hasContent = hasNotifyContent(lastPinNotify, lastPositionNotify);
+        if (!hasContent) {
           panel.hidden = true;
           tab.hidden = true;
-          body.innerHTML = "";
+          tab.classList.remove("is-active");
+          pinsEl.innerHTML = "";
+          posEl.innerHTML = "";
           if (timeEl) timeEl.textContent = "";
           return;
         }
 
-        const dismissed = isNotifyFloatDismissed(notify);
-        panel.hidden = dismissed;
-        tab.hidden = !dismissed;
+        const dismissed = isNotifyFloatDismissed();
+        const momentumOpen = !(
+          document.getElementById("momentumFloat") || { hidden: true }
+        ).hidden;
+
+        if (dismissed || momentumOpen) {
+          panel.hidden = true;
+          tab.hidden = false;
+          tab.classList.remove("is-active");
+        } else {
+          panel.hidden = false;
+          tab.hidden = true;
+          tab.classList.add("is-active");
+        }
+
         if (timeEl) {
-          const label = formatNotifyAt(notify.at);
+          const label = formatNotifyAt(
+            notifyContentAt({ lastPinNotify, lastPositionNotify }),
+          );
           timeEl.textContent = label ? ` · ${label}` : "";
         }
-        body.innerHTML = renderWecomNotifyHtml(
-          notify.markdown,
-          notify.symbols || [],
-        );
+
+        const pinMd =
+          lastPinNotify && typeof lastPinNotify.markdown === "string"
+            ? lastPinNotify.markdown.trim()
+            : "";
+        const posText =
+          lastPositionNotify && typeof lastPositionNotify.text === "string"
+            ? lastPositionNotify.text.trim()
+            : "";
+
+        pinsEl.innerHTML = pinMd
+          ? renderWecomNotifyHtml(pinMd, lastPinNotify.symbols || [])
+          : `<div class="notify-col-empty">暂无盯一下推送</div>`;
+        posEl.innerHTML = posText
+          ? renderPlainNotifyHtml(posText, lastPositionNotify.symbols || [])
+          : `<div class="notify-col-empty">暂无持仓推送</div>`;
       }
 
       function dismissNotifyFloat() {
-        if (lastPinNotify && Number.isFinite(Number(lastPinNotify.at))) {
-          localStorage.setItem(
-            notifyDismissStorageKey(),
-            String(lastPinNotify.at),
-          );
+        const at = notifyContentAt({
+          lastPinNotify,
+          lastPositionNotify,
+        });
+        if (at) {
+          localStorage.setItem(notifyDismissStorageKey(), String(at));
         }
         updateNotifyFloatPanel();
       }
 
       function reopenNotifyFloat() {
-        localStorage.removeItem(notifyDismissStorageKey());
-        updateNotifyFloatPanel();
+        setNotifyFloatOpen(true);
       }
 
       async function renderKlines() {
@@ -2459,8 +2845,7 @@
         }
 
         if (!pinItems.length) {
-          document.getElementById("pinMeta").textContent =
-            "还没有盯一下 · 长按选「盯一下」· 当前窗口上涨即展示（可低于盯住价）";
+          document.getElementById("pinMeta").textContent = "";
           updatePinMomentumMeta(new Map(), []);
         } else {
           const heldInPins = pinItems.filter((item) =>
@@ -2477,7 +2862,7 @@
           const parts = [
             `盯一下 ${pinItems.length}`,
             `窗口上涨展示 ${pinShownWindow}`,
-            "窗口涨即可显示（含低于盯住价）",
+            // "窗口涨即可显示（含低于盯住价）",
           ];
           if (pinShownBelowPin > 0) {
             parts.push(`其中低于盯住价 ${pinShownBelowPin}`);
@@ -2500,14 +2885,16 @@
         updateHiddenPinTab(pinHiddenDown);
         const hiddenPinMeta = document.getElementById("hiddenPinMeta");
         if (hiddenPinMeta) {
+          // 指引文案已收起；仅保留数量
           hiddenPinMeta.textContent = pinHiddenDown
-            ? `${pinHiddenDown} 个当前窗口未涨（企微不会推送）· 长按可取消/续盯`
-            : "当前没有隐藏的盯一下";
+            ? `${pinHiddenDown} 个当前窗口未涨`
+            : "";
         }
 
         if (!favoriteItems.length) {
-          document.getElementById("favMeta").textContent =
-            "还没有收藏 · 长按卡片选「收藏」即可加入";
+          // document.getElementById("favMeta").textContent =
+          //   "还没有收藏 · 长按卡片选「收藏」即可加入";
+          document.getElementById("favMeta").textContent = "";
         } else {
           const parts = [
             `收藏 ${favoriteItems.length}`,
@@ -2982,15 +3369,20 @@
         }
       }
 
-      async function refreshAll() {
+      async function refreshAll(options) {
         if (loading) return;
         loading = true;
+        const reason = options && options.reason ? options.reason : "manual";
         const btn = document.getElementById("refreshBtn");
         const rangeSelect = document.getElementById("rangeSelect");
         btn.disabled = true;
         if (rangeSelect) rangeSelect.disabled = true;
         try {
-          setStatus(false, "1/3 读取 GitHub 快照 / 观察池 / 收藏...");
+          if (reason === "focus") {
+            setStatus(false, "切回页面 · 正在刷新最新行情与 K 线...");
+          } else {
+            setStatus(false, "1/3 读取 GitHub 快照 / 观察池 / 收藏...");
+          }
           await loadGithubStorage();
           updateNotifyFloatPanel();
 
@@ -3001,9 +3393,11 @@
           updateWatchPool();
           await renderKlines();
           const rising = getRisingSymbols().length;
+          const now = Date.now();
+          updateDataAsOf(now);
           setStatus(
             true,
-            `已更新 · 上涨 ${rising} · 盯 ${pinItems.length} · 持仓 ${positionItems.length} · 收藏 ${favoriteItems.length} · ${new Date().toLocaleTimeString("zh-CN")}`,
+            `已更新 · 上涨 ${rising} · 盯 ${pinItems.length} · 持仓 ${positionItems.length} · 收藏 ${favoriteItems.length}`,
           );
         } catch (error) {
           console.error(error);
@@ -3030,9 +3424,21 @@
         }
       }
 
+      function maybeRefreshDataOnFocus() {
+        if (document.visibilityState !== "visible") return;
+        if (loading) return;
+        if (
+          lastDataAt > 0 &&
+          Date.now() - lastDataAt < CONFIG.DATA_FOCUS_REFRESH_MIN_MS
+        ) {
+          return;
+        }
+        refreshAll({ reason: "focus" });
+      }
+
       document.getElementById("refreshBtn").addEventListener("click", () => {
         closeCardActions();
-        refreshAll();
+        refreshAll({ reason: "manual" });
       });
       document
         .getElementById("notifyFloatClose")
@@ -3056,9 +3462,63 @@
           event.preventDefault();
           jumpToNotifySymbol(link.dataset.jump);
         });
+      document
+        .getElementById("momentumFloatClose")
+        .addEventListener("click", () => {
+          setMomentumFloatOpen(false);
+        });
+      document
+        .getElementById("momentumFloatTab")
+        .addEventListener("click", () => {
+          setMomentumFloatOpen(true);
+        });
+      document
+        .getElementById("momentumFloatRefresh")
+        .addEventListener("click", async () => {
+          if (momentumFloatRefreshing || loading) return;
+          const symbols = (lastMomentumSnapshot &&
+            lastMomentumSnapshot.rows &&
+            lastMomentumSnapshot.rows.map((row) => row.symbol)) ||
+            [];
+          if (!symbols.length) {
+            showToast("暂无盯一下可计算");
+            return;
+          }
+          momentumFloatRefreshing = true;
+          const btn = document.getElementById("momentumFloatRefresh");
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = "…";
+          }
+          try {
+            const controller = new AbortController();
+            const scores = await loadPinHourScores(symbols, controller.signal);
+            updatePinMomentumMeta(scores, symbols);
+            setMomentumFloatOpen(true);
+            showToast("近2h/1h 已更新");
+          } catch (error) {
+            console.warn(error);
+            showToast(error.message || "刷新近2h/1h 失败");
+          } finally {
+            momentumFloatRefreshing = false;
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = "刷新";
+            }
+          }
+        });
+      document
+        .getElementById("momentumFloatBody")
+        .addEventListener("click", (event) => {
+          const link = event.target.closest(".notify-coin");
+          if (!link) return;
+          event.preventDefault();
+          jumpToNotifySymbol(link.dataset.jump);
+        });
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "visible") {
           refreshNotifyFloat({ silent: true });
+          maybeRefreshDataOnFocus();
         }
       });
       startNotifyPoll();
@@ -3094,6 +3554,11 @@
           closeCardActions();
           setHiddenPinDrawerOpen(false);
           setMaintPanelOpen(false);
+          const notifyPanel = document.getElementById("notifyFloat");
+          if (notifyPanel && !notifyPanel.hidden) {
+            dismissNotifyFloat();
+          }
+          setMomentumFloatOpen(false);
         }
       });
       document
@@ -3118,10 +3583,8 @@
           setStatus(false, `正在加载${view.label} K线...`);
           try {
             await renderKlines();
-            setStatus(
-              true,
-              `已切换为${view.label} · ${new Date().toLocaleTimeString("zh-CN")}`,
-            );
+            updateDataAsOf(Date.now());
+            setStatus(true, `已切换为${view.label}`);
           } catch (error) {
             console.error(error);
             klineViewKey = prev;
@@ -3144,7 +3607,7 @@
         window.location.href = "./watch.html";
       });
       syncRangeSelect();
-      refreshAll();
+      refreshAll({ reason: "boot" });
     </script>
   </body>
 </html>
