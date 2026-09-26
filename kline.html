@@ -354,19 +354,6 @@
         top: 22px;
         color: #4f7a6e;
       }
-      .kline-card.is-early .early-badge {
-        position: absolute;
-        left: 8px;
-        bottom: 8px;
-        z-index: 1;
-        padding: 2px 6px;
-        border-radius: 4px;
-        background: rgba(74, 108, 98, 0.9);
-        color: #f4f7f5;
-        font-size: 11px;
-        line-height: 1.3;
-        cursor: help;
-      }
       /* Align with WeCom: 5m three-up = green, 15m 2/3 = orange */
       .kline-card-head .symbol-copy.is-streak5 {
         color: #2f8f6e;
@@ -1103,7 +1090,6 @@
         KLINE_INTERVAL: "4h",
         SIGNAL_INTERVAL: "15m",
         SIGNAL_LIMIT: 200,
-        EARLY_SCORE_MIN: 2,
         LONG_PRESS_MS: 550,
         MOMENTUM_5M_LIMIT: 5,
         NOTIFY_STATE_PATH: "watch-notify-state.json",
@@ -1814,88 +1800,6 @@
         throw lastError || new Error("K线请求失败");
       }
 
-      function scoreEarlyMomentum(candles) {
-        if (!Array.isArray(candles) || candles.length < 12) return null;
-        const recent10 = candles.slice(-10);
-        const look = candles.slice(-Math.min(20, candles.length));
-        if (look.length < 5) return null;
-
-        const green = recent10.filter((c) => c.close >= c.open).length;
-        let higherHighs = 0;
-        let higherLows = 0;
-        for (let index = 1; index < recent10.length; index += 1) {
-          if (recent10[index].high > recent10[index - 1].high) higherHighs += 1;
-          if (recent10[index].low > recent10[index - 1].low) higherLows += 1;
-        }
-
-        const price = recent10[recent10.length - 1].close;
-        const maxHigh = Math.max(...look.map((c) => c.high));
-        const priorHigh = Math.max(
-          ...look.slice(0, -1).map((c) => c.high),
-          look[0].high,
-        );
-        const nearBreak = price >= maxHigh * 0.98;
-        const broke = price > priorHigh;
-        const avgVol =
-          look.reduce((sum, c) => sum + (Number.isFinite(c.volume) ? c.volume : 0), 0) /
-          look.length;
-        const lastVol = Number.isFinite(recent10[recent10.length - 1].volume)
-          ? recent10[recent10.length - 1].volume
-          : 0;
-        const volRatio = avgVol > 0 ? lastVol / avgVol : 0;
-
-        const dayBars = candles.slice(-Math.min(192, candles.length));
-        const dayHigh = Math.max(...dayBars.map((c) => c.high));
-        const dayLow = Math.min(...dayBars.map((c) => c.low));
-        const dayPos =
-          dayHigh === dayLow ? 0 : (price - dayLow) / (dayHigh - dayLow);
-
-        let score = 0;
-        const reasons = [];
-        if (green >= 6) {
-          score += 1;
-          reasons.push(`阳${green}/10`);
-        }
-        if (higherLows >= 5 || (higherHighs >= 4 && higherLows >= 4)) {
-          score += 1;
-          reasons.push("抬结构");
-        }
-        if (nearBreak || broke) {
-          score += 1;
-          reasons.push(broke ? "破高" : "近高");
-        }
-        if (volRatio >= 1.5) {
-          score += 1;
-          reasons.push(`量${volRatio.toFixed(1)}x`);
-        }
-        if (dayPos >= 0.85) {
-          score -= 1;
-          reasons.push("过热");
-        }
-
-        return {
-          score,
-          hit: score >= CONFIG.EARLY_SCORE_MIN,
-          detail: reasons.length ? reasons.join(" · ") : "无加分项",
-        };
-      }
-
-      function applyEarlyBadge(card, early) {
-        card.classList.remove("is-early");
-        card.removeAttribute("title");
-        const old = card.querySelector(".early-badge");
-        if (old) old.remove();
-        if (!early || !early.hit) return;
-        card.classList.add("is-early");
-        const tip = `15m 启动分 ${early.score}/4 · ${early.detail}`;
-        const badge = document.createElement("span");
-        badge.className = "early-badge";
-        badge.textContent = `启动 ${early.score}`;
-        badge.title = tip;
-        badge.addEventListener("pointerdown", (event) => event.stopPropagation());
-        card.appendChild(badge);
-      }
-
       /** Drop forming candle; closed closes only (same as WeCom notify). */
       function closedCloses(candles) {
         if (!Array.isArray(candles) || candles.length < 2) return [];
@@ -2487,22 +2391,23 @@
         const status = card.querySelector("[data-kline-status]");
         if (!canvas || !status) return;
         try {
-          const tasks = [
-            fetchKlines(symbol, interval, signal),
-            fetchKlines(
-              symbol,
-              CONFIG.SIGNAL_INTERVAL,
-              signal,
-              CONFIG.SIGNAL_LIMIT,
-            ),
-          ];
+          const tasks = [fetchKlines(symbol, interval, signal)];
           if (pinItem) {
             tasks.push(
+              fetchKlines(
+                symbol,
+                CONFIG.SIGNAL_INTERVAL,
+                signal,
+                CONFIG.SIGNAL_LIMIT,
+              ),
               fetchKlines(symbol, "5m", signal, CONFIG.MOMENTUM_5M_LIMIT),
             );
           }
-          const [candles, signalCandles, candles5] = await Promise.all(tasks);
+          const results = await Promise.all(tasks);
+          const candles = results[0];
           if (pinItem) {
+            const signalCandles = results[1];
+            const candles5 = results[2];
             const mom = momentumFromCloses(
               closedCloses(candles5),
               closedCloses(signalCandles),
@@ -2540,7 +2445,6 @@
             applyPinMomentum(card, null);
           }
           drawKline(canvas, candles, pinItem ? pinItem.pinPrice : null);
-          applyEarlyBadge(card, scoreEarlyMomentum(signalCandles));
         } catch (error) {
           if (error.name === "AbortError") return;
           status.textContent = "加载失败";
@@ -2729,7 +2633,7 @@
         };
 
         const start = (event) => {
-          if (event.target.closest(".symbol-copy, .card-actions, .early-badge, .mom-badge, .price-up-last-mark")) {
+          if (event.target.closest(".symbol-copy, .card-actions, .mom-badge, .price-up-last-mark")) {
             return;
           }
           if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -3230,11 +3134,6 @@
           pairSet,
         );
         if (signal.aborted) return;
-        const earlyCount = document.querySelectorAll(".early-badge").length;
-        if (earlyCount > 0) {
-          const risingMeta = document.getElementById("risingMeta");
-          risingMeta.textContent = `${risingMeta.textContent} · 启动标记 ${earlyCount}`;
-        }
         updateNotifyFloatPanel();
       }
 
