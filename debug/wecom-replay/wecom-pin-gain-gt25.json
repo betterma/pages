@@ -1,0 +1,98 @@
+{
+  "source": "C:\\Users\\punk_\\Documents\\pages\\wecom-notify-archive-from-2026-09-24.json",
+  "method": "From each WeCom pin notify snapshot, parse 【pinChange%】 = (current-pinPrice)/pinPrice. Per symbol take max 【】 over 2026-09-24 04:00 → archive end. Threshold >= 25%.",
+  "caveats": [
+    "Only moments when the coin was in pin-window-up notify list (not continuous ticks).",
+    "If pin was renewed, pinPrice resets; max is best observed vs the then-current pinPrice.",
+    "Images ignored; position alerts not included."
+  ],
+  "thresholdPercent": 25,
+  "symbolUniverse": 70,
+  "winnerCount": 7,
+  "winners": [
+    {
+      "rank": 1,
+      "symbol": "QIUSDT",
+      "label": "QI",
+      "maxPinChangePercent": 64.18,
+      "peakTime": "2026/9/25 19:50:01",
+      "peakPinPrice": 0.003037,
+      "peakCurrent": 0.004986,
+      "samplesInArchive": 52,
+      "firstSeen": "2026/9/25 16:25:01",
+      "lastSeen": "2026/9/25 22:55:01"
+    },
+    {
+      "rank": 2,
+      "symbol": "NILUSDT",
+      "label": "NIL",
+      "maxPinChangePercent": 49.08,
+      "peakTime": "2026/9/24 13:30:01",
+      "peakPinPrice": 0.09806,
+      "peakCurrent": 0.14619,
+      "samplesInArchive": 248,
+      "firstSeen": "2026/9/24 04:00:01",
+      "lastSeen": "2026/9/25 16:05:01"
+    },
+    {
+      "rank": 3,
+      "symbol": "QNTUSDT",
+      "label": "QNT",
+      "maxPinChangePercent": 43.42,
+      "peakTime": "2026/9/25 15:20:01",
+      "peakPinPrice": 72.6,
+      "peakCurrent": 104.12,
+      "samplesInArchive": 293,
+      "firstSeen": "2026/9/24 05:35:01",
+      "lastSeen": "2026/9/25 16:00:01"
+    },
+    {
+      "rank": 4,
+      "symbol": "PHAUSDT",
+      "label": "PHA",
+      "maxPinChangePercent": 40,
+      "peakTime": "2026/9/25 22:35:01",
+      "peakPinPrice": 0.056,
+      "peakCurrent": 0.0784,
+      "samplesInArchive": 210,
+      "firstSeen": "2026/9/24 19:50:00",
+      "lastSeen": "2026/9/25 23:35:01"
+    },
+    {
+      "rank": 5,
+      "symbol": "QUICKUSDT",
+      "label": "QUICK",
+      "maxPinChangePercent": 39.61,
+      "peakTime": "2026/9/25 20:05:01",
+      "peakPinPrice": 0.01035,
+      "peakCurrent": 0.01445,
+      "samplesInArchive": 36,
+      "firstSeen": "2026/9/25 17:20:00",
+      "lastSeen": "2026/9/25 21:10:01"
+    },
+    {
+      "rank": 6,
+      "symbol": "NOMUSDT",
+      "label": "NOM",
+      "maxPinChangePercent": 38.78,
+      "peakTime": "2026/9/24 14:20:01",
+      "peakPinPrice": 0.001988,
+      "peakCurrent": 0.002759,
+      "samplesInArchive": 215,
+      "firstSeen": "2026/9/24 05:00:01",
+      "lastSeen": "2026/9/25 15:55:01"
+    },
+    {
+      "rank": 7,
+      "symbol": "BROCCOLI714USDT",
+      "label": "BROCCOLI714",
+      "maxPinChangePercent": 33.5,
+      "peakTime": "2026/9/25 00:25:01",
+      "peakPinPrice": 0.02573,
+      "peakCurrent": 0.03435,
+      "samplesInArchive": 112,
+      "firstSeen": "2026/9/24 18:20:01",
+      "lastSeen": "2026/9/25 16:05:01"
+    }
+  ]
+}

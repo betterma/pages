@@ -1,0 +1,557 @@
+{
+  "question": "Do ≥25% pin-gain winners show more 5m / @@@ flags before or in early stage of the run?",
+  "definitions": {
+    "is5m": "WeCom name color=info (5m three-up / streak5)",
+    "isAt": "current price line ends with @@@ (above last notify price)",
+    "earlyWindow": "samples from first notify appearance until pinChange first reaches +10% (bars still < 10%)",
+    "toPeakWindow": "winners: first appearance → peak 【盯幅】 time; others: all samples",
+    "density": "flag hits / samples in that window (0~1)",
+    "ratePerHour": "flag hits / elapsed hours in window"
+  },
+  "groupCompare": {
+    "early": {
+      "winners": {
+        "n": 7,
+        "avgSamples": 43.143,
+        "avgCount5m": 7.571,
+        "avgCountAt": 22.286,
+        "avgDens5m": 0.145,
+        "avgDensAt": 0.553,
+        "avgDensEither": 0.563,
+        "medDens5m": 0.168,
+        "medDensAt": 0.5,
+        "medDensEither": 0.5,
+        "avgRate5mPerHour": 0.971,
+        "avgRateAtPerHour": 4.73
+      },
+      "others": {
+        "n": 63,
+        "avgSamples": 103.54,
+        "avgCount5m": 11.032,
+        "avgCountAt": 46.381,
+        "avgDens5m": 0.135,
+        "avgDensAt": 0.459,
+        "avgDensEither": 0.491,
+        "medDens5m": 0.111,
+        "medDensAt": 0.469,
+        "medDensEither": 0.5,
+        "avgRate5mPerHour": 1.152,
+        "avgRateAtPerHour": 3.567
+      }
+    },
+    "toPeakOrAll": {
+      "winners": {
+        "n": 7,
+        "avgSamples": 115.571,
+        "avgCount5m": 19.857,
+        "avgCountAt": 63.857,
+        "avgDens5m": 0.15,
+        "avgDensAt": 0.552,
+        "avgDensEither": 0.563,
+        "medDens5m": 0.146,
+        "medDensAt": 0.565,
+        "medDensEither": 0.585,
+        "avgRate5mPerHour": 1.465,
+        "avgRateAtPerHour": 5.56
+      },
+      "others": {
+        "n": 63,
+        "avgSamples": 117.54,
+        "avgCount5m": 13.127,
+        "avgCountAt": 52.952,
+        "avgDens5m": 0.121,
+        "avgDensAt": 0.463,
+        "avgDensEither": 0.479,
+        "medDens5m": 0.111,
+        "medDensAt": 0.469,
+        "medDensEither": 0.486,
+        "avgRate5mPerHour": 0.933,
+        "avgRateAtPerHour": 3.467
+      }
+    },
+    "all": {
+      "winners": {
+        "n": 7,
+        "avgSamples": 166.571,
+        "avgCount5m": 26.857,
+        "avgCountAt": 88.143,
+        "avgDens5m": 0.153,
+        "avgDensAt": 0.519,
+        "avgDensEither": 0.533,
+        "medDens5m": 0.163,
+        "medDensAt": 0.538,
+        "medDensEither": 0.538,
+        "avgRate5mPerHour": 1.113,
+        "avgRateAtPerHour": 3.812
+      },
+      "others": {
+        "n": 63,
+        "avgSamples": 117.54,
+        "avgCount5m": 13.127,
+        "avgCountAt": 52.952,
+        "avgDens5m": 0.121,
+        "avgDensAt": 0.463,
+        "avgDensEither": 0.479,
+        "medDens5m": 0.111,
+        "medDensAt": 0.469,
+        "medDensEither": 0.486,
+        "avgRate5mPerHour": 0.933,
+        "avgRateAtPerHour": 3.467
+      }
+    }
+  },
+  "winnersDetail": [
+    {
+      "label": "QI",
+      "maxPinChange": 64.18,
+      "firstTime": "2026/9/25 16:25:01",
+      "peakTime": "2026/9/25 19:50:01",
+      "early": {
+        "samples": 4,
+        "hours": 0.33,
+        "count5m": 0,
+        "countAt": 2,
+        "countEither": 2,
+        "dens5m": 0,
+        "densAt": 0.5,
+        "densEither": 0.5,
+        "rate5mPerHour": 0,
+        "rateAtPerHour": 6
+      },
+      "toPeak": {
+        "samples": 41,
+        "hours": 3.42,
+        "count5m": 6,
+        "countAt": 24,
+        "countEither": 24,
+        "dens5m": 0.146,
+        "densAt": 0.585,
+        "densEither": 0.585,
+        "rate5mPerHour": 1.756,
+        "rateAtPerHour": 7.024
+      }
+    },
+    {
+      "label": "NIL",
+      "maxPinChange": 49.08,
+      "firstTime": "2026/9/24 04:00:01",
+      "peakTime": "2026/9/24 13:30:01",
+      "early": {
+        "samples": 8,
+        "hours": 2.25,
+        "count5m": 3,
+        "countAt": 7,
+        "countEither": 7,
+        "dens5m": 0.375,
+        "densAt": 0.875,
+        "densEither": 0.875,
+        "rate5mPerHour": 1.333,
+        "rateAtPerHour": 3.111
+      },
+      "toPeak": {
+        "samples": 86,
+        "hours": 9.5,
+        "count5m": 12,
+        "countAt": 52,
+        "countEither": 52,
+        "dens5m": 0.14,
+        "densAt": 0.605,
+        "densEither": 0.605,
+        "rate5mPerHour": 1.263,
+        "rateAtPerHour": 5.474
+      }
+    },
+    {
+      "label": "QNT",
+      "maxPinChange": 43.42,
+      "firstTime": "2026/9/24 05:35:01",
+      "peakTime": "2026/9/25 15:20:01",
+      "early": {
+        "samples": 109,
+        "hours": 16.5,
+        "count5m": 22,
+        "countAt": 61,
+        "countEither": 63,
+        "dens5m": 0.202,
+        "densAt": 0.56,
+        "densEither": 0.578,
+        "rate5mPerHour": 1.333,
+        "rateAtPerHour": 3.697
+      },
+      "toPeak": {
+        "samples": 285,
+        "hours": 33.75,
+        "count5m": 56,
+        "countAt": 161,
+        "countEither": 167,
+        "dens5m": 0.196,
+        "densAt": 0.565,
+        "densEither": 0.586,
+        "rate5mPerHour": 1.659,
+        "rateAtPerHour": 4.77
+      }
+    },
+    {
+      "label": "PHA",
+      "maxPinChange": 40,
+      "firstTime": "2026/9/24 19:50:00",
+      "peakTime": "2026/9/25 22:35:01",
+      "early": {
+        "samples": 101,
+        "hours": 18.33,
+        "count5m": 17,
+        "countAt": 46,
+        "countEither": 49,
+        "dens5m": 0.168,
+        "densAt": 0.455,
+        "densEither": 0.485,
+        "rate5mPerHour": 0.927,
+        "rateAtPerHour": 2.509
+      },
+      "toPeak": {
+        "samples": 198,
+        "hours": 26.75,
+        "count5m": 37,
+        "countAt": 103,
+        "countEither": 108,
+        "dens5m": 0.187,
+        "densAt": 0.52,
+        "densEither": 0.545,
+        "rate5mPerHour": 1.383,
+        "rateAtPerHour": 3.85
+      }
+    },
+    {
+      "label": "QUICK",
+      "maxPinChange": 39.61,
+      "firstTime": "2026/9/25 17:20:00",
+      "peakTime": "2026/9/25 20:05:01",
+      "early": {
+        "samples": 32,
+        "hours": 2.67,
+        "count5m": 2,
+        "countAt": 14,
+        "countEither": 14,
+        "dens5m": 0.063,
+        "densAt": 0.438,
+        "densEither": 0.438,
+        "rate5mPerHour": 0.75,
+        "rateAtPerHour": 5.25
+      },
+      "toPeak": {
+        "samples": 34,
+        "hours": 2.83,
+        "count5m": 3,
+        "countAt": 16,
+        "countEither": 16,
+        "dens5m": 0.088,
+        "densAt": 0.471,
+        "densEither": 0.471,
+        "rate5mPerHour": 1.059,
+        "rateAtPerHour": 5.647
+      }
+    },
+    {
+      "label": "NOM",
+      "maxPinChange": 38.78,
+      "firstTime": "2026/9/24 05:00:01",
+      "peakTime": "2026/9/24 14:20:01",
+      "early": {
+        "samples": 44,
+        "hours": 3.67,
+        "count5m": 9,
+        "countAt": 24,
+        "countEither": 25,
+        "dens5m": 0.205,
+        "densAt": 0.545,
+        "densEither": 0.568,
+        "rate5mPerHour": 2.455,
+        "rateAtPerHour": 6.545
+      },
+      "toPeak": {
+        "samples": 95,
+        "hours": 9.33,
+        "count5m": 17,
+        "countAt": 49,
+        "countEither": 51,
+        "dens5m": 0.179,
+        "densAt": 0.516,
+        "densEither": 0.537,
+        "rate5mPerHour": 1.821,
+        "rateAtPerHour": 5.25
+      }
+    },
+    {
+      "label": "BROCCOLI714",
+      "maxPinChange": 33.5,
+      "firstTime": "2026/9/24 18:20:01",
+      "peakTime": "2026/9/25 00:25:01",
+      "early": {
+        "samples": 4,
+        "hours": 0.33,
+        "count5m": 0,
+        "countAt": 2,
+        "countEither": 2,
+        "dens5m": 0,
+        "densAt": 0.5,
+        "densEither": 0.5,
+        "rate5mPerHour": 0,
+        "rateAtPerHour": 6
+      },
+      "toPeak": {
+        "samples": 70,
+        "hours": 6.08,
+        "count5m": 8,
+        "countAt": 42,
+        "countEither": 43,
+        "dens5m": 0.114,
+        "densAt": 0.6,
+        "densEither": 0.614,
+        "rate5mPerHour": 1.315,
+        "rateAtPerHour": 6.904
+      }
+    }
+  ],
+  "othersTopByEarlyEitherDensity": [
+    {
+      "label": "MET",
+      "maxPinChange": 21.64,
+      "early": {
+        "samples": 1,
+        "hours": 0.08,
+        "count5m": 1,
+        "countAt": 0,
+        "countEither": 1,
+        "dens5m": 1,
+        "densAt": 0,
+        "densEither": 1,
+        "rate5mPerHour": 12,
+        "rateAtPerHour": 0
+      }
+    },
+    {
+      "label": "VIRTUAL",
+      "maxPinChange": 2.58,
+      "early": {
+        "samples": 18,
+        "hours": 1.5,
+        "count5m": 4,
+        "countAt": 12,
+        "countEither": 12,
+        "dens5m": 0.222,
+        "densAt": 0.667,
+        "densEither": 0.667,
+        "rate5mPerHour": 2.666,
+        "rateAtPerHour": 7.999
+      }
+    },
+    {
+      "label": "MOVR",
+      "maxPinChange": 10.96,
+      "early": {
+        "samples": 33,
+        "hours": 3.67,
+        "count5m": 7,
+        "countAt": 21,
+        "countEither": 21,
+        "dens5m": 0.212,
+        "densAt": 0.636,
+        "densEither": 0.636,
+        "rate5mPerHour": 1.909,
+        "rateAtPerHour": 5.727
+      }
+    },
+    {
+      "label": "VELODROME",
+      "maxPinChange": 2.28,
+      "early": {
+        "samples": 40,
+        "hours": 4,
+        "count5m": 7,
+        "countAt": 24,
+        "countEither": 25,
+        "dens5m": 0.175,
+        "densAt": 0.6,
+        "densEither": 0.625,
+        "rate5mPerHour": 1.75,
+        "rateAtPerHour": 6
+      }
+    },
+    {
+      "label": "ENA",
+      "maxPinChange": 11.95,
+      "early": {
+        "samples": 47,
+        "hours": 4.5,
+        "count5m": 8,
+        "countAt": 28,
+        "countEither": 29,
+        "dens5m": 0.17,
+        "densAt": 0.596,
+        "densEither": 0.617,
+        "rate5mPerHour": 1.778,
+        "rateAtPerHour": 6.222
+      }
+    },
+    {
+      "label": "JTO",
+      "maxPinChange": 1.6,
+      "early": {
+        "samples": 26,
+        "hours": 4.83,
+        "count5m": 2,
+        "countAt": 15,
+        "countEither": 16,
+        "dens5m": 0.077,
+        "densAt": 0.577,
+        "densEither": 0.615,
+        "rate5mPerHour": 0.414,
+        "rateAtPerHour": 3.103
+      }
+    },
+    {
+      "label": "JOE",
+      "maxPinChange": 13.67,
+      "early": {
+        "samples": 25,
+        "hours": 3.75,
+        "count5m": 4,
+        "countAt": 15,
+        "countEither": 15,
+        "dens5m": 0.16,
+        "densAt": 0.6,
+        "densEither": 0.6,
+        "rate5mPerHour": 1.067,
+        "rateAtPerHour": 4
+      }
+    },
+    {
+      "label": "AERO",
+      "maxPinChange": 9.1,
+      "early": {
+        "samples": 76,
+        "hours": 7.08,
+        "count5m": 16,
+        "countAt": 43,
+        "countEither": 45,
+        "dens5m": 0.211,
+        "densAt": 0.566,
+        "densEither": 0.592,
+        "rate5mPerHour": 2.259,
+        "rateAtPerHour": 6.071
+      }
+    },
+    {
+      "label": "PIXEL",
+      "maxPinChange": 11.75,
+      "early": {
+        "samples": 12,
+        "hours": 1,
+        "count5m": 3,
+        "countAt": 5,
+        "countEither": 7,
+        "dens5m": 0.25,
+        "densAt": 0.417,
+        "densEither": 0.583,
+        "rate5mPerHour": 3,
+        "rateAtPerHour": 5
+      }
+    },
+    {
+      "label": "LINK",
+      "maxPinChange": 0.82,
+      "early": {
+        "samples": 12,
+        "hours": 1.58,
+        "count5m": 2,
+        "countAt": 5,
+        "countEither": 7,
+        "dens5m": 0.167,
+        "densAt": 0.417,
+        "densEither": 0.583,
+        "rate5mPerHour": 1.263,
+        "rateAtPerHour": 3.158
+      }
+    },
+    {
+      "label": "FF",
+      "maxPinChange": 6.9,
+      "early": {
+        "samples": 268,
+        "hours": 35.08,
+        "count5m": 50,
+        "countAt": 153,
+        "countEither": 153,
+        "dens5m": 0.187,
+        "densAt": 0.571,
+        "densEither": 0.571,
+        "rate5mPerHour": 1.425,
+        "rateAtPerHour": 4.361
+      }
+    },
+    {
+      "label": "JUP",
+      "maxPinChange": 4.28,
+      "early": {
+        "samples": 23,
+        "hours": 4.83,
+        "count5m": 2,
+        "countAt": 13,
+        "countEither": 13,
+        "dens5m": 0.087,
+        "densAt": 0.565,
+        "densEither": 0.565,
+        "rate5mPerHour": 0.414,
+        "rateAtPerHour": 2.69
+      }
+    },
+    {
+      "label": "FORM",
+      "maxPinChange": 7,
+      "early": {
+        "samples": 277,
+        "hours": 35.83,
+        "count5m": 47,
+        "countAt": 149,
+        "countEither": 152,
+        "dens5m": 0.17,
+        "densAt": 0.538,
+        "densEither": 0.549,
+        "rate5mPerHour": 1.312,
+        "rateAtPerHour": 4.158
+      }
+    },
+    {
+      "label": "PYTH",
+      "maxPinChange": 3.93,
+      "early": {
+        "samples": 31,
+        "hours": 4.08,
+        "count5m": 7,
+        "countAt": 17,
+        "countEither": 17,
+        "dens5m": 0.226,
+        "densAt": 0.548,
+        "densEither": 0.548,
+        "rate5mPerHour": 1.714,
+        "rateAtPerHour": 4.163
+      }
+    },
+    {
+      "label": "MORPHO",
+      "maxPinChange": 13.01,
+      "early": {
+        "samples": 97,
+        "hours": 17.33,
+        "count5m": 14,
+        "countAt": 51,
+        "countEither": 53,
+        "dens5m": 0.144,
+        "densAt": 0.526,
+        "densEither": 0.546,
+        "rate5mPerHour": 0.808,
+        "rateAtPerHour": 2.942
+      }
+    }
+  ]
+}
