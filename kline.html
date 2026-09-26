@@ -469,7 +469,7 @@
         display: none !important;
       }
       .notify-float.is-momentum {
-        width: min(420px, calc(100vw - 24px));
+        width: min(480px, calc(100vw - 24px));
       }
       .notify-float-head {
         display: flex;
@@ -613,6 +613,10 @@
       .mom-row .mom-hours {
         margin-top: 4px;
         font-size: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 6px 10px;
       }
       .mom-row .mom-hours .is-hot {
         color: #2f8f6e;
@@ -621,6 +625,52 @@
       .mom-row .mom-hours .is-cool {
         color: #8d7771;
         font-weight: 650;
+      }
+      .mom-row .mom-status {
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.02em;
+        color: #78817f;
+      }
+      .mom-row .mom-status.is-climb {
+        color: #2f8f6e;
+      }
+      .mom-row .mom-status.is-flat {
+        color: #78817f;
+      }
+      .mom-row .mom-status.is-fade {
+        color: #c47a3a;
+      }
+      .mom-row .mom-status.is-other {
+        color: #9aa3a0;
+        font-weight: 500;
+      }
+      .mom-row .mom-trail {
+        display: flex;
+        align-items: flex-end;
+        gap: 5px;
+        height: 22px;
+        margin-top: 6px;
+      }
+      .mom-row .mom-step {
+        flex: 1;
+        min-width: 0;
+        height: calc(var(--h, 0.2) * 100%);
+        border-radius: 2px 2px 0 0;
+        background: rgba(90, 106, 104, 0.28);
+        transition: height 0.25s ease;
+      }
+      .mom-row .mom-step.is-last {
+        background: rgba(47, 143, 110, 0.55);
+      }
+      .mom-row .mom-step.is-neg {
+        background: rgba(141, 119, 113, 0.4);
+      }
+      .mom-row .mom-step.is-last.is-neg {
+        background: rgba(141, 119, 113, 0.55);
+      }
+      .mom-row.is-climb .mom-step.is-last {
+        background: rgba(47, 143, 110, 0.72);
       }
       .float-tabs {
         position: fixed;
@@ -990,7 +1040,7 @@
           type="button"
           class="notify-float-refresh"
           id="momentumFloatRefresh"
-          title="按当前盯一下重算近1h/2h"
+          title="按当前盯一下重算近1h/2h与2h轨迹"
           aria-label="刷新近2h/1h"
         >
           刷新
@@ -1026,7 +1076,7 @@
         class="notify-float-tab"
         id="momentumFloatTab"
         hidden
-        title="打开近2h/1h 动量快照"
+        title="打开近2h/1h（爬升优先 · 含2h轨迹）"
       >
         近2h/1h
       </button>
@@ -1061,6 +1111,22 @@
         NOTIFY_POLL_MS: 60 * 1000,
         // Skip focus auto-refresh if data is still fresher than this.
         DATA_FOCUS_REFRESH_MIN_MS: 45 * 1000,
+        // 近2h 五段轨迹（15m 回算）+ 爬升判定；可按真实案例调。
+        MOMENTUM_TREND: {
+          // 15m bars to fetch (need ≥14 closed for 60m of 2h history).
+          klineLimit: 24,
+          trailPoints: 5,
+          // 2h window in 15m bars.
+          bars2h: 8,
+          // Climb needs Δ = v4 − v0 ≥ this (percentage points).
+          // Flat (横盘) uses the same bar: v4 > 0 && abs(Δ) < minDeltaPts.
+          minDeltaPts: 1.5,
+          // Minimum step between adjacent trail points to count as "up".
+          minStepPts: 0.3,
+          // Hard veto: peak(v0…v3) − v4 ≥ this → not climb.
+          // Note: +5→+8→+13→+11→+12 has peakDrop=1pt → does NOT veto at 2.
+          dropFromPeakPts: 2,
+        },
       };
       const DURATION_MS = {
         "15m": 15 * 60 * 1000,
@@ -1839,25 +1905,198 @@
           .filter((value) => Number.isFinite(value));
       }
 
-      /** % change vs closed 15m close from `hours` ago; now prefers live ticker. */
-      function changeOverHours(candles, hours, currentPrice) {
-        const closes = closedCloses(candles);
-        const bars = Math.max(1, Math.round(Number(hours) * 4));
-        if (closes.length < bars) return null;
-        const past = closes[closes.length - bars];
-        const now = Number.isFinite(currentPrice)
-          ? currentPrice
-          : closes[closes.length - 1];
+      /**
+       * % change over `bars` 15m steps ending at closes[endIndex].
+       * past index matches changeOverHours: closes[(endIndex+1) - bars].
+       * livePrice only for the latest point (v4); historical ends must omit it
+       * so past trail points are never polluted by the current ticker.
+       */
+      function changeAtClosedEnd(closes, bars, endIndex, livePrice) {
+        if (!Array.isArray(closes) || bars < 1) return null;
+        if (endIndex < 0 || endIndex >= closes.length) return null;
+        const pastIndex = endIndex + 1 - bars;
+        if (pastIndex < 0 || pastIndex > endIndex) return null;
+        const past = closes[pastIndex];
+        const now = Number.isFinite(livePrice) ? livePrice : closes[endIndex];
         if (!Number.isFinite(past) || past === 0 || !Number.isFinite(now)) {
           return null;
         }
         return ((now - past) / past) * 100;
       }
 
+      /** % change vs closed 15m close from `hours` ago; now prefers live ticker. */
+      function changeOverHours(candles, hours, currentPrice) {
+        const closes = closedCloses(candles);
+        const bars = Math.max(1, Math.round(Number(hours) * 4));
+        if (!closes.length) return null;
+        return changeAtClosedEnd(
+          closes,
+          bars,
+          closes.length - 1,
+          currentPrice,
+        );
+      }
+
+      /**
+       * Five 2h-momentum samples: 60m ago → now (15m steps).
+       * v0…v3 = closed-vs-closed; v4 = ticker (or last close) vs close 8 bars back.
+       */
+      function build2hTrail(candles, currentPrice) {
+        const cfg = CONFIG.MOMENTUM_TREND;
+        const closes = closedCloses(candles);
+        const points = cfg.trailPoints;
+        const bars = cfg.bars2h;
+        const need = bars + (points - 2);
+        if (closes.length < Math.max(need, bars)) return null;
+        const last = closes.length - 1;
+        const trail = [];
+        for (let i = 0; i < points; i += 1) {
+          const endIndex = last - (points - 1 - i);
+          const live = i === points - 1 ? currentPrice : undefined;
+          trail.push(changeAtClosedEnd(closes, bars, endIndex, live));
+        }
+        if (trail.some((value) => !Number.isFinite(value))) return null;
+        return trail;
+      }
+
+      const MOMENTUM_STATUS_RANK = {
+        climb: 0,
+        flat: 1,
+        fade: 2,
+        other: 3,
+      };
+
+      /**
+       * V1: climb is the only precise label; flat/fade/other stay loose.
+       * 1h is carry only (not trail). Peak veto is hard.
+       *
+       * Incomplete trail (null / wrong length / any non-finite) → status "other"
+       * with delta null; sort rank is lowest (见 MOMENTUM_STATUS_RANK).
+       *
+       * Acceptance shapes (change1h ≥ 0):
+       *   A +4→+6→+8→+10→+12 → 爬升
+       *   B +5→+8→+13→+11→+9 → 衰减 (peakDrop≥2)
+       *   C +5→+8→+13→+11→+12 → 边界：peakDrop=1 < 2，V1 仍可能为爬升
+       *   D +10→+11→+11→+12→+11 → 横盘 (|Δ|<minDeltaPts)
+       *   E +5→+3→+6→+4→+5 → 横盘或其它（|Δ|小则横盘）
+       */
+      function classifyMomentumTrend(trail, change1h) {
+        const cfg = CONFIG.MOMENTUM_TREND;
+        const empty = {
+          status: "other",
+          label: "其它",
+          delta: null,
+          recentUpSteps: 0,
+          peakDrop: null,
+          incomplete: true,
+        };
+        if (!Array.isArray(trail) || trail.length !== cfg.trailPoints) {
+          return empty;
+        }
+        if (trail.some((value) => !Number.isFinite(value))) return empty;
+
+        const v0 = trail[0];
+        const v2 = trail[2];
+        const v3 = trail[3];
+        const v4 = trail[4];
+        const delta = v4 - v0;
+        const minStep = cfg.minStepPts;
+        let recentUpSteps = 0;
+        if (v3 - v2 >= minStep) recentUpSteps += 1;
+        if (v4 - v3 >= minStep) recentUpSteps += 1;
+
+        const peakBefore = Math.max(trail[0], trail[1], trail[2], trail[3]);
+        const peakDrop = peakBefore - v4;
+        const peakVeto = peakDrop >= cfg.dropFromPeakPts;
+        const h1Ok = !Number.isFinite(change1h) || change1h >= 0;
+
+        if (
+          v4 > 0 &&
+          h1Ok &&
+          delta >= cfg.minDeltaPts &&
+          recentUpSteps >= 1 &&
+          !peakVeto
+        ) {
+          return {
+            status: "climb",
+            label: "爬升",
+            delta,
+            recentUpSteps,
+            peakDrop,
+            incomplete: false,
+          };
+        }
+
+        // Loose non-climb buckets — tune later from live cases.
+        if (
+          peakVeto ||
+          delta <= -cfg.minDeltaPts ||
+          (v4 < v3 - minStep && v3 < v2 - minStep)
+        ) {
+          return {
+            status: "fade",
+            label: "衰减",
+            delta,
+            recentUpSteps,
+            peakDrop,
+            incomplete: false,
+          };
+        }
+        // 横盘: 近2h 仍正，且 abs(Δ) < minDeltaPts（与爬升门槛共用配置）。
+        if (v4 > 0 && Math.abs(delta) < cfg.minDeltaPts) {
+          return {
+            status: "flat",
+            label: "横盘",
+            delta,
+            recentUpSteps,
+            peakDrop,
+            incomplete: false,
+          };
+        }
+        return {
+          status: "other",
+          label: "其它",
+          delta,
+          recentUpSteps,
+          peakDrop,
+          incomplete: false,
+        };
+      }
+
+      function formatTrailTip(trail, trend) {
+        if (!Array.isArray(trail) || !trail.length) return "";
+        const parts = trail.map((value) => formatPercent(value)).join(" → ");
+        const deltaText = Number.isFinite(trend && trend.delta)
+          ? ` · Δ ${trend.delta >= 0 ? "+" : ""}${trend.delta.toFixed(1)}pt`
+          : "";
+        return `${parts}${deltaText}`;
+      }
+
+      function renderTrailStepsHtml(trail, trend) {
+        if (!Array.isArray(trail) || !trail.length) return "";
+        const maxAbs = Math.max(...trail.map((value) => Math.abs(value)), 0.01);
+        const steps = trail
+          .map((value, index) => {
+            const h = Math.max(0.14, Math.min(1, Math.abs(value) / maxAbs));
+            const classes = [
+              "mom-step",
+              index === trail.length - 1 ? "is-last" : "",
+              value < 0 ? "is-neg" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            return `<span class="${classes}" style="--h:${h.toFixed(3)}"></span>`;
+          })
+          .join("");
+        const tip = escapeHtml(formatTrailTip(trail, trend));
+        return `<div class="mom-trail" title="${tip}">${steps}</div>`;
+      }
+
       async function loadPinHourScores(symbols, signal) {
         const scores = new Map();
         const list = [...new Set((symbols || []).filter(Boolean))];
         const batchSize = 4;
+        const limit = CONFIG.MOMENTUM_TREND.klineLimit;
         for (let index = 0; index < list.length; index += batchSize) {
           if (signal && signal.aborted) return scores;
           const batch = list.slice(index, index + batchSize);
@@ -1868,16 +2107,27 @@
                   symbol,
                   "15m",
                   signal,
-                  20,
+                  limit,
                 );
                 const price = marketMap[symbol]?.price;
+                const change1h = changeOverHours(candles, 1, price);
+                const change2h = changeOverHours(candles, 2, price);
+                const trail2h = build2hTrail(candles, price);
+                const trend = classifyMomentumTrend(trail2h, change1h);
                 scores.set(symbol, {
-                  change1h: changeOverHours(candles, 1, price),
-                  change2h: changeOverHours(candles, 2, price),
+                  change1h,
+                  change2h,
+                  trail2h,
+                  trend,
                 });
               } catch (error) {
                 if (error && error.name === "AbortError") throw error;
-                scores.set(symbol, { change1h: null, change2h: null });
+                scores.set(symbol, {
+                  change1h: null,
+                  change2h: null,
+                  trail2h: null,
+                  trend: classifyMomentumTrend(null, null),
+                });
               }
             }),
           );
@@ -1918,6 +2168,7 @@
           .map((symbol) => {
             const score = scores.get(symbol) || {};
             const pinItem = pinItemBySymbol(symbol);
+            const trend = score.trend || classifyMomentumTrend(null, null);
             return {
               symbol,
               label: String(symbol).replace(/USDT$/i, ""),
@@ -1927,6 +2178,8 @@
               current: marketMap[symbol]?.price ?? null,
               change1h: score.change1h ?? null,
               change2h: score.change2h ?? null,
+              trail2h: score.trail2h ?? null,
+              trend,
             };
           })
           .filter(
@@ -1934,6 +2187,25 @@
               Number.isFinite(row.change2h) || Number.isFinite(row.change1h),
           )
           .sort((a, b) => {
+            // Incomplete trail stays in "other" (lowest rank); never climb.
+            const ra =
+              MOMENTUM_STATUS_RANK[a.trend && a.trend.status] ??
+              MOMENTUM_STATUS_RANK.other;
+            const rb =
+              MOMENTUM_STATUS_RANK[b.trend && b.trend.status] ??
+              MOMENTUM_STATUS_RANK.other;
+            if (ra !== rb) return ra - rb;
+            // Within same status, incomplete (no Δ) sorts after complete trails.
+            const aInc = !!(a.trend && a.trend.incomplete);
+            const bInc = !!(b.trend && b.trend.incomplete);
+            if (aInc !== bInc) return aInc ? 1 : -1;
+            const da = Number.isFinite(a.trend && a.trend.delta)
+              ? a.trend.delta
+              : -Infinity;
+            const db = Number.isFinite(b.trend && b.trend.delta)
+              ? b.trend.delta
+              : -Infinity;
+            if (db !== da) return db - da;
             const va = Number.isFinite(a.change2h) ? a.change2h : -Infinity;
             const vb = Number.isFinite(b.change2h) ? b.change2h : -Infinity;
             if (vb !== va) return vb - va;
@@ -1964,13 +2236,18 @@
             const c1 = formatPercent(row.change1h);
             const cls2 = hourClass(row.change2h);
             const cls1 = hourClass(row.change1h);
+            const trend = row.trend || classifyMomentumTrend(null, null);
+            const statusClass = `is-${trend.status || "other"}`;
+            const tip = escapeHtml(formatTrailTip(row.trail2h, trend));
+            const climbClass = trend.status === "climb" ? " is-climb" : "";
             return [
-              `<div class="mom-row">`,
+              `<div class="mom-row${climbClass}" title="${tip}">`,
               `<div><a href="#card-pin-${row.symbol}" class="notify-coin mom-name" data-jump="${row.symbol}">${escapeHtml(row.label)}</a> ${escapeHtml(day)}</div>`,
               `<div>【${escapeHtml(pinPct)}】</div>`,
               `<div>${escapeHtml(formatPinPrice(row.pinPrice))}</div>`,
               `<div>${escapeHtml(formatPinPrice(row.current))}</div>`,
-              `<div class="mom-hours"><span class="${cls2}">近2h ${escapeHtml(c2)}</span> · <span class="${cls1}">近1h ${escapeHtml(c1)}</span></div>`,
+              `<div class="mom-hours"><span class="${cls2}">近2h ${escapeHtml(c2)}</span> · <span class="${cls1}">近1h ${escapeHtml(c1)}</span><span class="mom-status ${statusClass}">${escapeHtml(trend.label || "其它")}</span></div>`,
+              renderTrailStepsHtml(row.trail2h, trend),
               `</div>`,
             ].join("");
           })
