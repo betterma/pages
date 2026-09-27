@@ -1,0 +1,822 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>记一笔追踪</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f4f5f3;
+        color: #28323a;
+        font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+      .page {
+        width: min(1400px, calc(100% - 20px));
+        margin: 12px auto 24px;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+      .topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      h1 {
+        margin: 0;
+        font-size: 20px;
+      }
+      h2.section-title {
+        margin: 16px 0 6px;
+        font-size: 15px;
+      }
+      .nav-link {
+        color: #5a6a68;
+        font-size: 13px;
+        text-decoration: none;
+      }
+      .nav-link:hover {
+        text-decoration: underline;
+      }
+      .friend-links {
+        position: relative;
+        font-size: 13px;
+        color: #5a6a68;
+      }
+      .friend-links > summary {
+        list-style: none;
+        cursor: pointer;
+        user-select: none;
+        padding: 4px 2px;
+      }
+      .friend-links > summary::-webkit-details-marker {
+        display: none;
+      }
+      .friend-links > summary::after {
+        content: " ▾";
+        font-size: 11px;
+        opacity: 0.7;
+      }
+      .friend-links[open] > summary::after {
+        content: " ▴";
+      }
+      .friend-links-panel {
+        position: absolute;
+        left: 0;
+        top: calc(100% + 4px);
+        z-index: 30;
+        min-width: 140px;
+        padding: 6px;
+        border: 1px solid rgba(90, 106, 104, 0.22);
+        border-radius: 10px;
+        background: rgba(251, 252, 250, 0.96);
+        box-shadow: 0 8px 20px rgba(40, 50, 58, 0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .friend-links-panel a {
+        color: #28323a;
+        text-decoration: none;
+        padding: 8px 10px;
+        border-radius: 8px;
+        font-size: 13px;
+      }
+      .friend-links-panel a:hover {
+        background: rgba(90, 106, 104, 0.1);
+      }
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      button {
+        border: 1px solid #c9d0d0;
+        background: #fbfcfa;
+        color: #28323a;
+        padding: 8px 13px;
+        border-radius: 8px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #eef1ee;
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: wait;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        font-size: 13px;
+        color: #5a6a68;
+        flex-wrap: wrap;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #9aa3a0;
+        flex-shrink: 0;
+      }
+      .dot.is-busy {
+        background: #c47a3a;
+      }
+      .dot.is-ok {
+        background: #2f8f6e;
+      }
+      .dot.is-err {
+        background: #b45a4a;
+      }
+      .meta {
+        font-size: 12px;
+        color: #78817f;
+        margin-bottom: 10px;
+        line-height: 1.5;
+      }
+      .kline-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 10px;
+      }
+      .kline-card {
+        position: relative;
+        border: 1px solid rgba(90, 106, 104, 0.18);
+        border-radius: 10px;
+        background: rgba(251, 252, 250, 0.85);
+        padding: 8px 9px 10px;
+        user-select: none;
+        -webkit-user-select: none;
+        touch-action: manipulation;
+      }
+      .kline-card.is-jump-target {
+        outline: 2px solid rgba(47, 143, 110, 0.55);
+        box-shadow: 0 0 0 4px rgba(47, 143, 110, 0.12);
+      }
+      .kline-card-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+        font-size: 13px;
+      }
+      .symbol-copy {
+        border: none;
+        background: transparent;
+        padding: 0;
+        font: inherit;
+        font-weight: 700;
+        color: #28323a;
+        cursor: pointer;
+      }
+      .note-mark {
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        color: #5a6a68;
+        font-size: 11px;
+        line-height: 1;
+        pointer-events: none;
+      }
+      .kline-card canvas {
+        display: block;
+        width: 100%;
+        height: 140px;
+      }
+      .empty {
+        padding: 28px 16px;
+        text-align: center;
+        color: #9aa3a0;
+        font-size: 13px;
+        grid-column: 1 / -1;
+      }
+      .card-actions {
+        position: absolute;
+        inset: 0;
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 6px;
+        padding: 12px;
+        border-radius: 10px;
+        background: rgba(244, 245, 243, 0.94);
+        backdrop-filter: blur(6px);
+      }
+      .card-actions button {
+        width: 100%;
+        padding: 10px 12px;
+      }
+      .card-actions button.is-danger {
+        color: #b45a4a;
+        border-color: rgba(180, 90, 74, 0.35);
+      }
+      .card-actions button.is-muted {
+        color: #78817f;
+      }
+      .card-actions.is-busy button {
+        cursor: wait;
+      }
+      .toast {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        background: rgba(40, 50, 58, 0.92);
+        color: #f4f7f5;
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        z-index: 50;
+        pointer-events: none;
+      }
+      .pct-up {
+        color: #2f8f6e;
+        font-weight: 650;
+      }
+      .pct-down {
+        color: #8d7771;
+        font-weight: 650;
+      }
+      .note-status {
+        font-size: 11px;
+        color: #78817f;
+      }
+      .note-status.is-climb {
+        color: #2f8f6e;
+        font-weight: 650;
+      }
+      @media (max-width: 768px) {
+        .kline-grid {
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+        }
+        .kline-card canvas {
+          height: 120px;
+        }
+        h1 {
+          font-size: 17px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h1>记一笔追踪</h1>
+          <a class="nav-link" href="./kline.html">币安观察</a>
+          <details class="friend-links">
+            <summary>友情链接</summary>
+            <div class="friend-links-panel">
+              <a href="./kline.html">币安观察</a>
+              <a href="./range100.html">Range100 潜伏</a>
+              <a href="./okx/kline.html">OKX 自选</a>
+            </div>
+          </details>
+        </div>
+        <div class="topbar-actions">
+          <select id="rangeSelect" class="range-select" title="K 线范围">
+            <option value="3d-4h">近3天 · 4h</option>
+            <option value="10d-4h">近10天 · 4h</option>
+            <option value="10d-1d">近10天 · 1天</option>
+          </select>
+          <button id="refreshBtn" type="button">刷新</button>
+        </div>
+      </div>
+      <div class="status">
+        <span id="statusDot" class="dot"></span>
+        <span id="statusText">等待启动...</span>
+      </div>
+      <div id="meta" class="meta">
+        数据来自记一笔 · 长按卡片可去掉该币 · 无近2h/1h浮窗
+      </div>
+      <h2 class="section-title">记一笔 K 线</h2>
+      <div id="noteGrid" class="kline-grid">
+        <div class="empty">加载中…</div>
+      </div>
+    </div>
+
+    <script src="./watch-favorites.js"></script>
+    <script>
+      "use strict";
+
+      const CONFIG = {
+        GITHUB_REPO: "betterma/pages",
+        MOM_NOTES_PATH: "watch-mom-notes.json",
+        PINS_PATH: "watch-pins.json",
+        LONG_PRESS_MS: 550,
+        KLINE_MAX_LIMIT: 1000,
+      };
+      const DURATION_MS = {
+        "4h": 4 * 60 * 60 * 1000,
+        "1d": 24 * 60 * 60 * 1000,
+      };
+      const KLINE_VIEWS = {
+        "3d-4h": { days: 3, chartInterval: "4h", label: "近3天 · 4h" },
+        "10d-4h": { days: 10, chartInterval: "4h", label: "近10天 · 4h" },
+        "10d-1d": { days: 10, chartInterval: "1d", label: "近10天 · 1天" },
+      };
+
+      const marketMap = {};
+      let momNoteItems = [];
+      let pinItems = [];
+      let loading = false;
+      let noteSaving = false;
+      let klineAbort = null;
+      let klineViewKey = "3d-4h";
+
+      function currentView() {
+        return KLINE_VIEWS[klineViewKey] || KLINE_VIEWS["3d-4h"];
+      }
+
+      function chartInterval() {
+        return currentView().chartInterval;
+      }
+
+      function klineLimit(interval) {
+        const days = currentView().days;
+        const barMs = DURATION_MS[interval] || DURATION_MS["4h"];
+        return Math.min(
+          CONFIG.KLINE_MAX_LIMIT,
+          Math.max(20, Math.ceil((days * 24 * 60 * 60 * 1000) / barMs) + 2),
+        );
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function formatPercent(value) {
+        return Number.isFinite(value)
+          ? `${value > 0 ? "+" : ""}${value.toFixed(2)}%`
+          : "--";
+      }
+
+      function formatPinPrice(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return "--";
+        if (n >= 1000) return n.toFixed(2);
+        if (n >= 1) return n.toFixed(4);
+        return n.toPrecision(4);
+      }
+
+      function formatNoteTime(at) {
+        const date = new Date(Number(at) || Date.now());
+        const mm = String(date.getMonth() + 1).padStart(2, "0");
+        const dd = String(date.getDate()).padStart(2, "0");
+        const hh = String(date.getHours()).padStart(2, "0");
+        const mi = String(date.getMinutes()).padStart(2, "0");
+        return `${mm}-${dd} ${hh}:${mi}`;
+      }
+
+      function showToast(message) {
+        const existing = document.querySelector(".toast");
+        if (existing) existing.remove();
+        const toast = document.createElement("div");
+        toast.className = "toast";
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 1600);
+      }
+
+      function setStatus(kind, text) {
+        const dot = document.getElementById("statusDot");
+        const el = document.getElementById("statusText");
+        if (dot) dot.className = "dot" + (kind ? ` is-${kind}` : "");
+        if (el) el.textContent = text;
+      }
+
+      function pinItemBySymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        return pinItems.find((item) => item.symbol === key) || null;
+      }
+
+      /** Unique symbols from notes, newest note first. */
+      function noteSymbolsOrdered() {
+        const seen = new Set();
+        const list = [];
+        for (const note of momNoteItems || []) {
+          const symbol = String(note.symbol || "")
+            .trim()
+            .toUpperCase();
+          if (!symbol || seen.has(symbol)) continue;
+          seen.add(symbol);
+          list.push({ symbol, note });
+        }
+        return list;
+      }
+
+      async function loadSideData() {
+        const [noteState, pinState] = await Promise.all([
+          WatchFavorites.loadMomNotesRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.MOM_NOTES_PATH,
+          }),
+          WatchFavorites.loadPinsRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.PINS_PATH,
+          }),
+        ]);
+        momNoteItems = noteState.notes || [];
+        pinItems = pinState.pins || [];
+      }
+
+      async function loadBinanceTicker() {
+        const endpoints = [
+          "https://data-api.binance.vision/api/v3/ticker/24hr",
+          "https://api.binance.com/api/v3/ticker/24hr",
+        ];
+        let lastError = null;
+        for (const url of endpoints) {
+          try {
+            const response = await fetch(url, { cache: "no-store" });
+            if (!response.ok) {
+              lastError = new Error(`HTTP ${response.status}`);
+              continue;
+            }
+            const data = await response.json();
+            Object.keys(marketMap).forEach((key) => delete marketMap[key]);
+            data.forEach((ticker) => {
+              if (!ticker.symbol.endsWith("USDT")) return;
+              const price = Number(ticker.lastPrice);
+              const change = Number(ticker.priceChangePercent);
+              if (Number.isFinite(price) && Number.isFinite(change)) {
+                marketMap[ticker.symbol] = { price, change24h: change };
+              }
+            });
+            return;
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("行情请求失败");
+      }
+
+      async function fetchKlines(symbol, interval, signal, limitOverride) {
+        const limit = limitOverride || klineLimit(interval);
+        const query = `symbol=${symbol}&interval=${interval}&limit=${limit}`;
+        const endpoints = [
+          `https://data-api.binance.vision/api/v3/klines?${query}`,
+          `https://api.binance.com/api/v3/klines?${query}`,
+        ];
+        let lastError = null;
+        for (const url of endpoints) {
+          try {
+            const response = await fetch(url, { signal, cache: "no-store" });
+            if (!response.ok) {
+              lastError = new Error(`HTTP ${response.status}`);
+              continue;
+            }
+            const rows = await response.json();
+            if (!Array.isArray(rows) || !rows.length) {
+              lastError = new Error("K线为空");
+              continue;
+            }
+            return rows.map((row) => ({
+              time: Number(row[0]),
+              open: Number(row[1]),
+              high: Number(row[2]),
+              low: Number(row[3]),
+              close: Number(row[4]),
+              volume: Number(row[5]),
+            }));
+          } catch (error) {
+            if (error && error.name === "AbortError") throw error;
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("K线请求失败");
+      }
+
+      function drawKline(canvas, candles, pinPrice) {
+        const rect = canvas.getBoundingClientRect();
+        const width = Math.max(1, Math.floor(rect.width));
+        const height = Math.max(1, Math.floor(rect.height));
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+        if (!candles.length) return;
+
+        const pad = { top: 6, right: 4, bottom: 6, left: 4 };
+        const chartW = width - pad.left - pad.right;
+        const chartH = height - pad.top - pad.bottom;
+        let max = Math.max(...candles.map((c) => c.high));
+        let min = Math.min(...candles.map((c) => c.low));
+        const pin = Number(pinPrice);
+        const hasPin = Number.isFinite(pin) && pin > 0;
+        if (hasPin) {
+          max = Math.max(max, pin);
+          min = Math.min(min, pin);
+        }
+        const range = max - min || max * 0.01 || 1;
+        const slot = chartW / candles.length;
+        const bodyW = Math.max(1, slot * 0.62);
+        const yOf = (price) => pad.top + ((max - price) / range) * chartH;
+
+        if (hasPin) {
+          const y = yOf(pin);
+          ctx.strokeStyle = "#5a6a68";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(pad.left, y);
+          ctx.lineTo(pad.left + chartW, y);
+          ctx.stroke();
+        }
+
+        candles.forEach((candle, index) => {
+          const x = pad.left + slot * index + slot / 2;
+          const up = candle.close >= candle.open;
+          ctx.strokeStyle = up ? "#718b88" : "#8d7771";
+          ctx.fillStyle = up ? "#718b88" : "#8d7771";
+          ctx.beginPath();
+          ctx.moveTo(x, yOf(candle.high));
+          ctx.lineTo(x, yOf(candle.low));
+          ctx.stroke();
+          const y1 = yOf(candle.open);
+          const y2 = yOf(candle.close);
+          ctx.fillRect(
+            x - bodyW / 2,
+            Math.min(y1, y2),
+            bodyW,
+            Math.max(1, Math.abs(y2 - y1)),
+          );
+        });
+      }
+
+      function closeCardActions(force) {
+        document.querySelectorAll(".card-actions").forEach((el) => {
+          if (!force && el.classList.contains("is-busy")) return;
+          el.remove();
+        });
+      }
+
+      function openCardActions(card) {
+        closeCardActions(true);
+        const symbol = card.dataset.symbol;
+        if (!symbol) return;
+        const sheet = document.createElement("div");
+        sheet.className = "card-actions";
+        sheet.innerHTML = [
+          `<button type="button" data-action="remove-note" class="is-danger">去掉记一笔</button>`,
+          `<button type="button" data-action="close" class="is-muted">关闭</button>`,
+        ].join("");
+        sheet.addEventListener("pointerdown", (event) => event.stopPropagation());
+        sheet.addEventListener("click", async (event) => {
+          const btn = event.target.closest("button[data-action]");
+          if (!btn || sheet.classList.contains("is-busy")) return;
+          event.stopPropagation();
+          const action = btn.dataset.action;
+          if (action === "close") {
+            closeCardActions(true);
+            return;
+          }
+          if (action === "remove-note") {
+            sheet.classList.add("is-busy");
+            btn.disabled = true;
+            btn.textContent = "处理中";
+            try {
+              await removeNotesForSymbol(symbol);
+              closeCardActions(true);
+            } catch (error) {
+              sheet.classList.remove("is-busy");
+              btn.disabled = false;
+              btn.textContent = "去掉记一笔";
+            }
+          }
+        });
+        card.appendChild(sheet);
+      }
+
+      function bindLongPress(card) {
+        let timer = null;
+        let armed = false;
+        const clear = () => {
+          if (timer) {
+            window.clearTimeout(timer);
+            timer = null;
+          }
+        };
+        card.addEventListener("pointerdown", (event) => {
+          if (event.button != null && event.button !== 0) return;
+          if (event.target.closest(".symbol-copy, .card-actions")) return;
+          armed = true;
+          clear();
+          timer = window.setTimeout(() => {
+            timer = null;
+            if (!armed) return;
+            openCardActions(card);
+          }, CONFIG.LONG_PRESS_MS);
+        });
+        ["pointerup", "pointercancel", "pointerleave"].forEach((type) => {
+          card.addEventListener(type, () => {
+            armed = false;
+            clear();
+          });
+        });
+        card.addEventListener("contextmenu", (event) => event.preventDefault());
+      }
+
+      async function removeNotesForSymbol(symbol) {
+        if (!symbol || noteSaving) return;
+        noteSaving = true;
+        const key = String(symbol).trim().toUpperCase();
+        const label = key.replace(/USDT$/i, "");
+        try {
+          setStatus("busy", `正在去掉 ${label} 的记一笔...`);
+          const result = await WatchFavorites.patchMomNotes({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.MOM_NOTES_PATH,
+            message: `Remove momentum notes ${key}`,
+            mutate: (list) =>
+              list.filter(
+                (note) =>
+                  String(note.symbol || "")
+                    .trim()
+                    .toUpperCase() !== key,
+              ),
+          });
+          momNoteItems = result.notes || [];
+          showToast(`已去掉 ${label}`);
+          await renderNotes();
+          setStatus("ok", `已去掉 ${label}`);
+        } catch (error) {
+          console.warn(error);
+          showToast(error.message || "去掉失败");
+          setStatus("err", error.message || "去掉失败");
+          throw error;
+        } finally {
+          noteSaving = false;
+        }
+      }
+
+      async function paintCard(card, symbol, note, signal) {
+        const canvas = card.querySelector("canvas");
+        const status = card.querySelector("[data-kline-status]");
+        if (!canvas || !status) return;
+        const pinItem = pinItemBySymbol(symbol);
+        try {
+          const candles = await fetchKlines(
+            symbol,
+            chartInterval(),
+            signal,
+          );
+          const change24h = marketMap[symbol]?.change24h;
+          const cls =
+            change24h > 0 ? "pct-up" : change24h < 0 ? "pct-down" : "";
+          const st = note && note.statusLabel ? note.statusLabel : "";
+          const stClass =
+            note && note.status === "climb" ? "is-climb" : "";
+          const notedAt = note && note.at ? formatNoteTime(note.at) : "";
+          status.innerHTML = [
+            `<span class="${cls}">${escapeHtml(formatPercent(change24h))}</span>`,
+            st
+              ? `<span class="note-status ${stClass}"> · ${escapeHtml(st)}</span>`
+              : "",
+            notedAt
+              ? `<span class="note-status"> · ${escapeHtml(notedAt)}</span>`
+              : "",
+            pinItem
+              ? `<span class="note-status"> · 盯 ${escapeHtml(formatPinPrice(pinItem.pinPrice))}</span>`
+              : "",
+          ].join("");
+          drawKline(canvas, candles, pinItem ? pinItem.pinPrice : null);
+        } catch (error) {
+          if (error && error.name === "AbortError") return;
+          status.textContent = "加载失败";
+          status.className = "pct-down";
+        }
+      }
+
+      async function renderNotes() {
+        const grid = document.getElementById("noteGrid");
+        const meta = document.getElementById("meta");
+        if (!grid) return;
+        closeCardActions(true);
+        if (klineAbort) klineAbort.abort();
+        klineAbort = new AbortController();
+        const signal = klineAbort.signal;
+        const rows = noteSymbolsOrdered();
+        if (meta) {
+          meta.textContent = `记一笔 ${momNoteItems.length} 条 · 追踪 ${rows.length} 币 · ${currentView().label} · 长按可去掉记一笔`;
+        }
+        if (!rows.length) {
+          grid.innerHTML =
+            '<div class="empty">暂无记一笔 · 去币安观察近2h/1h 浮窗点「记」</div>';
+          return;
+        }
+        grid.innerHTML = rows
+          .map(({ symbol }) => {
+            const label = symbol.replace(/USDT$/i, "");
+            return `<div class="kline-card" id="card-note-${symbol}" data-symbol="${symbol}" data-section="note"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="${escapeHtml(label)}" title="点击复制">${escapeHtml(label)}</button><span data-kline-status>--</span></div><span class="note-mark">记</span><canvas></canvas></div>`;
+          })
+          .join("");
+
+        grid.querySelectorAll(".kline-card").forEach((card) => {
+          bindLongPress(card);
+          const btn = card.querySelector(".symbol-copy");
+          if (btn) {
+            btn.addEventListener("click", async (event) => {
+              event.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(btn.dataset.name || "");
+                showToast(`已复制 ${btn.dataset.name}`);
+              } catch (error) {
+                showToast("复制失败");
+              }
+            });
+          }
+        });
+
+        const batchSize = 4;
+        for (let i = 0; i < rows.length; i += batchSize) {
+          if (signal.aborted) return;
+          const batch = rows.slice(i, i + batchSize);
+          await Promise.all(
+            batch.map(({ symbol, note }) => {
+              const card = document.getElementById(`card-note-${symbol}`);
+              return card
+                ? paintCard(card, symbol, note, signal)
+                : Promise.resolve();
+            }),
+          );
+        }
+      }
+
+      async function refreshAll() {
+        if (loading) return;
+        loading = true;
+        const btn = document.getElementById("refreshBtn");
+        const rangeSelect = document.getElementById("rangeSelect");
+        if (btn) btn.disabled = true;
+        if (rangeSelect) rangeSelect.disabled = true;
+        try {
+          setStatus("busy", "加载记一笔 / 盯一下...");
+          await loadSideData();
+          setStatus("busy", "拉取行情...");
+          await loadBinanceTicker();
+          setStatus("busy", "绘制 K 线...");
+          await renderNotes();
+          setStatus(
+            "ok",
+            `完成 · ${noteSymbolsOrdered().length} 币 · ${new Date().toLocaleTimeString()}`,
+          );
+        } catch (error) {
+          if (error && error.name === "AbortError") return;
+          setStatus("err", error.message || "加载失败");
+        } finally {
+          loading = false;
+          if (btn) btn.disabled = false;
+          if (rangeSelect) rangeSelect.disabled = false;
+        }
+      }
+
+      document.getElementById("refreshBtn").addEventListener("click", () => {
+        closeCardActions(true);
+        refreshAll();
+      });
+      document.getElementById("rangeSelect").addEventListener("change", (event) => {
+        klineViewKey = event.target.value || "3d-4h";
+        closeCardActions(true);
+        refreshAll();
+      });
+      document.addEventListener("click", (event) => {
+        const open = document.querySelector("details.friend-links[open]");
+        if (open && !open.contains(event.target)) {
+          open.removeAttribute("open");
+        }
+        if (!event.target.closest(".card-actions, .kline-card")) {
+          closeCardActions();
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeCardActions(true);
+      });
+
+      refreshAll();
+    </script>
+  </body>
+</html>

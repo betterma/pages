@@ -1019,6 +1019,7 @@
           <details class="friend-links">
             <summary>友情链接</summary>
             <div class="friend-links-panel">
+              <a href="./newKline.html">记一笔追踪</a>
               <a href="./range100.html">Range100 潜伏</a>
               <a href="./okx/kline.html">OKX 自选</a>
             </div>
@@ -1297,6 +1298,8 @@
       let momNotesSaving = false;
       const MOM_NOTES_LOCAL_KEY = "kline-mom-notes-v1";
       const MOM_NOTES_MAX = 30;
+      const RISING_SNAP_KEY = "kline-rising-snap-v1";
+      const RISING_SNAP_SEEDED_KEY = "kline-rising-snap-seeded-v1";
       let notifyPollTimer = null;
       let klineAbort = null;
       let loading = false;
@@ -1606,6 +1609,79 @@
             !pinned.has(symbol) &&
             hasWindowGain(symbol, interval),
         );
+      }
+
+      function readRisingSnapshot() {
+        try {
+          const raw = localStorage.getItem(RISING_SNAP_KEY);
+          const list = raw ? JSON.parse(raw) : [];
+          return Array.isArray(list) ? list.map(String) : [];
+        } catch (error) {
+          return [];
+        }
+      }
+
+      function writeRisingSnapshot(symbols) {
+        localStorage.setItem(
+          RISING_SNAP_KEY,
+          JSON.stringify((symbols || []).map(String)),
+        );
+      }
+
+      /**
+       * Strategy A: only auto-pin symbols newly appeared in 窗口上涨
+       * vs last snapshot, and not already pinned. First visit seeds
+       * baseline without mass-pinning.
+       */
+      async function autoPinNewRising(risingSymbols) {
+        const current = (risingSymbols || []).filter(Boolean);
+        const seeded = localStorage.getItem(RISING_SNAP_SEEDED_KEY) === "1";
+        if (!seeded) {
+          writeRisingSnapshot(current);
+          localStorage.setItem(RISING_SNAP_SEEDED_KEY, "1");
+          return [];
+        }
+        const prevSet = new Set(readRisingSnapshot());
+        const pinned = pinSymbols();
+        const blocked = blacklistSymbols();
+        const newcomers = current.filter(
+          (symbol) =>
+            !prevSet.has(symbol) &&
+            !pinned.has(symbol) &&
+            !blocked.has(symbol),
+        );
+        if (!newcomers.length) {
+          writeRisingSnapshot(current);
+          return [];
+        }
+        try {
+          const result = await WatchFavorites.patchPins({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.PINS_PATH,
+            message: `Auto-pin rising ${newcomers.length}`,
+            mutate: (list) => {
+              let next = list.slice();
+              for (const symbol of newcomers) {
+                if (WatchFavorites.hasPin(next, symbol)) continue;
+                next = WatchFavorites.addPin(
+                  next,
+                  symbol,
+                  marketMap[symbol]?.price,
+                  "auto-rising",
+                );
+              }
+              return { list: next, added: true };
+            },
+          });
+          pinItems = result.pins;
+          // Snapshot post-pin rising so pinned names leave the baseline.
+          writeRisingSnapshot(getRisingSymbols());
+          return newcomers;
+        } catch (error) {
+          console.warn("auto-pin rising failed", error);
+          writeRisingSnapshot(current);
+          return [];
+        }
       }
 
       function getFavoriteRisingSymbols(risingSymbols) {
@@ -3264,6 +3340,16 @@
         const chartIv = chartInterval();
         const bars = klineLimit(chartIv);
         const rangeText = klineRangeLabel();
+        const risingRaw = getRisingSymbols();
+        const autoPinned = await autoPinNewRising(risingRaw);
+        if (autoPinned.length) {
+          showToast(
+            `自动盯 ${autoPinned.length} 个新上涨：${autoPinned
+              .slice(0, 4)
+              .map((s) => s.replace(/USDT$/i, ""))
+              .join(" · ")}${autoPinned.length > 4 ? "…" : ""}`,
+          );
+        }
         const rising = getRisingSymbols();
         const favRising = getFavoriteRisingSymbols(rising);
         const pairSet = buildPairSet(rising);
