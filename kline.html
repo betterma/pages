@@ -99,8 +99,7 @@
       body.is-notes-view #hiddenPinTab,
       body.is-notes-view #hiddenPinDrawer,
       body.is-notes-view #notifyFloat,
-      body.is-notes-view #momentumFloat,
-      body.is-notes-view .float-tabs {
+      body.is-notes-view #notifyFloatTab {
         display: none !important;
       }
       .topbar-actions {
@@ -1417,6 +1416,13 @@
             `<a href="./okx/kline.html">OKX 自选</a>`,
           ].join("");
         }
+        const notifyTab = document.getElementById("notifyFloatTab");
+        const notifyPanel = document.getElementById("notifyFloat");
+        if (notifyTab) {
+          notifyTab.hidden = true;
+          notifyTab.classList.remove("is-active");
+        }
+        if (notifyPanel) notifyPanel.hidden = true;
       }
 
       function currentKlineView() {
@@ -3638,7 +3644,15 @@
           }
 
           updateHiddenPinTab(0);
-          updatePinMomentumMeta(new Map(), []);
+
+          let pinHourScores = new Map();
+          if (pinSymbolsList.length) {
+            setStatus(false, "计算记一笔近1h/2h动量...");
+            pinHourScores = await loadPinHourScores(pinSymbolsList, signal);
+            if (signal.aborted) return;
+          }
+          updatePinMomentumMeta(pinHourScores, pinSymbolsList);
+
           await fillGrid(
             document.getElementById("pinGrid"),
             pinSymbolsList,
