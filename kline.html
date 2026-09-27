@@ -394,7 +394,8 @@
         border-color: #6b7f6e;
       }
       .pin-mark,
-      .pos-mark {
+      .pos-mark,
+      .note-mark {
         position: absolute;
         top: 6px;
         right: 8px;
@@ -407,6 +408,31 @@
         right: 8px;
         top: 22px;
         color: #4f7a6e;
+      }
+      /* 记一笔：鲜艳角标，与「盯」区分 */
+      .note-mark {
+        left: 8px;
+        right: auto;
+        top: 6px;
+        padding: 3px 7px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        color: #fff8fb;
+        background: linear-gradient(135deg, #ff2d7a 0%, #ff6a3d 100%);
+        box-shadow:
+          0 0 0 1px rgba(255, 255, 255, 0.35),
+          0 4px 14px rgba(255, 45, 122, 0.55);
+      }
+      .kline-card.is-note {
+        border-color: #ff4d8d;
+        box-shadow:
+          0 0 0 1px rgba(255, 77, 141, 0.35),
+          0 8px 22px rgba(255, 45, 122, 0.12);
+      }
+      .kline-card.is-note.is-pin {
+        border-color: #ff4d8d;
       }
       /* Align with WeCom: 5m three-up = green, 15m 2/3 = orange */
       .kline-card-head .symbol-copy.is-streak5 {
@@ -2302,6 +2328,40 @@
         other: 3,
       };
 
+      /** Stronger signal first (climb → flat → fade → other, then Δ / 2h / 1h). */
+      function compareMomentumSignal(symbolA, symbolB, scores) {
+        const scoreA = (scores && scores.get(symbolA)) || {};
+        const scoreB = (scores && scores.get(symbolB)) || {};
+        const trendA =
+          scoreA.trend || classifyMomentumTrend(scoreA.trail2h, scoreA.change1h);
+        const trendB =
+          scoreB.trend || classifyMomentumTrend(scoreB.trail2h, scoreB.change1h);
+        const ra =
+          MOMENTUM_STATUS_RANK[trendA && trendA.status] ??
+          MOMENTUM_STATUS_RANK.other;
+        const rb =
+          MOMENTUM_STATUS_RANK[trendB && trendB.status] ??
+          MOMENTUM_STATUS_RANK.other;
+        if (ra !== rb) return ra - rb;
+        const aInc = !!(trendA && trendA.incomplete);
+        const bInc = !!(trendB && trendB.incomplete);
+        if (aInc !== bInc) return aInc ? 1 : -1;
+        const da = Number.isFinite(trendA && trendA.delta)
+          ? trendA.delta
+          : -Infinity;
+        const db = Number.isFinite(trendB && trendB.delta)
+          ? trendB.delta
+          : -Infinity;
+        if (db !== da) return db - da;
+        const va = Number.isFinite(scoreA.change2h) ? scoreA.change2h : -Infinity;
+        const vb = Number.isFinite(scoreB.change2h) ? scoreB.change2h : -Infinity;
+        if (vb !== va) return vb - va;
+        const a1 = Number.isFinite(scoreA.change1h) ? scoreA.change1h : -Infinity;
+        const b1 = Number.isFinite(scoreB.change1h) ? scoreB.change1h : -Infinity;
+        if (b1 !== a1) return b1 - a1;
+        return String(symbolA).localeCompare(String(symbolB));
+      }
+
       /**
        * V1: climb is the only precise label; flat/fade/other stay loose.
        * 1h is carry only (not trail). Peak veto is hard.
@@ -3104,11 +3164,18 @@
         const favClass = options.isFavorite ? " is-favorite" : "";
         const pairClass = options.isPair ? " is-pair" : "";
         const pinClass = options.isPin ? " is-pin" : "";
+        const noteClass = options.isNote ? " is-note" : "";
         const posClass = options.hasPosition ? " is-position" : "";
         const expiredClass = options.isExpired ? " is-expired" : "";
         const marks = [];
         if (options.showMark) marks.push('<span class="fav-mark">★</span>');
-        if (options.isPin) {
+        if (options.isNote) {
+          marks.push(
+            '<span class="note-mark" title="记一笔追踪">记</span>',
+          );
+        }
+        // Notes view: only show 盯 when there is a real pin row.
+        if (options.isPin && (options.pinItem || !options.isNote)) {
           marks.push(
             `<span class="pin-mark">${options.isExpired ? "过期" : "盯"}</span>`,
           );
@@ -3125,7 +3192,7 @@
           ? "kline-card-head is-pin-head"
           : "kline-card-head";
         const statusClass = options.pinItem ? ' class="pin-stats"' : "";
-        return `<div class="kline-card${favClass}${pairClass}${pinClass}${posClass}${expiredClass}" id="card-${options.section}-${symbol}" data-symbol="${symbol}" data-section="${options.section}"><div class="${headClass}"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status${statusClass}>${statusText}</span></div>${marks.join("")}<canvas></canvas></div>`;
+        return `<div class="kline-card${favClass}${pairClass}${pinClass}${noteClass}${posClass}${expiredClass}" id="card-${options.section}-${symbol}" data-symbol="${symbol}" data-section="${options.section}"><div class="${headClass}"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status${statusClass}>${statusText}</span></div>${marks.join("")}<canvas></canvas></div>`;
       }
 
       function closeCardActions(force) {
@@ -3330,6 +3397,7 @@
                   isFavorite: favSet.has(symbol),
                   isPair: pairs.has(symbol),
                   isPin: isPinSection || pinSymbols().has(symbol),
+                  isNote: isNotesView() && section === "pin",
                   hasPosition: positionSymbols().has(symbol),
                   isExpired: isPinSection && expired,
                   pinItem: isPinSection ? pinItem : null,
@@ -3599,27 +3667,6 @@
           const visibleNotes = noteSymbols.filter(
             (symbol) => !blocked.has(symbol),
           );
-          // Same pin-card display/sort among notes that still have pin rows.
-          const withPin = visibleNotes
-            .filter((symbol) => pinMap.has(symbol))
-            .map((symbol) => pinMap.get(symbol))
-            .sort((a, b) => {
-              const changeA = pinChangePercent(a);
-              const changeB = pinChangePercent(b);
-              const hasA = Number.isFinite(changeA);
-              const hasB = Number.isFinite(changeB);
-              const upA = hasA && changeA > 0 ? 1 : 0;
-              const upB = hasB && changeB > 0 ? 1 : 0;
-              if (upA !== upB) return upB - upA;
-              if (hasA && hasB && changeB !== changeA) return changeB - changeA;
-              if (hasA !== hasB) return hasA ? -1 : 1;
-              return b.pinnedAt - a.pinnedAt;
-            })
-            .map((item) => item.symbol);
-          const withoutPin = visibleNotes.filter(
-            (symbol) => !pinMap.has(symbol),
-          );
-          const pinSymbolsList = [...withPin, ...withoutPin];
 
           const clearExpiredBtn = document.getElementById("clearExpiredPinsBtn");
           const clearPositionsBtn = document.getElementById(
@@ -3636,25 +3683,31 @@
             maintEmptyHint.hidden = expiredPins > 0 || positionCount > 0;
           }
 
+          updateHiddenPinTab(0);
+
+          let pinHourScores = new Map();
+          if (visibleNotes.length) {
+            setStatus(false, "计算记一笔近1h/2h动量...");
+            pinHourScores = await loadPinHourScores(visibleNotes, signal);
+            if (signal.aborted) return;
+          }
+          // Sort K 线 by momentum signal strength (climb / Δ / 2h / 1h).
+          const pinSymbolsList = visibleNotes
+            .slice()
+            .sort((a, b) => compareMomentumSignal(a, b, pinHourScores));
+
           const pinMeta = document.getElementById("pinMeta");
           if (pinMeta) {
             pinMeta.textContent = [
               `记一笔 ${momNoteItems.length} 条`,
               `追踪 ${pinSymbolsList.length} 币`,
+              "按信号强弱排序",
               rangeText,
               `${bars} 根`,
-              "显示/长按与盯一下一致",
+              "长按去掉记一笔",
             ].join(" · ");
           }
 
-          updateHiddenPinTab(0);
-
-          let pinHourScores = new Map();
-          if (pinSymbolsList.length) {
-            setStatus(false, "计算记一笔近1h/2h动量...");
-            pinHourScores = await loadPinHourScores(pinSymbolsList, signal);
-            if (signal.aborted) return;
-          }
           updatePinMomentumMeta(pinHourScores, pinSymbolsList);
 
           await fillGrid(
