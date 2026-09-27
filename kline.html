@@ -40,6 +40,38 @@
         margin: 16px 0 6px;
         font-size: 15px;
       }
+      .section-title-row {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin: 16px 0 6px;
+      }
+      .section-title-row .section-title {
+        margin: 0;
+      }
+      .section-title-row .maint-toggle {
+        margin-left: auto;
+      }
+      .ghost-action {
+        flex-shrink: 0;
+        border: none;
+        background: transparent;
+        color: #9aa3a0;
+        font-size: 11px;
+        padding: 0 2px;
+        line-height: 1;
+        cursor: pointer;
+        opacity: 0.72;
+      }
+      .ghost-action:hover {
+        color: #5a6a68;
+        opacity: 1;
+        background: transparent;
+      }
+      .ghost-action.is-active {
+        color: #2f8f6e;
+        opacity: 1;
+      }
       .nav-link {
         color: #5a6a68;
         font-size: 13px;
@@ -99,7 +131,9 @@
       body.is-notes-view #hiddenPinTab,
       body.is-notes-view #hiddenPinDrawer,
       body.is-notes-view #notifyFloat,
-      body.is-notes-view #notifyFloatTab {
+      body.is-notes-view #notifyFloatTab,
+      body.is-notes-view #pinSelectBtn,
+      body.is-notes-view #pinBatchBar {
         display: none !important;
       }
       .topbar-actions {
@@ -215,6 +249,75 @@
       .pin-momentum-meta .mom-cool {
         color: #8d7771;
       }
+      .kline-card.is-select-mode {
+        cursor: pointer;
+      }
+      .kline-card.is-selected {
+        outline: 1px solid rgba(47, 143, 110, 0.55);
+        outline-offset: 1px;
+      }
+      .pin-check {
+        position: absolute;
+        left: 6px;
+        bottom: 6px;
+        z-index: 2;
+        width: 14px;
+        height: 14px;
+        margin: 0;
+        accent-color: #2f8f6e;
+        cursor: pointer;
+        opacity: 0.85;
+      }
+      .kline-card.is-note .pin-check {
+        bottom: 26px;
+      }
+      .pin-batch-bar {
+        position: fixed;
+        left: 50%;
+        bottom: 10px;
+        transform: translateX(-50%);
+        z-index: 80;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 8px;
+        border-radius: 8px;
+        border: 1px solid rgba(200, 208, 204, 0.85);
+        background: rgba(251, 252, 250, 0.94);
+        color: #5a6a68;
+        box-shadow: 0 4px 14px rgba(40, 50, 48, 0.1);
+        max-width: calc(100vw - 16px);
+      }
+      .pin-batch-bar[hidden] {
+        display: none !important;
+      }
+      .pin-batch-bar .pin-batch-count {
+        font-size: 11px;
+        color: #9aa3a0;
+        margin-right: 2px;
+        white-space: nowrap;
+      }
+      .pin-batch-bar button {
+        border: none;
+        background: transparent;
+        color: #5a6a68;
+        padding: 3px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+      }
+      .pin-batch-bar button:hover {
+        background: rgba(90, 106, 104, 0.08);
+      }
+      .pin-batch-bar button.is-primary {
+        color: #2f8f6e;
+      }
+      .pin-batch-bar button.is-danger {
+        color: #a05a52;
+      }
+      .pin-batch-bar button:disabled {
+        opacity: 0.35;
+      }
       .pin-meta-row button,
       .maint-panel button {
         flex-shrink: 0;
@@ -222,19 +325,24 @@
         padding: 6px 10px;
       }
       .maint-toggle {
-        color: #78817f;
-        border-color: transparent;
+        color: #9aa3a0;
+        border: none;
         background: transparent;
-        padding: 4px 8px;
+        padding: 0 2px;
+        font-size: 11px;
+        opacity: 0.72;
       }
       .maint-toggle:hover {
-        background: #eef1ee;
-        border-color: #c9d0d0;
+        color: #5a6a68;
+        opacity: 1;
+        background: transparent;
+        border: none;
       }
       .maint-toggle[aria-expanded="true"] {
-        color: #3d4a48;
-        border-color: #c9d0d0;
-        background: #eef1ee;
+        color: #5a6a68;
+        opacity: 1;
+        border: none;
+        background: transparent;
       }
       .maint-panel {
         display: flex;
@@ -1153,19 +1261,30 @@
       <p class="hint">长按选 盯/购买/卖出/收藏/拉黑 · 盯一下展示当前窗口上涨（可低于盯住价）· 右侧看窗口回落 · 企微同步</p>
       -->
 
-      <h2 class="section-title" id="pinSectionTitle">盯一下</h2>
-      <div class="pin-meta-row">
-        <div id="pinMeta" class="meta"></div>
+      <div class="section-title-row">
+        <h2 class="section-title" id="pinSectionTitle">盯一下</h2>
+        <button
+          id="pinSelectBtn"
+          class="ghost-action"
+          type="button"
+          aria-pressed="false"
+          title="多选后可批量取消盯住或按现价续盯"
+        >
+          多选
+        </button>
         <button
           id="maintToggleBtn"
-          class="maint-toggle"
+          class="ghost-action maint-toggle"
           type="button"
           aria-expanded="false"
           aria-controls="maintPanel"
           title="展开低频清理操作"
         >
-          清理 ▾
+          清理
         </button>
+      </div>
+      <div class="pin-meta-row">
+        <div id="pinMeta" class="meta"></div>
       </div>
       <!-- 近2h/1h 改由左下角浮窗展示，顶栏排行收起
       <div
@@ -1315,6 +1434,31 @@
       </button>
     </div>
 
+    <div id="pinBatchBar" class="pin-batch-bar" hidden>
+      <span class="pin-batch-count" id="pinBatchCount">0</span>
+      <button type="button" id="pinBatchSelectAllBtn" title="全选当前展示的盯一下">
+        全选
+      </button>
+      <button
+        type="button"
+        id="pinBatchRenewBtn"
+        class="is-primary"
+        title="按现价续盯"
+      >
+        续盯
+      </button>
+      <button
+        type="button"
+        id="pinBatchUnpinBtn"
+        class="is-danger"
+        title="取消盯住"
+      >
+        取消
+      </button>
+      <button type="button" id="pinBatchClearBtn" title="清空选择">清空</button>
+      <button type="button" id="pinBatchExitBtn" title="退出多选">×</button>
+    </div>
+
     <script src="./watch-favorites.js"></script>
     <script>
       "use strict";
@@ -1414,6 +1558,8 @@
       let favoriteSaving = false;
       let blacklistSaving = false;
       let pinSaving = false;
+      let pinSelectMode = false;
+      const selectedPinSymbols = new Set();
       let positionSaving = false;
       let klineViewKey = "3d-4h";
 
@@ -1430,6 +1576,9 @@
       function applyNotesViewChrome() {
         if (!isNotesView()) return;
         document.body.classList.add("is-notes-view");
+        pinSelectMode = false;
+        selectedPinSymbols.clear();
+        updatePinSelectUi();
         document.title = "记一笔追踪";
         const h1 = document.querySelector(".topbar-left h1");
         if (h1) h1.textContent = "记一笔追踪";
@@ -3165,6 +3314,14 @@
         const pairClass = options.isPair ? " is-pair" : "";
         const pinClass = options.isPin ? " is-pin" : "";
         const noteClass = options.isNote ? " is-note" : "";
+        const selectClass =
+          options.selectMode && options.isPinSection ? " is-select-mode" : "";
+        const selectedClass =
+          options.selectMode &&
+          options.isPinSection &&
+          options.isSelected
+            ? " is-selected"
+            : "";
         const posClass = options.hasPosition ? " is-position" : "";
         const expiredClass = options.isExpired ? " is-expired" : "";
         const marks = [];
@@ -3183,6 +3340,12 @@
         if (options.hasPosition) {
           marks.push('<span class="pos-mark">持仓</span>');
         }
+        const checkHtml =
+          options.selectMode && options.isPinSection
+            ? `<input type="checkbox" class="pin-check" ${
+                options.isSelected ? "checked" : ""
+              } aria-label="选择 ${label}" />`
+            : "";
         const statusText = options.pinItem
           ? buildPinStatusHtml(options.pinItem, symbol, null)
           : Number.isFinite(change24h)
@@ -3192,7 +3355,7 @@
           ? "kline-card-head is-pin-head"
           : "kline-card-head";
         const statusClass = options.pinItem ? ' class="pin-stats"' : "";
-        return `<div class="kline-card${favClass}${pairClass}${pinClass}${noteClass}${posClass}${expiredClass}" id="card-${options.section}-${symbol}" data-symbol="${symbol}" data-section="${options.section}"><div class="${headClass}"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status${statusClass}>${statusText}</span></div>${marks.join("")}<canvas></canvas></div>`;
+        return `<div class="kline-card${favClass}${pairClass}${pinClass}${noteClass}${selectClass}${selectedClass}${posClass}${expiredClass}" id="card-${options.section}-${symbol}" data-symbol="${symbol}" data-section="${options.section}"><div class="${headClass}"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status${statusClass}>${statusText}</span></div>${marks.join("")}${checkHtml}<canvas></canvas></div>`;
       }
 
       function closeCardActions(force) {
@@ -3323,6 +3486,15 @@
       function bindCardInteractions(root) {
         root.querySelectorAll(".symbol-copy").forEach((btn) => {
           btn.addEventListener("click", (event) => {
+            if (pinSelectMode && !isNotesView()) {
+              event.preventDefault();
+              event.stopPropagation();
+              const card = btn.closest(".kline-card");
+              if (card && isPinCardSection(card.dataset.section)) {
+                togglePinSelection(card.dataset.symbol);
+              }
+              return;
+            }
             event.stopPropagation();
             closeCardActions();
             copyName(btn.dataset.name);
@@ -3331,6 +3503,232 @@
         root.querySelectorAll(".kline-card").forEach((card) => {
           bindLongPress(card);
         });
+      }
+
+      function isPinCardSection(section) {
+        return section === "pin" || section === "pin-hidden";
+      }
+
+      function updatePinSelectUi() {
+        for (const symbol of [...selectedPinSymbols]) {
+          if (!pinSymbols().has(symbol)) selectedPinSymbols.delete(symbol);
+        }
+        const btn = document.getElementById("pinSelectBtn");
+        const bar = document.getElementById("pinBatchBar");
+        const countEl = document.getElementById("pinBatchCount");
+        if (btn) {
+          btn.classList.toggle("is-active", pinSelectMode);
+          btn.setAttribute("aria-pressed", pinSelectMode ? "true" : "false");
+          btn.textContent = pinSelectMode ? "选中" : "多选";
+        }
+        if (bar) {
+          bar.hidden = !pinSelectMode || isNotesView();
+        }
+        if (countEl) {
+          countEl.textContent = String(selectedPinSymbols.size);
+        }
+        const renewBtn = document.getElementById("pinBatchRenewBtn");
+        const unpinBtn = document.getElementById("pinBatchUnpinBtn");
+        const clearBtn = document.getElementById("pinBatchClearBtn");
+        const disabled = pinSaving || selectedPinSymbols.size === 0;
+        if (renewBtn) renewBtn.disabled = disabled;
+        if (unpinBtn) unpinBtn.disabled = disabled;
+        if (clearBtn) clearBtn.disabled = selectedPinSymbols.size === 0;
+      }
+
+      function setPinSelectMode(on) {
+        if (isNotesView()) on = false;
+        const next = !!on;
+        if (next === pinSelectMode) {
+          updatePinSelectUi();
+          return;
+        }
+        pinSelectMode = next;
+        if (!pinSelectMode) selectedPinSymbols.clear();
+        closeCardActions(true);
+        applyPinSelectChrome();
+        updatePinSelectUi();
+      }
+
+      function applyPinSelectChrome() {
+        const wantSelect = pinSelectMode && !isNotesView();
+        document
+          .querySelectorAll(
+            "#pinGrid .kline-card[data-symbol], #hiddenPinGrid .kline-card[data-symbol]",
+          )
+          .forEach((card) => {
+            const symbol = String(card.dataset.symbol || "").toUpperCase();
+            card.classList.toggle("is-select-mode", wantSelect);
+            const selected = wantSelect && selectedPinSymbols.has(symbol);
+            card.classList.toggle("is-selected", selected);
+            let check = card.querySelector(".pin-check");
+            if (wantSelect) {
+              if (!check) {
+                check = document.createElement("input");
+                check.type = "checkbox";
+                check.className = "pin-check";
+                check.setAttribute(
+                  "aria-label",
+                  `选择 ${symbol.replace(/USDT$/i, "")}`,
+                );
+                card.appendChild(check);
+              }
+              check.checked = selected;
+            } else if (check) {
+              check.remove();
+            }
+          });
+        if (wantSelect) bindPinSelectDelegation();
+      }
+
+      function togglePinSelection(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || !pinSymbols().has(key)) return;
+        if (selectedPinSymbols.has(key)) selectedPinSymbols.delete(key);
+        else selectedPinSymbols.add(key);
+        document
+          .querySelectorAll(`.kline-card[data-symbol="${key}"]`)
+          .forEach((card) => {
+            if (!isPinCardSection(card.dataset.section)) return;
+            const on = selectedPinSymbols.has(key);
+            card.classList.toggle("is-selected", on);
+            const check = card.querySelector(".pin-check");
+            if (check) check.checked = on;
+          });
+        updatePinSelectUi();
+      }
+
+      function onPinSelectPointer(event) {
+        if (!pinSelectMode || isNotesView()) return;
+        const card = event.target.closest(
+          "#pinGrid .kline-card.is-select-mode, #hiddenPinGrid .kline-card.is-select-mode",
+        );
+        if (!card) return;
+        if (event.target.closest(".card-actions, .mom-badge")) return;
+        if (event.type === "change") {
+          if (!event.target.classList.contains("pin-check")) return;
+          togglePinSelection(card.dataset.symbol);
+          return;
+        }
+        if (event.type === "click") {
+          if (event.target.closest(".pin-check")) return;
+          event.preventDefault();
+          togglePinSelection(card.dataset.symbol);
+        }
+      }
+
+      function bindPinSelectDelegation() {
+        const pinGrid = document.getElementById("pinGrid");
+        const hiddenGrid = document.getElementById("hiddenPinGrid");
+        for (const root of [pinGrid, hiddenGrid]) {
+          if (!root || root.dataset.pinSelectBound === "1") continue;
+          root.dataset.pinSelectBound = "1";
+          root.addEventListener("click", onPinSelectPointer);
+          root.addEventListener("change", onPinSelectPointer);
+        }
+      }
+
+      async function batchUnpinSelected() {
+        if (pinSaving || !selectedPinSymbols.size) return;
+        const symbols = [...selectedPinSymbols];
+        if (
+          !window.confirm(
+            `确定取消盯住选中的 ${symbols.length} 个币？`,
+          )
+        ) {
+          return;
+        }
+        pinSaving = true;
+        updatePinSelectUi();
+        try {
+          setStatus(false, `正在批量取消盯住 ${symbols.length} 个...`);
+          const result = await WatchFavorites.patchPins({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.PINS_PATH,
+            message: `Batch unpin ${symbols.length} symbols`,
+            mutate: (list) => {
+              let next = list;
+              for (const symbol of symbols) {
+                next = WatchFavorites.removePin(next, symbol);
+              }
+              return { list: next, added: false };
+            },
+          });
+          pinItems = result.pins;
+          selectedPinSymbols.clear();
+          showToast(`已取消盯住 ${symbols.length} 个`);
+          await renderKlines();
+          setStatus(true, `已批量取消盯住 ${symbols.length} 个`);
+        } catch (error) {
+          console.error(error);
+          showToast(error.message || "批量取消失败");
+          setStatus(false, error.message || "批量取消失败");
+          window.alert(error.message || "批量取消失败");
+        } finally {
+          pinSaving = false;
+          updatePinSelectUi();
+        }
+      }
+
+      async function batchRenewSelected() {
+        if (pinSaving || !selectedPinSymbols.size) return;
+        const symbols = [...selectedPinSymbols];
+        const withPrice = [];
+        const noPrice = [];
+        for (const symbol of symbols) {
+          const price = marketMap[symbol]?.price;
+          if (Number.isFinite(price) && price > 0) withPrice.push(symbol);
+          else noPrice.push(symbol);
+        }
+        if (!withPrice.length) {
+          window.alert("选中币种暂无现价，无法续盯");
+          return;
+        }
+        if (
+          !window.confirm(
+            `按现价续盯 ${withPrice.length} 个` +
+              (noPrice.length ? `（跳过无价 ${noPrice.length} 个）` : "") +
+              "？",
+          )
+        ) {
+          return;
+        }
+        pinSaving = true;
+        updatePinSelectUi();
+        try {
+          setStatus(false, `正在批量续盯 ${withPrice.length} 个...`);
+          const result = await WatchFavorites.patchPins({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.PINS_PATH,
+            message: `Batch renew ${withPrice.length} pins`,
+            mutate: (list) => {
+              let next = list;
+              for (const symbol of withPrice) {
+                const price = marketMap[symbol]?.price;
+                next = WatchFavorites.addPin(next, symbol, price, "batch-renew");
+              }
+              return { list: next, added: true };
+            },
+          });
+          pinItems = result.pins;
+          selectedPinSymbols.clear();
+          showToast(
+            `已续盯 ${withPrice.length} 个` +
+              (noPrice.length ? ` · 跳过 ${noPrice.length}` : ""),
+          );
+          await renderKlines();
+          setStatus(true, `已批量续盯 ${withPrice.length} 个`);
+        } catch (error) {
+          console.error(error);
+          showToast(error.message || "批量续盯失败");
+          setStatus(false, error.message || "批量续盯失败");
+          window.alert(error.message || "批量续盯失败");
+        } finally {
+          pinSaving = false;
+          updatePinSelectUi();
+        }
       }
 
       function bindLongPress(card) {
@@ -3346,7 +3744,14 @@
         };
 
         const start = (event) => {
-          if (event.target.closest(".symbol-copy, .card-actions, .mom-badge, .price-up-last-mark")) {
+          if (
+            event.target.closest(
+              ".symbol-copy, .card-actions, .mom-badge, .price-up-last-mark, .pin-check",
+            )
+          ) {
+            return;
+          }
+          if (pinSelectMode && isPinCardSection(card.dataset.section)) {
             return;
           }
           if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -3398,6 +3803,9 @@
                   isPair: pairs.has(symbol),
                   isPin: isPinSection || pinSymbols().has(symbol),
                   isNote: isNotesView() && section === "pin",
+                  isPinSection,
+                  selectMode: pinSelectMode && isPinSection && !isNotesView(),
+                  isSelected: selectedPinSymbols.has(symbol),
                   hasPosition: positionSymbols().has(symbol),
                   isExpired: isPinSection && expired,
                   pinItem: isPinSection ? pinItem : null,
@@ -3927,6 +4335,7 @@
         );
         if (signal.aborted) return;
         updateNotifyFloatPanel();
+        updatePinSelectUi();
       }
 
       async function toggleFavoriteForSymbol(symbol) {
@@ -4115,7 +4524,7 @@
         if (!panel || !btn) return;
         panel.hidden = !open;
         btn.setAttribute("aria-expanded", open ? "true" : "false");
-        btn.textContent = open ? "清理 ▴" : "清理 ▾";
+        btn.classList.toggle("is-active", !!open);
         btn.title = open ? "收起清理操作" : "展开低频清理操作";
       }
 
@@ -4552,6 +4961,50 @@
         const panel = document.getElementById("maintPanel");
         setMaintPanelOpen(panel && panel.hidden);
       });
+      document.getElementById("pinSelectBtn").addEventListener("click", () => {
+        closeCardActions();
+        setPinSelectMode(!pinSelectMode);
+      });
+      bindPinSelectDelegation();
+      document.getElementById("pinBatchExitBtn").addEventListener("click", () => {
+        setPinSelectMode(false);
+      });
+      document.getElementById("pinBatchClearBtn").addEventListener("click", () => {
+        selectedPinSymbols.clear();
+        document.querySelectorAll(".kline-card.is-selected").forEach((card) => {
+          card.classList.remove("is-selected");
+          const check = card.querySelector(".pin-check");
+          if (check) check.checked = false;
+        });
+        updatePinSelectUi();
+      });
+      document
+        .getElementById("pinBatchSelectAllBtn")
+        .addEventListener("click", () => {
+          document
+            .querySelectorAll(
+              "#pinGrid .kline-card[data-symbol], #hiddenPinGrid .kline-card[data-symbol]",
+            )
+            .forEach((card) => {
+              const symbol = String(card.dataset.symbol || "").toUpperCase();
+              if (!symbol || !pinSymbols().has(symbol)) return;
+              selectedPinSymbols.add(symbol);
+              card.classList.add("is-selected");
+              const check = card.querySelector(".pin-check");
+              if (check) check.checked = true;
+            });
+          updatePinSelectUi();
+        });
+      document
+        .getElementById("pinBatchUnpinBtn")
+        .addEventListener("click", () => {
+          batchUnpinSelected();
+        });
+      document
+        .getElementById("pinBatchRenewBtn")
+        .addEventListener("click", () => {
+          batchRenewSelected();
+        });
       document.getElementById("hiddenPinTab").addEventListener("click", () => {
         closeCardActions();
         setHiddenPinDrawerOpen(true);
@@ -4567,6 +5020,7 @@
           closeCardActions();
           setHiddenPinDrawerOpen(false);
           setMaintPanelOpen(false);
+          if (pinSelectMode) setPinSelectMode(false);
           const notifyPanel = document.getElementById("notifyFloat");
           if (notifyPanel && !notifyPanel.hidden) {
             dismissNotifyFloat();
