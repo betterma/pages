@@ -50,13 +50,16 @@ const CONFIG = {
   DROP_COOLDOWN_MS: Number(
     process.env.DROP_COOLDOWN_MS || 2 * 60 * 60 * 1000,
   ),
-  // 0 = all rising pins in one collage; set e.g. 3 to only take top N.
+  // Cap WeCom pin text list (sorted by pin-change). Keeps markdown ~1–2 msgs.
+  PIN_NOTIFY_MAX: Number(process.env.PIN_NOTIFY_MAX || 20),
+  // 0 = follow PIN_CHART_MAX; set e.g. 3 to only take top N charts.
   PIN_CHART_TOP: Number(
     process.env.PIN_CHART_TOP === undefined || process.env.PIN_CHART_TOP === ''
       ? 0
       : process.env.PIN_CHART_TOP,
   ),
-  PIN_CHART_MAX: Number(process.env.PIN_CHART_MAX || 50),
+  // Collage hard cap (phone-readable; also bounds Binance kline fan-out).
+  PIN_CHART_MAX: Number(process.env.PIN_CHART_MAX || 12),
   // Align pin notify with kline.html: require current K-line window gain (default 4h).
   PIN_WINDOW_INTERVAL: process.env.PIN_WINDOW_INTERVAL || '4h',
   // Skip duplicate runs if another invoke already sent within this window.
@@ -318,11 +321,16 @@ function nextLastPinPrices(lastPinPrices, rows) {
   return next;
 }
 
-function buildPinReport(rows) {
+function buildPinReport(rows, meta) {
   if (!rows.length) return null;
 
   const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
-  const blocks = [time, ''];
+  const totalUp = Number(meta && meta.totalUp);
+  const capped = Number.isFinite(totalUp) && totalUp > rows.length;
+  const blocks = [
+    capped ? `${time} · 推送 ${rows.length}/${totalUp}` : `${time} · ${rows.length}`,
+    '',
+  ];
 
   rows.forEach((row, index) => {
     const currentText = formatPrice(row.current);
@@ -357,10 +365,23 @@ function buildPinReport(rows) {
   return blocks.join('\n').trimEnd();
 }
 
+function limitPinNotifyRows(rows) {
+  const max = Math.max(1, Number(CONFIG.PIN_NOTIFY_MAX) || 20);
+  if (!rows.length || rows.length <= max) {
+    return { rows, totalUp: rows.length, truncated: false };
+  }
+  console.warn(`pin notify truncated ${rows.length} -> ${max} (PIN_NOTIFY_MAX)`);
+  return {
+    rows: rows.slice(0, max),
+    totalUp: rows.length,
+    truncated: true,
+  };
+}
+
 async function sendTopPinCharts(rows, webhook) {
   if (!rows.length || !webhook) return [];
   const configured = CONFIG.PIN_CHART_TOP;
-  const hardMax = Math.max(1, CONFIG.PIN_CHART_MAX || 50);
+  const hardMax = Math.max(1, CONFIG.PIN_CHART_MAX || 12);
   const limit =
     Number.isFinite(configured) && configured > 0
       ? Math.min(configured, hardMax)
@@ -554,16 +575,8 @@ async function main() {
   ];
   const tickers = await fetchBinanceTickers(symbols);
 
-  let pinRows = listPinCandidateRows(pins, tickers);
-  if (pinRows.length) {
-    await attachPinWindowGain(pinRows);
-    pinRows = filterPinWindowUp(pinRows);
-  }
-  if (pinRows.length) {
-    await attachPinMomentum(pinRows);
-    attachPriceVsLast(pinRows, lastPinPrices);
-  }
-  const pinText = pinRows.length ? buildPinReport(pinRows) : null;
+  // Build + send positions first. Pin momentum/charts can timeout or hit WeCom
+  // rate limits when many pins are up; those must not block the 5m position push.
   const { text: positionText, nextDropAlerts } = buildPositionReport(
     positions,
     tickers,
@@ -572,37 +585,74 @@ async function main() {
   );
 
   const sent = [];
-  let chartSymbols = [];
-  const momentumHits = pinRows.filter((row) => row.streak5 || row.heat15).map(
-    (row) => ({
-      symbol: row.symbol,
-      streak5: row.streak5,
-      heat15: row.heat15,
-    }),
-  );
-  if (pinText) {
-    if (!CONFIG.WECOM_WEBHOOK_PINS) {
-      console.warn('pin report skipped: missing WECOM_WEBHOOK_PINS');
-    } else {
-      await sendWecomMarkdown(pinText, CONFIG.WECOM_WEBHOOK_PINS);
-      sent.push('pins');
-      chartSymbols = await sendTopPinCharts(
-        pinRows,
-        CONFIG.WECOM_WEBHOOK_PINS,
-      );
-      if (chartSymbols.length) sent.push(`charts:${chartSymbols.length}`);
-    }
-  }
+  const sendErrors = [];
   if (positionText) {
     if (!CONFIG.WECOM_WEBHOOK_POSITIONS) {
       console.warn('position report skipped: missing WECOM_WEBHOOK_POSITIONS');
     } else {
-      await sendWecomText(positionText, CONFIG.WECOM_WEBHOOK_POSITIONS);
-      sent.push('positions');
+      try {
+        await sendWecomText(positionText, CONFIG.WECOM_WEBHOOK_POSITIONS);
+        sent.push('positions');
+      } catch (error) {
+        const message = error && error.message ? error.message : String(error);
+        sendErrors.push(`positions:${message}`);
+        console.warn('position report failed', message);
+      }
     }
   }
 
-  const nextPinPrices = pinText
+  let pinRows = listPinCandidateRows(pins, tickers);
+  if (pinRows.length) {
+    await attachPinWindowGain(pinRows);
+    pinRows = filterPinWindowUp(pinRows);
+  }
+  // Cap before momentum/charts so a large pin set cannot blow the time budget.
+  const pinCap = limitPinNotifyRows(pinRows);
+  pinRows = pinCap.rows;
+  if (pinRows.length) {
+    await attachPinMomentum(pinRows);
+    attachPriceVsLast(pinRows, lastPinPrices);
+  }
+  const pinText = pinRows.length
+    ? buildPinReport(pinRows, { totalUp: pinCap.totalUp })
+    : null;
+
+  let chartSymbols = [];
+  const momentumHits = pinRows
+    .filter((row) => row.streak5 || row.heat15)
+    .map((row) => ({
+      symbol: row.symbol,
+      streak5: row.streak5,
+      heat15: row.heat15,
+    }));
+  if (pinText) {
+    if (!CONFIG.WECOM_WEBHOOK_PINS) {
+      console.warn('pin report skipped: missing WECOM_WEBHOOK_PINS');
+    } else {
+      try {
+        await sendWecomMarkdown(pinText, CONFIG.WECOM_WEBHOOK_PINS);
+        sent.push('pins');
+      } catch (error) {
+        const message = error && error.message ? error.message : String(error);
+        sendErrors.push(`pins:${message}`);
+        console.warn('pin report failed', message);
+      }
+      try {
+        chartSymbols = await sendTopPinCharts(
+          pinRows,
+          CONFIG.WECOM_WEBHOOK_PINS,
+        );
+        if (chartSymbols.length) sent.push(`charts:${chartSymbols.length}`);
+      } catch (error) {
+        const message = error && error.message ? error.message : String(error);
+        sendErrors.push(`charts:${message}`);
+        console.warn('pin charts failed', message);
+      }
+    }
+  }
+
+  // Only advance last-pin prices when pin markdown actually went out.
+  const nextPinPrices = sent.includes('pins')
     ? nextLastPinPrices(lastPinPrices, pinRows)
     : lastPinPrices;
   const prevNotify =
@@ -615,30 +665,37 @@ async function main() {
       activeStateFile.data &&
       activeStateFile.data.lastPositionNotify) ||
     null;
-  const lastPinNotify = pinText
-    ? {
-        at: now,
-        markdown: pinText,
-        symbols: pinRows.map((row) => row.symbol),
-      }
-    : prevNotify;
-  const lastPositionNotify = positionText
-    ? {
-        at: now,
-        text: positionText,
-        symbols: positions.map((item) => item.symbol),
-      }
-    : prevPositionNotify;
+  const lastPinNotify =
+    pinText && sent.includes('pins')
+      ? {
+          at: now,
+          markdown: pinText,
+          symbols: pinRows.map((row) => row.symbol),
+        }
+      : prevNotify;
+  const lastPositionNotify =
+    positionText && sent.includes('positions')
+      ? {
+          at: now,
+          text: positionText,
+          symbols: positions.map((item) => item.symbol),
+        }
+      : prevPositionNotify;
+  // Persist drop-alert cooldowns only after a successful position send, so a
+  // failed push can retry the same alerts next cycle.
+  const dropAlertsToSave = sent.includes('positions')
+    ? nextDropAlerts
+    : dropAlerts;
   const stateChanged =
-    JSON.stringify(nextDropAlerts) !== JSON.stringify(dropAlerts) ||
+    JSON.stringify(dropAlertsToSave) !== JSON.stringify(dropAlerts) ||
     JSON.stringify(nextPinPrices) !== JSON.stringify(lastPinPrices) ||
     JSON.stringify(lastPinNotify) !== JSON.stringify(prevNotify) ||
     JSON.stringify(lastPositionNotify) !== JSON.stringify(prevPositionNotify);
-  if (stateChanged || sent.length) {
+  if (stateChanged || sent.length || sendErrors.length) {
     await saveJson(
       CONFIG.NOTIFY_STATE_PATH,
       {
-        dropAlerts: nextDropAlerts,
+        dropAlerts: dropAlertsToSave,
         lastPinPrices: nextPinPrices,
         lastPinNotify,
         lastPositionNotify,
@@ -658,7 +715,8 @@ async function main() {
       sent,
       charts: chartSymbols,
       momentum: momentumHits,
-      dropsArmed: Object.keys(nextDropAlerts).length,
+      dropsArmed: Object.keys(dropAlertsToSave).length,
+      sendErrors,
     }),
   );
 
@@ -669,6 +727,7 @@ async function main() {
     sent,
     charts: chartSymbols,
     momentum: momentumHits,
+    sendErrors,
   };
 }
 
@@ -678,6 +737,7 @@ module.exports = {
   buildPositionReport,
   listPinUpRows,
   listPinCandidateRows,
+  limitPinNotifyRows,
   attachPinMomentum,
   attachPinWindowGain,
   filterPinDoubleUp,
