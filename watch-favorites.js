@@ -19,8 +19,10 @@
   const FAVORITES_PATH = "watch-favorites.json";
   const BLACKLIST_PATH = "watch-blacklist.json";
   const PINS_PATH = "watch-pins.json";
+  const MOM_NOTES_PATH = "watch-mom-notes.json";
   const LEGACY_DATA_PATH = "watch-data.json";
   const PIN_TTL_MS = 12 * 60 * 60 * 1000;
+  const MOM_NOTES_MAX = 30;
 
   const TOKEN_PART_A = "gh";
   const TOKEN_PART_B = "p_Xrmz1DjzLfbjyiXZqFyJGd9O8aWFIq4D9758";
@@ -708,6 +710,161 @@
     return { pins: [], pinsUpdatedAt: null, source: "empty" };
   }
 
+  function normalizeMomNote(item) {
+    if (!item || typeof item !== "object") return null;
+    const symbol = String(item.symbol || "")
+      .trim()
+      .toUpperCase();
+    if (!symbol) return null;
+    const at = Number(item.at);
+    return {
+      id: item.id ? String(item.id) : `${Date.now().toString(36)}`,
+      at: Number.isFinite(at) ? at : Date.now(),
+      symbol,
+      label: item.label
+        ? String(item.label)
+        : symbol.replace(/USDT$/i, ""),
+      status: item.status ? String(item.status) : null,
+      statusLabel: item.statusLabel ? String(item.statusLabel) : null,
+      change2h: Number.isFinite(Number(item.change2h))
+        ? Number(item.change2h)
+        : null,
+      change1h: Number.isFinite(Number(item.change1h))
+        ? Number(item.change1h)
+        : null,
+      delta: Number.isFinite(Number(item.delta)) ? Number(item.delta) : null,
+    };
+  }
+
+  function normalizeMomNotes(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map(normalizeMomNote)
+      .filter(Boolean)
+      .sort((a, b) => b.at - a.at)
+      .slice(0, MOM_NOTES_MAX);
+  }
+
+  function serializeMomNotes(list) {
+    return normalizeMomNotes(list).map((item) => ({
+      id: item.id,
+      at: item.at,
+      symbol: item.symbol,
+      label: item.label,
+      status: item.status,
+      statusLabel: item.statusLabel,
+      change2h: item.change2h,
+      change1h: item.change1h,
+      delta: item.delta,
+    }));
+  }
+
+  async function loadMomNotesRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || MOM_NOTES_PATH;
+
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          notes: normalizeMomNotes(current.data.notes),
+          notesUpdatedAt: Number.isFinite(Number(current.data.notesUpdatedAt))
+            ? Number(current.data.notesUpdatedAt)
+            : null,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadMomNotes via API failed, trying raw", error);
+    }
+
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          notes: normalizeMomNotes(data.notes),
+          notesUpdatedAt: Number.isFinite(Number(data.notesUpdatedAt))
+            ? Number(data.notesUpdatedAt)
+            : null,
+          source: "raw-commit",
+        };
+      }
+      if (response.status !== 404) {
+        console.warn(`读取记一笔 raw 失败: ${response.status}`);
+      }
+    } catch (error) {
+      console.warn("loadMomNotes via commit-raw failed", error);
+    }
+
+    return { notes: [], notesUpdatedAt: null, source: "empty" };
+  }
+
+  async function patchMomNotes(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || MOM_NOTES_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = current.data || {
+          notes: [],
+          notesUpdatedAt: null,
+        };
+        const notes = normalizeMomNotes(base.notes);
+        let nextList = notes;
+        if (typeof options.mutate === "function") {
+          const result = options.mutate(notes.slice());
+          nextList = Array.isArray(result)
+            ? result
+            : result && result.list
+              ? result.list
+              : notes;
+        }
+        const nextNotes = serializeMomNotes(nextList).slice(0, MOM_NOTES_MAX);
+        const nextData = {
+          notes: nextNotes,
+          notesUpdatedAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update momentum notes",
+        });
+        return {
+          notes: nextNotes,
+          notesUpdatedAt: nextData.notesUpdatedAt,
+        };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存记一笔失败");
+  }
+
   async function patchPins(options) {
     const repo = (options && options.repo) || DEFAULT_REPO;
     const path = (options && options.path) || PINS_PATH;
@@ -1006,6 +1163,12 @@
     togglePin,
     loadPinsRaw,
     patchPins,
+    MOM_NOTES_PATH,
+    MOM_NOTES_MAX,
+    normalizeMomNotes,
+    serializeMomNotes,
+    loadMomNotesRaw,
+    patchMomNotes,
     normalizePositions,
     serializePositions,
     positionsToSymbolSet,

@@ -666,18 +666,26 @@
         letter-spacing: 0.02em;
         color: #78817f;
       }
-      .mom-row .mom-status.is-climb {
+      .mom-row .mom-status.is-climb,
+      .mom-note-item .mom-status.is-climb {
         color: #2f8f6e;
       }
-      .mom-row .mom-status.is-flat {
+      .mom-row .mom-status.is-flat,
+      .mom-note-item .mom-status.is-flat {
         color: #78817f;
       }
-      .mom-row .mom-status.is-fade {
+      .mom-row .mom-status.is-fade,
+      .mom-note-item .mom-status.is-fade {
         color: #c47a3a;
       }
-      .mom-row .mom-status.is-other {
+      .mom-row .mom-status.is-other,
+      .mom-note-item .mom-status.is-other {
         color: #9aa3a0;
         font-weight: 500;
+      }
+      .mom-note-item .mom-status {
+        font-size: 11px;
+        font-weight: 650;
       }
       .mom-row .mom-trail {
         display: flex;
@@ -705,6 +713,85 @@
       }
       .mom-row.is-climb .mom-step.is-last {
         background: rgba(47, 143, 110, 0.72);
+      }
+      .mom-row .mom-note-btn {
+        margin-top: 4px;
+        border: none;
+        background: transparent;
+        color: #9aa3a0;
+        padding: 0;
+        font-size: 11px;
+        cursor: pointer;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .mom-row .mom-note-btn:hover {
+        color: #5a6a68;
+      }
+      .mom-notes {
+        margin-bottom: 10px;
+        padding-bottom: 8px;
+        border-bottom: 1px dashed rgba(90, 106, 104, 0.22);
+      }
+      .mom-notes-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 4px;
+        font-size: 11px;
+        color: #9aa3a0;
+        letter-spacing: 0.04em;
+      }
+      .mom-notes-clear {
+        border: none;
+        background: transparent;
+        color: #9aa3a0;
+        padding: 0;
+        font-size: 11px;
+        cursor: pointer;
+      }
+      .mom-notes-clear:hover {
+        color: #5a6a68;
+      }
+      .mom-note-item {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 4px 8px;
+        padding: 3px 0;
+        font-size: 12px;
+        color: #5a6a68;
+        line-height: 1.4;
+      }
+      .mom-note-item .mom-note-time {
+        color: #9aa3a0;
+        font-variant-numeric: tabular-nums;
+        flex-shrink: 0;
+      }
+      .mom-note-item .mom-note-del {
+        border: none;
+        background: transparent;
+        color: #c5cbc8;
+        padding: 0 2px;
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+        margin-left: auto;
+      }
+      .mom-note-item .mom-note-del:hover {
+        color: #8d7771;
+      }
+      .mom-notes-empty {
+        font-size: 11px;
+        color: #c5cbc8;
+      }
+      .mom-note-item .is-hot {
+        color: #2f8f6e;
+        font-weight: 650;
+      }
+      .mom-note-item .is-cool {
+        color: #8d7771;
       }
       .float-tabs {
         position: fixed;
@@ -1135,6 +1222,7 @@
         FAVORITES_PATH: "watch-favorites.json",
         BLACKLIST_PATH: "watch-blacklist.json",
         PINS_PATH: "watch-pins.json",
+        MOM_NOTES_PATH: "watch-mom-notes.json",
         POSITIONS_PATH: "watch-positions.json",
         WATCH_POOL_RANK: 30,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
@@ -1205,6 +1293,10 @@
       let lastMomentumSnapshot = null;
       let notifyFloatRefreshing = false;
       let momentumFloatRefreshing = false;
+      let momNoteItems = [];
+      let momNotesSaving = false;
+      const MOM_NOTES_LOCAL_KEY = "kline-mom-notes-v1";
+      const MOM_NOTES_MAX = 30;
       let notifyPollTimer = null;
       let klineAbort = null;
       let loading = false;
@@ -1553,6 +1645,7 @@
           blacklistItems = [];
           pinItems = [];
           positionItems = [];
+          momNoteItems = [];
           return;
         }
         if (!response.ok) {
@@ -1608,6 +1701,25 @@
           positionItems = [];
         }
         try {
+          const noteState = await WatchFavorites.loadMomNotesRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.MOM_NOTES_PATH,
+          });
+          momNoteItems = noteState.notes || [];
+          if (!momNoteItems.length) {
+            momNoteItems = await migrateLocalMomNotesIfNeeded();
+          } else {
+            try {
+              localStorage.removeItem(MOM_NOTES_LOCAL_KEY);
+            } catch (error) {
+              /* ignore */
+            }
+          }
+        } catch (error) {
+          console.warn(error);
+          momNoteItems = [];
+        }
+        try {
           const notifyState = await loadNotifyState();
           lastPinPrices = notifyState.lastPinPrices || {};
           lastPinNotify = notifyState.lastPinNotify || null;
@@ -1619,6 +1731,31 @@
           lastPositionNotify = null;
         }
         pruneHistory();
+      }
+
+      async function migrateLocalMomNotesIfNeeded() {
+        let local = [];
+        try {
+          const raw = localStorage.getItem(MOM_NOTES_LOCAL_KEY);
+          local = raw ? JSON.parse(raw) : [];
+        } catch (error) {
+          local = [];
+        }
+        if (!Array.isArray(local) || !local.length) return [];
+        try {
+          const result = await WatchFavorites.patchMomNotes({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.MOM_NOTES_PATH,
+            message: "Migrate momentum notes from localStorage",
+            mutate: () => local,
+          });
+          localStorage.removeItem(MOM_NOTES_LOCAL_KEY);
+          showToast("记一笔已迁移到 GitHub");
+          return result.notes || [];
+        } catch (error) {
+          console.warn("migrate mom notes failed", error);
+          return local.slice(0, MOM_NOTES_MAX);
+        }
       }
 
       function parseNotifyStateData(data) {
@@ -2179,12 +2316,149 @@
         return "";
       }
 
+      function loadMomNotes() {
+        return Array.isArray(momNoteItems) ? momNoteItems : [];
+      }
+
+      function formatMomNoteTime(at) {
+        const date = new Date(Number(at) || Date.now());
+        const hh = String(date.getHours()).padStart(2, "0");
+        const mm = String(date.getMinutes()).padStart(2, "0");
+        return `${hh}:${mm}`;
+      }
+
+      function renderMomNotesHtml() {
+        const notes = loadMomNotes();
+        const clearBtn = notes.length
+          ? `<button type="button" class="mom-notes-clear" data-mom-notes-clear title="清空记一笔">清空</button>`
+          : "";
+        const body = notes.length
+          ? notes
+              .map((note) => {
+                const label = escapeHtml(
+                  note.label || String(note.symbol || "").replace(/USDT$/i, ""),
+                );
+                const st = note.statusLabel || note.status || "";
+                const stClass = note.status ? `is-${note.status}` : "is-other";
+                const c2 = Number.isFinite(note.change2h)
+                  ? formatPercent(note.change2h)
+                  : "";
+                return [
+                  `<div class="mom-note-item">`,
+                  `<span class="mom-note-time">${escapeHtml(formatMomNoteTime(note.at))}</span>`,
+                  `<a href="#card-pin-${escapeHtml(note.symbol)}" class="notify-coin" data-jump="${escapeHtml(note.symbol)}">${label}</a>`,
+                  st
+                    ? `<span class="mom-status ${stClass}">${escapeHtml(st)}</span>`
+                    : "",
+                  c2
+                    ? `<span class="${hourClass(note.change2h)}">${escapeHtml(c2)}</span>`
+                    : "",
+                  `<button type="button" class="mom-note-del" data-mom-note-del="${escapeHtml(note.id)}" title="删除" aria-label="删除">×</button>`,
+                  `</div>`,
+                ].join("");
+              })
+              .join("")
+          : `<div class="mom-notes-empty">点行内「记」同步到 GitHub</div>`;
+        return `<div class="mom-notes"><div class="mom-notes-head"><span>记一笔</span>${clearBtn}</div>${body}</div>`;
+      }
+
+      async function addMomNoteFromRow(row) {
+        if (!row || !row.symbol || momNotesSaving) return;
+        const trend = row.trend || {};
+        const notes = loadMomNotes();
+        const recent = notes[0];
+        if (
+          recent &&
+          recent.symbol === row.symbol &&
+          Date.now() - Number(recent.at) < 2 * 60 * 1000
+        ) {
+          showToast(`刚记过 ${row.label || row.symbol}`);
+          return;
+        }
+        const entry = {
+          id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+          at: Date.now(),
+          symbol: row.symbol,
+          label: row.label || String(row.symbol).replace(/USDT$/i, ""),
+          status: trend.status || null,
+          statusLabel: trend.label || null,
+          change2h: Number.isFinite(row.change2h) ? row.change2h : null,
+          change1h: Number.isFinite(row.change1h) ? row.change1h : null,
+          delta: Number.isFinite(trend.delta) ? trend.delta : null,
+        };
+        momNotesSaving = true;
+        try {
+          const result = await WatchFavorites.patchMomNotes({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.MOM_NOTES_PATH,
+            message: `Note momentum ${entry.symbol}`,
+            mutate: (list) => [entry, ...list],
+          });
+          momNoteItems = result.notes || [];
+          showToast(`已记 ${entry.label}`);
+          refreshMomentumFloatBody();
+        } catch (error) {
+          console.warn(error);
+          showToast(error.message || "记一笔失败");
+        } finally {
+          momNotesSaving = false;
+        }
+      }
+
+      async function removeMomNote(id) {
+        if (!id || momNotesSaving) return;
+        momNotesSaving = true;
+        try {
+          const result = await WatchFavorites.patchMomNotes({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.MOM_NOTES_PATH,
+            message: "Remove momentum note",
+            mutate: (list) => list.filter((note) => note.id !== id),
+          });
+          momNoteItems = result.notes || [];
+          refreshMomentumFloatBody();
+        } catch (error) {
+          console.warn(error);
+          showToast(error.message || "删除失败");
+        } finally {
+          momNotesSaving = false;
+        }
+      }
+
+      async function clearMomNotes() {
+        if (momNotesSaving) return;
+        momNotesSaving = true;
+        try {
+          const result = await WatchFavorites.patchMomNotes({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.MOM_NOTES_PATH,
+            message: "Clear momentum notes",
+            mutate: () => [],
+          });
+          momNoteItems = result.notes || [];
+          refreshMomentumFloatBody();
+          showToast("记一笔已清空");
+        } catch (error) {
+          console.warn(error);
+          showToast(error.message || "清空失败");
+        } finally {
+          momNotesSaving = false;
+        }
+      }
+
+      function refreshMomentumFloatBody() {
+        const body = document.getElementById("momentumFloatBody");
+        if (!body) return;
+        body.innerHTML = renderMomentumFloatHtml(lastMomentumSnapshot);
+      }
+
       function renderMomentumFloatHtml(snapshot) {
         const rows = (snapshot && snapshot.rows) || [];
+        const notesHtml = renderMomNotesHtml();
         if (!rows.length) {
-          return `<div class="notify-col-empty">暂无近2h/1h 数据</div>`;
+          return `${notesHtml}<div class="notify-col-empty">暂无近2h/1h 数据</div>`;
         }
-        return rows
+        const list = rows
           .map((row) => {
             const day = formatPercent(row.change24h);
             const pinPct = formatPercent(row.pinChange);
@@ -2197,17 +2471,19 @@
             const tip = escapeHtml(formatTrailTip(row.trail2h, trend));
             const climbClass = trend.status === "climb" ? " is-climb" : "";
             return [
-              `<div class="mom-row${climbClass}" title="${tip}">`,
+              `<div class="mom-row${climbClass}" title="${tip}" data-mom-symbol="${escapeHtml(row.symbol)}">`,
               `<div><a href="#card-pin-${row.symbol}" class="notify-coin mom-name" data-jump="${row.symbol}">${escapeHtml(row.label)}</a> ${escapeHtml(day)}</div>`,
               `<div>【${escapeHtml(pinPct)}】</div>`,
               `<div>${escapeHtml(formatPinPrice(row.pinPrice))}</div>`,
               `<div>${escapeHtml(formatPinPrice(row.current))}</div>`,
               `<div class="mom-hours"><span class="${cls2}">近2h ${escapeHtml(c2)}</span> · <span class="${cls1}">近1h ${escapeHtml(c1)}</span><span class="mom-status ${statusClass}">${escapeHtml(trend.label || "其它")}</span></div>`,
               renderTrailStepsHtml(row.trail2h, trend),
+              `<button type="button" class="mom-note-btn" data-mom-note="${escapeHtml(row.symbol)}" title="记一笔：时间 + 状态">记</button>`,
               `</div>`,
             ].join("");
           })
           .join("");
+        return notesHtml + list;
       }
 
       function setMomentumFloatOpen(open) {
@@ -2219,9 +2495,7 @@
           hideNotifyFloatKeepTab();
           panel.hidden = false;
           if (tab) tab.classList.add("is-active");
-          if (body) {
-            body.innerHTML = renderMomentumFloatHtml(lastMomentumSnapshot);
-          }
+          refreshMomentumFloatBody();
           updateMomentumFloatPanel();
         } else {
           panel.hidden = true;
@@ -2284,7 +2558,7 @@
         }
         // Only refresh body if panel is open or first paint.
         if (!panel.hidden) {
-          body.innerHTML = renderMomentumFloatHtml(snap);
+          refreshMomentumFloatBody();
         }
       }
 
@@ -2292,9 +2566,8 @@
         // Top meta strip retired — keep snapshot for the 近2h/1h float.
         lastMomentumSnapshot = buildMomentumSnapshot(scores, symbols);
         const panel = document.getElementById("momentumFloat");
-        const body = document.getElementById("momentumFloatBody");
-        if (panel && body && !panel.hidden) {
-          body.innerHTML = renderMomentumFloatHtml(lastMomentumSnapshot);
+        if (panel && !panel.hidden) {
+          refreshMomentumFloatBody();
         }
         updateMomentumFloatPanel();
       }
@@ -3752,6 +4025,31 @@
       document
         .getElementById("momentumFloatBody")
         .addEventListener("click", (event) => {
+          const noteBtn = event.target.closest("[data-mom-note]");
+          if (noteBtn) {
+            event.preventDefault();
+            const symbol = noteBtn.getAttribute("data-mom-note");
+            const row =
+              (lastMomentumSnapshot &&
+                lastMomentumSnapshot.rows &&
+                lastMomentumSnapshot.rows.find(
+                  (item) => item.symbol === symbol,
+                )) ||
+              null;
+            if (row) addMomNoteFromRow(row);
+            return;
+          }
+          const delBtn = event.target.closest("[data-mom-note-del]");
+          if (delBtn) {
+            event.preventDefault();
+            removeMomNote(delBtn.getAttribute("data-mom-note-del"));
+            return;
+          }
+          if (event.target.closest("[data-mom-notes-clear]")) {
+            event.preventDefault();
+            clearMomNotes();
+            return;
+          }
           const link = event.target.closest(".notify-coin");
           if (!link) return;
           event.preventDefault();
