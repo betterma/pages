@@ -230,7 +230,11 @@ async function fetchTokenBasicInfo(tokens) {
   return map;
 }
 
-async function fetchHistoricalCandles(params) {
+/**
+ * GET /api/v6/dex/market/candles （Basic，月免费 100K）
+ * 替代 Premium 的 historical-candles，参数与返回格式兼容。
+ */
+async function fetchCandles(params) {
   const { baseUrl } = okxConfig();
   const chainIndex = String(params.chainIndex || '').trim();
   const tokenContractAddress = normalizeAddress(
@@ -250,7 +254,7 @@ async function fetchHistoricalCandles(params) {
   if (params.after) query.set('after', String(params.after));
   if (params.before) query.set('before', String(params.before));
 
-  const requestPath = `/api/v6/dex/market/historical-candles?${query.toString()}`;
+  const requestPath = `/api/v6/dex/market/candles?${query.toString()}`;
   return withRetry(async () => {
     const headers = authHeaders('GET', requestPath, '');
     const response = await requestRaw(`${baseUrl}${requestPath}`, {
@@ -300,7 +304,9 @@ async function fetchHistoricalCandles(params) {
 
 module.exports = {
   okxConfig,
-  fetchHistoricalCandles,
+  fetchCandles,
+  /** @deprecated 使用 fetchCandles（Basic /market/candles） */
+  fetchHistoricalCandles: fetchCandles,
   fetchTokenBasicInfo,
   normalizeAddress,
   shortLabel,

@@ -8,12 +8,12 @@
  *
  * 流程：
  *   读 GitHub okx/favorites.json
- *   拉 OKX historical-candles（多周期）+ token basic-info
+ *   拉 OKX market/candles（Basic，多周期）+ token basic-info
  *   写 OBS okx-candles-cache.json
  *   若补全了名字则回写 favorites.json
  */
 const {
-  fetchHistoricalCandles,
+  fetchCandles,
   fetchTokenBasicInfo,
   isPlaceholderSymbol,
   isRateLimitError,
@@ -112,7 +112,7 @@ async function fetchBarsForToken(token, previous) {
   for (let index = 0; index < BARS.length; index += 1) {
     const bar = BARS[index];
     try {
-      const row = await fetchHistoricalCandles({
+      const row = await fetchCandles({
         chainIndex: token.chainIndex,
         tokenContractAddress: token.tokenContractAddress,
         bar,

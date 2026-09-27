@@ -29,6 +29,7 @@
 
 ## 说明
 
+- 行情走 Basic：`GET /api/v6/dex/market/candles`（月免费约 100K），不再用 Premium 的 `historical-candles`
 - 新加自选后，等下一次定时才有 K 线
 - 近 3 天 / 近 10 天在前端截取
 - 多周期改为**串行**请求，避免 OKX 429；失败会尽量沿用上一轮 OBS 缓存
