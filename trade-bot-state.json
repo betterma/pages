@@ -2,23 +2,35 @@
   "mode": "paper",
   "symbol": "JUVUSDT",
   "enabled": true,
-  "status": "holding",
+  "status": "cooldown",
   "quoteAmount": 10000,
-  "quantity": 29556.213017751477,
-  "cash": 0,
-  "equity": 9990,
-  "anchorPrice": 0.323,
-  "windowStartMs": 1790510400000,
+  "quantity": 0,
+  "cash": 9655.216775147928,
+  "equity": 9655.216775147928,
+  "anchorPrice": 0.34,
+  "windowStartMs": 1790524800000,
   "entryPrice": 0.338,
-  "cooldownUntil": null,
-  "lastPrice": 0.338,
-  "lastCheckAt": 1790524223241,
-  "lastAction": "paper_start",
+  "cooldownUntil": 1790526578715,
+  "lastPrice": 0.327,
+  "lastCheckAt": 1790525978715,
+  "lastAction": "paper_sell_stop",
   "lastError": null,
-  "updatedAt": 1790524223241,
+  "updatedAt": 1790525979236,
   "startedAt": 1790524223241,
-  "feesPaid": 10,
+  "feesPaid": 19.66488165680473,
   "logs": [
+    {
+      "at": 1790525979236,
+      "source": "page",
+      "level": "info",
+      "message": "【模拟卖出】现价 0.327 ≤ 卖出线 0.338300，到账 9655.22，冷静 10 分钟"
+    },
+    {
+      "at": 1790525979236,
+      "source": "page",
+      "level": "info",
+      "message": "换窗：起步价 0.323 → 0.34"
+    },
     {
       "at": 1790524223241,
       "source": "page",
@@ -1203,18 +1215,6 @@
     },
     {
       "at": 1790366479937,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 检测跳过：自动检测已关闭"
-    },
-    {
-      "at": 1790366479936,
-      "source": "timer",
-      "level": "info",
-      "message": "[paper] 定时检测开始 symbol=VTHOUSDT status=idle enabled=false"
-    },
-    {
-      "at": 1790364701951,
       "source": "timer",
       "level": "info",
       "message": "[paper] 检测跳过：自动检测已关闭"
