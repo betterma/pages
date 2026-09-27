@@ -741,6 +741,9 @@
         padding-bottom: 8px;
         border-bottom: 1px dashed rgba(90, 106, 104, 0.22);
       }
+      .mom-notes.is-collapsed {
+        padding-bottom: 4px;
+      }
       .mom-notes-head {
         display: flex;
         align-items: center;
@@ -750,6 +753,34 @@
         font-size: 11px;
         color: #9aa3a0;
         letter-spacing: 0.04em;
+      }
+      .mom-notes.is-collapsed .mom-notes-head {
+        margin-bottom: 0;
+      }
+      .mom-notes-toggle {
+        border: none;
+        background: transparent;
+        color: #5a6a68;
+        padding: 0;
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.04em;
+        cursor: pointer;
+      }
+      .mom-notes-toggle:hover {
+        color: #28323a;
+      }
+      .mom-notes-toggle .mom-notes-caret {
+        display: inline-block;
+        margin-right: 2px;
+        font-size: 10px;
+        color: #9aa3a0;
+      }
+      .mom-notes-head-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
       }
       .mom-notes-clear {
         border: none;
@@ -763,10 +794,7 @@
         color: #5a6a68;
       }
       .mom-notes-list {
-        max-height: 168px;
-        overflow: auto;
-        -webkit-overflow-scrolling: touch;
-        overscroll-behavior: contain;
+        /* no inner scroll — use expand/collapse */
       }
       .mom-note-group {
         margin-bottom: 8px;
@@ -1347,6 +1375,7 @@
       let momentumFloatRefreshing = false;
       let momNoteItems = [];
       let momNotesSaving = false;
+      let momNotesExpanded = true;
       const MOM_NOTES_LOCAL_KEY = "kline-mom-notes-v1";
       const MOM_NOTES_MAX = 30;
       const RISING_SNAP_KEY = "kline-rising-snap-v1";
@@ -2559,13 +2588,40 @@
 
       function renderMomNotesHtml() {
         const notes = loadMomNotes();
+        const groups = groupMomNotesBySymbol(notes);
+        const expanded = momNotesExpanded;
         const clearBtn = notes.length
           ? `<button type="button" class="mom-notes-clear" data-mom-notes-clear title="清空记一笔">清空</button>`
           : "";
+        const summary = notes.length
+          ? `${groups.length} 币 · ${notes.length} 条`
+          : "";
+        const caret = expanded ? "▾" : "▸";
+        const toggleLabel = notes.length
+          ? `记一笔${summary ? ` · ${summary}` : ""}`
+          : "记一笔";
+        const head = [
+          `<div class="mom-notes-head">`,
+          `<button type="button" class="mom-notes-toggle" data-mom-notes-toggle aria-expanded="${expanded ? "true" : "false"}">`,
+          `<span class="mom-notes-caret" aria-hidden="true">${caret}</span>`,
+          escapeHtml(toggleLabel),
+          `</button>`,
+          `<span class="mom-notes-head-actions">${clearBtn}</span>`,
+          `</div>`,
+        ].join("");
+
         if (!notes.length) {
-          return `<div class="mom-notes"><div class="mom-notes-head"><span>记一笔</span></div><div class="mom-notes-empty">点行内「记」同步到 GitHub</div></div>`;
+          return `<div class="mom-notes${expanded ? "" : " is-collapsed"}">${head}${
+            expanded
+              ? `<div class="mom-notes-empty">点行内「记」同步到 GitHub</div>`
+              : ""
+          }</div>`;
         }
-        const groups = groupMomNotesBySymbol(notes);
+
+        if (!expanded) {
+          return `<div class="mom-notes is-collapsed">${head}</div>`;
+        }
+
         const body = groups
           .map((group) => {
             const label = escapeHtml(group.label);
@@ -2608,7 +2664,7 @@
             ].join("");
           })
           .join("");
-        return `<div class="mom-notes"><div class="mom-notes-head"><span>记一笔</span>${clearBtn}</div><div class="mom-notes-list">${body}</div></div>`;
+        return `<div class="mom-notes">${head}<div class="mom-notes-list">${body}</div></div>`;
       }
 
       async function addMomNoteFromRow(row) {
@@ -4388,6 +4444,12 @@
           if (event.target.closest("[data-mom-notes-clear]")) {
             event.preventDefault();
             clearMomNotes();
+            return;
+          }
+          if (event.target.closest("[data-mom-notes-toggle]")) {
+            event.preventDefault();
+            momNotesExpanded = !momNotesExpanded;
+            refreshMomentumFloatBody();
             return;
           }
           const link = event.target.closest(".notify-coin");
