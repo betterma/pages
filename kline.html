@@ -95,6 +95,14 @@
       .friend-links-panel a:hover {
         background: rgba(90, 106, 104, 0.1);
       }
+      body.is-notes-view .page-section,
+      body.is-notes-view #hiddenPinTab,
+      body.is-notes-view #hiddenPinDrawer,
+      body.is-notes-view #notifyFloat,
+      body.is-notes-view #momentumFloat,
+      body.is-notes-view .float-tabs {
+        display: none !important;
+      }
       .topbar-actions {
         display: flex;
         align-items: center;
@@ -1052,7 +1060,7 @@
       <p class="hint">长按选 盯/购买/卖出/收藏/拉黑 · 盯一下展示当前窗口上涨（可低于盯住价）· 右侧看窗口回落 · 企微同步</p>
       -->
 
-      <h2 class="section-title">盯一下</h2>
+      <h2 class="section-title" id="pinSectionTitle">盯一下</h2>
       <div class="pin-meta-row">
         <div id="pinMeta" class="meta"></div>
         <button
@@ -1091,13 +1099,17 @@
       </div>
       <div id="pinGrid" class="kline-grid"></div>
 
+      <div id="risingSection" class="page-section">
       <h2 class="section-title">窗口上涨</h2>
       <div id="risingMeta" class="meta"></div>
       <div id="risingGrid" class="kline-grid"></div>
+      </div>
 
+      <div id="favSection" class="page-section">
       <h2 class="section-title">我的收藏</h2>
       <div id="favMeta" class="meta"></div>
       <div id="favGrid" class="kline-grid"></div>
+      </div>
     </div>
 
     <button
@@ -1311,6 +1323,35 @@
       let positionSaving = false;
       let klineViewKey = "3d-4h";
 
+      function isNotesView() {
+        try {
+          return (
+            new URLSearchParams(window.location.search).get("view") === "notes"
+          );
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function applyNotesViewChrome() {
+        if (!isNotesView()) return;
+        document.body.classList.add("is-notes-view");
+        document.title = "记一笔追踪";
+        const h1 = document.querySelector(".topbar-left h1");
+        if (h1) h1.textContent = "记一笔追踪";
+        const pinTitle = document.getElementById("pinSectionTitle");
+        if (pinTitle) pinTitle.textContent = "记一笔 K 线";
+        const friendPanel = document.querySelector(".friend-links-panel");
+        if (friendPanel) {
+          friendPanel.innerHTML = [
+            `<a href="./kline.html">币安观察</a>`,
+            `<a href="./watch.html">冲榜雷达</a>`,
+            `<a href="./range100.html">Range100 潜伏</a>`,
+            `<a href="./okx/kline.html">OKX 自选</a>`,
+          ].join("");
+        }
+      }
+
       function currentKlineView() {
         return KLINE_VIEWS[klineViewKey] || KLINE_VIEWS["3d-4h"];
       }
@@ -1365,6 +1406,54 @@
         return Number.isFinite(value)
           ? `${value > 0 ? "+" : ""}${value.toFixed(2)}%`
           : "--";
+      }
+
+      function noteSymbolList() {
+        const seen = new Set();
+        const list = [];
+        for (const note of momNoteItems || []) {
+          const symbol = String(note && note.symbol ? note.symbol : "")
+            .trim()
+            .toUpperCase();
+          if (!symbol || seen.has(symbol)) continue;
+          seen.add(symbol);
+          list.push(symbol);
+        }
+        return list;
+      }
+
+      async function removeNotesForSymbol(symbol) {
+        if (!symbol || momNotesSaving) return false;
+        momNotesSaving = true;
+        const key = String(symbol).trim().toUpperCase();
+        const label = key.replace(/USDT$/i, "");
+        try {
+          setStatus(false, `正在去掉 ${label} 的记一笔...`);
+          const result = await WatchFavorites.patchMomNotes({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.MOM_NOTES_PATH,
+            message: `Remove momentum notes ${key}`,
+            mutate: (list) =>
+              list.filter(
+                (note) =>
+                  String(note.symbol || "")
+                    .trim()
+                    .toUpperCase() !== key,
+              ),
+          });
+          momNoteItems = result.notes || [];
+          showToast(`已去掉记一笔 ${label}`);
+          await renderKlines();
+          setStatus(true, `已去掉记一笔 ${label}`);
+          return true;
+        } catch (error) {
+          console.error(error);
+          showToast(error.message || "去掉记一笔失败");
+          setStatus(false, error.message || "去掉记一笔失败");
+          throw error;
+        } finally {
+          momNotesSaving = false;
+        }
       }
 
       function favoriteSymbols() {
@@ -2952,6 +3041,9 @@
             ? `<button type="button" data-action="sell">卖出</button>`
             : "",
           `<button type="button" data-action="fav">${favored ? "取消收藏" : "收藏"}</button>`,
+          isNotesView()
+            ? `<button type="button" data-action="remove-note" class="is-danger">去掉记一笔</button>`
+            : "",
           `<button type="button" data-action="blacklist" class="is-danger">拉黑</button>`,
           `<button type="button" data-action="close" class="is-muted">关闭</button>`,
         ].join("");
@@ -2972,6 +3064,7 @@
             buy: "保存中",
             sell: "卖出中",
             fav: favored ? "取消中" : "收藏中",
+            "remove-note": "去掉中",
             blacklist: "拉黑中",
           };
           const needsConfirm = action === "buy" || action === "sell" || action === "blacklist";
@@ -2991,6 +3084,8 @@
               done = await sellPositionForSymbol(symbol, { onSaving: markBusy });
             } else if (action === "fav") {
               await toggleFavoriteForSymbol(symbol);
+            } else if (action === "remove-note") {
+              done = await removeNotesForSymbol(symbol);
             } else if (action === "blacklist") {
               done = await addToBlacklist(symbol, { onSaving: markBusy });
             }
@@ -3097,7 +3192,9 @@
               section === "rising"
                 ? "暂无上涨币种"
                 : section === "pin"
-                  ? "暂无当前窗口上涨的盯一下 · 右侧可看窗口回落项"
+                  ? isNotesView()
+                    ? "暂无记一笔 · 去币安观察近2h/1h 浮窗点「记」"
+                    : "暂无当前窗口上涨的盯一下 · 右侧可看窗口回落项"
                   : section === "pin-hidden"
                     ? "当前没有隐藏的盯一下（窗口回落）"
                     : "暂无窗口上涨的收藏"
@@ -3341,6 +3438,79 @@
         const chartIv = chartInterval();
         const bars = klineLimit(chartIv);
         const rangeText = klineRangeLabel();
+        const notesMode = isNotesView();
+
+        if (notesMode) {
+          if (klineAbort) klineAbort.abort();
+          klineAbort = new AbortController();
+          const { signal } = klineAbort;
+          const noteSymbols = noteSymbolList();
+          const blocked = blacklistSymbols();
+          const pinMap = new Map(pinItems.map((item) => [item.symbol, item]));
+          const visibleNotes = noteSymbols.filter(
+            (symbol) => !blocked.has(symbol),
+          );
+          // Same pin-card display/sort among notes that still have pin rows.
+          const withPin = visibleNotes
+            .filter((symbol) => pinMap.has(symbol))
+            .map((symbol) => pinMap.get(symbol))
+            .sort((a, b) => {
+              const changeA = pinChangePercent(a);
+              const changeB = pinChangePercent(b);
+              const hasA = Number.isFinite(changeA);
+              const hasB = Number.isFinite(changeB);
+              const upA = hasA && changeA > 0 ? 1 : 0;
+              const upB = hasB && changeB > 0 ? 1 : 0;
+              if (upA !== upB) return upB - upA;
+              if (hasA && hasB && changeB !== changeA) return changeB - changeA;
+              if (hasA !== hasB) return hasA ? -1 : 1;
+              return b.pinnedAt - a.pinnedAt;
+            })
+            .map((item) => item.symbol);
+          const withoutPin = visibleNotes.filter(
+            (symbol) => !pinMap.has(symbol),
+          );
+          const pinSymbolsList = [...withPin, ...withoutPin];
+
+          const clearExpiredBtn = document.getElementById("clearExpiredPinsBtn");
+          const clearPositionsBtn = document.getElementById(
+            "clearAllPositionsBtn",
+          );
+          const maintEmptyHint = document.getElementById("maintEmptyHint");
+          const expiredPins = pinItems.filter((item) =>
+            WatchFavorites.isPinExpired(item),
+          ).length;
+          const positionCount = positionItems.length;
+          if (clearExpiredBtn) clearExpiredBtn.hidden = expiredPins <= 0;
+          if (clearPositionsBtn) clearPositionsBtn.hidden = positionCount <= 0;
+          if (maintEmptyHint) {
+            maintEmptyHint.hidden = expiredPins > 0 || positionCount > 0;
+          }
+
+          const pinMeta = document.getElementById("pinMeta");
+          if (pinMeta) {
+            pinMeta.textContent = [
+              `记一笔 ${momNoteItems.length} 条`,
+              `追踪 ${pinSymbolsList.length} 币`,
+              rangeText,
+              `${bars} 根`,
+              "显示/长按与盯一下一致",
+            ].join(" · ");
+          }
+
+          updateHiddenPinTab(0);
+          updatePinMomentumMeta(new Map(), []);
+          await fillGrid(
+            document.getElementById("pinGrid"),
+            pinSymbolsList,
+            "pin",
+            signal,
+            new Set(),
+            pinMap,
+          );
+          return;
+        }
+
         const risingRaw = getRisingSymbols();
         const autoPinned = await autoPinNewRising(risingRaw);
         if (autoPinned.length) {
@@ -4231,8 +4401,11 @@
         if (event.target.closest("button, a, input, select, textarea, label, .card-actions, summary")) {
           return;
         }
-        window.location.href = "./newKline.html";
+        window.location.href = isNotesView()
+          ? "./kline.html"
+          : "./newKline.html";
       });
+      applyNotesViewChrome();
       syncRangeSelect();
       refreshAll({ reason: "boot" });
     </script>
