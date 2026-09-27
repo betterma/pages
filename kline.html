@@ -746,7 +746,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 8px;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
         font-size: 11px;
         color: #9aa3a0;
         letter-spacing: 0.04em;
@@ -762,20 +762,58 @@
       .mom-notes-clear:hover {
         color: #5a6a68;
       }
-      .mom-note-item {
+      .mom-notes-list {
+        max-height: 168px;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+      }
+      .mom-note-group {
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid rgba(220, 226, 222, 0.45);
+      }
+      .mom-note-group:last-child {
+        margin-bottom: 0;
+        padding-bottom: 0;
+        border-bottom: 0;
+      }
+      .mom-note-group-head {
         display: flex;
         align-items: baseline;
-        flex-wrap: wrap;
-        gap: 4px 8px;
-        padding: 3px 0;
+        gap: 6px;
+        margin-bottom: 2px;
+        font-size: 12px;
+      }
+      .mom-note-group-head .mom-note-sym {
+        font-weight: 700;
+        color: #28323a;
+      }
+      .mom-note-group-head .mom-note-count {
+        color: #9aa3a0;
+        font-size: 11px;
+        font-weight: 500;
+      }
+      .mom-note-item {
+        display: grid;
+        grid-template-columns: 40px minmax(0, 1fr) auto;
+        align-items: baseline;
+        column-gap: 8px;
+        padding: 2px 0 2px 2px;
         font-size: 12px;
         color: #5a6a68;
-        line-height: 1.4;
+        line-height: 1.45;
       }
       .mom-note-item .mom-note-time {
         color: #9aa3a0;
         font-variant-numeric: tabular-nums;
-        flex-shrink: 0;
+      }
+      .mom-note-item .mom-note-main {
+        min-width: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 6px;
+        align-items: baseline;
       }
       .mom-note-item .mom-note-del {
         border: none;
@@ -785,7 +823,7 @@
         font-size: 14px;
         line-height: 1;
         cursor: pointer;
-        margin-left: auto;
+        justify-self: end;
       }
       .mom-note-item .mom-note-del:hover {
         color: #8d7771;
@@ -2493,17 +2531,50 @@
         return `${hh}:${mm}`;
       }
 
+      function groupMomNotesBySymbol(notes) {
+        const map = new Map();
+        (notes || []).forEach((note) => {
+          const symbol = String(note && note.symbol ? note.symbol : "")
+            .trim()
+            .toUpperCase();
+          if (!symbol) return;
+          if (!map.has(symbol)) map.set(symbol, []);
+          map.get(symbol).push(note);
+        });
+        const groups = [...map.entries()].map(([symbol, list]) => {
+          const sorted = list
+            .slice()
+            .sort((a, b) => Number(a.at) - Number(b.at));
+          const latestAt = sorted.length
+            ? Number(sorted[sorted.length - 1].at) || 0
+            : 0;
+          const label =
+            (sorted[sorted.length - 1] && sorted[sorted.length - 1].label) ||
+            symbol.replace(/USDT$/i, "");
+          return { symbol, label, notes: sorted, latestAt };
+        });
+        groups.sort((a, b) => b.latestAt - a.latestAt);
+        return groups;
+      }
+
       function renderMomNotesHtml() {
         const notes = loadMomNotes();
         const clearBtn = notes.length
           ? `<button type="button" class="mom-notes-clear" data-mom-notes-clear title="清空记一笔">清空</button>`
           : "";
-        const body = notes.length
-          ? notes
+        if (!notes.length) {
+          return `<div class="mom-notes"><div class="mom-notes-head"><span>记一笔</span></div><div class="mom-notes-empty">点行内「记」同步到 GitHub</div></div>`;
+        }
+        const groups = groupMomNotesBySymbol(notes);
+        const body = groups
+          .map((group) => {
+            const label = escapeHtml(group.label);
+            const count =
+              group.notes.length > 1
+                ? `<span class="mom-note-count">${group.notes.length}</span>`
+                : "";
+            const lines = group.notes
               .map((note) => {
-                const label = escapeHtml(
-                  note.label || String(note.symbol || "").replace(/USDT$/i, ""),
-                );
                 const st = note.statusLabel || note.status || "";
                 const stClass = note.status ? `is-${note.status}` : "is-other";
                 const c2 = Number.isFinite(note.change2h)
@@ -2512,20 +2583,32 @@
                 return [
                   `<div class="mom-note-item">`,
                   `<span class="mom-note-time">${escapeHtml(formatMomNoteTime(note.at))}</span>`,
-                  `<a href="#card-pin-${escapeHtml(note.symbol)}" class="notify-coin" data-jump="${escapeHtml(note.symbol)}">${label}</a>`,
+                  `<span class="mom-note-main">`,
                   st
                     ? `<span class="mom-status ${stClass}">${escapeHtml(st)}</span>`
                     : "",
                   c2
                     ? `<span class="${hourClass(note.change2h)}">${escapeHtml(c2)}</span>`
                     : "",
-                  `<button type="button" class="mom-note-del" data-mom-note-del="${escapeHtml(note.id)}" title="删除" aria-label="删除">×</button>`,
+                  `</span>`,
+                  `<button type="button" class="mom-note-del" data-mom-note-del="${escapeHtml(note.id)}" title="删除这条" aria-label="删除">×</button>`,
                   `</div>`,
                 ].join("");
               })
-              .join("")
-          : `<div class="mom-notes-empty">点行内「记」同步到 GitHub</div>`;
-        return `<div class="mom-notes"><div class="mom-notes-head"><span>记一笔</span>${clearBtn}</div>${body}</div>`;
+              .join("");
+            return [
+              `<div class="mom-note-group">`,
+              `<div class="mom-note-group-head">`,
+              `<a href="#card-pin-${escapeHtml(group.symbol)}" class="notify-coin mom-note-sym" data-jump="${escapeHtml(group.symbol)}">${label}</a>`,
+              `<span aria-hidden="true">：</span>`,
+              count,
+              `</div>`,
+              lines,
+              `</div>`,
+            ].join("");
+          })
+          .join("");
+        return `<div class="mom-notes"><div class="mom-notes-head"><span>记一笔</span>${clearBtn}</div><div class="mom-notes-list">${body}</div></div>`;
       }
 
       async function addMomNoteFromRow(row) {
