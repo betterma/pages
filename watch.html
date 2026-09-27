@@ -1954,17 +1954,6 @@
       setInterval(() => {
         if (githubReady) refreshDerivedSteps();
       }, 60 * 1000);
-
-      document.addEventListener("dblclick", (event) => {
-        if (
-          event.target.closest(
-            "button, a, input, select, textarea, label, dialog, .favorite-button, .blacklist-button, .symbol-copy, .price-link",
-          )
-        ) {
-          return;
-        }
-        window.location.href = "./kline.html";
-      });
     </script>
   </body>
 </html>

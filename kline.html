@@ -1020,6 +1020,7 @@
             <summary>友情链接</summary>
             <div class="friend-links-panel">
               <a href="./newKline.html">记一笔追踪</a>
+              <a href="./watch.html">冲榜雷达</a>
               <a href="./range100.html">Range100 潜伏</a>
               <a href="./okx/kline.html">OKX 自选</a>
             </div>
@@ -4227,10 +4228,10 @@
         if (open) closeCardActions();
       });
       document.addEventListener("dblclick", (event) => {
-        if (event.target.closest("button, a, input, select, textarea, label")) {
+        if (event.target.closest("button, a, input, select, textarea, label, .card-actions, summary")) {
           return;
         }
-        window.location.href = "./watch.html";
+        window.location.href = "./newKline.html";
       });
       syncRangeSelect();
       refreshAll({ reason: "boot" });
