@@ -436,14 +436,11 @@
     </div>
 
     <div class="explain">
-        📘 字段说明：<br>
-        - <strong>市值</strong>：当前流通市值（marketCap）。<br>
-        - <strong>FDV</strong>：完全稀释估值（基于总供应量）。<br>
-        - <strong>流动性</strong>：DEX中代币的可交易资金池总额，流动性越高交易滑点越低。<br>
-        - <strong>24h交易量</strong>：过去24小时美元交易额（v24hUSD）。<br>
-        - <strong>排序规则</strong>：市值≥1000万且<1亿直接显示；500万≤市值<1000万折叠；<500万不显示；失败项始终显示。<br>
-        - <strong>复制地址</strong>：点击合约地址单元格即可复制完整地址。<br>
-        - <strong>导出功能</strong>：查询完成后可使用 To Watch (市值≥500万) 和 To All (此次+历史) 按钮导出数据。
+        📘 流程说明：<br>
+        - 粘贴前两步得到的新地址 → 点击查询 → Birdeye 拉市值。<br>
+        - <strong>市值 &lt; $5M</strong>：直接丢弃，不展示、不进入导出。<br>
+        - <strong>市值 ≥ $5M</strong>：按市值降序展示；<strong>To Watch</strong> 覆盖写入本次列表；<strong>To All</strong> 与历史合并去重。<br>
+        - 查询失败的地址单独标红，不进入导出。
     </div>
 
     <div class="footer-note">
@@ -469,8 +466,8 @@
 
         // ---------- 全局数据集合 ----------
         let L0 = [];  // toAll.json 中的数据
-        let L1 = [];  // 此次处理的所有合约集合
-        let L2 = [];  // 市值 > 500万 的集合
+        let L1 = [];  // 本次 ≥5M（供 To All）
+        let L2 = [];  // 本次 ≥5M（供 To Watch）
 
         // ---------- DOM 元素 ----------
         const fileInput = document.getElementById('fileInput');
@@ -677,7 +674,7 @@
             return { results, successCount };
         }
 
-        // ---------- 渲染表格（排序+折叠）----------
+        // ---------- 渲染表格：丢弃 <5M，其余供 To Watch / To All ----------
         function renderResults(results) {
             if (!results || results.length === 0) {
                 resultsBody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 40px;">无数据</td></tr>`;
@@ -685,141 +682,90 @@
                 return;
             }
 
-            // 初始化 L1 和 L2
             L1 = [];
             L2 = [];
 
-            // 分离成功(有市值)和失败
             const successWithCap = [];
             const failed = [];
             for (const item of results) {
-                if (item.success) {
-                    L1.push(item.address);  // 将所有成功的地址加入 L1
-                }
-                if (item.success && typeof item.market_cap === 'number' && !isNaN(item.market_cap)) {
+                if (
+                    item.success &&
+                    typeof item.market_cap === 'number' &&
+                    !isNaN(item.market_cap)
+                ) {
                     successWithCap.push(item);
                 } else {
                     failed.push(item);
                 }
             }
 
-            // 过滤掉市值 < 5M 的代币
-            const filtered = successWithCap.filter(item => item.market_cap >= 5000000);
-            
-            // 构建 L2 (市值 > 500万)
+            const filtered = successWithCap.filter(
+                (item) => item.market_cap >= 5000000,
+            );
+            filtered.sort((a, b) => b.market_cap - a.market_cap);
+
+            // 仅 ≥5M 进入导出池（To Watch / To All）
             for (const item of filtered) {
+                L1.push(item.address);
                 L2.push(item.address);
             }
 
-            // 按市值降序排序
-            filtered.sort((a, b) => b.market_cap - a.market_cap);
-
-            // 分组：≥$1000万 并且 < $1亿，和 $500万-$1000万
-            const high = filtered.filter(item => item.market_cap >= 10000000 && item.market_cap < 100000000);   // ≥10M 且 < 1亿
-            const medium = filtered.filter(item => item.market_cap >= 5000000 && item.market_cap < 10000000); // 5M-10M
-
-            // 构建HTML
-            let highRows = '';
-            for (const item of high) {
-                highRows += `<tr class="success-row">
+            let rows = '';
+            for (const item of filtered) {
+                rows += `<tr class="success-row">
                     <td class="address-cell" data-address="${item.address}" title="点击复制地址"><span>${item.address}</span></td>
                     <td>${item.symbol}</td>
                     <td class="numeric">$${formatNumber(item.market_cap)}</td>
-                    <td class="numeric">${item.price ? '$' + item.price.toFixed(6) : '-'}</td>
-                    <td class="numeric">${item.fdv !== undefined ? '$' + formatNumber(item.fdv) : '-'}</td>
-                    <td class="numeric">${item.liquidity !== undefined ? '$' + formatNumber(item.liquidity) : '-'}</td>
-                    <td class="numeric">${item.volume_24h !== undefined ? '$' + formatNumber(item.volume_24h) : '-'}</td>
-                    <td class="numeric">${item.holders ?? '-'}</td>
-                </tr>`;
-            }
-
-            let mediumRows = '';
-            for (const item of medium) {
-                mediumRows += `<tr class="success-row">
-                    <td class="address-cell" data-address="${item.address}" title="点击复制地址"><span>${item.address}</span></td>
-                    <td>${item.symbol}</td>
-                    <td class="numeric">$${formatNumber(item.market_cap)}</td>
-                    <td class="numeric">${item.price ? '$' + item.price.toFixed(6) : '-'}</td>
-                    <td class="numeric">${item.fdv !== undefined ? '$' + formatNumber(item.fdv) : '-'}</td>
-                    <td class="numeric">${item.liquidity !== undefined ? '$' + formatNumber(item.liquidity) : '-'}</td>
-                    <td class="numeric">${item.volume_24h !== undefined ? '$' + formatNumber(item.volume_24h) : '-'}</td>
+                    <td class="numeric">${item.price ? '$' + Number(item.price).toFixed(6) : '-'}</td>
+                    <td class="numeric">${item.fdv !== undefined && item.fdv !== null ? '$' + formatNumber(item.fdv) : '-'}</td>
+                    <td class="numeric">${item.liquidity !== undefined && item.liquidity !== null ? '$' + formatNumber(item.liquidity) : '-'}</td>
+                    <td class="numeric">${item.volume_24h !== undefined && item.volume_24h !== null ? '$' + formatNumber(item.volume_24h) : '-'}</td>
                     <td class="numeric">${item.holders ?? '-'}</td>
                 </tr>`;
             }
 
             let failedRows = '';
             for (const item of failed) {
-                if (item.success) continue; // 理论上不会到这里
                 failedRows += `<tr class="error-row">
                     <td class="address-cell" data-address="${item.address}" title="点击复制地址"><span>${item.address}</span></td>
-                    <td colspan="7" class="error-message">❌ 查询失败: ${item.error}</td>
+                    <td colspan="7" class="error-message">❌ 查询失败: ${item.error || '无市值数据'}</td>
                 </tr>`;
             }
 
-            // 构建完整 tbody
             let html = '';
-            if (highRows) {
-                html += `<tbody id="high-group">${highRows}</tbody>`;
-            }
-            if (mediumRows) {
-                // 默认隐藏的 medium 组
-                html += `<tbody id="medium-group" style="display: none;">${mediumRows}</tbody>`;
-                    // 切换行（用<tbody>包装<tr>以确保正规的HTML结构）
-                    html += `<tbody id="toggle-wrapper"><tr id="toggle-medium-row" class="toggle-row"><td colspan="8">⬇️ 点击显示 5M-10M 代币 (${medium.length} 个) ⬇️</td></tr></tbody>`;
-            }
-            if (failedRows) {
-                html += `<tbody id="failed-group">${failedRows}</tbody>`;
-            }
-            if (!highRows && !mediumRows && !failedRows) {
-                html = `<tr><td colspan="8" style="text-align: center; padding: 40px;">无符合条件的数据（市值均低于500万或全部失败）</td></tr>`;
+            if (rows) html += rows;
+            if (failedRows) html += failedRows;
+            if (!html) {
+                html = `<tr><td colspan="8" style="text-align: center; padding: 40px;">无符合条件的数据（市值均低于 $5M 或全部失败）</td></tr>`;
             }
 
             resultsBody.innerHTML = html;
 
-            // 绑定复制事件：为所有 .address-cell 添加点击复制
-            const addressCells = document.querySelectorAll('.address-cell');
-            addressCells.forEach(cell => {
-                cell.addEventListener('click', (e) => {
+            document.querySelectorAll('.address-cell').forEach((cell) => {
+                cell.addEventListener('click', () => {
                     const address = cell.getAttribute('data-address');
-                    if (address) {
-                        navigator.clipboard.writeText(address).then(() => {
-                            showToast('✅ 地址已复制');
-                        }).catch(() => {
-                            // 降级处理
-                            const textarea = document.createElement('textarea');
-                            textarea.value = address;
-                            document.body.appendChild(textarea);
-                            textarea.select();
-                            document.execCommand('copy');
-                            document.body.removeChild(textarea);
-                            showToast('✅ 地址已复制');
-                        });
-                    }
+                    if (!address) return;
+                    navigator.clipboard.writeText(address).then(() => {
+                        showToast('✅ 地址已复制');
+                    }).catch(() => {
+                        const textarea = document.createElement('textarea');
+                        textarea.value = address;
+                        document.body.appendChild(textarea);
+                        textarea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textarea);
+                        showToast('✅ 地址已复制');
+                    });
                 });
             });
 
-            // 绑定折叠切换事件
-            const toggleRow = document.getElementById('toggle-medium-row');
-            const mediumGroup = document.getElementById('medium-group');
-            if (toggleRow && mediumGroup) {
-                toggleRow.addEventListener('click', function() {
-                    const isHidden = mediumGroup.style.display === 'none';
-                    if (isHidden) {
-                        mediumGroup.style.display = 'table-row-group';
-                        toggleRow.innerHTML = '<td colspan="8">⬆️ 点击隐藏 5M-10M 代币 ⬆️</td>';
-                    } else {
-                        mediumGroup.style.display = 'none';
-                        toggleRow.innerHTML = `<td colspan="8">⬇️ 点击显示 5M-10M 代币 (${medium.length} 个) ⬇️</td>`;
-                    }
-                });
-            }
-
-            // 显示导出区域
             exportArea.style.display = 'flex';
 
-            // 统计信息
-            const hiddenCount = successWithCap.length - filtered.length; // 被过滤的（<5M）
-            showStatus(`查询完成：成功 ${successWithCap.length} 个（显示 ${filtered.length} 个，过滤 ${hiddenCount} 个），失败 ${failed.length} 个。可进行导出操作。`, 'info');
+            const discarded = successWithCap.length - filtered.length;
+            showStatus(
+                `查询完成：有市值 ${successWithCap.length} · 保留 ≥$5M ${filtered.length} · 丢弃 <$5M ${discarded} · 失败 ${failed.length}。可 To Watch / To All。`,
+                'info',
+            );
         }
 
         // ---------- 导出功能 ----------

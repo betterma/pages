@@ -1,213 +1,265 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>数据工具中心</title>
-    <style>
-        :root {
-            --primary-color: #4361ee;
-            --hover-color: #3a56d4;
-            --active-color: #3f37c9;
-            --text-color: #2b2d42;
-            --bg-color: #f8f9fa;
-            --border-color: #e0e0e0;
-        }
-        
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            line-height: 1.6;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 1rem;
-        }
-        
-        header {
-            text-align: center;
-            padding: 2rem 0;
-            border-bottom: 1px solid var(--border-color);
-            margin-bottom: 2rem;
-        }
-        
-        h1 {
-            color: var(--primary-color);
-            margin-bottom: 0.5rem;
-        }
-        
-        .description {
-            color: #6c757d;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        
-        .tabs {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 2rem;
-            border-bottom: 1px solid var(--border-color);
-        }
-        
-        .tab-button {
-            padding: 0.8rem 1.5rem;
-            background: none;
-            border: none;
-            border-bottom: 3px solid transparent;
-            font-size: 1rem;
-            font-weight: 500;
-            color: var(--text-color);
-            cursor: pointer;
-            transition: all 0.2s;
-            margin: 0 0.2rem;
-        }
-        
-        .tab-button:hover {
-            color: var(--primary-color);
-        }
-        
-        .tab-button.active {
-            color: var(--primary-color);
-            border-bottom-color: var(--primary-color);
-        }
-        
-        .tab-content {
-            display: none;
-            padding: 1rem;
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        }
-        
-        .tab-content.active {
-            display: block;
-            animation: fadeIn 0.3s ease-in-out;
-        }
-        
-        .iframe-container {
-            position: relative;
-            width: 100%;
-            /* 修改高度为更适合移动端的视口高度 */
-            height: 90vh;
-            min-height: 500px;
-            border-radius: 6px;
-            overflow: hidden;
-            border: 1px solid var(--border-color);
-        }
-        
-        .iframe-container iframe {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>交易系统 · Pages</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,500;0,9..40,700;1,9..40,500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #1a2332;
+      --muted: #5c6b7a;
+      --line: rgba(26, 35, 50, 0.12);
+      --card: rgba(255, 255, 255, 0.72);
+      --accent: #c45c26;
+      --accent-soft: #e8a06a;
+      --teal: #1f6f6a;
+      --binance: #b8860b;
+      --okx: #2d4a3e;
+      --sol: #0f766e;
+      --rh: #3d4f7c;
+      --trade: #6b3fa0;
+    }
 
-        .bottom-links {
-            margin-top: 2rem;
-            padding: 1rem 0 2rem;
-            text-align: center;
-        }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-        .bottom-links a {
-            display: inline-block;
-            padding: 0.75rem 1.4rem;
-            background: var(--primary-color);
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: 600;
-            transition: background-color 0.2s ease;
-        }
+    body {
+      min-height: 100vh;
+      font-family: "DM Sans", "PingFang SC", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 80% 50% at 10% -10%, rgba(232, 160, 106, 0.35), transparent 55%),
+        radial-gradient(ellipse 60% 40% at 90% 10%, rgba(31, 111, 106, 0.18), transparent 50%),
+        linear-gradient(165deg, #f7f1e8 0%, #e8eef2 48%, #dfe8e4 100%);
+      padding: 2.5rem 1.25rem 3.5rem;
+    }
 
-        .bottom-links a:hover {
-            background: var(--hover-color);
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        @media (max-width: 768px) {
-            .tabs {
-                flex-wrap: wrap;
-            }
-            
-            .tab-button {
-                flex: 1;
-                margin: 0.2rem;
-                padding: 0.8rem;
-                font-size: 0.9rem;
-            }
-            
-            .iframe-container {
-                /* 移动端也用更高的视口高度 */
-                height: 90vh;
-                min-height: 350px;
-            }
-        }
-    </style>
+    .shell {
+      max-width: 920px;
+      margin: 0 auto;
+    }
+
+    .brand-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.75rem 1.5rem;
+      margin-bottom: 0.35rem;
+    }
+
+    .brand {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: clamp(2.4rem, 6vw, 3.4rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.05;
+      color: var(--ink);
+    }
+
+    .brand em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .mazha {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: var(--teal);
+      text-decoration: none;
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .mazha:hover {
+      color: var(--accent);
+      border-bottom-color: var(--accent-soft);
+    }
+
+    .lede {
+      max-width: 36rem;
+      margin: 0.5rem 0 2.25rem;
+      font-size: 1.05rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .section {
+      margin-bottom: 1.75rem;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .section-head h2 {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .section-head span {
+      font-size: 0.85rem;
+      color: var(--muted);
+      opacity: 0.85;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .card {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      padding: 1.15rem 1.2rem;
+      text-decoration: none;
+      color: inherit;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 24px rgba(26, 35, 50, 0.06);
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--stripe, var(--accent));
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 32px rgba(26, 35, 50, 0.1);
+      border-color: rgba(26, 35, 50, 0.18);
+    }
+
+    .card .label {
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+
+    .card .hint {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .stripe-binance { --stripe: var(--binance); }
+    .stripe-okx { --stripe: var(--okx); }
+    .stripe-sol { --stripe: var(--sol); }
+    .stripe-rh { --stripe: var(--rh); }
+    .stripe-trade { --stripe: var(--trade); }
+
+    .footer {
+      margin-top: 2.5rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--line);
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    @media (max-width: 560px) {
+      body { padding: 1.75rem 1rem 2.5rem; }
+      .grid { grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+      .card { padding: 0.95rem; }
+      .card .hint { display: none; }
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <a href="./eth-index.html" style="display:inline-block; padding:0.75rem 1.4rem; background:var(--primary-color); color:white; text-decoration:none; border-radius:6px; font-weight:600;">ETH 独立入口</a>
-        <div class="tabs">
-            <button class="tab-button active" data-tab="url-viewer">资源中心</button>
-            <button class="tab-button" data-tab="data-comparison-2">数据对比</button>
-            <button class="tab-button" data-tab="get-coin-info">获取详情</button>
-        </div>
-        
-        <div class="tab-content active" id="url-viewer">
-            <div class="iframe-container">
-                <iframe src="./url-viewer.html" title="资源链接中心"></iframe>
-            </div>
-        </div>
-        
-        <div class="tab-content" id="data-comparison-2">
-            <div class="iframe-container">
-                <iframe src="./findNew.html/new.html" title="数据对比工具2"></iframe>
-            </div>
-        </div>
-
-        <div class="tab-content" id="get-coin-info">
-            <div class="iframe-container">
-                <iframe src="./getcoininfo.html" title="获取详情工具"></iframe>
-            </div>
-        </div>
+  <div class="shell">
+    <div class="brand-row">
+      <h1 class="brand">Pages <em>交易台</em></h1>
+      <a class="mazha" href="https://betterma.github.io/">← 蚂蚱导航</a>
     </div>
+    <p class="lede">Binance 盯盘、OKX 自选，以及 Solana / Robinhood 发现流程的统一入口。</p>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const tabButtons = document.querySelectorAll('.tab-button');
-            const tabContents = document.querySelectorAll('.tab-content');
-            
-            tabButtons.forEach(button => {
-                button.addEventListener('click', () => {
-                    // 移除所有active类
-                    tabButtons.forEach(btn => btn.classList.remove('active'));
-                    tabContents.forEach(content => content.classList.remove('active'));
-                    
-                    // 添加active类到当前选项卡
-                    button.classList.add('active');
-                    const tabId = button.getAttribute('data-tab');
-                    document.getElementById(tabId).classList.add('active');
-                });
-            });
-            
-            // 初始化第一个选项卡
-            tabButtons[0].click();
-        });
-    </script>
+    <section class="section">
+      <div class="section-head">
+        <h2>Binance</h2>
+        <span>观察池 · 冲榜 · 记一笔</span>
+      </div>
+      <div class="grid">
+        <a class="card stripe-binance" href="./kline.html">
+          <span class="label">币安观察</span>
+          <span class="hint">K 线 · 盯一下 · 持仓</span>
+        </a>
+        <a class="card stripe-binance" href="./watch.html">
+          <span class="label">冲榜雷达</span>
+          <span class="hint">涨幅对比与收藏</span>
+        </a>
+        <a class="card stripe-binance" href="./newKline.html">
+          <span class="label">记一笔追踪</span>
+          <span class="hint">笔记视图 K 线</span>
+        </a>
+        <a class="card stripe-binance" href="./range100.html">
+          <span class="label">Range100</span>
+          <span class="hint">潜伏池 21–100</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>OKX</h2>
+        <span>Solana + Robinhood 自选</span>
+      </div>
+      <div class="grid">
+        <a class="card stripe-okx" href="./okx/kline.html">
+          <span class="label">OKX 自选 K 线</span>
+          <span class="hint">链上代币价格跟踪</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>发现</h2>
+        <span>资源 → 对比 → 详情</span>
+      </div>
+      <div class="grid">
+        <a class="card stripe-sol" href="./solana/">
+          <span class="label">Solana 发现</span>
+          <span class="hint">Birdeye 查市值 · To Watch</span>
+        </a>
+        <a class="card stripe-rh" href="./eth-index.html">
+          <span class="label">Robinhood 发现</span>
+          <span class="hint">DexScreener · 链 4663</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>交易</h2>
+        <span>模拟盘</span>
+      </div>
+      <div class="grid">
+        <a class="card stripe-trade" href="./trade.html">
+          <span class="label">模拟交易</span>
+          <span class="hint">trade-bot 面板</span>
+        </a>
+      </div>
+    </section>
+
+    <p class="footer">云函数路径与 JSON 状态文件保持原位，勿随意挪动。</p>
+  </div>
 </body>
 </html>

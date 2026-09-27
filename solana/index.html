@@ -3,15 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ETH 数据工具中心</title>
+    <title>Solana 发现工具</title>
     <style>
         :root {
-            --primary-color: #4361ee;
-            --hover-color: #3a56d4;
-            --active-color: #3f37c9;
-            --text-color: #2b2d42;
-            --bg-color: #f8f9fa;
-            --border-color: #e0e0e0;
+            --primary-color: #0f766e;
+            --hover-color: #0d9488;
+            --text-color: #134e4a;
+            --bg-color: #f0fdfa;
+            --border-color: #99f6e4;
         }
         
         * {
@@ -32,23 +31,38 @@
             margin: 0 auto;
             padding: 0 1rem;
         }
-        
-        header {
-            text-align: center;
-            padding: 2rem 0;
-            border-bottom: 1px solid var(--border-color);
-            margin-bottom: 2rem;
+
+        .top-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            padding: 1rem 0 0.5rem;
         }
-        
-        h1 {
+
+        .top-links a {
+            display: inline-block;
+            padding: 0.6rem 1.1rem;
+            background: var(--primary-color);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: background-color 0.2s ease;
+        }
+
+        .top-links a:hover {
+            background: var(--hover-color);
+        }
+
+        .top-links a.secondary {
+            background: transparent;
             color: var(--primary-color);
-            margin-bottom: 0.5rem;
+            border: 1px solid var(--primary-color);
         }
-        
-        .description {
-            color: #6c757d;
-            max-width: 800px;
-            margin: 0 auto;
+
+        .top-links a.secondary:hover {
+            background: rgba(15, 118, 110, 0.08);
         }
         
         .tabs {
@@ -138,10 +152,10 @@
 </head>
 <body>
     <div class="container">
-        <div style="display:flex;flex-wrap:wrap;gap:0.6rem;padding:1rem 0 0.5rem;">
-            <a href="./index.html" style="display:inline-block;padding:0.6rem 1.1rem;background:var(--primary-color);color:white;text-decoration:none;border-radius:6px;font-weight:600;font-size:0.9rem;">返回总导航</a>
-            <a href="./solana/" style="display:inline-block;padding:0.6rem 1.1rem;background:transparent;color:var(--primary-color);border:1px solid var(--primary-color);text-decoration:none;border-radius:6px;font-weight:600;font-size:0.9rem;">Solana 发现</a>
-            <a href="https://betterma.github.io/" style="display:inline-block;padding:0.6rem 1.1rem;background:transparent;color:var(--primary-color);border:1px solid var(--primary-color);text-decoration:none;border-radius:6px;font-weight:600;font-size:0.9rem;">蚂蚱导航</a>
+        <div class="top-links">
+            <a href="../index.html">返回总导航</a>
+            <a class="secondary" href="../eth-index.html">Robinhood 发现</a>
+            <a class="secondary" href="https://betterma.github.io/">蚂蚱导航</a>
         </div>
         <div class="tabs">
             <button class="tab-button active" data-tab="url-viewer">资源中心</button>
@@ -151,19 +165,19 @@
         
         <div class="tab-content active" id="url-viewer">
             <div class="iframe-container">
-                <iframe src="./eth/url-viewer.html" title="资源链接中心"></iframe>
+                <iframe src="../url-viewer.html" title="资源链接中心"></iframe>
             </div>
         </div>
         
         <div class="tab-content" id="data-comparison-2">
             <div class="iframe-container">
-                <iframe src="./eth/findNew.html/new.html" title="数据对比工具2"></iframe>
+                <iframe src="../findNew.html/new.html" title="数据对比工具"></iframe>
             </div>
         </div>
 
         <div class="tab-content" id="get-coin-info">
             <div class="iframe-container">
-                <iframe src="./eth/getcoininfo.html" title="获取详情工具"></iframe>
+                <iframe src="../getcoininfo.html" title="获取详情工具"></iframe>
             </div>
         </div>
     </div>
@@ -180,10 +194,7 @@
                     
                     button.classList.add('active');
                     const tabId = button.getAttribute('data-tab');
-                    const targetContent = document.getElementById(tabId);
-                    if (targetContent) {
-                        targetContent.classList.add('active');
-                    }
+                    document.getElementById(tabId).classList.add('active');
                 });
             });
             
