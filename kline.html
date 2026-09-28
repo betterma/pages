@@ -132,6 +132,8 @@
       body.is-notes-view #hiddenPinDrawer,
       body.is-notes-view #notifyFloat,
       body.is-notes-view #notifyFloatTab,
+      body.is-notes-view #actionLogFloat,
+      body.is-notes-view #actionLogTab,
       body.is-notes-view #pinSelectBtn,
       body.is-notes-view #pinBatchBar {
         display: none !important;
@@ -502,8 +504,7 @@
         border-color: #6b7f6e;
       }
       .pin-mark,
-      .pos-mark,
-      .note-mark {
+      .pos-mark {
         position: absolute;
         top: 6px;
         right: 8px;
@@ -517,30 +518,45 @@
         top: 22px;
         color: #4f7a6e;
       }
-      /* 记一笔：鲜艳角标，与「盯」区分 */
-      .note-mark {
-        left: 8px;
-        right: auto;
-        top: 6px;
-        padding: 3px 7px;
-        border-radius: 999px;
-        font-size: 11px;
-        font-weight: 800;
-        letter-spacing: 0.04em;
-        color: #fff8fb;
-        background: linear-gradient(135deg, #ff2d7a 0%, #ff6a3d 100%);
-        box-shadow:
-          0 0 0 1px rgba(255, 255, 255, 0.35),
-          0 4px 14px rgba(255, 45, 122, 0.55);
+      .notify-float.is-action-log {
+        width: min(360px, calc(100vw - 24px));
+        max-height: min(42vh, 360px);
       }
-      .kline-card.is-note {
-        border-color: #ff4d8d;
-        box-shadow:
-          0 0 0 1px rgba(255, 77, 141, 0.35),
-          0 8px 22px rgba(255, 45, 122, 0.12);
+      .action-log-body {
+        padding: 8px 10px 10px;
+        overflow: auto;
+        font-size: 12px;
+        line-height: 1.45;
+        color: #3d4a48;
+        -webkit-overflow-scrolling: touch;
       }
-      .kline-card.is-note.is-pin {
-        border-color: #ff4d8d;
+      .action-log-row {
+        padding: 4px 0;
+        border-bottom: 1px solid rgba(220, 226, 222, 0.45);
+      }
+      .action-log-row:last-child {
+        border-bottom: none;
+      }
+      .action-log-time {
+        color: #9aa3a0;
+        margin-right: 6px;
+        font-variant-numeric: tabular-nums;
+      }
+      .action-log-kind {
+        color: #78817f;
+        margin-right: 4px;
+      }
+      .action-log-body .notify-coin {
+        color: #3d4a48;
+        text-decoration: none;
+        border-bottom: 1px dotted rgba(90, 106, 104, 0.45);
+      }
+      .action-log-body .notify-coin:hover {
+        color: #2f8f6e;
+      }
+      .action-log-empty {
+        color: #9aa3a0;
+        padding: 12px 4px;
       }
       /* Align with WeCom: 5m three-up = green, 15m 2/3 = orange */
       .kline-card-head .symbol-copy.is-streak5 {
@@ -1413,6 +1429,31 @@
       <div class="notify-float-body" id="momentumFloatBody"></div>
     </div>
 
+    <div id="actionLogFloat" class="notify-float is-action-log" hidden>
+      <div class="notify-float-head">
+        <strong>动作日志</strong>
+        <button
+          type="button"
+          class="notify-float-close"
+          id="actionLogClear"
+          title="清空日志"
+          aria-label="清空日志"
+        >
+          清
+        </button>
+        <button
+          type="button"
+          class="notify-float-close"
+          id="actionLogClose"
+          title="关闭"
+          aria-label="关闭动作日志"
+        >
+          ×
+        </button>
+      </div>
+      <div class="action-log-body" id="actionLogBody"></div>
+    </div>
+
     <div class="float-tabs">
       <button
         type="button"
@@ -1431,6 +1472,14 @@
         title="打开近2h/1h（爬升优先 · 含2h轨迹）"
       >
         近2h/1h
+      </button>
+      <button
+        type="button"
+        class="notify-float-tab"
+        id="actionLogTab"
+        title="自动盯 / 买 / 卖 简要日志"
+      >
+        日志
       </button>
     </div>
 
@@ -1551,6 +1600,8 @@
       const MOM_NOTES_MAX = 30;
       const RISING_SNAP_KEY = "kline-rising-snap-v1";
       const RISING_SNAP_SEEDED_KEY = "kline-rising-snap-seeded-v1";
+      const ACTION_LOG_KEY = "kline-action-log-v1";
+      const ACTION_LOG_MAX = 80;
       let notifyPollTimer = null;
       let klineAbort = null;
       let loading = false;
@@ -1672,6 +1723,34 @@
           list.push(symbol);
         }
         return list;
+      }
+
+      /** Same universe as 币安观察 盯一下区 / 近2h·1h 浮窗：未拉黑且当前窗口上涨. */
+      function listWindowUpPinSymbols(interval) {
+        const iv = interval || CONFIG.KLINE_INTERVAL;
+        const blocked = blacklistSymbols();
+        return pinItems
+          .filter(
+            (item) =>
+              item &&
+              item.symbol &&
+              !blocked.has(item.symbol) &&
+              hasWindowGain(item.symbol, iv),
+          )
+          .slice()
+          .sort((a, b) => {
+            const changeA = pinChangePercent(a);
+            const changeB = pinChangePercent(b);
+            const hasA = Number.isFinite(changeA);
+            const hasB = Number.isFinite(changeB);
+            const upA = hasA && changeA > 0 ? 1 : 0;
+            const upB = hasB && changeB > 0 ? 1 : 0;
+            if (upA !== upB) return upB - upA;
+            if (hasA && hasB && changeB !== changeA) return changeB - changeA;
+            if (hasA !== hasB) return hasA ? -1 : 1;
+            return (b.pinnedAt || 0) - (a.pinnedAt || 0);
+          })
+          .map((item) => item.symbol);
       }
 
       async function removeNotesForSymbol(symbol) {
@@ -1970,6 +2049,99 @@
         );
       }
 
+      function readActionLog() {
+        try {
+          const raw = localStorage.getItem(ACTION_LOG_KEY);
+          const list = raw ? JSON.parse(raw) : [];
+          return Array.isArray(list) ? list : [];
+        } catch (error) {
+          return [];
+        }
+      }
+
+      function writeActionLog(list) {
+        try {
+          localStorage.setItem(
+            ACTION_LOG_KEY,
+            JSON.stringify((list || []).slice(0, ACTION_LOG_MAX)),
+          );
+        } catch (error) {
+          console.warn("action log save failed", error);
+        }
+      }
+
+      function appendActionLog(kind, symbols, extra) {
+        const keys = [...new Set(
+          (symbols || [])
+            .map((symbol) => String(symbol || "").trim().toUpperCase())
+            .filter(Boolean),
+        )];
+        if (!keys.length) return;
+        const entry = {
+          at: Date.now(),
+          kind: String(kind || ""),
+          symbols: keys,
+        };
+        if (extra && Number.isFinite(extra.price) && extra.price > 0) {
+          entry.price = extra.price;
+        }
+        const next = [entry, ...readActionLog()].slice(0, ACTION_LOG_MAX);
+        writeActionLog(next);
+        renderActionLogBody();
+        const tab = document.getElementById("actionLogTab");
+        if (tab && !isNotesView()) tab.hidden = false;
+      }
+
+      function formatActionLogTime(at) {
+        const date = new Date(Number(at) || 0);
+        if (!Number.isFinite(date.getTime())) return "--:--";
+        const hh = String(date.getHours()).padStart(2, "0");
+        const mm = String(date.getMinutes()).padStart(2, "0");
+        return `${hh}:${mm}`;
+      }
+
+      function actionLogKindLabel(kind) {
+        if (kind === "auto-pin") return "自动盯";
+        if (kind === "buy") return "买";
+        if (kind === "sell") return "卖";
+        return kind || "动";
+      }
+
+      function renderActionLogBody() {
+        const body = document.getElementById("actionLogBody");
+        if (!body) return;
+        const list = readActionLog();
+        if (!list.length) {
+          body.innerHTML = '<div class="action-log-empty">暂无 · 自动盯 / 买 / 卖</div>';
+          return;
+        }
+        body.innerHTML = list
+          .map((entry) => {
+            const kind = actionLogKindLabel(entry.kind);
+            const names = (entry.symbols || [])
+              .map((symbol) => {
+                const label = String(symbol).replace(/USDT$/i, "");
+                return `<a href="#card" class="notify-coin" data-jump="${escapeHtml(symbol)}">${escapeHtml(label)}</a>`;
+              })
+              .join(" ");
+            const price =
+              entry.kind === "buy" && Number.isFinite(entry.price)
+                ? ` ${escapeHtml(formatPinPrice(entry.price))}`
+                : "";
+            return `<div class="action-log-row"><span class="action-log-time">${formatActionLogTime(entry.at)}</span><span class="action-log-kind">${escapeHtml(kind)}</span>${names}${price}</div>`;
+          })
+          .join("");
+      }
+
+      function setActionLogOpen(open) {
+        const panel = document.getElementById("actionLogFloat");
+        const tab = document.getElementById("actionLogTab");
+        if (!panel) return;
+        panel.hidden = !open;
+        if (tab) tab.classList.toggle("is-active", !!open);
+        if (open) renderActionLogBody();
+      }
+
       /**
        * Strategy A: only auto-pin symbols newly appeared in 窗口上涨
        * vs last snapshot, and not already pinned. First visit seeds
@@ -2018,6 +2190,7 @@
           pinItems = result.pins;
           // Snapshot post-pin rising so pinned names leave the baseline.
           writeRisingSnapshot(getRisingSymbols());
+          appendActionLog("auto-pin", newcomers);
           return newcomers;
         } catch (error) {
           console.warn("auto-pin rising failed", error);
@@ -3326,11 +3499,6 @@
         const expiredClass = options.isExpired ? " is-expired" : "";
         const marks = [];
         if (options.showMark) marks.push('<span class="fav-mark">★</span>');
-        if (options.isNote) {
-          marks.push(
-            '<span class="note-mark" title="记一笔追踪">记</span>',
-          );
-        }
         // Notes view: only show 盯 when there is a real pin row.
         if (options.isPin && (options.pinItem || !options.isNote)) {
           marks.push(
@@ -4075,6 +4243,11 @@
           const visibleNotes = noteSymbols.filter(
             (symbol) => !blocked.has(symbol),
           );
+          // 近2h/1h 浮窗与币安观察一致：全部窗口上涨盯一下，不限记一笔。
+          const floatPinSymbols = listWindowUpPinSymbols(interval);
+          const scoreSymbols = [
+            ...new Set([...floatPinSymbols, ...visibleNotes]),
+          ];
 
           const clearExpiredBtn = document.getElementById("clearExpiredPinsBtn");
           const clearPositionsBtn = document.getElementById(
@@ -4094,12 +4267,12 @@
           updateHiddenPinTab(0);
 
           let pinHourScores = new Map();
-          if (visibleNotes.length) {
-            setStatus(false, "计算记一笔近1h/2h动量...");
-            pinHourScores = await loadPinHourScores(visibleNotes, signal);
+          if (scoreSymbols.length) {
+            setStatus(false, "计算近1h/2h动量...");
+            pinHourScores = await loadPinHourScores(scoreSymbols, signal);
             if (signal.aborted) return;
           }
-          // Sort K 线 by momentum signal strength (climb / Δ / 2h / 1h).
+          // K 线区仍只展示记一笔，按信号强弱排序。
           const pinSymbolsList = visibleNotes
             .slice()
             .sort((a, b) => compareMomentumSignal(a, b, pinHourScores));
@@ -4109,6 +4282,7 @@
             pinMeta.textContent = [
               `记一笔 ${momNoteItems.length} 条`,
               `追踪 ${pinSymbolsList.length} 币`,
+              `浮窗盯一下 ${floatPinSymbols.length}`,
               "按信号强弱排序",
               rangeText,
               `${bars} 根`,
@@ -4116,7 +4290,7 @@
             ].join(" · ");
           }
 
-          updatePinMomentumMeta(pinHourScores, pinSymbolsList);
+          updatePinMomentumMeta(pinHourScores, floatPinSymbols);
 
           await fillGrid(
             document.getElementById("pinGrid"),
@@ -4178,23 +4352,7 @@
           });
         const pinHiddenDown = pinHiddenItems.length;
         const pinHiddenList = pinHiddenItems.map((item) => item.symbol);
-        let pinSymbolsList = pinCandidates
-          .filter((item) => hasWindowGain(item.symbol, interval))
-          .slice()
-          .sort((a, b) => {
-            const changeA = pinChangePercent(a);
-            const changeB = pinChangePercent(b);
-            const hasA = Number.isFinite(changeA);
-            const hasB = Number.isFinite(changeB);
-            // Window-up pins: pin-up first, then by pin change desc.
-            const upA = hasA && changeA > 0 ? 1 : 0;
-            const upB = hasB && changeB > 0 ? 1 : 0;
-            if (upA !== upB) return upB - upA;
-            if (hasA && hasB && changeB !== changeA) return changeB - changeA;
-            if (hasA !== hasB) return hasA ? -1 : 1;
-            return b.pinnedAt - a.pinnedAt;
-          })
-          .map((item) => item.symbol);
+        let pinSymbolsList = listWindowUpPinSymbols(interval);
         const activePins = pinItems.filter(
           (item) =>
             !blocked.has(item.symbol) && !WatchFavorites.isPinExpired(item),
@@ -4619,6 +4777,7 @@
               console.warn("购买后自动盯一下失败", error);
             }
           }
+          appendActionLog("buy", [symbol], { price: buyPrice });
           showToast(`${label} 已记录买入 ${formatPinPrice(buyPrice)}`);
           await renderKlines();
           setStatus(true, `${label} 持仓已同步`);
@@ -4653,6 +4812,7 @@
             }),
           });
           positionItems = result.positions;
+          appendActionLog("sell", [symbol]);
           showToast(`${label} 已卖出，停止持仓观测`);
           await renderKlines();
           setStatus(true, `${label} 持仓已清除`);
@@ -5015,6 +5175,26 @@
           setHiddenPinDrawerOpen(false);
         }
       });
+      document.getElementById("actionLogTab").addEventListener("click", () => {
+        closeCardActions();
+        const panel = document.getElementById("actionLogFloat");
+        setActionLogOpen(panel && panel.hidden);
+      });
+      document.getElementById("actionLogClose").addEventListener("click", () => {
+        setActionLogOpen(false);
+      });
+      document.getElementById("actionLogClear").addEventListener("click", () => {
+        writeActionLog([]);
+        renderActionLogBody();
+      });
+      document
+        .getElementById("actionLogBody")
+        .addEventListener("click", (event) => {
+          const link = event.target.closest(".notify-coin");
+          if (!link) return;
+          event.preventDefault();
+          jumpToNotifySymbol(link.dataset.jump);
+        });
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
           closeCardActions();
@@ -5026,8 +5206,10 @@
             dismissNotifyFloat();
           }
           setMomentumFloatOpen(false);
+          setActionLogOpen(false);
         }
       });
+      renderActionLogBody();
       document
         .getElementById("rangeSelect")
         .addEventListener("change", async (event) => {
