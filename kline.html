@@ -132,10 +132,11 @@
       body.is-notes-view .page-section,
       body.is-notes-view #hiddenPinTab,
       body.is-notes-view #hiddenPinDrawer,
-      body.is-notes-view #pinSelectBtn,
-      body.is-notes-view #pinBatchBar,
       body.is-notes-view #pinSortSwitch,
       body.is-notes-view #recentAutoPinSection {
+        display: none !important;
+      }
+      body.is-notes-view #pinBatchRenewBtn {
         display: none !important;
       }
       .topbar-actions {
@@ -1756,6 +1757,9 @@
         // 盯一下卡每币最多 3 路请求，过大易触币安限流。
         KLINE_CARD_CONCURRENCY: 10,
         MOMENTUM_FETCH_CONCURRENCY: 12,
+        // 记一笔：卡片通常只拉主图；动量也单独提高。
+        NOTES_CARD_CONCURRENCY: 16,
+        NOTES_MOMENTUM_FETCH_CONCURRENCY: 16,
         LONG_PRESS_MS: 550,
         MOMENTUM_5M_LIMIT: 5,
         NOTIFY_STATE_PATH: "watch-notify-state.json",
@@ -1894,12 +1898,16 @@
         const notes = isNotesView();
         document.body.classList.toggle("is-notes-view", notes);
         if (notes) {
-          pinSelectMode = false;
           selectedPinSymbols.clear();
           updatePinSelectUi();
           closeAllFloatPanels();
           setHiddenPinDrawerOpen(false);
           setMaintPanelOpen(false);
+        } else if (pinSelectMode) {
+          // 离开记一笔时退出多选，避免和盯一下多选状态串台。
+          pinSelectMode = false;
+          selectedPinSymbols.clear();
+          updatePinSelectUi();
         }
         document.title = notes ? "记一笔追踪" : "观察池 K 线";
         const h1 = document.querySelector(".topbar-left h1");
@@ -3510,7 +3518,12 @@
       async function loadPinHourScores(symbols, signal, onProgress) {
         const scores = new Map();
         const list = [...new Set((symbols || []).filter(Boolean))];
-        const batchSize = Math.max(1, CONFIG.MOMENTUM_FETCH_CONCURRENCY || 12);
+        const batchSize = Math.max(
+          1,
+          isNotesView()
+            ? CONFIG.NOTES_MOMENTUM_FETCH_CONCURRENCY || 16
+            : CONFIG.MOMENTUM_FETCH_CONCURRENCY || 12,
+        );
         const limit = CONFIG.MOMENTUM_TREND.klineLimit;
         if (typeof onProgress === "function") onProgress(0, list.length);
         for (let index = 0; index < list.length; index += batchSize) {
@@ -4294,7 +4307,9 @@
         if (!canvas || !status) return;
         try {
           const tasks = [fetchKlines(symbol, interval, signal)];
-          if (pinItem) {
+          // 记一笔只拉主图，少打 15m/5m，提速。
+          const needPinSignals = !!pinItem && !isNotesView();
+          if (needPinSignals) {
             tasks.push(
               fetchKlines(
                 symbol,
@@ -4307,7 +4322,7 @@
           }
           const results = await Promise.all(tasks);
           const candles = results[0];
-          if (pinItem) {
+          if (pinItem && needPinSignals) {
             const signalCandles = results[1];
             const candles5 = results[2];
             const mom = momentumFromCloses(
@@ -4337,6 +4352,24 @@
               .filter(Boolean)
               .join(" · ");
             applyPinMomentum(card, flags);
+          } else if (pinItem && isNotesView()) {
+            const current = marketMap[symbol]?.price;
+            const change24h = marketMap[symbol]?.change24h;
+            status.className = "pin-stats";
+            status.innerHTML = buildPinStatusHtml(pinItem, symbol, {
+              streak5: false,
+              heat15: false,
+              priceUpVsLast: false,
+            });
+            status.title = [
+              `盯住价 ${formatPinPrice(pinItem.pinPrice)}`,
+              `现价 ${formatPinPrice(current)}`,
+              `盯幅 ${formatPercent(pinChangePercent(pinItem))}`,
+              `24h ${formatPercent(change24h)}`,
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            applyPinMomentum(card, null);
           } else {
             const change24h = marketMap[symbol]?.change24h;
             status.textContent = Number.isFinite(change24h)
@@ -4537,7 +4570,7 @@
       function bindCardInteractions(root) {
         root.querySelectorAll(".symbol-copy").forEach((btn) => {
           btn.addEventListener("click", (event) => {
-            if (pinSelectMode && !isNotesView()) {
+            if (pinSelectMode) {
               event.preventDefault();
               event.stopPropagation();
               const card = btn.closest(".kline-card");
@@ -4560,9 +4593,20 @@
         return section === "pin" || section === "pin-hidden";
       }
 
+      function noteSymbolSet() {
+        return new Set(noteSymbolList());
+      }
+
       function updatePinSelectUi() {
-        for (const symbol of [...selectedPinSymbols]) {
-          if (!pinSymbols().has(symbol)) selectedPinSymbols.delete(symbol);
+        if (isNotesView()) {
+          const notes = noteSymbolSet();
+          for (const symbol of [...selectedPinSymbols]) {
+            if (!notes.has(symbol)) selectedPinSymbols.delete(symbol);
+          }
+        } else {
+          for (const symbol of [...selectedPinSymbols]) {
+            if (!pinSymbols().has(symbol)) selectedPinSymbols.delete(symbol);
+          }
         }
         const btn = document.getElementById("pinSelectBtn");
         const bar = document.getElementById("pinBatchBar");
@@ -4571,9 +4615,13 @@
           btn.classList.toggle("is-active", pinSelectMode);
           btn.setAttribute("aria-pressed", pinSelectMode ? "true" : "false");
           btn.textContent = pinSelectMode ? "选中" : "多选";
+          btn.title = isNotesView()
+            ? "多选后可批量取消记一笔"
+            : "多选后可批量取消盯住或按现价续盯";
+          btn.hidden = false;
         }
         if (bar) {
-          bar.hidden = !pinSelectMode || isNotesView();
+          bar.hidden = !pinSelectMode;
         }
         if (countEl) {
           countEl.textContent = String(selectedPinSymbols.size);
@@ -4581,14 +4629,29 @@
         const renewBtn = document.getElementById("pinBatchRenewBtn");
         const unpinBtn = document.getElementById("pinBatchUnpinBtn");
         const clearBtn = document.getElementById("pinBatchClearBtn");
-        const disabled = pinSaving || selectedPinSymbols.size === 0;
-        if (renewBtn) renewBtn.disabled = disabled;
-        if (unpinBtn) unpinBtn.disabled = disabled;
+        const selectAllBtn = document.getElementById("pinBatchSelectAllBtn");
+        const busy = isNotesView() ? momNotesSaving : pinSaving;
+        const disabled = busy || selectedPinSymbols.size === 0;
+        if (renewBtn) {
+          renewBtn.hidden = isNotesView();
+          renewBtn.disabled = disabled;
+        }
+        if (unpinBtn) {
+          unpinBtn.disabled = disabled;
+          unpinBtn.textContent = isNotesView() ? "取消记" : "取消";
+          unpinBtn.title = isNotesView()
+            ? "取消选中币的记一笔"
+            : "取消盯住";
+        }
         if (clearBtn) clearBtn.disabled = selectedPinSymbols.size === 0;
+        if (selectAllBtn) {
+          selectAllBtn.title = isNotesView()
+            ? "全选当前展示的记一笔"
+            : "全选当前展示的盯一下";
+        }
       }
 
       function setPinSelectMode(on) {
-        if (isNotesView()) on = false;
         const next = !!on;
         if (next === pinSelectMode) {
           updatePinSelectUi();
@@ -4602,7 +4665,7 @@
       }
 
       function applyPinSelectChrome() {
-        const wantSelect = pinSelectMode && !isNotesView();
+        const wantSelect = pinSelectMode;
         document
           .querySelectorAll(
             "#pinGrid .kline-card[data-symbol], #hiddenPinGrid .kline-card[data-symbol]",
@@ -4636,7 +4699,12 @@
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
-        if (!key || !pinSymbols().has(key)) return;
+        if (!key) return;
+        if (isNotesView()) {
+          if (!noteSymbolSet().has(key)) return;
+        } else if (!pinSymbols().has(key)) {
+          return;
+        }
         if (selectedPinSymbols.has(key)) selectedPinSymbols.delete(key);
         else selectedPinSymbols.add(key);
         document
@@ -4652,7 +4720,7 @@
       }
 
       function onPinSelectPointer(event) {
-        if (!pinSelectMode || isNotesView()) return;
+        if (!pinSelectMode) return;
         const card = event.target.closest(
           "#pinGrid .kline-card.is-select-mode, #hiddenPinGrid .kline-card.is-select-mode",
         );
@@ -4719,6 +4787,49 @@
           window.alert(error.message || "批量取消失败");
         } finally {
           pinSaving = false;
+          updatePinSelectUi();
+        }
+      }
+
+      async function batchRemoveNotesSelected() {
+        if (momNotesSaving || !selectedPinSymbols.size) return;
+        const symbols = [...selectedPinSymbols];
+        const keySet = new Set(symbols);
+        if (
+          !window.confirm(
+            `确定取消选中的 ${symbols.length} 个记一笔？`,
+          )
+        ) {
+          return;
+        }
+        momNotesSaving = true;
+        updatePinSelectUi();
+        try {
+          setStatus(false, `正在批量取消记一笔 ${symbols.length} 个...`);
+          const result = await WatchFavorites.patchMomNotes({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.MOM_NOTES_PATH,
+            message: `Batch remove momentum notes x${symbols.length}`,
+            mutate: (list) =>
+              list.filter((note) => {
+                const key = String(note.symbol || "")
+                  .trim()
+                  .toUpperCase();
+                return !keySet.has(key);
+              }),
+          });
+          momNoteItems = result.notes || [];
+          selectedPinSymbols.clear();
+          showToast(`已取消记一笔 ${symbols.length} 个`);
+          await renderKlines();
+          setStatus(true, `已批量取消记一笔 ${symbols.length} 个`);
+        } catch (error) {
+          console.error(error);
+          showToast(error.message || "批量取消记一笔失败");
+          setStatus(false, error.message || "批量取消记一笔失败");
+          window.alert(error.message || "批量取消记一笔失败");
+        } finally {
+          momNotesSaving = false;
           updatePinSelectUi();
         }
       }
@@ -4863,7 +4974,7 @@
                   isPin: isPinSection || pinSymbols().has(symbol),
                   isNote: isNotesView() && section === "pin",
                   isPinSection,
-                  selectMode: pinSelectMode && isPinSection && !isNotesView(),
+                  selectMode: pinSelectMode && isPinSection,
                   isSelected: selectedPinSymbols.has(symbol),
                   hasPosition: positionSymbols().has(symbol),
                   isExpired: isPinSection && expired,
@@ -4887,7 +4998,12 @@
         bindCardInteractions(grid);
 
         const cards = [...grid.querySelectorAll(".kline-card")];
-        const batchSize = Math.max(1, CONFIG.KLINE_CARD_CONCURRENCY || 10);
+        const batchSize = Math.max(
+          1,
+          isNotesView()
+            ? CONFIG.NOTES_CARD_CONCURRENCY || 16
+            : CONFIG.KLINE_CARD_CONCURRENCY || 10,
+        );
         for (let index = 0; index < cards.length; index += batchSize) {
           if (signal.aborted) return;
           const batch = cards.slice(index, index + batchSize);
@@ -5181,7 +5297,7 @@
               "按信号强弱排序",
               rangeText,
               `${bars} 根`,
-              "长按去掉记一笔",
+              "多选可批量取消 · 长按去掉单条",
             ].join(" · ");
           }
 
@@ -5194,6 +5310,8 @@
             pinMap,
             bumpKline,
           );
+          updatePinSelectUi();
+          applyPinSelectChrome();
           const recentSection = document.getElementById("recentAutoPinSection");
           if (recentSection) {
             recentSection.hidden = true;
@@ -6129,13 +6247,15 @@
       document
         .getElementById("pinBatchSelectAllBtn")
         .addEventListener("click", () => {
+          const notes = isNotesView();
+          const allowed = notes ? noteSymbolSet() : pinSymbols();
           document
             .querySelectorAll(
               "#pinGrid .kline-card[data-symbol], #hiddenPinGrid .kline-card[data-symbol]",
             )
             .forEach((card) => {
               const symbol = String(card.dataset.symbol || "").toUpperCase();
-              if (!symbol || !pinSymbols().has(symbol)) return;
+              if (!symbol || !allowed.has(symbol)) return;
               selectedPinSymbols.add(symbol);
               card.classList.add("is-selected");
               const check = card.querySelector(".pin-check");
@@ -6146,7 +6266,8 @@
       document
         .getElementById("pinBatchUnpinBtn")
         .addEventListener("click", () => {
-          batchUnpinSelected();
+          if (isNotesView()) batchRemoveNotesSelected();
+          else batchUnpinSelected();
         });
       document
         .getElementById("pinBatchRenewBtn")
