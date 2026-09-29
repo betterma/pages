@@ -2064,14 +2064,124 @@
           : "尚未成功刷新";
       }
 
-      function showToast(message) {
+      function showToast(message, options) {
         const existing = document.querySelector(".toast");
         if (existing) existing.remove();
         const toast = document.createElement("div");
         toast.className = "toast";
         toast.textContent = message;
         document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 1600);
+        const ms =
+          options && Number.isFinite(options.duration)
+            ? Math.max(800, options.duration)
+            : 1600;
+        setTimeout(() => toast.remove(), ms);
+      }
+
+      let lastApiIssueAt = 0;
+      let lastApiIssueKind = "";
+      let apiIssueSuppressed = 0;
+
+      function classifyFetchNetworkError(error, label) {
+        if (error && error.name === "AbortError") return error;
+        if (error && error.kind) return error;
+        const raw = error && error.message ? String(error.message) : "";
+        const err = new Error(
+          raw
+            ? `${label}网络失败：${raw.slice(0, 100)}`
+            : `${label}网络失败`,
+        );
+        err.kind = "network";
+        err.userMessage = err.message;
+        return err;
+      }
+
+      async function errorFromHttpResponse(response, label) {
+        let bodyText = "";
+        try {
+          bodyText = await response.text();
+        } catch (error) {
+          bodyText = "";
+        }
+        let apiCode = null;
+        let apiMsg = "";
+        if (bodyText) {
+          try {
+            const json = JSON.parse(bodyText);
+            if (json && typeof json === "object") {
+              if (json.code != null) apiCode = json.code;
+              if (json.msg) apiMsg = String(json.msg);
+              else if (json.message) apiMsg = String(json.message);
+            }
+          } catch (error) {
+            /* ignore non-json */
+          }
+        }
+        const status = response.status;
+        let kind = "http_error";
+        let userMessage = "";
+        if (status === 429) {
+          kind = "rate_limit";
+          userMessage = "币安限流（429），请稍后再试";
+        } else if (status === 418) {
+          kind = "ip_banned";
+          userMessage = "币安暂时封禁本机 IP（418）";
+        } else if (status === 403) {
+          kind = "forbidden";
+          userMessage = "币安拒绝访问（403）";
+        } else if (status === 451) {
+          kind = "unavailable";
+          userMessage = "币安不可用（451）";
+        } else if (status >= 500) {
+          kind = "server_error";
+          userMessage = `币安服务异常（${status}）`;
+        } else {
+          userMessage = `${label || "币安"}异常（HTTP ${status}）`;
+        }
+        if (apiMsg) {
+          userMessage += `：${apiMsg.slice(0, 80)}`;
+        } else if (apiCode != null) {
+          userMessage += `（code ${apiCode}）`;
+        }
+        const err = new Error(userMessage);
+        err.kind = kind;
+        err.apiStatus = status;
+        err.apiCode = apiCode;
+        err.userMessage = userMessage;
+        return err;
+      }
+
+      function reportApiIssue(error, options) {
+        if (!error || error.name === "AbortError") return;
+        const opts = options || {};
+        const kind = error.kind || "other";
+        const now = Date.now();
+        const throttleMs =
+          kind === "rate_limit" || kind === "ip_banned" ? 12000 : 8000;
+        if (kind === lastApiIssueKind && now - lastApiIssueAt < throttleMs) {
+          apiIssueSuppressed += 1;
+          return;
+        }
+        const suppressed = apiIssueSuppressed;
+        apiIssueSuppressed = 0;
+        lastApiIssueAt = now;
+        lastApiIssueKind = kind;
+        let msg = error.userMessage || error.message || "第三方接口异常";
+        if (suppressed > 0) msg += `（另有 ${suppressed} 次）`;
+        const duration =
+          kind === "rate_limit" || kind === "ip_banned" ? 4200 : 2800;
+        showToast(msg, { duration });
+        if (opts.statusBar) setStatus(false, msg);
+      }
+
+      function cardErrorLabel(error) {
+        if (!error) return "加载失败";
+        if (error.kind === "rate_limit") return "限流";
+        if (error.kind === "ip_banned") return "IP限制";
+        if (error.kind === "forbidden") return "拒绝访问";
+        if (error.kind === "server_error") return "服务异常";
+        if (error.kind === "network") return "网络失败";
+        return "加载失败";
       }
 
       function formatPercent(value) {
@@ -3086,10 +3196,16 @@
           try {
             const response = await fetch(url, { cache: "no-store" });
             if (!response.ok) {
-              lastError = new Error(`HTTP ${response.status}`);
+              lastError = await errorFromHttpResponse(response, "币安行情");
               continue;
             }
             const data = await response.json();
+            if (!Array.isArray(data) || !data.length) {
+              lastError = new Error("币安行情返回异常（非列表）");
+              lastError.kind = "bad_response";
+              lastError.userMessage = lastError.message;
+              continue;
+            }
             Object.keys(marketMap).forEach((key) => delete marketMap[key]);
             data.forEach((ticker) => {
               if (!ticker.symbol.endsWith("USDT")) return;
@@ -3104,10 +3220,17 @@
             });
             return;
           } catch (error) {
-            lastError = error;
+            if (error && error.kind) {
+              lastError = error;
+            } else {
+              lastError = classifyFetchNetworkError(error, "币安行情");
+            }
           }
         }
-        throw lastError || new Error("行情请求失败");
+        const fail = lastError || new Error("行情请求失败");
+        if (!fail.userMessage) fail.userMessage = fail.message;
+        reportApiIssue(fail, { statusBar: true });
+        throw fail;
       }
 
       async function fetchKlines(symbol, interval, signal, limitOverride) {
@@ -3122,12 +3245,14 @@
           try {
             const response = await fetch(url, { signal, cache: "no-store" });
             if (!response.ok) {
-              lastError = new Error(`HTTP ${response.status}`);
+              lastError = await errorFromHttpResponse(response, "币安K线");
               continue;
             }
             const rows = await response.json();
             if (!Array.isArray(rows) || !rows.length) {
-              lastError = new Error("K线为空");
+              lastError = new Error(`${symbol} K线为空`);
+              lastError.kind = "bad_response";
+              lastError.userMessage = "币安K线返回为空";
               continue;
             }
             return rows.map((row) => ({
@@ -3140,10 +3265,16 @@
             }));
           } catch (error) {
             if (error.name === "AbortError") throw error;
-            lastError = error;
+            if (error && error.kind) {
+              lastError = error;
+            } else {
+              lastError = classifyFetchNetworkError(error, "币安K线");
+            }
           }
         }
-        throw lastError || new Error("K线请求失败");
+        const fail = lastError || new Error("K线请求失败");
+        if (!fail.userMessage) fail.userMessage = fail.message;
+        throw fail;
       }
 
       /** Drop forming candle; closed closes only (same as WeCom notify). */
@@ -3407,6 +3538,7 @@
                 });
               } catch (error) {
                 if (error && error.name === "AbortError") throw error;
+                reportApiIssue(error);
                 scores.set(symbol, {
                   change1h: null,
                   change2h: null,
@@ -4217,12 +4349,15 @@
           drawKline(canvas, candles, pinItem ? pinItem.pinPrice : null);
         } catch (error) {
           if (error.name === "AbortError") return;
-          status.textContent = "加载失败";
+          reportApiIssue(error);
+          status.textContent = cardErrorLabel(error);
           status.className = "price-down";
+          status.title = error.userMessage || error.message || "K线加载失败";
           canvas.replaceWith(
             Object.assign(document.createElement("div"), {
               className: "empty",
-              textContent: error.message || "K线加载失败",
+              textContent: cardErrorLabel(error),
+              title: error.userMessage || error.message || "",
             }),
           );
         }
