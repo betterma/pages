@@ -254,6 +254,124 @@
         padding: 8px 14px;
         box-shadow: 0 6px 18px rgba(40, 50, 48, 0.08);
       }
+      .stop-loss-gate {
+        position: fixed;
+        inset: 0;
+        z-index: 120;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(48, 18, 18, 0.72);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+      }
+      .stop-loss-gate[hidden] {
+        display: none !important;
+      }
+      .stop-loss-panel {
+        width: min(420px, 100%);
+        max-height: min(80vh, 640px);
+        overflow: auto;
+        padding: 20px 18px 16px;
+        border-radius: 14px;
+        background: #fbf6f4;
+        border: 1px solid rgba(168, 72, 72, 0.35);
+        box-shadow: 0 16px 40px rgba(40, 20, 20, 0.28);
+        color: #2a1c1c;
+      }
+      .stop-loss-panel h2 {
+        margin: 0 0 8px;
+        font-size: 18px;
+        font-weight: 700;
+        color: #a03838;
+      }
+      .stop-loss-lead {
+        margin: 0 0 14px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: #5a4040;
+      }
+      .stop-loss-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .stop-loss-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 6px 12px;
+        align-items: center;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(168, 72, 72, 0.08);
+        border: 1px solid rgba(168, 72, 72, 0.18);
+      }
+      .stop-loss-row .stop-loss-name {
+        font-size: 15px;
+        font-weight: 700;
+      }
+      .stop-loss-row .stop-loss-meta {
+        grid-column: 1 / -1;
+        font-size: 12px;
+        color: #6a4a4a;
+        font-variant-numeric: tabular-nums;
+      }
+      .stop-loss-row .stop-loss-pct {
+        font-size: 15px;
+        font-weight: 700;
+        color: #a03838;
+        font-variant-numeric: tabular-nums;
+      }
+      .stop-loss-row button {
+        grid-column: 1 / -1;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: #a03838;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .stop-loss-row button:hover {
+        background: #8a2e2e;
+      }
+      .stop-loss-row button:disabled {
+        opacity: 0.6;
+        cursor: wait;
+      }
+      .stop-loss-actions {
+        margin-top: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .stop-loss-actions button {
+        border: none;
+        border-radius: 8px;
+        padding: 11px 12px;
+        font-size: 14px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .stop-loss-actions .is-danger {
+        background: #7a2828;
+        color: #fff;
+      }
+      .stop-loss-actions .is-danger:disabled {
+        opacity: 0.6;
+        cursor: wait;
+      }
+      .stop-loss-hint {
+        margin: 12px 0 0;
+        font-size: 11px;
+        color: #8a6a6a;
+        line-height: 1.45;
+      }
+      body.is-stop-loss-locked {
+        overflow: hidden;
+      }
       @keyframes mode-progress-slide {
         0% {
           transform: translateX(-120%);
@@ -1428,6 +1546,31 @@
     >
       <div class="mode-progress-label" id="modeProgressLabel">正在切换…</div>
     </div>
+    <div
+      id="stopLossGate"
+      class="stop-loss-gate"
+      hidden
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="stopLossTitle"
+      aria-describedby="stopLossLead"
+    >
+      <div class="stop-loss-panel">
+        <h2 id="stopLossTitle">强制止损</h2>
+        <p class="stop-loss-lead" id="stopLossLead">
+          持仓已跌破买入价 -5%。须确认卖出后才能继续操作（清除观测记录，不会在币安下单）。
+        </p>
+        <div id="stopLossList" class="stop-loss-list"></div>
+        <div class="stop-loss-actions" id="stopLossActions" hidden>
+          <button type="button" class="is-danger" id="stopLossSellAllBtn">
+            全部确认卖出
+          </button>
+        </div>
+        <p class="stop-loss-hint">
+          无关闭按钮。处理完跌破项后自动解锁。
+        </p>
+      </div>
+    </div>
     <div class="page">
       <div class="topbar">
         <div class="topbar-left">
@@ -1760,6 +1903,8 @@
         // 记一笔：卡片通常只拉主图；动量也单独提高。
         NOTES_CARD_CONCURRENCY: 16,
         NOTES_MOMENTUM_FETCH_CONCURRENCY: 16,
+        // 持仓相对买入价跌破该百分比 → 全屏强制确认卖出（与企微跌破告警对齐）。
+        STOP_LOSS_PCT: 5,
         LONG_PRESS_MS: 550,
         MOMENTUM_5M_LIMIT: 5,
         NOTIFY_STATE_PATH: "watch-notify-state.json",
@@ -2326,6 +2471,118 @@
         return ((current - base) / base) * 100;
       }
 
+      function positionChangePercent(item) {
+        const current = marketMap[item && item.symbol]?.price;
+        const base = Number(item && item.buyPrice);
+        if (
+          !Number.isFinite(current) ||
+          !Number.isFinite(base) ||
+          base <= 0
+        ) {
+          return null;
+        }
+        return ((current - base) / base) * 100;
+      }
+
+      function listStopLossBreaches() {
+        const limit = -Math.abs(Number(CONFIG.STOP_LOSS_PCT) || 5);
+        return (positionItems || [])
+          .map((item) => {
+            const change = positionChangePercent(item);
+            const current = marketMap[item.symbol]?.price;
+            return {
+              symbol: item.symbol,
+              buyPrice: Number(item.buyPrice),
+              current,
+              change,
+            };
+          })
+          .filter(
+            (row) =>
+              row.symbol &&
+              Number.isFinite(row.change) &&
+              row.change <= limit,
+          )
+          .sort((a, b) => a.change - b.change);
+      }
+
+      let stopLossBusy = false;
+
+      function syncStopLossGate() {
+        const gate = document.getElementById("stopLossGate");
+        const listEl = document.getElementById("stopLossList");
+        const actionsEl = document.getElementById("stopLossActions");
+        const sellAllBtn = document.getElementById("stopLossSellAllBtn");
+        const leadEl = document.getElementById("stopLossLead");
+        if (!gate || !listEl) return;
+        const breaches = listStopLossBreaches();
+        const locked = breaches.length > 0;
+        document.body.classList.toggle("is-stop-loss-locked", locked);
+        gate.hidden = !locked;
+        if (!locked) {
+          listEl.innerHTML = "";
+          if (actionsEl) actionsEl.hidden = true;
+          return;
+        }
+        const pct = Math.abs(Number(CONFIG.STOP_LOSS_PCT) || 5);
+        if (leadEl) {
+          leadEl.textContent = `持仓已跌破买入价 -${pct}%。须确认卖出后才能继续操作（清除观测记录，不会在币安下单）。`;
+        }
+        listEl.innerHTML = breaches
+          .map((row) => {
+            const label = String(row.symbol).replace(/USDT$/i, "");
+            return [
+              `<div class="stop-loss-row" data-stop-symbol="${escapeHtml(row.symbol)}">`,
+              `<span class="stop-loss-name">${escapeHtml(label)}</span>`,
+              `<span class="stop-loss-pct">${escapeHtml(formatPercent(row.change))}</span>`,
+              `<div class="stop-loss-meta">${escapeHtml(formatPinPrice(row.buyPrice))} → ${escapeHtml(formatPinPrice(row.current))}</div>`,
+              `<button type="button" data-stop-sell="${escapeHtml(row.symbol)}">确认卖出 ${escapeHtml(label)}</button>`,
+              `</div>`,
+            ].join("");
+          })
+          .join("");
+        if (actionsEl) actionsEl.hidden = breaches.length < 2;
+        if (sellAllBtn) {
+          sellAllBtn.disabled = stopLossBusy;
+          sellAllBtn.textContent = `全部确认卖出（${breaches.length}）`;
+        }
+        listEl.querySelectorAll("[data-stop-sell]").forEach((btn) => {
+          btn.disabled = stopLossBusy;
+        });
+      }
+
+      async function forceSellStopLoss(symbol, options) {
+        const opts = options || {};
+        return sellPositionForSymbol(symbol, {
+          skipConfirm: true,
+          forceStopLoss: true,
+          skipRender: !!opts.skipRender,
+        });
+      }
+
+      async function forceSellAllStopLoss() {
+        const breaches = listStopLossBreaches();
+        if (!breaches.length || stopLossBusy) return;
+        stopLossBusy = true;
+        syncStopLossGate();
+        try {
+          for (let i = 0; i < breaches.length; i += 1) {
+            const row = breaches[i];
+            await forceSellStopLoss(row.symbol, {
+              skipRender: i < breaches.length - 1,
+            });
+          }
+          if (!listStopLossBreaches().length) {
+            await renderKlines();
+          }
+        } catch (error) {
+          console.error(error);
+        } finally {
+          stopLossBusy = false;
+          syncStopLossGate();
+        }
+      }
+
       function formatPinPrice(value) {
         if (!Number.isFinite(value)) return "--";
         if (value >= 1000) return value.toFixed(2);
@@ -2598,6 +2855,7 @@
         if (kind === "auto-pin") return "自动盯";
         if (kind === "buy") return "买";
         if (kind === "sell") return "卖";
+        if (kind === "sell-stop") return "止损";
         return kind || "动";
       }
 
@@ -5776,6 +6034,7 @@
           positionItems = result.positions;
           showToast(`已清除 ${held.length} 条持仓`);
           await renderKlines();
+          syncStopLossGate();
           setStatus(true, `已清除 ${held.length} 条持仓`);
         } catch (error) {
           console.error(error);
@@ -5891,6 +6150,7 @@
           appendActionLog("buy", [symbol], { price: buyPrice });
           showToast(`${label} 已记录买入 ${formatPinPrice(buyPrice)}`);
           await renderKlines();
+          syncStopLossGate();
           setStatus(true, `${label} 持仓已同步`);
           return true;
         } catch (error) {
@@ -5908,25 +6168,49 @@
         if (!symbol || positionSaving) return false;
         if (!WatchFavorites.hasPosition(positionItems, symbol)) return false;
         const label = symbol.replace("USDT", "");
-        if (!window.confirm(`确认卖出并停止观测 ${label} 持仓？`)) return false;
+        const forceStop = !!(options && options.forceStopLoss);
+        if (!(options && options.skipConfirm)) {
+          if (!window.confirm(`确认卖出并停止观测 ${label} 持仓？`)) {
+            return false;
+          }
+        }
         if (options && typeof options.onSaving === "function") options.onSaving();
         positionSaving = true;
         try {
-          setStatus(false, `正在清除 ${label} 持仓...`);
+          setStatus(
+            false,
+            forceStop
+              ? `强制止损：正在清除 ${label}…`
+              : `正在清除 ${label} 持仓...`,
+          );
           const result = await WatchFavorites.patchPositions({
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.POSITIONS_PATH,
-            message: `Sell position ${symbol}`,
+            message: forceStop
+              ? `Force stop-loss ${symbol}`
+              : `Sell position ${symbol}`,
             mutate: (list) => ({
               list: WatchFavorites.removePosition(list, symbol),
               added: false,
             }),
           });
           positionItems = result.positions;
-          appendActionLog("sell", [symbol]);
-          showToast(`${label} 已卖出，停止持仓观测`);
-          await renderKlines();
-          setStatus(true, `${label} 持仓已清除`);
+          appendActionLog(forceStop ? "sell-stop" : "sell", [symbol]);
+          showToast(
+            forceStop
+              ? `${label} 已强制止损卖出`
+              : `${label} 已卖出，停止持仓观测`,
+          );
+          if (!(options && options.skipRender)) {
+            await renderKlines();
+          }
+          syncStopLossGate();
+          setStatus(
+            true,
+            forceStop
+              ? `${label} 强制止损已同步`
+              : `${label} 持仓已清除`,
+          );
           return true;
         } catch (error) {
           console.error(error);
@@ -6054,6 +6338,7 @@
 
           setStatus(false, "2/3 拉取行情…");
           await loadBinanceTicker();
+          syncStopLossGate();
 
           setStatus(false, "3/3 加载K线…");
           updateWatchPool();
@@ -6065,6 +6350,7 @@
               if (total > 0) setTopProgressValue(done / total, label);
             },
           });
+          syncStopLossGate();
           const rising = getRisingSymbols().length;
           const now = Date.now();
           updateDataAsOf(now);
@@ -6429,6 +6715,36 @@
       });
       applyNotesViewChrome();
       syncRangeSelect();
+      document
+        .getElementById("stopLossList")
+        .addEventListener("click", async (event) => {
+          const btn = event.target.closest("[data-stop-sell]");
+          if (!btn || stopLossBusy || positionSaving) return;
+          const symbol = btn.getAttribute("data-stop-sell");
+          if (!symbol) return;
+          stopLossBusy = true;
+          syncStopLossGate();
+          try {
+            await forceSellStopLoss(symbol);
+          } catch (error) {
+            console.error(error);
+          } finally {
+            stopLossBusy = false;
+            syncStopLossGate();
+          }
+        });
+      document
+        .getElementById("stopLossSellAllBtn")
+        .addEventListener("click", () => {
+          void forceSellAllStopLoss();
+        });
+      document.addEventListener("keydown", (event) => {
+        if (!document.body.classList.contains("is-stop-loss-locked")) return;
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      });
       refreshAll({ reason: "boot" });
     </script>
   </body>
