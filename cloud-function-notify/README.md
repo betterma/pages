@@ -23,7 +23,9 @@
 
 无盯一下上涨且无持仓时，不发空消息。排序以盯住涨幅为准。
 
-可选环境变量：`PIN_NOTIFY_MAX`（默认 `20`）、`PIN_CHART_TOP`（默认 `0`=跟 `PIN_CHART_MAX`；设 `3` 则只取前 3）、`PIN_CHART_MAX`（默认 `12`）、`PIN_CHART_INTERVAL`（默认 `4h`）、`PIN_CHART_LIMIT`（默认 42）、`NOTIFY_DEBOUNCE_MS`（默认 90000）、`MOMENTUM_CONCURRENCY`（默认 5）。
+可选环境变量：`PIN_NOTIFY_MAX`（默认 `20`）、`PIN_CHART_TOP`、`PIN_CHART_MAX`（默认 `12`）、`AUTO_PIN_ENABLED`（默认 `1` 云端自动盯）、`AUTO_PIN_WECOM`（默认 `1`，新自动盯仍发一条短企微；主反馈在网页日志/置顶）、`OBS_DATA_URL`、`NOTIFY_DEBOUNCE_MS`、`MOMENTUM_CONCURRENCY`。
+
+**云端自动盯**：每轮在推送前读取 OBS `watch-data`，把新进「窗口上涨」且未盯的币写入 `watch-pins.json`（`source: auto-cloud`），事件写入 `watch-notify-state.json` 的 `autoPinEvents`，网页打开即可看到。
 
 **若出现「一整套消息连发 4 遍」**：先检查函数是否挂了多个定时触发器；代码已加 90 秒去重锁。务必把超时调到 ≥60～120 秒（全量拼图 + 动量 K 线更耗时）。
 

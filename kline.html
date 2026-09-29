@@ -133,7 +133,9 @@
       body.is-notes-view #hiddenPinTab,
       body.is-notes-view #hiddenPinDrawer,
       body.is-notes-view #pinSelectBtn,
-      body.is-notes-view #pinBatchBar {
+      body.is-notes-view #pinBatchBar,
+      body.is-notes-view #pinSortSwitch,
+      body.is-notes-view #recentAutoPinSection {
         display: none !important;
       }
       .topbar-actions {
@@ -172,6 +174,27 @@
       .mode-switch button:disabled {
         opacity: 0.55;
         cursor: wait;
+      }
+      .pin-sort-switch {
+        margin-left: 2px;
+      }
+      .section-title-row .pin-sort-switch {
+        margin-left: 0;
+      }
+      .recent-auto-pin {
+        margin: 0 0 12px;
+      }
+      .recent-auto-pin[hidden] {
+        display: none !important;
+      }
+      .recent-auto-pin-head {
+        font-size: 12px;
+        color: #78817f;
+        margin: 0 0 6px;
+      }
+      .recent-auto-pin .kline-card {
+        border-color: #2f8f6e;
+        box-shadow: 0 0 0 1px rgba(47, 143, 110, 0.18);
       }
       .mode-progress {
         position: fixed;
@@ -1438,6 +1461,16 @@
 
       <div class="section-title-row">
         <h2 class="section-title" id="pinSectionTitle">盯一下</h2>
+        <div
+          class="mode-switch pin-sort-switch"
+          id="pinSortSwitch"
+          role="group"
+          aria-label="盯一下排序"
+          title="盯幅：按相对盯住价；爬升：按近2h/1h信号"
+        >
+          <button type="button" data-pin-sort="pin" class="is-active">盯幅</button>
+          <button type="button" data-pin-sort="momentum">爬升</button>
+        </div>
         <button
           id="pinSelectBtn"
           class="ghost-action"
@@ -1461,14 +1494,6 @@
       <div class="pin-meta-row">
         <div id="pinMeta" class="meta"></div>
       </div>
-      <!-- 近2h/1h 改由左下角浮窗展示，顶栏排行收起
-      <div
-        id="pinMomentumMeta"
-        class="meta pin-momentum-meta"
-        hidden
-        title="主看近2小时谁高；近1小时用来判断有没有熄火。仅作排行提示，不改变下方卡片顺序"
-      ></div>
-      -->
       <div id="maintPanel" class="maint-panel" hidden>
         <span id="maintEmptyHint" class="maint-empty" hidden>暂无可清理项</span>
         <button id="clearExpiredPinsBtn" type="button" hidden>
@@ -1483,6 +1508,10 @@
         >
           清除全部持仓
         </button>
+      </div>
+      <div id="recentAutoPinSection" class="recent-auto-pin" hidden>
+        <div class="recent-auto-pin-head" id="recentAutoPinMeta">新自动盯 · 30分钟内</div>
+        <div id="recentAutoPinGrid" class="kline-grid"></div>
       </div>
       <div id="pinGrid" class="kline-grid"></div>
 
@@ -1762,6 +1791,16 @@
       const RISING_SNAP_SEEDED_KEY = "kline-rising-snap-seeded-v1";
       const ACTION_LOG_KEY = "kline-action-log-v1";
       const ACTION_LOG_MAX = 80;
+      const PIN_SORT_KEY = "kline-pin-sort-v1";
+      const AUTO_PIN_EVENTS_SEEN_KEY = "kline-auto-pin-events-seen-v1";
+      const NEW_AUTO_PIN_MS = 30 * 60 * 1000;
+      let pinSortMode = "pin";
+      try {
+        const savedSort = localStorage.getItem(PIN_SORT_KEY);
+        if (savedSort === "momentum" || savedSort === "pin") pinSortMode = savedSort;
+      } catch (error) {
+        pinSortMode = "pin";
+      }
       let notifyPollTimer = null;
       let klineAbort = null;
       let loading = false;
@@ -2665,6 +2704,7 @@
           lastPinPrices = notifyState.lastPinPrices || {};
           lastPinNotify = notifyState.lastPinNotify || null;
           lastPositionNotify = notifyState.lastPositionNotify || null;
+          mergeCloudAutoPinEvents(notifyState.autoPinEvents || []);
         } catch (error) {
           console.warn(error);
           lastPinPrices = {};
@@ -2699,6 +2739,85 @@
         }
       }
 
+      function listRecentAutoPins() {
+        const now = Date.now();
+        const blocked = blacklistSymbols();
+        return pinItems
+          .filter((item) => {
+            if (!item || !item.symbol || blocked.has(item.symbol)) return false;
+            const source = String(item.source || "");
+            if (source !== "auto-rising" && source !== "auto-cloud") return false;
+            const at = Number(item.pinnedAt) || 0;
+            return at > 0 && now - at <= NEW_AUTO_PIN_MS;
+          })
+          .slice()
+          .sort((a, b) => (b.pinnedAt || 0) - (a.pinnedAt || 0));
+      }
+
+      function syncPinSortUi() {
+        document.querySelectorAll("#pinSortSwitch [data-pin-sort]").forEach((btn) => {
+          btn.classList.toggle("is-active", btn.dataset.pinSort === pinSortMode);
+        });
+      }
+
+      function setPinSortMode(mode) {
+        const next = mode === "momentum" ? "momentum" : "pin";
+        if (next === pinSortMode) return;
+        pinSortMode = next;
+        try {
+          localStorage.setItem(PIN_SORT_KEY, pinSortMode);
+        } catch (error) {
+          /* ignore */
+        }
+        syncPinSortUi();
+        if (!isNotesView() && !loading) {
+          void renderKlines();
+        }
+      }
+
+      function mergeCloudAutoPinEvents(events) {
+        if (!Array.isArray(events) || !events.length) return;
+        let seenAt = 0;
+        try {
+          seenAt = Number(localStorage.getItem(AUTO_PIN_EVENTS_SEEN_KEY) || 0) || 0;
+        } catch (error) {
+          seenAt = 0;
+        }
+        const fresh = events
+          .filter((item) => item && Number(item.at) > seenAt)
+          .slice()
+          .sort((a, b) => Number(a.at) - Number(b.at));
+        if (!fresh.length) return;
+        let maxAt = seenAt;
+        for (const event of fresh) {
+          const at = Number(event.at) || 0;
+          if (at > maxAt) maxAt = at;
+          const symbols = Array.isArray(event.symbols) ? event.symbols : [];
+          if (!symbols.length) continue;
+          // Write with event time so ordering matches cloud.
+          const entry = {
+            at: at || Date.now(),
+            kind: "auto-pin",
+            symbols: [
+              ...new Set(
+                symbols
+                  .map((symbol) => String(symbol || "").trim().toUpperCase())
+                  .filter(Boolean),
+              ),
+            ],
+          };
+          if (!entry.symbols.length) continue;
+          const next = [entry, ...readActionLog()].slice(0, ACTION_LOG_MAX);
+          writeActionLog(next);
+        }
+        try {
+          localStorage.setItem(AUTO_PIN_EVENTS_SEEN_KEY, String(maxAt));
+        } catch (error) {
+          /* ignore */
+        }
+        renderActionLogBody();
+      }
+
       function parseNotifyStateData(data) {
         return {
           lastPinPrices:
@@ -2715,6 +2834,9 @@
             typeof data.lastPositionNotify === "object"
               ? data.lastPositionNotify
               : null,
+          autoPinEvents: Array.isArray(data && data.autoPinEvents)
+            ? data.autoPinEvents
+            : [],
         };
       }
 
@@ -2802,6 +2924,7 @@
               lastPinPrices: {},
               lastPinNotify: null,
               lastPositionNotify: null,
+              autoPinEvents: [],
             };
           }
           return parseNotifyStateData(await response.json());
@@ -2811,6 +2934,7 @@
             lastPinPrices: {},
             lastPinNotify: null,
             lastPositionNotify: null,
+            autoPinEvents: [],
           };
         }
       }
@@ -4607,6 +4731,12 @@
             new Set(),
             pinMap,
           );
+          const recentSection = document.getElementById("recentAutoPinSection");
+          if (recentSection) {
+            recentSection.hidden = true;
+            const recentGrid = document.getElementById("recentAutoPinGrid");
+            if (recentGrid) recentGrid.innerHTML = "";
+          }
           return;
         }
 
@@ -4659,7 +4789,14 @@
           });
         const pinHiddenDown = pinHiddenItems.length;
         const pinHiddenList = pinHiddenItems.map((item) => item.symbol);
-        let pinSymbolsList = listWindowUpPinSymbols(interval);
+        const recentAutoList = listRecentAutoPins().map((item) => item.symbol);
+        const recentAutoSet = new Set(recentAutoList);
+        let pinSymbolsList = listWindowUpPinSymbols(interval).filter(
+          (symbol) => !recentAutoSet.has(symbol),
+        );
+        const scoreUniverse = [
+          ...new Set([...recentAutoList, ...pinSymbolsList]),
+        ];
         const activePins = pinItems.filter(
           (item) =>
             !blocked.has(item.symbol) && !WatchFavorites.isPinExpired(item),
@@ -4678,12 +4815,20 @@
         const { signal } = klineAbort;
 
         let pinHourScores = new Map();
-        if (pinSymbolsList.length) {
+        if (scoreUniverse.length) {
           setStatus(false, "计算盯一下近1h/2h动量...");
-          pinHourScores = await loadPinHourScores(pinSymbolsList, signal);
+          pinHourScores = await loadPinHourScores(scoreUniverse, signal);
           if (signal.aborted) return;
         }
-        updatePinMomentumMeta(pinHourScores, pinSymbolsList);
+        if (pinSortMode === "momentum") {
+          pinSymbolsList = pinSymbolsList
+            .slice()
+            .sort((a, b) => compareMomentumSignal(a, b, pinHourScores));
+        }
+        updatePinMomentumMeta(pinHourScores, [
+          ...recentAutoList,
+          ...pinSymbolsList,
+        ]);
 
         document.getElementById("risingMeta").textContent = rising.length
           ? `窗口上涨 ${rising.length} / 观察池 ${watchPool.size} · ${rangeText} · ${bars} 根`
@@ -4717,8 +4862,11 @@
           const parts = [
             `盯一下 ${pinItems.length}`,
             `窗口上涨展示 ${pinShownWindow}`,
-            // "窗口涨即可显示（含低于盯住价）",
+            pinSortMode === "momentum" ? "排序爬升" : "排序盯幅",
           ];
+          if (recentAutoList.length) {
+            parts.push(`新自动盯 ${recentAutoList.length}`);
+          }
           if (pinShownBelowPin > 0) {
             parts.push(`其中低于盯住价 ${pinShownBelowPin}`);
           }
@@ -4773,6 +4921,29 @@
           pairSet,
           pinMap,
         );
+        if (signal.aborted) return;
+        const recentSection = document.getElementById("recentAutoPinSection");
+        const recentMeta = document.getElementById("recentAutoPinMeta");
+        const recentGrid = document.getElementById("recentAutoPinGrid");
+        if (recentSection && recentGrid) {
+          if (recentAutoList.length) {
+            recentSection.hidden = false;
+            if (recentMeta) {
+              recentMeta.textContent = `新自动盯 · 近30分钟 ${recentAutoList.length} 个`;
+            }
+            await fillGrid(
+              recentGrid,
+              recentAutoList,
+              "pin",
+              signal,
+              pairSet,
+              pinMap,
+            );
+          } else {
+            recentSection.hidden = true;
+            recentGrid.innerHTML = "";
+          }
+        }
         if (signal.aborted) return;
         await fillGrid(
           document.getElementById("hiddenPinGrid"),
@@ -5564,6 +5735,13 @@
         closeCardActions();
         setNotesView(nextNotes);
       });
+      document.getElementById("pinSortSwitch").addEventListener("click", (event) => {
+        const btn = event.target.closest("button[data-pin-sort]");
+        if (!btn || loading) return;
+        closeCardActions();
+        setPinSortMode(btn.dataset.pinSort);
+      });
+      syncPinSortUi();
       document.addEventListener("pointerdown", (event) => {
         if (event.target.closest(".card-actions")) return;
         const open = document.querySelector(".card-actions");

@@ -330,6 +330,7 @@ module.exports = {
   sendWecomMarkdown,
   sendWecomText,
   sendWecomImage,
+  requestRaw,
   splitMarkdownByBytes,
   truncateUtf8,
 };
