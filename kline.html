@@ -1185,6 +1185,13 @@
         color: #28323a;
         font-weight: 650;
       }
+      .notify-float-tab.is-computing {
+        color: #4a6b66;
+        font-variant-numeric: tabular-nums;
+      }
+      .notify-float-tab.is-computing:not(.is-active) {
+        background: rgba(113, 139, 136, 0.08);
+      }
       .notify-float-tab:disabled {
         opacity: 0.4;
         cursor: default;
@@ -1804,6 +1811,10 @@
       let notifyPollTimer = null;
       let klineAbort = null;
       let loading = false;
+      let momentumAbort = null;
+      let momentumBusy = false;
+      let momentumProgress = { done: 0, total: 0 };
+      let lastScoreUniverse = [];
       let lastDataAt = 0;
       let favoriteSaving = false;
       let blacklistSaving = false;
@@ -2495,6 +2506,19 @@
           }
           refreshMomentumFloatBody();
           updateMomentumFloatPanel();
+          const universe = currentMomentumUniverse();
+          const snapSymbols = new Set(
+            ((lastMomentumSnapshot && lastMomentumSnapshot.rows) || []).map(
+              (row) => row.symbol,
+            ),
+          );
+          const mismatch =
+            !snapSymbols.size ||
+            universe.length !== snapSymbols.size ||
+            universe.some((symbol) => !snapSymbols.has(symbol));
+          if (mismatch && !momentumBusy) {
+            void schedulePinMomentum(universe, { force: true });
+          }
           return;
         }
         if (name === "notify") {
@@ -2770,8 +2794,11 @@
           /* ignore */
         }
         syncPinSortUi();
-        if (!isNotesView() && !loading) {
-          void renderKlines();
+        if (isNotesView() || loading) return;
+        if (next === "momentum") {
+          void ensureMomentumThenReorder({ force: !lastMomentumSnapshot });
+        } else {
+          reorderPinGridByPinChange();
         }
       }
 
@@ -3284,11 +3311,12 @@
         return `<div class="mom-trail" title="${tip}">${steps}</div>`;
       }
 
-      async function loadPinHourScores(symbols, signal) {
+      async function loadPinHourScores(symbols, signal, onProgress) {
         const scores = new Map();
         const list = [...new Set((symbols || []).filter(Boolean))];
         const batchSize = 4;
         const limit = CONFIG.MOMENTUM_TREND.klineLimit;
+        if (typeof onProgress === "function") onProgress(0, list.length);
         for (let index = 0; index < list.length; index += batchSize) {
           if (signal && signal.aborted) return scores;
           const batch = list.slice(index, index + batchSize);
@@ -3323,8 +3351,204 @@
               }
             }),
           );
+          if (typeof onProgress === "function") {
+            onProgress(Math.min(list.length, index + batch.length), list.length);
+          }
         }
         return scores;
+      }
+
+      function shouldComputeMomentum(options) {
+        if (options && options.force) return true;
+        if (isNotesView()) return true;
+        if (pinSortMode === "momentum") return true;
+        if (isFloatPanelOpen("momentum")) return true;
+        return false;
+      }
+
+      function setMomentumUiBusy(busy, label) {
+        const tab = document.getElementById("momentumFloatTab");
+        const total = momentumProgress.total || 0;
+        const done = momentumProgress.done || 0;
+        const text =
+          label ||
+          (total > 0 ? `计算近2h/1h ${done}/${total}` : "计算近2h/1h…");
+        if (tab) {
+          if (!tab.dataset.idleText) {
+            tab.dataset.idleText = (tab.textContent || "近2h/1h").trim();
+          }
+          tab.classList.toggle("is-computing", !!busy);
+          tab.hidden = false;
+          tab.disabled = false;
+          tab.textContent = busy
+            ? total > 0
+              ? `近2h/1h ${done}/${total}`
+              : "近2h/1h…"
+            : tab.dataset.idleText || "近2h/1h";
+          tab.title = busy
+            ? text
+            : "近2h/1h（爬升优先 · 含2h轨迹）";
+        }
+        if (!loading) {
+          if (busy) {
+            setTopProgress(true, { overlay: false, label: text });
+          } else {
+            setTopProgress(false);
+          }
+        }
+        const panel = document.getElementById("momentumFloat");
+        const body = document.getElementById("momentumFloatBody");
+        const timeEl = document.getElementById("momentumFloatTime");
+        const hasRows =
+          lastMomentumSnapshot &&
+          Array.isArray(lastMomentumSnapshot.rows) &&
+          lastMomentumSnapshot.rows.length;
+        if (busy && timeEl) {
+          timeEl.textContent = ` · ${done}/${total || "…"}`;
+        }
+        if (busy && panel && !panel.hidden && body && !hasRows) {
+          body.innerHTML = `<div class="notify-col-empty">${escapeHtml(text)}</div>`;
+        }
+      }
+
+      function scoresMapFromSnapshot(snapshot) {
+        const map = new Map();
+        const rows = (snapshot && snapshot.rows) || [];
+        rows.forEach((row) => {
+          if (!row || !row.symbol) return;
+          map.set(row.symbol, {
+            change1h: row.change1h,
+            change2h: row.change2h,
+            trail2h: row.trail2h,
+            trend: row.trend,
+          });
+        });
+        return map;
+      }
+
+      function currentMomentumUniverse() {
+        if (lastScoreUniverse.length) return lastScoreUniverse.slice();
+        if (isNotesView()) {
+          const blocked = blacklistSymbols();
+          return [
+            ...new Set([
+              ...listWindowUpPinSymbols(),
+              ...noteSymbolList().filter((symbol) => !blocked.has(symbol)),
+            ]),
+          ];
+        }
+        const recentAutoList = listRecentAutoPins().map((item) => item.symbol);
+        return [
+          ...new Set([
+            ...recentAutoList,
+            ...listWindowUpPinSymbols().filter(
+              (symbol) => !recentAutoList.includes(symbol),
+            ),
+          ]),
+        ];
+      }
+
+      function applyPinGridOrder(symbols) {
+        const grid = document.getElementById("pinGrid");
+        if (!grid || !symbols || !symbols.length) return;
+        symbols.forEach((symbol) => {
+          const card = grid.querySelector(
+            `.kline-card[data-section="pin"][data-symbol="${symbol}"]`,
+          );
+          if (card) grid.appendChild(card);
+        });
+      }
+
+      function reorderPinGridByMomentum(scores) {
+        const scoreMap = scores || scoresMapFromSnapshot(lastMomentumSnapshot);
+        if (isNotesView()) {
+          const blocked = blacklistSymbols();
+          const list = noteSymbolList()
+            .filter((symbol) => !blocked.has(symbol))
+            .slice()
+            .sort((a, b) => compareMomentumSignal(a, b, scoreMap));
+          applyPinGridOrder(list);
+          return;
+        }
+        const recentAutoSet = new Set(
+          listRecentAutoPins().map((item) => item.symbol),
+        );
+        const list = listWindowUpPinSymbols()
+          .filter((symbol) => !recentAutoSet.has(symbol))
+          .slice()
+          .sort((a, b) => compareMomentumSignal(a, b, scoreMap));
+        applyPinGridOrder(list);
+      }
+
+      function reorderPinGridByPinChange() {
+        if (isNotesView()) return;
+        const recentAutoSet = new Set(
+          listRecentAutoPins().map((item) => item.symbol),
+        );
+        applyPinGridOrder(
+          listWindowUpPinSymbols().filter(
+            (symbol) => !recentAutoSet.has(symbol),
+          ),
+        );
+      }
+
+      async function schedulePinMomentum(symbols, options) {
+        const opts = options || {};
+        const list = [...new Set((symbols || []).filter(Boolean))];
+        lastScoreUniverse = list;
+        if (!shouldComputeMomentum(opts)) {
+          updateMomentumFloatPanel();
+          return null;
+        }
+        if (!list.length) {
+          updatePinMomentumMeta(new Map(), []);
+          return new Map();
+        }
+        if (momentumAbort) momentumAbort.abort();
+        momentumAbort = new AbortController();
+        const { signal } = momentumAbort;
+        momentumBusy = true;
+        momentumProgress = { done: 0, total: list.length };
+        setMomentumUiBusy(true, `计算近2h/1h 0/${list.length}`);
+        try {
+          const scores = await loadPinHourScores(
+            list,
+            signal,
+            (done, total) => {
+              momentumProgress = { done, total };
+              setMomentumUiBusy(true, `计算近2h/1h ${done}/${total}`);
+            },
+          );
+          if (signal.aborted) return null;
+          updatePinMomentumMeta(scores, list);
+          if (pinSortMode === "momentum" || isNotesView()) {
+            reorderPinGridByMomentum(scores);
+          }
+          return scores;
+        } catch (error) {
+          if (error && error.name === "AbortError") return null;
+          console.warn(error);
+          showToast(error.message || "近2h/1h 计算失败");
+          return null;
+        } finally {
+          if (!signal.aborted) {
+            momentumBusy = false;
+            setMomentumUiBusy(false);
+          }
+        }
+      }
+
+      async function ensureMomentumThenReorder(options) {
+        const list = currentMomentumUniverse();
+        const snap = lastMomentumSnapshot;
+        const hasSnap =
+          snap && Array.isArray(snap.rows) && snap.rows.length > 0;
+        if (hasSnap && !(options && options.force)) {
+          reorderPinGridByMomentum();
+          updateMomentumFloatPanel();
+          return;
+        }
+        await schedulePinMomentum(list, { force: true });
       }
 
       function formatHourRankLine(scores, symbols, key, limit) {
@@ -3677,13 +3901,24 @@
         const snap = lastMomentumSnapshot;
         const hasRows = snap && Array.isArray(snap.rows) && snap.rows.length;
         tab.hidden = false;
-        tab.disabled = !hasRows;
+        tab.disabled = !hasRows && !momentumBusy;
         if (!hasRows) {
-          if (!panel.hidden) panel.hidden = true;
-          body.innerHTML =
-            '<div class="notify-col-empty">暂无近2h/1h 数据</div>';
-          if (timeEl) timeEl.textContent = "";
-          tab.classList.remove("is-active");
+          if (!momentumBusy && !panel.hidden) panel.hidden = true;
+          if (momentumBusy) {
+            const total = momentumProgress.total || 0;
+            const done = momentumProgress.done || 0;
+            const text =
+              total > 0
+                ? `正在计算近2h/1h ${done}/${total}`
+                : "正在计算近2h/1h…";
+            body.innerHTML = `<div class="notify-col-empty">${escapeHtml(text)}</div>`;
+            if (timeEl) timeEl.textContent = ` · ${done}/${total || "…"}`;
+          } else {
+            body.innerHTML =
+              '<div class="notify-col-empty">暂无近2h/1h 数据</div>';
+            if (timeEl) timeEl.textContent = "";
+            tab.classList.remove("is-active");
+          }
           return;
         }
 
@@ -4668,6 +4903,12 @@
           if (klineAbort) klineAbort.abort();
           klineAbort = new AbortController();
           const { signal } = klineAbort;
+          if (momentumAbort) {
+            momentumAbort.abort();
+            momentumAbort = null;
+            momentumBusy = false;
+            setMomentumUiBusy(false);
+          }
           const noteSymbols = noteSymbolList();
           const blocked = blacklistSymbols();
           const pinMap = new Map(pinItems.map((item) => [item.symbol, item]));
@@ -4697,16 +4938,8 @@
 
           updateHiddenPinTab(0);
 
-          let pinHourScores = new Map();
-          if (scoreSymbols.length) {
-            setStatus(false, "计算近1h/2h动量...");
-            pinHourScores = await loadPinHourScores(scoreSymbols, signal);
-            if (signal.aborted) return;
-          }
-          // K 线区仍只展示记一笔，按信号强弱排序。
-          const pinSymbolsList = visibleNotes
-            .slice()
-            .sort((a, b) => compareMomentumSignal(a, b, pinHourScores));
+          // 先出记一笔 K 线；近2h/1h 后台算完再按信号重排 + 更新浮窗。
+          const pinSymbolsList = visibleNotes.slice();
 
           const pinMeta = document.getElementById("pinMeta");
           if (pinMeta) {
@@ -4720,8 +4953,6 @@
               "长按去掉记一笔",
             ].join(" · ");
           }
-
-          updatePinMomentumMeta(pinHourScores, floatPinSymbols);
 
           await fillGrid(
             document.getElementById("pinGrid"),
@@ -4737,6 +4968,7 @@
             const recentGrid = document.getElementById("recentAutoPinGrid");
             if (recentGrid) recentGrid.innerHTML = "";
           }
+          void schedulePinMomentum(scoreSymbols);
           return;
         }
 
@@ -4813,22 +5045,15 @@
         if (klineAbort) klineAbort.abort();
         klineAbort = new AbortController();
         const { signal } = klineAbort;
+        if (momentumAbort) {
+          momentumAbort.abort();
+          momentumAbort = null;
+          momentumBusy = false;
+          setMomentumUiBusy(false);
+        }
 
-        let pinHourScores = new Map();
-        if (scoreUniverse.length) {
-          setStatus(false, "计算盯一下近1h/2h动量...");
-          pinHourScores = await loadPinHourScores(scoreUniverse, signal);
-          if (signal.aborted) return;
-        }
-        if (pinSortMode === "momentum") {
-          pinSymbolsList = pinSymbolsList
-            .slice()
-            .sort((a, b) => compareMomentumSignal(a, b, pinHourScores));
-        }
-        updatePinMomentumMeta(pinHourScores, [
-          ...recentAutoList,
-          ...pinSymbolsList,
-        ]);
+        // 先按盯幅出卡片；爬升排序 / 浮窗所需动量放到后台。
+        lastScoreUniverse = scoreUniverse.slice();
 
         document.getElementById("risingMeta").textContent = rising.length
           ? `窗口上涨 ${rising.length} / 观察池 ${watchPool.size} · ${rangeText} · ${bars} 根`
@@ -4972,6 +5197,7 @@
         if (signal.aborted) return;
         updateNotifyFloatPanel();
         updatePinSelectUi();
+        void schedulePinMomentum(scoreUniverse);
       }
 
       async function toggleFavoriteForSymbol(symbol) {
@@ -5455,6 +5681,17 @@
           loading = false;
           btn.disabled = false;
           if (rangeSelect) rangeSelect.disabled = false;
+          // 主加载结束后若后台还在算动量，接上顶部进度。
+          if (momentumBusy) {
+            const total = momentumProgress.total || 0;
+            const done = momentumProgress.done || 0;
+            setMomentumUiBusy(
+              true,
+              total > 0
+                ? `计算近2h/1h ${done}/${total}`
+                : "计算近2h/1h…",
+            );
+          }
         }
       }
 
@@ -5498,6 +5735,17 @@
         if (name === "notify" && isFloatPanelOpen("notify")) {
           refreshNotifyFloat({ silent: true });
         }
+        if (name === "momentum" && isFloatPanelOpen("momentum")) {
+          const hasRows =
+            lastMomentumSnapshot &&
+            Array.isArray(lastMomentumSnapshot.rows) &&
+            lastMomentumSnapshot.rows.length;
+          if (!hasRows && !momentumBusy) {
+            void schedulePinMomentum(currentMomentumUniverse(), {
+              force: true,
+            });
+          }
+        }
       });
       document
         .getElementById("notifyFloatBody")
@@ -5515,11 +5763,8 @@
       document
         .getElementById("momentumFloatRefresh")
         .addEventListener("click", async () => {
-          if (momentumFloatRefreshing || loading) return;
-          const symbols = (lastMomentumSnapshot &&
-            lastMomentumSnapshot.rows &&
-            lastMomentumSnapshot.rows.map((row) => row.symbol)) ||
-            [];
+          if (momentumFloatRefreshing || loading || momentumBusy) return;
+          const symbols = currentMomentumUniverse();
           if (!symbols.length) {
             showToast("暂无盯一下可计算");
             return;
@@ -5531,11 +5776,11 @@
             btn.textContent = "…";
           }
           try {
-            const controller = new AbortController();
-            const scores = await loadPinHourScores(symbols, controller.signal);
-            updatePinMomentumMeta(scores, symbols);
-            setMomentumFloatOpen(true);
-            showToast("近2h/1h 已更新");
+            const scores = await schedulePinMomentum(symbols, { force: true });
+            if (scores) {
+              setMomentumFloatOpen(true);
+              showToast("近2h/1h 已更新");
+            }
           } catch (error) {
             console.warn(error);
             showToast(error.message || "刷新近2h/1h 失败");
