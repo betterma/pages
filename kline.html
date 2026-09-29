@@ -1186,15 +1186,41 @@
         font-weight: 650;
       }
       .notify-float-tab.is-computing {
-        color: #4a6b66;
+        --mom-pct: 0%;
+        color: #1f4a40;
         font-variant-numeric: tabular-nums;
+        font-weight: 650;
+        cursor: not-allowed;
+        pointer-events: none;
+        background: linear-gradient(
+          90deg,
+          rgba(47, 143, 110, 0.62) 0%,
+          rgba(47, 143, 110, 0.62) var(--mom-pct),
+          rgba(90, 106, 104, 0.16) var(--mom-pct),
+          rgba(90, 106, 104, 0.16) 100%
+        );
       }
-      .notify-float-tab.is-computing:not(.is-active) {
-        background: rgba(113, 139, 136, 0.08);
+      .notify-float-tab.is-computing.is-active {
+        color: #1a3f36;
+        background: linear-gradient(
+          90deg,
+          rgba(47, 143, 110, 0.72) 0%,
+          rgba(47, 143, 110, 0.72) var(--mom-pct),
+          rgba(113, 139, 136, 0.22) var(--mom-pct),
+          rgba(113, 139, 136, 0.22) 100%
+        );
       }
       .notify-float-tab:disabled {
         opacity: 0.4;
         cursor: default;
+      }
+      .notify-float-tab.is-computing:disabled {
+        opacity: 1;
+      }
+      .pin-sort-switch [data-pin-sort="momentum"].is-computing {
+        font-variant-numeric: tabular-nums;
+        opacity: 0.72;
+        cursor: not-allowed;
       }
       @media (max-width: 640px) {
         .notify-float {
@@ -1802,12 +1828,7 @@
       const AUTO_PIN_EVENTS_SEEN_KEY = "kline-auto-pin-events-seen-v1";
       const NEW_AUTO_PIN_MS = 30 * 60 * 1000;
       let pinSortMode = "pin";
-      try {
-        const savedSort = localStorage.getItem(PIN_SORT_KEY);
-        if (savedSort === "momentum" || savedSort === "pin") pinSortMode = savedSort;
-      } catch (error) {
-        pinSortMode = "pin";
-      }
+      // 默认盯幅；不恢复「爬升」，避免一进页就后台算动量。
       let notifyPollTimer = null;
       let klineAbort = null;
       let loading = false;
@@ -1945,6 +1966,24 @@
           modeProgressValue += Math.max(0.6, (90 - modeProgressValue) * 0.08);
           if (fill) fill.style.width = `${Math.min(90, modeProgressValue)}%`;
         }, 180);
+      }
+
+      function setTopProgressValue(ratio, label) {
+        const bar = document.getElementById("modeProgressBar");
+        const labelEl = document.getElementById("modeProgressLabel");
+        const fill = bar && bar.querySelector("span");
+        if (labelEl && label) labelEl.textContent = label;
+        if (!bar || !fill) return;
+        if (modeProgressTimer) {
+          clearInterval(modeProgressTimer);
+          modeProgressTimer = null;
+        }
+        bar.hidden = false;
+        bar.classList.add("is-on");
+        bar.classList.remove("is-indeterminate");
+        const pct = Math.max(0, Math.min(100, Math.round(Number(ratio) * 100)));
+        modeProgressValue = pct;
+        fill.style.width = `${pct}%`;
       }
 
       function setModeProgress(on, label) {
@@ -2780,7 +2819,29 @@
 
       function syncPinSortUi() {
         document.querySelectorAll("#pinSortSwitch [data-pin-sort]").forEach((btn) => {
-          btn.classList.toggle("is-active", btn.dataset.pinSort === pinSortMode);
+          const mode = btn.dataset.pinSort;
+          btn.classList.toggle("is-active", mode === pinSortMode);
+          if (mode !== "momentum") {
+            btn.disabled = false;
+            btn.classList.remove("is-computing");
+            return;
+          }
+          const busy = momentumBusy;
+          const total = momentumProgress.total || 0;
+          const done = momentumProgress.done || 0;
+          btn.classList.toggle("is-computing", busy);
+          btn.disabled = busy;
+          btn.textContent =
+            busy && total > 0
+              ? `爬升 (${done}/${total})`
+              : busy
+                ? "爬升 (…)"
+                : "爬升";
+          btn.title = busy
+            ? total > 0
+              ? `近2h/1h 计算中 ${done}/${total}`
+              : "近2h/1h 计算中"
+            : "按近2h/1h 信号排序";
         });
       }
 
@@ -3370,16 +3431,18 @@
         const tab = document.getElementById("momentumFloatTab");
         const total = momentumProgress.total || 0;
         const done = momentumProgress.done || 0;
+        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
         const text =
           label ||
           (total > 0 ? `计算近2h/1h ${done}/${total}` : "计算近2h/1h…");
         if (tab) {
           if (!tab.dataset.idleText) {
-            tab.dataset.idleText = (tab.textContent || "近2h/1h").trim();
+            tab.dataset.idleText = "近2h/1h";
           }
           tab.classList.toggle("is-computing", !!busy);
           tab.hidden = false;
-          tab.disabled = false;
+          tab.disabled = !!busy;
+          tab.style.setProperty("--mom-pct", busy ? `${pct}%` : "0%");
           tab.textContent = busy
             ? total > 0
               ? `近2h/1h ${done}/${total}`
@@ -3389,9 +3452,11 @@
             ? text
             : "近2h/1h（爬升优先 · 含2h轨迹）";
         }
+        syncPinSortUi();
         if (!loading) {
           if (busy) {
             setTopProgress(true, { overlay: false, label: text });
+            if (total > 0) setTopProgressValue(done / total, text);
           } else {
             setTopProgress(false);
           }
@@ -3901,7 +3966,14 @@
         const snap = lastMomentumSnapshot;
         const hasRows = snap && Array.isArray(snap.rows) && snap.rows.length;
         tab.hidden = false;
-        tab.disabled = !hasRows && !momentumBusy;
+        tab.disabled = momentumBusy || !hasRows;
+        if (momentumBusy) {
+          tab.classList.add("is-computing");
+          const total = momentumProgress.total || 0;
+          const done = momentumProgress.done || 0;
+          const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+          tab.style.setProperty("--mom-pct", `${pct}%`);
+        }
         if (!hasRows) {
           if (!momentumBusy && !panel.hidden) panel.hidden = true;
           if (momentumBusy) {
@@ -4625,7 +4697,15 @@
         );
       }
 
-      async function fillGrid(grid, symbols, section, signal, pairSet, pinMap) {
+      async function fillGrid(
+        grid,
+        symbols,
+        section,
+        signal,
+        pairSet,
+        pinMap,
+        onBatchDone,
+      ) {
         const favSet = favoriteSymbols();
         const pairs = pairSet || new Set();
         const pins = pinMap || new Map();
@@ -4683,6 +4763,7 @@
               ),
             ),
           );
+          if (typeof onBatchDone === "function") onBatchDone(batch.length);
         }
       }
 
@@ -4892,12 +4973,21 @@
         openFloatPanel("notify");
       }
 
-      async function renderKlines() {
+      async function renderKlines(options) {
+        const onProgress = options && options.onProgress;
         const interval = CONFIG.KLINE_INTERVAL;
         const chartIv = chartInterval();
         const bars = klineLimit(chartIv);
         const rangeText = klineRangeLabel();
         const notesMode = isNotesView();
+        let klineDone = 0;
+        let klineTotal = 0;
+        const bumpKline = (n) => {
+          klineDone += n;
+          if (typeof onProgress === "function") {
+            onProgress(klineDone, klineTotal);
+          }
+        };
 
         if (notesMode) {
           if (klineAbort) klineAbort.abort();
@@ -4940,6 +5030,8 @@
 
           // 先出记一笔 K 线；近2h/1h 后台算完再按信号重排 + 更新浮窗。
           const pinSymbolsList = visibleNotes.slice();
+          klineTotal = pinSymbolsList.length;
+          if (typeof onProgress === "function") onProgress(0, klineTotal);
 
           const pinMeta = document.getElementById("pinMeta");
           if (pinMeta) {
@@ -4961,6 +5053,7 @@
             signal,
             new Set(),
             pinMap,
+            bumpKline,
           );
           const recentSection = document.getElementById("recentAutoPinSection");
           if (recentSection) {
@@ -5138,6 +5231,14 @@
           document.getElementById("favMeta").textContent = parts.join(" · ");
         }
 
+        klineTotal =
+          pinSymbolsList.length +
+          recentAutoList.length +
+          pinHiddenList.length +
+          rising.length +
+          favRising.length;
+        if (typeof onProgress === "function") onProgress(0, klineTotal);
+
         await fillGrid(
           document.getElementById("pinGrid"),
           pinSymbolsList,
@@ -5145,6 +5246,7 @@
           signal,
           pairSet,
           pinMap,
+          bumpKline,
         );
         if (signal.aborted) return;
         const recentSection = document.getElementById("recentAutoPinSection");
@@ -5163,6 +5265,7 @@
               signal,
               pairSet,
               pinMap,
+              bumpKline,
             );
           } else {
             recentSection.hidden = true;
@@ -5177,6 +5280,7 @@
           signal,
           pairSet,
           pinMap,
+          bumpKline,
         );
         if (signal.aborted) return;
         await fillGrid(
@@ -5185,6 +5289,8 @@
           "rising",
           signal,
           pairSet,
+          null,
+          bumpKline,
         );
         if (signal.aborted) return;
         await fillGrid(
@@ -5193,6 +5299,8 @@
           "favorite",
           signal,
           pairSet,
+          null,
+          bumpKline,
         );
         if (signal.aborted) return;
         updateNotifyFloatPanel();
@@ -5645,12 +5753,19 @@
           await loadGithubStorage();
           updateNotifyFloatPanel();
 
-          setStatus(false, "2/3 拉取币安最新行情...");
+          setStatus(false, "2/3 拉取行情…");
           await loadBinanceTicker();
 
-          setStatus(false, "3/3 重算观察池并加载 K 线...");
+          setStatus(false, "3/3 加载K线…");
           updateWatchPool();
-          await renderKlines();
+          await renderKlines({
+            onProgress: (done, total) => {
+              const label =
+                total > 0 ? `3/3 加载K线 ${done}/${total}` : "3/3 加载K线…";
+              setStatus(false, label);
+              if (total > 0) setTopProgressValue(done / total, label);
+            },
+          });
           const rising = getRisingSymbols().length;
           const now = Date.now();
           updateDataAsOf(now);
@@ -5955,11 +6070,18 @@
           select.disabled = true;
           setTopProgress(true, {
             overlay: false,
-            label: `正在加载${view.label}…`,
+            label: `加载${view.label}…`,
           });
-          setStatus(false, `正在加载${view.label} K线...`);
+          setStatus(false, `加载K线…`);
           try {
-            await renderKlines();
+            await renderKlines({
+              onProgress: (done, total) => {
+                const label =
+                  total > 0 ? `加载K线 ${done}/${total}` : "加载K线…";
+                setStatus(false, label);
+                if (total > 0) setTopProgressValue(done / total, label);
+              },
+            });
             updateDataAsOf(Date.now());
             setStatus(true, `已切换为${view.label}`);
           } catch (error) {
@@ -5982,7 +6104,7 @@
       });
       document.getElementById("pinSortSwitch").addEventListener("click", (event) => {
         const btn = event.target.closest("button[data-pin-sort]");
-        if (!btn || loading) return;
+        if (!btn || loading || btn.disabled) return;
         closeCardActions();
         setPinSortMode(btn.dataset.pinSort);
       });
