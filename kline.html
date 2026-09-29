@@ -2011,13 +2011,22 @@
         applyPageChrome();
         if (options && options.skipRender) return;
         setModeSwitchBusy(true);
-        setModeProgress(
-          true,
-          next ? "正在切换到记一笔…" : "正在切换到观察…",
-        );
+        const baseLabel = next ? "切换到记一笔" : "切换到观察";
+        setModeProgress(true, `${baseLabel}…`);
         try {
-          setStatus(false, next ? "切换到记一笔..." : "切换到观察...");
-          await renderKlines();
+          setStatus(false, `${baseLabel}…`);
+          await renderKlines({
+            onProgress: (done, total) => {
+              const label =
+                total > 0
+                  ? `${baseLabel} ${done}/${total}`
+                  : `${baseLabel}…`;
+              setStatus(false, label);
+              setTopProgressValue(done / Math.max(total, 1), label);
+              const labelEl = document.getElementById("modeProgressLabel");
+              if (labelEl) labelEl.textContent = label;
+            },
+          });
           setStatus(true, next ? "已切换到记一笔" : "已切换到观察");
         } catch (error) {
           console.error(error);
