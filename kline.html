@@ -4475,6 +4475,30 @@
         });
       }
 
+      function momentumRowForSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return null;
+        const rows =
+          (lastMomentumSnapshot && lastMomentumSnapshot.rows) || [];
+        const hit = rows.find((row) => row && row.symbol === key);
+        if (hit) return hit;
+        const pinItem = pinItemBySymbol(key);
+        return {
+          symbol: key,
+          label: key.replace(/USDT$/i, ""),
+          change24h: marketMap[key]?.change24h ?? null,
+          pinChange: pinItem ? pinChangePercent(pinItem) : null,
+          pinPrice: pinItem ? Number(pinItem.pinPrice) : null,
+          current: marketMap[key]?.price ?? null,
+          change1h: null,
+          change2h: null,
+          trail2h: null,
+          trend: classifyMomentumTrend(null, null),
+        };
+      }
+
       function openCardActions(card) {
         closeCardActions(true);
         const symbol = card.dataset.symbol;
@@ -4482,6 +4506,8 @@
         const pinned = pinSymbols().has(symbol);
         const favored = favoriteSymbols().has(symbol);
         const held = positionSymbols().has(symbol);
+        const canAddNote =
+          !isNotesView() && pinSortMode === "momentum";
         const expired = (() => {
           const item = pinItemBySymbol(symbol);
           return item ? WatchFavorites.isPinExpired(item) : false;
@@ -4489,6 +4515,9 @@
         const sheet = document.createElement("div");
         sheet.className = "card-actions";
         sheet.innerHTML = [
+          canAddNote
+            ? `<button type="button" data-action="add-note">记一下</button>`
+            : "",
           expired
             ? `<button type="button" data-action="renew">续盯（现价起算）</button>`
             : "",
@@ -4522,6 +4551,7 @@
           }
 
           const busyLabels = {
+            "add-note": "记录中",
             renew: "续盯中",
             pin: pinned ? (expired ? "清除中" : "取消中") : "盯住中",
             buy: "保存中",
@@ -4536,7 +4566,10 @@
           if (!needsConfirm) markBusy();
           try {
             let done = true;
-            if (action === "renew") {
+            if (action === "add-note") {
+              const row = momentumRowForSymbol(symbol);
+              await addMomNoteFromRow(row);
+            } else if (action === "renew") {
               done = await renewPinForSymbol(symbol);
             } else if (action === "pin") {
               if (pinned) await clearPinForSymbol(symbol);
