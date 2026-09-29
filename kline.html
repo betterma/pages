@@ -1752,6 +1752,10 @@
         KLINE_INTERVAL: "4h",
         SIGNAL_INTERVAL: "15m",
         SIGNAL_LIMIT: 200,
+        // 卡片 K 线 / 近2h动量 并发（每批同时处理的币数）。
+        // 盯一下卡每币最多 3 路请求，过大易触币安限流。
+        KLINE_CARD_CONCURRENCY: 10,
+        MOMENTUM_FETCH_CONCURRENCY: 12,
         LONG_PRESS_MS: 550,
         MOMENTUM_5M_LIMIT: 5,
         NOTIFY_STATE_PATH: "watch-notify-state.json",
@@ -3375,7 +3379,7 @@
       async function loadPinHourScores(symbols, signal, onProgress) {
         const scores = new Map();
         const list = [...new Set((symbols || []).filter(Boolean))];
-        const batchSize = 4;
+        const batchSize = Math.max(1, CONFIG.MOMENTUM_FETCH_CONCURRENCY || 12);
         const limit = CONFIG.MOMENTUM_TREND.klineLimit;
         if (typeof onProgress === "function") onProgress(0, list.length);
         for (let index = 0; index < list.length; index += batchSize) {
@@ -4748,7 +4752,7 @@
         bindCardInteractions(grid);
 
         const cards = [...grid.querySelectorAll(".kline-card")];
-        const batchSize = 4;
+        const batchSize = Math.max(1, CONFIG.KLINE_CARD_CONCURRENCY || 10);
         for (let index = 0; index < cards.length; index += batchSize) {
           if (signal.aborted) return;
           const batch = cards.slice(index, index + batchSize);
