@@ -13,6 +13,8 @@
         background: #f4f5f3;
         color: #28323a;
         font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+        --float-dock-h: 48px;
+        padding-bottom: var(--float-dock-h);
       }
       .page {
         width: min(1400px, calc(100% - 20px));
@@ -130,10 +132,6 @@
       body.is-notes-view .page-section,
       body.is-notes-view #hiddenPinTab,
       body.is-notes-view #hiddenPinDrawer,
-      body.is-notes-view #notifyFloat,
-      body.is-notes-view #notifyFloatTab,
-      body.is-notes-view #actionLogFloat,
-      body.is-notes-view #actionLogTab,
       body.is-notes-view #pinSelectBtn,
       body.is-notes-view #pinBatchBar {
         display: none !important;
@@ -142,6 +140,103 @@
         display: flex;
         align-items: center;
         gap: 8px;
+      }
+      .mode-switch {
+        display: inline-flex;
+        align-items: stretch;
+        padding: 2px;
+        border: 1px solid #d8ddda;
+        border-radius: 8px;
+        background: #eef1ee;
+        flex-shrink: 0;
+      }
+      .mode-switch button {
+        border: none;
+        background: transparent;
+        color: #78817f;
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        line-height: 1.2;
+        cursor: pointer;
+      }
+      .mode-switch button:hover {
+        color: #3d4a48;
+        background: transparent;
+      }
+      .mode-switch button.is-active {
+        background: #fbfcfa;
+        color: #28323a;
+        box-shadow: 0 1px 2px rgba(40, 50, 48, 0.08);
+      }
+      .mode-switch button:disabled {
+        opacity: 0.55;
+        cursor: wait;
+      }
+      .mode-progress {
+        position: fixed;
+        inset: 0;
+        z-index: 90;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        background: rgba(244, 245, 243, 0.55);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.18s ease;
+      }
+      .mode-progress.is-on {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .mode-progress-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        z-index: 91;
+        background: rgba(216, 221, 218, 0.85);
+        overflow: hidden;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s ease;
+      }
+      .mode-progress-bar.is-on {
+        opacity: 1;
+      }
+      .mode-progress-bar > span {
+        display: block;
+        height: 100%;
+        width: 0;
+        background: linear-gradient(90deg, #71a89a, #2f8f6e);
+        transition: width 0.28s ease;
+      }
+      .mode-progress-bar.is-indeterminate > span {
+        width: 40%;
+        transition: none;
+        animation: mode-progress-slide 1s ease-in-out infinite;
+      }
+      .mode-progress-label {
+        font-size: 13px;
+        color: #5a6a68;
+        background: rgba(251, 252, 250, 0.92);
+        border: 1px solid rgba(200, 208, 204, 0.9);
+        border-radius: 8px;
+        padding: 8px 14px;
+        box-shadow: 0 6px 18px rgba(40, 50, 48, 0.08);
+      }
+      @keyframes mode-progress-slide {
+        0% {
+          transform: translateX(-120%);
+        }
+        100% {
+          transform: translateX(320%);
+        }
       }
       button {
         border: 1px solid #c9d0d0;
@@ -276,7 +371,7 @@
       .pin-batch-bar {
         position: fixed;
         left: 50%;
-        bottom: 10px;
+        bottom: calc(var(--float-dock-h, 48px) + 10px);
         transform: translateX(-50%);
         z-index: 80;
         display: flex;
@@ -478,6 +573,7 @@
         -webkit-user-select: none;
         touch-action: manipulation;
         transition: transform 0.15s ease, box-shadow 0.15s ease;
+        scroll-margin-top: 12px;
       }
       .kline-card.is-pressed {
         transform: scale(0.98);
@@ -519,8 +615,8 @@
         color: #4f7a6e;
       }
       .notify-float.is-action-log {
-        width: min(360px, calc(100vw - 24px));
-        max-height: min(42vh, 360px);
+        width: min(420px, 100vw);
+        max-height: min(42vh, calc(100vh - var(--float-dock-h, 48px) - 8px));
       }
       .action-log-body {
         padding: 8px 10px 10px;
@@ -642,19 +738,23 @@
       }
       .notify-float {
         position: fixed;
-        left: 12px;
-        bottom: 56px;
+        left: 0;
+        right: 0;
+        bottom: var(--float-dock-h, 48px);
         z-index: 40;
-        width: min(680px, calc(100vw - 24px));
-        max-height: min(52vh, 480px);
+        width: min(680px, 100vw);
+        max-width: 100vw;
+        max-height: min(52vh, calc(100vh - var(--float-dock-h, 48px) - 8px));
+        margin: 0 auto;
         display: flex;
         flex-direction: column;
         border: 1px solid rgba(90, 106, 104, 0.22);
-        border-radius: 12px;
-        background: rgba(244, 245, 243, 0.42);
+        border-bottom: none;
+        border-radius: 12px 12px 0 0;
+        background: rgba(244, 245, 243, 0.92);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
-        box-shadow: 0 8px 24px rgba(40, 50, 58, 0.1);
+        box-shadow: 0 -8px 24px rgba(40, 50, 58, 0.1);
       }
       .notify-float[hidden] {
         display: none !important;
@@ -1018,44 +1118,62 @@
       }
       .float-tabs {
         position: fixed;
-        left: 12px;
-        bottom: 12px;
+        left: 0;
+        right: 0;
+        bottom: 0;
         z-index: 41;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        max-width: calc(100vw - 24px);
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 0;
+        width: 100%;
+        max-width: none;
+        height: var(--float-dock-h, 48px);
+        margin: 0;
+        padding: 0;
+        border-top: 1px solid rgba(90, 106, 104, 0.28);
+        background: rgba(251, 252, 250, 0.96);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 -4px 16px rgba(40, 50, 58, 0.08);
       }
       .notify-float-tab {
         position: static;
-        border: 1px solid rgba(90, 106, 104, 0.28);
-        background: rgba(244, 245, 243, 0.5);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
+        border: none;
+        border-radius: 0;
+        background: transparent;
         color: #5a6a68;
-        padding: 10px 14px;
-        min-height: 40px;
-        border-radius: 999px;
-        font-size: 12px;
-        box-shadow: 0 6px 18px rgba(40, 50, 58, 0.1);
+        padding: 0 8px;
+        min-height: 0;
+        height: 100%;
+        width: 100%;
+        font-size: 13px;
+        box-shadow: none;
         cursor: pointer;
+      }
+      .notify-float-tab + .notify-float-tab {
+        border-left: 1px solid rgba(90, 106, 104, 0.18);
       }
       .notify-float-tab[hidden] {
         display: none !important;
       }
       .notify-float-tab.is-active {
-        background: rgba(113, 139, 136, 0.22);
-        border-color: rgba(113, 139, 136, 0.45);
-        color: #3d4a48;
+        background: rgba(113, 139, 136, 0.18);
+        border-color: rgba(90, 106, 104, 0.18);
+        color: #28323a;
+        font-weight: 650;
+      }
+      .notify-float-tab:disabled {
+        opacity: 0.4;
+        cursor: default;
       }
       @media (max-width: 640px) {
         .notify-float {
-          left: 8px;
-          right: 8px;
-          bottom: 52px;
-          width: auto;
-          max-height: min(48vh, 400px);
-          background: rgba(244, 245, 243, 0.38);
+          left: 0;
+          right: 0;
+          bottom: var(--float-dock-h, 48px);
+          width: 100%;
+          max-height: min(48vh, calc(100vh - var(--float-dock-h, 48px) - 8px));
+          background: rgba(244, 245, 243, 0.94);
         }
         .notify-float-body {
           font-size: 11px;
@@ -1071,8 +1189,9 @@
           border-top: 0;
         }
         .float-tabs {
-          left: 8px;
-          bottom: 8px;
+          left: 0;
+          right: 0;
+          bottom: 0;
         }
       }
       .fav-mark {
@@ -1235,6 +1354,23 @@
     </style>
   </head>
   <body>
+    <div
+      id="modeProgressBar"
+      class="mode-progress-bar"
+      hidden
+      aria-hidden="true"
+    >
+      <span></span>
+    </div>
+    <div
+      id="modeProgress"
+      class="mode-progress"
+      hidden
+      aria-live="polite"
+      aria-busy="false"
+    >
+      <div class="mode-progress-label" id="modeProgressLabel">正在切换…</div>
+    </div>
     <div class="page">
       <div class="topbar">
         <div class="topbar-left">
@@ -1243,7 +1379,6 @@
             <summary>友情链接</summary>
             <div class="friend-links-panel">
               <a href="./index.html">总导航</a>
-              <a href="./newKline.html">记一笔追踪</a>
               <a href="./watch.html">冲榜雷达</a>
               <a href="./range100.html">Range100 潜伏</a>
               <a href="./okx/kline.html">OKX 自选</a>
@@ -1252,6 +1387,30 @@
           </details>
         </div>
         <div class="topbar-actions">
+          <div
+            class="mode-switch"
+            id="modeSwitch"
+            role="group"
+            aria-label="页面模式"
+          >
+            <button
+              type="button"
+              id="modeWatchBtn"
+              data-mode="watch"
+              class="is-active"
+              title="币安观察：盯一下 / 窗口上涨 / 收藏"
+            >
+              观察
+            </button>
+            <button
+              type="button"
+              id="modeNotesBtn"
+              data-mode="notes"
+              title="记一笔追踪：只看已记币种 K 线"
+            >
+              记一笔
+            </button>
+          </div>
           <select
             id="rangeSelect"
             class="range-select"
@@ -1384,7 +1543,7 @@
           type="button"
           class="notify-float-close"
           id="notifyFloatClose"
-          title="关闭，可再点左下角打开"
+          title="关闭"
           aria-label="关闭通知浮层"
         >
           ×
@@ -1454,29 +1613,30 @@
       <div class="action-log-body" id="actionLogBody"></div>
     </div>
 
-    <div class="float-tabs">
-      <button
-        type="button"
-        class="notify-float-tab"
-        id="notifyFloatTab"
-        hidden
-        title="打开企微同步（盯一下 / 持仓）"
-      >
-        企微通知
-      </button>
+    <div class="float-tabs" role="tablist" aria-label="浮窗">
       <button
         type="button"
         class="notify-float-tab"
         id="momentumFloatTab"
-        hidden
-        title="打开近2h/1h（爬升优先 · 含2h轨迹）"
+        data-float="momentum"
+        title="近2h/1h（爬升优先 · 含2h轨迹）"
       >
         近2h/1h
       </button>
       <button
         type="button"
         class="notify-float-tab"
+        id="notifyFloatTab"
+        data-float="notify"
+        title="企微同步（盯一下 / 持仓）"
+      >
+        企微
+      </button>
+      <button
+        type="button"
+        class="notify-float-tab"
         id="actionLogTab"
+        data-float="log"
         title="自动盯 / 买 / 卖 简要日志"
       >
         日志
@@ -1613,46 +1773,162 @@
       const selectedPinSymbols = new Set();
       let positionSaving = false;
       let klineViewKey = "3d-4h";
+      let notesViewMode = false;
+      try {
+        notesViewMode =
+          new URLSearchParams(window.location.search).get("view") === "notes";
+      } catch (error) {
+        notesViewMode = false;
+      }
 
       function isNotesView() {
+        return !!notesViewMode;
+      }
+
+      function syncModeSwitchUi() {
+        const watchBtn = document.getElementById("modeWatchBtn");
+        const notesBtn = document.getElementById("modeNotesBtn");
+        if (watchBtn) {
+          watchBtn.classList.toggle("is-active", !notesViewMode);
+          watchBtn.setAttribute("aria-pressed", notesViewMode ? "false" : "true");
+        }
+        if (notesBtn) {
+          notesBtn.classList.toggle("is-active", notesViewMode);
+          notesBtn.setAttribute("aria-pressed", notesViewMode ? "true" : "false");
+        }
+      }
+
+      function setModeSwitchBusy(busy) {
+        document.querySelectorAll("#modeSwitch button").forEach((btn) => {
+          btn.disabled = !!busy;
+        });
+      }
+
+      function syncNotesViewUrl() {
         try {
-          return (
-            new URLSearchParams(window.location.search).get("view") === "notes"
-          );
+          const url = new URL(window.location.href);
+          if (notesViewMode) url.searchParams.set("view", "notes");
+          else url.searchParams.delete("view");
+          window.history.replaceState({}, "", url.pathname + url.search + url.hash);
         } catch (error) {
-          return false;
+          /* ignore */
+        }
+      }
+
+      function applyPageChrome() {
+        const notes = isNotesView();
+        document.body.classList.toggle("is-notes-view", notes);
+        if (notes) {
+          pinSelectMode = false;
+          selectedPinSymbols.clear();
+          updatePinSelectUi();
+          closeAllFloatPanels();
+          setHiddenPinDrawerOpen(false);
+          setMaintPanelOpen(false);
+        }
+        document.title = notes ? "记一笔追踪" : "观察池 K 线";
+        const h1 = document.querySelector(".topbar-left h1");
+        if (h1) h1.textContent = notes ? "记一笔追踪" : "币安观察";
+        const pinTitle = document.getElementById("pinSectionTitle");
+        if (pinTitle) pinTitle.textContent = notes ? "记一笔 K 线" : "盯一下";
+        syncModeSwitchUi();
+      }
+
+      let modeProgressTimer = null;
+      let modeProgressValue = 0;
+
+      function setTopProgress(on, options) {
+        const opts = options || {};
+        const useOverlay = !!opts.overlay;
+        const label = opts.label || "";
+        const overlay = document.getElementById("modeProgress");
+        const bar = document.getElementById("modeProgressBar");
+        const labelEl = document.getElementById("modeProgressLabel");
+        const fill = bar && bar.querySelector("span");
+        if (labelEl && label) labelEl.textContent = label;
+        if (!on) {
+          if (modeProgressTimer) {
+            clearInterval(modeProgressTimer);
+            modeProgressTimer = null;
+          }
+          modeProgressValue = 100;
+          if (fill) {
+            bar.classList.remove("is-indeterminate");
+            fill.style.width = "100%";
+          }
+          window.setTimeout(() => {
+            if (overlay) {
+              overlay.classList.remove("is-on");
+              overlay.hidden = true;
+              overlay.setAttribute("aria-busy", "false");
+            }
+            if (bar) {
+              bar.classList.remove("is-on", "is-indeterminate");
+              bar.hidden = true;
+              if (fill) fill.style.width = "0%";
+            }
+            modeProgressValue = 0;
+          }, 220);
+          return;
+        }
+        modeProgressValue = 8;
+        if (overlay) {
+          if (useOverlay) {
+            overlay.hidden = false;
+            overlay.setAttribute("aria-busy", "true");
+            overlay.classList.add("is-on");
+          } else {
+            overlay.classList.remove("is-on");
+            overlay.hidden = true;
+            overlay.setAttribute("aria-busy", "false");
+          }
+        }
+        if (bar) {
+          bar.hidden = false;
+          bar.classList.add("is-on");
+          bar.classList.remove("is-indeterminate");
+          if (fill) fill.style.width = `${modeProgressValue}%`;
+        }
+        if (modeProgressTimer) clearInterval(modeProgressTimer);
+        modeProgressTimer = window.setInterval(() => {
+          if (modeProgressValue >= 90) return;
+          modeProgressValue += Math.max(0.6, (90 - modeProgressValue) * 0.08);
+          if (fill) fill.style.width = `${Math.min(90, modeProgressValue)}%`;
+        }, 180);
+      }
+
+      function setModeProgress(on, label) {
+        setTopProgress(on, { overlay: true, label: label || "正在切换…" });
+      }
+
+      async function setNotesView(on, options) {
+        const next = !!on;
+        if (next === notesViewMode && !(options && options.force)) return;
+        notesViewMode = next;
+        syncNotesViewUrl();
+        closeCardActions(true);
+        applyPageChrome();
+        if (options && options.skipRender) return;
+        setModeSwitchBusy(true);
+        setModeProgress(
+          true,
+          next ? "正在切换到记一笔…" : "正在切换到观察…",
+        );
+        try {
+          setStatus(false, next ? "切换到记一笔..." : "切换到观察...");
+          await renderKlines();
+          setStatus(true, next ? "已切换到记一笔" : "已切换到观察");
+        } catch (error) {
+          console.error(error);
+          setStatus(false, error.message || "切换模式失败");
+        } finally {
+          setModeProgress(false);
+          setModeSwitchBusy(false);
         }
       }
 
       function applyNotesViewChrome() {
-        if (!isNotesView()) return;
-        document.body.classList.add("is-notes-view");
-        pinSelectMode = false;
-        selectedPinSymbols.clear();
-        updatePinSelectUi();
-        document.title = "记一笔追踪";
-        const h1 = document.querySelector(".topbar-left h1");
-        if (h1) h1.textContent = "记一笔追踪";
-        const pinTitle = document.getElementById("pinSectionTitle");
-        if (pinTitle) pinTitle.textContent = "记一笔 K 线";
-        const friendPanel = document.querySelector(".friend-links-panel");
-        if (friendPanel) {
-          friendPanel.innerHTML = [
-            `<a href="./index.html">总导航</a>`,
-            `<a href="./kline.html">币安观察</a>`,
-            `<a href="./watch.html">冲榜雷达</a>`,
-            `<a href="./range100.html">Range100 潜伏</a>`,
-            `<a href="./okx/kline.html">OKX 自选</a>`,
-            `<a href="https://betterma.github.io/">蚂蚱导航</a>`,
-          ].join("");
-        }
-        const notifyTab = document.getElementById("notifyFloatTab");
-        const notifyPanel = document.getElementById("notifyFloat");
-        if (notifyTab) {
-          notifyTab.hidden = true;
-          notifyTab.classList.remove("is-active");
-        }
-        if (notifyPanel) notifyPanel.hidden = true;
+        applyPageChrome();
       }
 
       function currentKlineView() {
@@ -2088,8 +2364,6 @@
         const next = [entry, ...readActionLog()].slice(0, ACTION_LOG_MAX);
         writeActionLog(next);
         renderActionLogBody();
-        const tab = document.getElementById("actionLogTab");
-        if (tab && !isNotesView()) tab.hidden = false;
       }
 
       function formatActionLogTime(at) {
@@ -2134,12 +2408,88 @@
       }
 
       function setActionLogOpen(open) {
-        const panel = document.getElementById("actionLogFloat");
-        const tab = document.getElementById("actionLogTab");
-        if (!panel) return;
-        panel.hidden = !open;
-        if (tab) tab.classList.toggle("is-active", !!open);
-        if (open) renderActionLogBody();
+        if (open) openFloatPanel("log");
+        else if (isFloatPanelOpen("log")) closeAllFloatPanels();
+      }
+
+      function isFloatPanelOpen(name) {
+        if (name === "momentum") {
+          const panel = document.getElementById("momentumFloat");
+          return !!(panel && !panel.hidden);
+        }
+        if (name === "notify") {
+          const panel = document.getElementById("notifyFloat");
+          return !!(panel && !panel.hidden);
+        }
+        if (name === "log") {
+          const panel = document.getElementById("actionLogFloat");
+          return !!(panel && !panel.hidden);
+        }
+        return false;
+      }
+
+      function closeAllFloatPanels() {
+        const momentum = document.getElementById("momentumFloat");
+        const notify = document.getElementById("notifyFloat");
+        const log = document.getElementById("actionLogFloat");
+        const momTab = document.getElementById("momentumFloatTab");
+        const notifyTab = document.getElementById("notifyFloatTab");
+        const logTab = document.getElementById("actionLogTab");
+        if (momentum) momentum.hidden = true;
+        if (notify) notify.hidden = true;
+        if (log) log.hidden = true;
+        if (momTab) momTab.classList.remove("is-active");
+        if (notifyTab) notifyTab.classList.remove("is-active");
+        if (logTab) logTab.classList.remove("is-active");
+      }
+
+      function openFloatPanel(name) {
+        closeAllFloatPanels();
+        if (name === "momentum") {
+          const panel = document.getElementById("momentumFloat");
+          const tab = document.getElementById("momentumFloatTab");
+          if (!panel) return;
+          panel.hidden = false;
+          if (tab) {
+            tab.hidden = false;
+            tab.classList.add("is-active");
+          }
+          refreshMomentumFloatBody();
+          updateMomentumFloatPanel();
+          return;
+        }
+        if (name === "notify") {
+          const panel = document.getElementById("notifyFloat");
+          const tab = document.getElementById("notifyFloatTab");
+          if (!panel) return;
+          localStorage.removeItem(notifyDismissStorageKey());
+          panel.hidden = false;
+          if (tab) {
+            tab.hidden = false;
+            tab.classList.add("is-active");
+          }
+          updateNotifyFloatPanel();
+          return;
+        }
+        if (name === "log") {
+          const panel = document.getElementById("actionLogFloat");
+          const tab = document.getElementById("actionLogTab");
+          if (!panel) return;
+          panel.hidden = false;
+          if (tab) {
+            tab.hidden = false;
+            tab.classList.add("is-active");
+          }
+          renderActionLogBody();
+        }
+      }
+
+      function toggleFloatPanel(name) {
+        if (isFloatPanelOpen(name)) {
+          closeAllFloatPanels();
+          return;
+        }
+        openFloatPanel(name);
       }
 
       /**
@@ -3184,51 +3534,13 @@
       }
 
       function setMomentumFloatOpen(open) {
-        const panel = document.getElementById("momentumFloat");
-        const tab = document.getElementById("momentumFloatTab");
-        const body = document.getElementById("momentumFloatBody");
-        if (!panel) return;
-        if (open) {
-          hideNotifyFloatKeepTab();
-          panel.hidden = false;
-          if (tab) tab.classList.add("is-active");
-          refreshMomentumFloatBody();
-          updateMomentumFloatPanel();
-        } else {
-          panel.hidden = true;
-          if (tab) tab.classList.remove("is-active");
-        }
-      }
-
-      function hideNotifyFloatKeepTab() {
-        const panel = document.getElementById("notifyFloat");
-        const tab = document.getElementById("notifyFloatTab");
-        if (panel) panel.hidden = true;
-        if (tab) {
-          tab.classList.remove("is-active");
-          if (hasNotifyContent(lastPinNotify, lastPositionNotify)) {
-            tab.hidden = false;
-          }
-        }
+        if (open) openFloatPanel("momentum");
+        else if (isFloatPanelOpen("momentum")) closeAllFloatPanels();
       }
 
       function setNotifyFloatOpen(open) {
-        const panel = document.getElementById("notifyFloat");
-        const tab = document.getElementById("notifyFloatTab");
-        if (!panel) return;
-        if (open) {
-          setMomentumFloatOpen(false);
-          localStorage.removeItem(notifyDismissStorageKey());
-          updateNotifyFloatPanel();
-          panel.hidden = false;
-          if (tab) {
-            tab.hidden = true;
-            tab.classList.add("is-active");
-          }
-        } else {
-          panel.hidden = true;
-          if (tab) tab.classList.remove("is-active");
-        }
+        if (open) openFloatPanel("notify");
+        else if (isFloatPanelOpen("notify")) closeAllFloatPanels();
       }
 
       function updateMomentumFloatPanel() {
@@ -3240,10 +3552,12 @@
 
         const snap = lastMomentumSnapshot;
         const hasRows = snap && Array.isArray(snap.rows) && snap.rows.length;
-        tab.hidden = !hasRows;
+        tab.hidden = false;
+        tab.disabled = !hasRows;
         if (!hasRows) {
           if (!panel.hidden) panel.hidden = true;
-          body.innerHTML = "";
+          body.innerHTML =
+            '<div class="notify-col-empty">暂无近2h/1h 数据</div>';
           if (timeEl) timeEl.textContent = "";
           tab.classList.remove("is-active");
           return;
@@ -3253,7 +3567,6 @@
           const label = formatNotifyAt(snap.at);
           timeEl.textContent = label ? ` · ${label}` : "";
         }
-        // Only refresh body if panel is open or first paint.
         if (!panel.hidden) {
           refreshMomentumFloatBody();
         }
@@ -4132,7 +4445,7 @@
         if (card.dataset.section === "pin-hidden") {
           setHiddenPinDrawerOpen(true);
         }
-        card.scrollIntoView({ behavior: "smooth", block: "center" });
+        card.scrollIntoView({ behavior: "smooth", block: "start" });
         card.classList.add("is-jump-target");
         window.setTimeout(() => card.classList.remove("is-jump-target"), 1600);
       }
@@ -4162,28 +4475,22 @@
         if (!panel || !tab || !pinsEl || !posEl) return;
 
         const hasContent = hasNotifyContent(lastPinNotify, lastPositionNotify);
+        tab.hidden = false;
+        tab.disabled = !hasContent;
+
         if (!hasContent) {
-          panel.hidden = true;
-          tab.hidden = true;
+          if (!panel.hidden) panel.hidden = true;
           tab.classList.remove("is-active");
-          pinsEl.innerHTML = "";
-          posEl.innerHTML = "";
+          pinsEl.innerHTML = `<div class="notify-col-empty">暂无盯一下推送</div>`;
+          posEl.innerHTML = `<div class="notify-col-empty">暂无持仓推送</div>`;
           if (timeEl) timeEl.textContent = "";
           return;
         }
 
-        const dismissed = isNotifyFloatDismissed();
-        const momentumOpen = !(
-          document.getElementById("momentumFloat") || { hidden: true }
-        ).hidden;
-
-        if (dismissed || momentumOpen) {
-          panel.hidden = true;
-          tab.hidden = false;
+        // Keep open state only if this panel is the active float.
+        if (panel.hidden) {
           tab.classList.remove("is-active");
         } else {
-          panel.hidden = false;
-          tab.hidden = true;
           tab.classList.add("is-active");
         }
 
@@ -4219,11 +4526,11 @@
         if (at) {
           localStorage.setItem(notifyDismissStorageKey(), String(at));
         }
-        updateNotifyFloatPanel();
+        closeAllFloatPanels();
       }
 
       function reopenNotifyFloat() {
-        setNotifyFloatOpen(true);
+        openFloatPanel("notify");
       }
 
       async function renderKlines() {
@@ -4923,6 +5230,15 @@
         const rangeSelect = document.getElementById("rangeSelect");
         btn.disabled = true;
         if (rangeSelect) rangeSelect.disabled = true;
+        setTopProgress(true, {
+          overlay: false,
+          label:
+            reason === "focus"
+              ? "正在刷新…"
+              : reason === "boot"
+                ? "正在加载…"
+                : "正在刷新…",
+        });
         try {
           if (reason === "focus") {
             setStatus(false, "切回页面 · 正在刷新最新行情与 K 线...");
@@ -4964,6 +5280,7 @@
           updateHiddenPinTab(0);
           setHiddenPinDrawerOpen(false);
         } finally {
+          setTopProgress(false);
           loading = false;
           btn.disabled = false;
           if (rangeSelect) rangeSelect.disabled = false;
@@ -5001,9 +5318,15 @@
         .addEventListener("click", () => {
           refreshNotifyFloat();
         });
-      document.getElementById("notifyFloatTab").addEventListener("click", () => {
-        reopenNotifyFloat();
-        refreshNotifyFloat({ silent: true });
+      document.querySelector(".float-tabs").addEventListener("click", (event) => {
+        const btn = event.target.closest("button[data-float]");
+        if (!btn || btn.disabled) return;
+        closeCardActions();
+        const name = btn.dataset.float;
+        toggleFloatPanel(name);
+        if (name === "notify" && isFloatPanelOpen("notify")) {
+          refreshNotifyFloat({ silent: true });
+        }
       });
       document
         .getElementById("notifyFloatBody")
@@ -5017,11 +5340,6 @@
         .getElementById("momentumFloatClose")
         .addEventListener("click", () => {
           setMomentumFloatOpen(false);
-        });
-      document
-        .getElementById("momentumFloatTab")
-        .addEventListener("click", () => {
-          setMomentumFloatOpen(true);
         });
       document
         .getElementById("momentumFloatRefresh")
@@ -5175,11 +5493,6 @@
           setHiddenPinDrawerOpen(false);
         }
       });
-      document.getElementById("actionLogTab").addEventListener("click", () => {
-        closeCardActions();
-        const panel = document.getElementById("actionLogFloat");
-        setActionLogOpen(panel && panel.hidden);
-      });
       document.getElementById("actionLogClose").addEventListener("click", () => {
         setActionLogOpen(false);
       });
@@ -5201,12 +5514,7 @@
           setHiddenPinDrawerOpen(false);
           setMaintPanelOpen(false);
           if (pinSelectMode) setPinSelectMode(false);
-          const notifyPanel = document.getElementById("notifyFloat");
-          if (notifyPanel && !notifyPanel.hidden) {
-            dismissNotifyFloat();
-          }
-          setMomentumFloatOpen(false);
-          setActionLogOpen(false);
+          closeAllFloatPanels();
         }
       });
       renderActionLogBody();
@@ -5229,6 +5537,10 @@
           syncRangeSelect();
           const view = currentKlineView();
           select.disabled = true;
+          setTopProgress(true, {
+            overlay: false,
+            label: `正在加载${view.label}…`,
+          });
           setStatus(false, `正在加载${view.label} K线...`);
           try {
             await renderKlines();
@@ -5240,9 +5552,18 @@
             syncRangeSelect();
             setStatus(false, error.message || "切换 K 线范围失败");
           } finally {
+            setTopProgress(false);
             select.disabled = false;
           }
         });
+      document.getElementById("modeSwitch").addEventListener("click", (event) => {
+        const btn = event.target.closest("button[data-mode]");
+        if (!btn || btn.disabled) return;
+        const nextNotes = btn.dataset.mode === "notes";
+        if (nextNotes === isNotesView()) return;
+        closeCardActions();
+        setNotesView(nextNotes);
+      });
       document.addEventListener("pointerdown", (event) => {
         if (event.target.closest(".card-actions")) return;
         const open = document.querySelector(".card-actions");
@@ -5250,12 +5571,14 @@
         if (open) closeCardActions();
       });
       document.addEventListener("dblclick", (event) => {
-        if (event.target.closest("button, a, input, select, textarea, label, .card-actions, summary")) {
+        if (
+          event.target.closest(
+            "button, a, input, select, textarea, label, .card-actions, summary, .mode-switch",
+          )
+        ) {
           return;
         }
-        window.location.href = isNotesView()
-          ? "./kline.html"
-          : "./newKline.html";
+        setNotesView(!isNotesView());
       });
       applyNotesViewChrome();
       syncRangeSelect();
