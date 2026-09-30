@@ -1687,7 +1687,7 @@
         </button>
       </div>
       <div id="recentAutoPinSection" class="recent-auto-pin" hidden>
-        <div class="recent-auto-pin-head" id="recentAutoPinMeta">新自动盯 · 30分钟内</div>
+        <div class="recent-auto-pin-head" id="recentAutoPinMeta">新自动盯 · 12小时内</div>
         <div id="recentAutoPinGrid" class="kline-grid"></div>
       </div>
       <div id="pinGrid" class="kline-grid"></div>
@@ -1979,7 +1979,7 @@
       const ACTION_LOG_MAX = 80;
       const PIN_SORT_KEY = "kline-pin-sort-v1";
       const AUTO_PIN_EVENTS_SEEN_KEY = "kline-auto-pin-events-seen-v1";
-      const NEW_AUTO_PIN_MS = 30 * 60 * 1000;
+      const NEW_AUTO_PIN_MS = 12 * 60 * 60 * 1000;
       let pinSortMode = "pin";
       // 默认盯幅；不恢复「爬升」，避免一进页就后台算动量。
       let notifyPollTimer = null;
@@ -4940,7 +4940,11 @@
       }
 
       function isPinCardSection(section) {
-        return section === "pin" || section === "pin-hidden";
+        return (
+          section === "pin" ||
+          section === "pin-hidden" ||
+          section === "pin-recent"
+        );
       }
 
       function noteSymbolSet() {
@@ -5018,7 +5022,7 @@
         const wantSelect = pinSelectMode;
         document
           .querySelectorAll(
-            "#pinGrid .kline-card[data-symbol], #hiddenPinGrid .kline-card[data-symbol]",
+            "#pinGrid .kline-card[data-symbol], #recentAutoPinGrid .kline-card[data-symbol], #hiddenPinGrid .kline-card[data-symbol]",
           )
           .forEach((card) => {
             const symbol = String(card.dataset.symbol || "").toUpperCase();
@@ -5072,7 +5076,7 @@
       function onPinSelectPointer(event) {
         if (!pinSelectMode) return;
         const card = event.target.closest(
-          "#pinGrid .kline-card.is-select-mode, #hiddenPinGrid .kline-card.is-select-mode",
+          "#pinGrid .kline-card.is-select-mode, #recentAutoPinGrid .kline-card.is-select-mode, #hiddenPinGrid .kline-card.is-select-mode",
         );
         if (!card) return;
         if (event.target.closest(".card-actions, .mom-badge")) return;
@@ -5090,8 +5094,9 @@
 
       function bindPinSelectDelegation() {
         const pinGrid = document.getElementById("pinGrid");
+        const recentGrid = document.getElementById("recentAutoPinGrid");
         const hiddenGrid = document.getElementById("hiddenPinGrid");
-        for (const root of [pinGrid, hiddenGrid]) {
+        for (const root of [pinGrid, recentGrid, hiddenGrid]) {
           if (!root || root.dataset.pinSelectBound === "1") continue;
           root.dataset.pinSelectBound = "1";
           root.addEventListener("click", onPinSelectPointer);
@@ -5309,7 +5314,10 @@
         const favSet = favoriteSymbols();
         const pairs = pairSet || new Set();
         const pins = pinMap || new Map();
-        const isPinSection = section === "pin" || section === "pin-hidden";
+        const isPinSection =
+          section === "pin" ||
+          section === "pin-hidden" ||
+          section === "pin-recent";
         grid.innerHTML = symbols.length
           ? symbols
               .map((symbol) => {
@@ -5342,7 +5350,9 @@
                     : "暂无当前窗口上涨的盯一下 · 右侧可看窗口回落项"
                   : section === "pin-hidden"
                     ? "当前没有隐藏的盯一下（窗口回落）"
-                    : "暂无窗口上涨的收藏"
+                    : section === "pin-recent"
+                      ? "暂无新自动盯"
+                      : "暂无窗口上涨的收藏"
             }</div>`;
 
         bindCardInteractions(grid);
@@ -5863,17 +5873,19 @@
           if (recentAutoList.length) {
             recentSection.hidden = false;
             if (recentMeta) {
-              recentMeta.textContent = `新自动盯 · 近30分钟 ${recentAutoList.length} 个`;
+              recentMeta.textContent = `新自动盯 · 近12小时 ${recentAutoList.length} 个`;
             }
             await fillGrid(
               recentGrid,
               recentAutoList,
-              "pin",
+              "pin-recent",
               signal,
               pairSet,
               pinMap,
               bumpKline,
             );
+            applyPinSelectChrome();
+            updatePinSelectUi();
           } else {
             recentSection.hidden = true;
             recentGrid.innerHTML = "";
@@ -6629,7 +6641,7 @@
           const allowed = notes ? noteSymbolSet() : pinSymbols();
           document
             .querySelectorAll(
-              "#pinGrid .kline-card[data-symbol], #hiddenPinGrid .kline-card[data-symbol]",
+              "#pinGrid .kline-card[data-symbol], #recentAutoPinGrid .kline-card[data-symbol], #hiddenPinGrid .kline-card[data-symbol]",
             )
             .forEach((card) => {
               const symbol = String(card.dataset.symbol || "").toUpperCase();
