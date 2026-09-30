@@ -29,9 +29,9 @@ const CONFIG = {
   ),
   AUTO_PIN_EVENTS_MAX: Number(process.env.AUTO_PIN_EVENTS_MAX || 40),
   // Same-symbol edge cooldown: skip rewarm / re-pin while recent.
-  // Default 12h — aligns with 新自动盯置顶 window; kills flicker re-pins.
+  // Default 24h — kills flicker re-pins within a full day.
   EDGE_COOLDOWN_MS: Number(
-    process.env.AUTO_PIN_EDGE_COOLDOWN_MS || 12 * 60 * 60 * 1000,
+    process.env.AUTO_PIN_EDGE_COOLDOWN_MS || 24 * 60 * 60 * 1000,
   ),
   ENABLED:
     String(process.env.AUTO_PIN_ENABLED === undefined ? '1' : process.env.AUTO_PIN_ENABLED) !==
