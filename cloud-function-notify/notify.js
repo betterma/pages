@@ -494,6 +494,10 @@ async function tryAcquireNotifyLock(stateFile, now) {
     lastPositionNotify: data.lastPositionNotify || null,
     risingSnap: Array.isArray(data.risingSnap) ? data.risingSnap : [],
     risingSnapSeeded: !!data.risingSnapSeeded,
+    risingZoneSnap: Array.isArray(data.risingZoneSnap)
+      ? data.risingZoneSnap
+      : [],
+    risingZoneSnapSeeded: !!data.risingZoneSnapSeeded,
     autoPinEvents: Array.isArray(data.autoPinEvents) ? data.autoPinEvents : [],
     lastNotifyAt: now,
     updatedAt: now,
@@ -577,33 +581,38 @@ async function main() {
   let dropAlerts = lock.dropAlerts || {};
   let lastPinPrices = lock.lastPinPrices || {};
   const stateData = (activeStateFile && activeStateFile.data) || {};
-  let risingSnap = Array.isArray(stateData.risingSnap)
-    ? stateData.risingSnap
+  let risingZoneSnap = Array.isArray(stateData.risingZoneSnap)
+    ? stateData.risingZoneSnap
     : [];
-  let risingSnapSeeded = !!stateData.risingSnapSeeded;
+  let risingZoneSnapSeeded = !!stateData.risingZoneSnapSeeded;
   let autoPinEvents = Array.isArray(stateData.autoPinEvents)
     ? stateData.autoPinEvents
     : [];
 
   let autoPinned = [];
+  let autoRewarmed = [];
   try {
     const autoResult = await runAutoPin({
       pins,
-      risingSnap,
-      risingSnapSeeded,
+      risingZoneSnap,
+      risingZoneSnapSeeded,
       autoPinEvents,
       now,
     });
     pins = autoResult.pins;
-    risingSnap = autoResult.risingSnap;
-    risingSnapSeeded = autoResult.risingSnapSeeded;
+    risingZoneSnap = autoResult.risingSnap;
+    risingZoneSnapSeeded = autoResult.risingSnapSeeded;
     autoPinEvents = autoResult.autoPinEvents;
     autoPinned = autoResult.newcomers || [];
+    autoRewarmed = autoResult.rewarmed || [];
     if (autoResult.pinsChanged) {
+      const parts = [];
+      if (autoPinned.length) parts.push(`new ${autoPinned.length}`);
+      if (autoRewarmed.length) parts.push(`rewarm ${autoRewarmed.length}`);
       const saved = await savePinsFile(
         pinsFile,
         pins,
-        `Auto-pin ${autoPinned.length} rising`,
+        `Auto-pin zone edge: ${parts.join(', ') || 'update'}`,
       );
       pins = saved.pins;
       // Refresh sha for later state writes only — pins file sha not reused below.
@@ -617,21 +626,42 @@ async function main() {
     console.warn('auto-pin failed', error.message || error);
   }
 
+  async function sendAutoPinWecom() {
+    if (!CONFIG.AUTO_PIN_WECOM || !CONFIG.WECOM_WEBHOOK_PINS) return null;
+    const lines = [];
+    if (autoPinned.length) {
+      const names = autoPinned
+        .slice(0, 12)
+        .map((symbol) => labelOf(symbol))
+        .join(' · ');
+      const more =
+        autoPinned.length > 12 ? ` …+${autoPinned.length - 12}` : '';
+      lines.push(`【新自动盯】${autoPinned.length}\n${names}${more}`);
+    }
+    if (autoRewarmed.length) {
+      const names = autoRewarmed
+        .slice(0, 12)
+        .map((symbol) => labelOf(symbol))
+        .join(' · ');
+      const more =
+        autoRewarmed.length > 12 ? ` …+${autoRewarmed.length - 12}` : '';
+      lines.push(`【回暖】${autoRewarmed.length}\n${names}${more}`);
+    }
+    if (!lines.length) return null;
+    await sendWecomText(
+      `${lines.join('\n')}\n（网页「日志 / 置顶」可看）`,
+      CONFIG.WECOM_WEBHOOK_PINS,
+    );
+    return `auto-pin:${autoPinned.length}+rewarm:${autoRewarmed.length}`;
+  }
+
   if (!pins.length && !positions.length) {
-    // Still persist rising snap / events so seeding works with empty pins.
-    if (autoPinned.length && CONFIG.AUTO_PIN_WECOM && CONFIG.WECOM_WEBHOOK_PINS) {
-      try {
-        const names = autoPinned
-          .slice(0, 12)
-          .map((symbol) => labelOf(symbol))
-          .join(' · ');
-        await sendWecomText(
-          `【新自动盯】${autoPinned.length}\n${names}\n（网页可看）`,
-          CONFIG.WECOM_WEBHOOK_PINS,
-        );
-      } catch (error) {
-        console.warn('auto-pin wecom failed', error.message || error);
-      }
+    // Still persist rising zone snap / events so seeding works with empty pins.
+    try {
+      const tag = await sendAutoPinWecom();
+      if (tag) console.log('auto-pin wecom', tag);
+    } catch (error) {
+      console.warn('auto-pin wecom failed', error.message || error);
     }
     await saveJson(
       CONFIG.NOTIFY_STATE_PATH,
@@ -640,8 +670,10 @@ async function main() {
         lastPinPrices,
         lastPinNotify: stateData.lastPinNotify || null,
         lastPositionNotify: stateData.lastPositionNotify || null,
-        risingSnap,
-        risingSnapSeeded,
+        risingSnap: stateData.risingSnap || [],
+        risingSnapSeeded: !!stateData.risingSnapSeeded,
+        risingZoneSnap,
+        risingZoneSnapSeeded,
         autoPinEvents,
         lastNotifyAt: now,
         updatedAt: Date.now(),
@@ -655,6 +687,7 @@ async function main() {
       skipped: true,
       reason: 'empty',
       autoPinned,
+      autoRewarmed,
     };
   }
 
@@ -678,19 +711,10 @@ async function main() {
   const sent = [];
   const sendErrors = [];
 
-  if (autoPinned.length && CONFIG.AUTO_PIN_WECOM && CONFIG.WECOM_WEBHOOK_PINS) {
+  if (autoPinned.length || autoRewarmed.length) {
     try {
-      const names = autoPinned
-        .slice(0, 12)
-        .map((symbol) => labelOf(symbol))
-        .join(' · ');
-      const more =
-        autoPinned.length > 12 ? ` …+${autoPinned.length - 12}` : '';
-      await sendWecomText(
-        `【新自动盯】${autoPinned.length}\n${names}${more}\n（网页「日志 / 新自动盯」可看）`,
-        CONFIG.WECOM_WEBHOOK_PINS,
-      );
-      sent.push(`auto-pin:${autoPinned.length}`);
+      const tag = await sendAutoPinWecom();
+      if (tag) sent.push(tag);
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
       sendErrors.push(`auto-pin:${message}`);
@@ -803,12 +827,18 @@ async function main() {
     JSON.stringify(nextPinPrices) !== JSON.stringify(lastPinPrices) ||
     JSON.stringify(lastPinNotify) !== JSON.stringify(prevNotify) ||
     JSON.stringify(lastPositionNotify) !== JSON.stringify(prevPositionNotify) ||
-    JSON.stringify(risingSnap) !==
-      JSON.stringify(stateData.risingSnap || []) ||
-    risingSnapSeeded !== !!stateData.risingSnapSeeded ||
+    JSON.stringify(risingZoneSnap) !==
+      JSON.stringify(stateData.risingZoneSnap || []) ||
+    risingZoneSnapSeeded !== !!stateData.risingZoneSnapSeeded ||
     JSON.stringify(autoPinEvents) !==
       JSON.stringify(stateData.autoPinEvents || []);
-  if (stateChanged || sent.length || sendErrors.length || autoPinned.length) {
+  if (
+    stateChanged ||
+    sent.length ||
+    sendErrors.length ||
+    autoPinned.length ||
+    autoRewarmed.length
+  ) {
     await saveJson(
       CONFIG.NOTIFY_STATE_PATH,
       {
@@ -816,8 +846,10 @@ async function main() {
         lastPinPrices: nextPinPrices,
         lastPinNotify,
         lastPositionNotify,
-        risingSnap,
-        risingSnapSeeded,
+        risingSnap: stateData.risingSnap || [],
+        risingSnapSeeded: !!stateData.risingSnapSeeded,
+        risingZoneSnap,
+        risingZoneSnapSeeded,
         autoPinEvents,
         lastNotifyAt: now,
         updatedAt: Date.now(),
@@ -837,6 +869,7 @@ async function main() {
       momentum: momentumHits,
       dropsArmed: Object.keys(dropAlertsToSave).length,
       autoPinned,
+      autoRewarmed,
       sendErrors,
     }),
   );
@@ -849,6 +882,7 @@ async function main() {
     charts: chartSymbols,
     momentum: momentumHits,
     autoPinned,
+    autoRewarmed,
     sendErrors,
   };
 }

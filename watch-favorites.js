@@ -723,6 +723,7 @@
       .toUpperCase();
     if (!symbol) return null;
     const at = Number(item.at);
+    const price = Number(item.price);
     return {
       id: item.id ? String(item.id) : `${Date.now().toString(36)}`,
       at: Number.isFinite(at) ? at : Date.now(),
@@ -739,6 +740,7 @@
         ? Number(item.change1h)
         : null,
       delta: Number.isFinite(Number(item.delta)) ? Number(item.delta) : null,
+      price: Number.isFinite(price) && price > 0 ? price : null,
     };
   }
 
@@ -762,6 +764,7 @@
       change2h: item.change2h,
       change1h: item.change1h,
       delta: item.delta,
+      price: item.price,
     }));
   }
 

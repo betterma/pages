@@ -1,9 +1,9 @@
 'use strict';
 
 /**
- * Server-side auto-pin: same idea as kline.html Strategy A.
- * Newcomers into 窗口上涨 (watch-pool ∩ window-up) get pinned even if the
- * browser page is closed. Snapshot lives in watch-notify-state.json.
+ * Server-side auto-pin / rewarm: edge into 窗口上涨
+ * (watch-pool ∩ window-up), including already-pinned coins.
+ * Snapshot lives in watch-notify-state.json as risingZoneSnap.
  */
 
 const {
@@ -206,7 +206,15 @@ function buildWatchPool(history, marketMap, seedPool, blacklist) {
   return next;
 }
 
+/** UI list: zone ∩ not pinned. */
 function listRisingSymbols(history, marketMap, watchPool, pinnedSet, blacklist) {
+  return listRisingZone(history, marketMap, watchPool, blacklist).filter(
+    (symbol) => !pinnedSet.has(symbol),
+  );
+}
+
+/** Edge universe: watch-pool ∩ window-up (includes pinned). */
+function listRisingZone(history, marketMap, watchPool, blacklist) {
   const interval = CONFIG.WINDOW_INTERVAL;
   const list = ranking(marketMap, blacklist);
   const ranked = list.filter((symbol) => watchPool.has(symbol));
@@ -219,9 +227,20 @@ function listRisingSymbols(history, marketMap, watchPool, pinnedSet, blacklist) 
   return [...ranked, ...unranked].filter(
     (symbol) =>
       !blacklist.has(symbol) &&
-      !pinnedSet.has(symbol) &&
       hasWindowGain(history, marketMap, symbol, interval),
   );
+}
+
+function emptyResult(pins, snap, seeded, events) {
+  return {
+    pins,
+    pinsChanged: false,
+    newcomers: [],
+    rewarmed: [],
+    risingSnap: snap,
+    risingSnapSeeded: seeded,
+    autoPinEvents: events,
+  };
 }
 
 /**
@@ -229,6 +248,7 @@ function listRisingSymbols(history, marketMap, watchPool, pinnedSet, blacklist) 
  *   pins: object[],
  *   pinsChanged: boolean,
  *   newcomers: string[],
+ *   rewarmed: string[],
  *   risingSnap: string[],
  *   risingSnapSeeded: boolean,
  *   autoPinEvents: object[],
@@ -238,21 +258,15 @@ async function runAutoPin(options) {
   const opts = options || {};
   const now = Number(opts.now) || Date.now();
   let pins = normalizePinList(opts.pins);
-  const prevSnap = Array.isArray(opts.risingSnap)
-    ? opts.risingSnap.map(String)
+  // Zone snap (v2) includes pinned; first deploy re-seeds without mass rewarm.
+  const prevSnap = Array.isArray(opts.risingZoneSnap)
+    ? opts.risingZoneSnap.map(String)
     : [];
-  let seeded = !!opts.risingSnapSeeded;
+  let seeded = !!opts.risingZoneSnapSeeded;
   let events = Array.isArray(opts.autoPinEvents) ? opts.autoPinEvents.slice() : [];
 
   if (!CONFIG.ENABLED) {
-    return {
-      pins,
-      pinsChanged: false,
-      newcomers: [],
-      risingSnap: prevSnap,
-      risingSnapSeeded: seeded,
-      autoPinEvents: events,
-    };
+    return emptyResult(pins, prevSnap, seeded, events);
   }
 
   const [watchData, blacklist] = await Promise.all([
@@ -266,14 +280,12 @@ async function runAutoPin(options) {
     ? watchData.watchPool
     : [];
 
-  // Need broad ticker map for pool ranking + window checks.
   const probe = ranking(
     Object.fromEntries(
       seedPool.map((symbol) => [String(symbol).toUpperCase(), { change24h: 0 }]),
     ),
     blacklist,
   );
-  // Fetch all USDT via empty-set workaround: pass union of pool + ranked probe from last snapshot.
   const lastSnap = history.length ? history[history.length - 1] : null;
   const lastSymbols = lastSnap && lastSnap.prices ? Object.keys(lastSnap.prices) : [];
   const want = [
@@ -283,77 +295,72 @@ async function runAutoPin(options) {
       ...probe,
     ]),
   ].filter(Boolean);
-  // Cap fan-out: top ranks by last snapshot order if huge.
   const symbolList = want.slice(0, Math.max(80, CONFIG.WATCH_POOL_RANK * 3));
   const tickers = await fetchBinanceTickers(symbolList);
   const marketMap = tickers;
 
   const watchPool = buildWatchPool(history, marketMap, seedPool, blacklist);
-  const pinnedSet = new Set(pins.map((item) => item.symbol));
-  const rising = listRisingSymbols(
-    history,
-    marketMap,
-    watchPool,
-    pinnedSet,
-    blacklist,
-  );
+  const zone = listRisingZone(history, marketMap, watchPool, blacklist);
 
   if (!seeded) {
     console.log(
-      'auto-pin seed rising snap',
-      JSON.stringify({ rising: rising.length, pool: watchPool.size }),
+      'auto-pin seed rising zone snap',
+      JSON.stringify({ zone: zone.length, pool: watchPool.size }),
     );
-    return {
-      pins,
-      pinsChanged: false,
-      newcomers: [],
-      risingSnap: rising,
-      risingSnapSeeded: true,
-      autoPinEvents: events,
-    };
+    return emptyResult(pins, zone, true, events);
   }
 
   const prevSet = new Set(prevSnap);
-  const newcomers = rising.filter(
-    (symbol) => !prevSet.has(symbol) && !hasPin(pins, symbol),
-  );
+  const edges = zone.filter((symbol) => !prevSet.has(symbol));
+  const newcomers = edges.filter((symbol) => !hasPin(pins, symbol));
+  const rewarmed = edges.filter((symbol) => hasPin(pins, symbol));
 
   let pinsChanged = false;
-  if (newcomers.length) {
+  if (newcomers.length || rewarmed.length) {
     for (const symbol of newcomers) {
       const price = marketMap[symbol] && marketMap[symbol].price;
       pins = addPin(pins, symbol, price, 'auto-cloud', now);
     }
+    for (const symbol of rewarmed) {
+      const price = marketMap[symbol] && marketMap[symbol].price;
+      pins = addPin(pins, symbol, price, 'auto-rewarm', now);
+    }
     pinsChanged = true;
-    events = [
-      {
+    const nextEvents = [];
+    if (newcomers.length) {
+      nextEvents.push({
         at: now,
         symbols: newcomers.slice(),
         source: 'auto-cloud',
-      },
-      ...events,
-    ].slice(0, CONFIG.AUTO_PIN_EVENTS_MAX);
+        kind: 'new',
+      });
+    }
+    if (rewarmed.length) {
+      nextEvents.push({
+        at: now,
+        symbols: rewarmed.slice(),
+        source: 'auto-rewarm',
+        kind: 'rewarm',
+      });
+    }
+    events = [...nextEvents, ...events].slice(0, CONFIG.AUTO_PIN_EVENTS_MAX);
     console.log(
-      'auto-pin newcomers',
-      JSON.stringify({ count: newcomers.length, symbols: newcomers }),
+      'auto-pin zone edges',
+      JSON.stringify({
+        newcomers: newcomers.length,
+        rewarmed: rewarmed.length,
+        newSymbols: newcomers,
+        rewarmSymbols: rewarmed,
+      }),
     );
   }
-
-  // After pinning, refresh rising list without newly pinned names for snap.
-  const pinnedAfter = new Set(pins.map((item) => item.symbol));
-  const risingAfter = listRisingSymbols(
-    history,
-    marketMap,
-    watchPool,
-    pinnedAfter,
-    blacklist,
-  );
 
   return {
     pins,
     pinsChanged,
     newcomers,
-    risingSnap: risingAfter,
+    rewarmed,
+    risingSnap: zone,
     risingSnapSeeded: true,
     autoPinEvents: events,
   };
@@ -377,5 +384,7 @@ module.exports = {
   runAutoPin,
   savePinsFile,
   normalizePinList,
+  listRisingZone,
+  listRisingSymbols,
   CONFIG,
 };

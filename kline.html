@@ -215,6 +215,24 @@
         opacity: 0.9;
         filter: grayscale(0.12);
       }
+      .recent-auto-pin .kline-card.is-rewarm {
+        border-color: #8a9a72;
+        background: rgba(248, 250, 244, 0.78);
+        opacity: 0.78;
+        filter: grayscale(0.12);
+      }
+      .rewarm-mark {
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        color: #6a7a52;
+        font-size: 11px;
+        line-height: 1;
+        pointer-events: none;
+      }
+      .kline-card.is-rewarm .pin-mark {
+        display: none;
+      }
       .mode-progress {
         position: fixed;
         inset: 0;
@@ -1733,7 +1751,7 @@
         </button>
       </div>
       <div id="recentAutoPinSection" class="recent-auto-pin" hidden>
-        <div class="recent-auto-pin-head" id="recentAutoPinMeta">新自动盯 · 12小时内</div>
+        <div class="recent-auto-pin-head" id="recentAutoPinMeta">新自动盯 / 回暖 · 12小时内</div>
         <div id="recentAutoPinGrid" class="kline-grid"></div>
       </div>
       <div id="pinGrid" class="kline-grid"></div>
@@ -2019,8 +2037,8 @@
       let momNotesExpanded = true;
       const MOM_NOTES_LOCAL_KEY = "kline-mom-notes-v1";
       const MOM_NOTES_MAX = 30;
-      const RISING_SNAP_KEY = "kline-rising-snap-v1";
-      const RISING_SNAP_SEEDED_KEY = "kline-rising-snap-seeded-v1";
+      const RISING_SNAP_KEY = "kline-rising-zone-snap-v1";
+      const RISING_SNAP_SEEDED_KEY = "kline-rising-zone-snap-seeded-v1";
       const ACTION_LOG_KEY = "kline-action-log-v1";
       const ACTION_LOG_MAX = 80;
       const PIN_SORT_KEY = "kline-pin-sort-v1";
@@ -2818,10 +2836,9 @@
         }
       }
 
-      function getRisingSymbols() {
+      function getRisingZoneSymbols() {
         const interval = CONFIG.KLINE_INTERVAL;
         const blocked = blacklistSymbols();
-        const pinned = pinSymbols();
         const list = ranking();
         const ranked = list.filter((symbol) => watchPool.has(symbol));
         const unranked = [...watchPool].filter(
@@ -2832,10 +2849,13 @@
         );
         return [...ranked, ...unranked].filter(
           (symbol) =>
-            !blocked.has(symbol) &&
-            !pinned.has(symbol) &&
-            hasWindowGain(symbol, interval),
+            !blocked.has(symbol) && hasWindowGain(symbol, interval),
         );
+      }
+
+      function getRisingSymbols() {
+        const pinned = pinSymbols();
+        return getRisingZoneSymbols().filter((symbol) => !pinned.has(symbol));
       }
 
       function readRisingSnapshot() {
@@ -2906,6 +2926,7 @@
 
       function actionLogKindLabel(kind) {
         if (kind === "auto-pin") return "自动盯";
+        if (kind === "rewarm") return "回暖";
         if (kind === "buy") return "买";
         if (kind === "sell") return "卖";
         if (kind === "sell-stop") return "止损";
@@ -2917,7 +2938,8 @@
         if (!body) return;
         const list = readActionLog();
         if (!list.length) {
-          body.innerHTML = '<div class="action-log-empty">暂无 · 自动盯 / 买 / 卖</div>';
+          body.innerHTML =
+            '<div class="action-log-empty">暂无 · 自动盯 / 回暖 / 买 / 卖</div>';
           return;
         }
         body.innerHTML = list
@@ -3037,36 +3059,38 @@
       }
 
       /**
-       * Strategy A: only auto-pin symbols newly appeared in 窗口上涨
-       * vs last snapshot, and not already pinned. First visit seeds
-       * baseline without mass-pinning.
+       * Edge into 窗口上涨 zone (watch-pool ∩ window-up):
+       * - not pinned → auto-pin (auto-rising)
+       * - already pinned → rewarm: re-pin at current price (auto-rewarm)
+       * First visit seeds baseline without mass action.
+       * @returns {{ newcomers: string[], rewarmed: string[] }}
        */
-      async function autoPinNewRising(risingSymbols) {
-        const current = (risingSymbols || []).filter(Boolean);
+      async function autoPinNewRising(zoneSymbols) {
+        const empty = { newcomers: [], rewarmed: [] };
+        const current = (zoneSymbols || []).filter(Boolean);
         const seeded = localStorage.getItem(RISING_SNAP_SEEDED_KEY) === "1";
         if (!seeded) {
           writeRisingSnapshot(current);
           localStorage.setItem(RISING_SNAP_SEEDED_KEY, "1");
-          return [];
+          return empty;
         }
         const prevSet = new Set(readRisingSnapshot());
         const pinned = pinSymbols();
         const blocked = blacklistSymbols();
-        const newcomers = current.filter(
-          (symbol) =>
-            !prevSet.has(symbol) &&
-            !pinned.has(symbol) &&
-            !blocked.has(symbol),
+        const edges = current.filter(
+          (symbol) => !prevSet.has(symbol) && !blocked.has(symbol),
         );
-        if (!newcomers.length) {
+        const newcomers = edges.filter((symbol) => !pinned.has(symbol));
+        const rewarmed = edges.filter((symbol) => pinned.has(symbol));
+        if (!newcomers.length && !rewarmed.length) {
           writeRisingSnapshot(current);
-          return [];
+          return empty;
         }
         try {
           const result = await WatchFavorites.patchPins({
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.PINS_PATH,
-            message: `Auto-pin rising ${newcomers.length}`,
+            message: `Auto-pin zone edge ${newcomers.length}+${rewarmed.length}`,
             mutate: (list) => {
               let next = list.slice();
               for (const symbol of newcomers) {
@@ -3078,18 +3102,26 @@
                   "auto-rising",
                 );
               }
+              for (const symbol of rewarmed) {
+                next = WatchFavorites.addPin(
+                  next,
+                  symbol,
+                  marketMap[symbol]?.price,
+                  "auto-rewarm",
+                );
+              }
               return { list: next, added: true };
             },
           });
           pinItems = result.pins;
-          // Snapshot post-pin rising so pinned names leave the baseline.
-          writeRisingSnapshot(getRisingSymbols());
-          appendActionLog("auto-pin", newcomers);
-          return newcomers;
+          writeRisingSnapshot(getRisingZoneSymbols());
+          if (newcomers.length) appendActionLog("auto-pin", newcomers);
+          if (rewarmed.length) appendActionLog("rewarm", rewarmed);
+          return { newcomers, rewarmed };
         } catch (error) {
           console.warn("auto-pin rising failed", error);
           writeRisingSnapshot(current);
-          return [];
+          return empty;
         }
       }
 
@@ -3247,16 +3279,21 @@
       function listRecentAutoPins() {
         const now = Date.now();
         const blocked = blacklistSymbols();
+        const sources = new Set(["auto-rising", "auto-cloud", "auto-rewarm"]);
         return pinItems
           .filter((item) => {
             if (!item || !item.symbol || blocked.has(item.symbol)) return false;
             const source = String(item.source || "");
-            if (source !== "auto-rising" && source !== "auto-cloud") return false;
+            if (!sources.has(source)) return false;
             const at = Number(item.pinnedAt) || 0;
             return at > 0 && now - at <= NEW_AUTO_PIN_MS;
           })
           .slice()
           .sort((a, b) => (b.pinnedAt || 0) - (a.pinnedAt || 0));
+      }
+
+      function isRewarmPinItem(item) {
+        return item && String(item.source || "") === "auto-rewarm";
       }
 
       function syncPinSortUi() {
@@ -3324,10 +3361,15 @@
           if (at > maxAt) maxAt = at;
           const symbols = Array.isArray(event.symbols) ? event.symbols : [];
           if (!symbols.length) continue;
-          // Write with event time so ordering matches cloud.
+          const source = String(event.source || "");
+          const eventKind = String(event.kind || "");
+          const kind =
+            eventKind === "rewarm" || source === "auto-rewarm"
+              ? "rewarm"
+              : "auto-pin";
           const entry = {
             at: at || Date.now(),
-            kind: "auto-pin",
+            kind,
             symbols: [
               ...new Set(
                 symbols
@@ -4314,6 +4356,12 @@
           change2h: Number.isFinite(row.change2h) ? row.change2h : null,
           change1h: Number.isFinite(row.change1h) ? row.change1h : null,
           delta: Number.isFinite(trend.delta) ? trend.delta : null,
+          price: (() => {
+            const live = Number(row.current);
+            if (Number.isFinite(live) && live > 0) return live;
+            const ticker = marketMap[row.symbol]?.price;
+            return Number.isFinite(ticker) && ticker > 0 ? ticker : null;
+          })(),
         };
         momNotesSaving = true;
         try {
@@ -4326,6 +4374,23 @@
           momNoteItems = result.notes || [];
           showToast(`已记 ${entry.label}`);
           refreshMomentumFloatBody();
+          document
+            .querySelectorAll(
+              `.kline-card[data-symbol="${entry.symbol}"]`,
+            )
+            .forEach((card) => {
+              const section = card.dataset.section;
+              const pinItem = isPinCardSection(section)
+                ? pinItemBySymbol(entry.symbol)
+                : null;
+              void renderKlineCard(
+                card,
+                entry.symbol,
+                chartInterval(),
+                new AbortController().signal,
+                pinItem,
+              );
+            });
         } catch (error) {
           console.warn(error);
           showToast(error.message || "记一笔失败");
@@ -4563,7 +4628,38 @@
         }
       }
 
-      function drawKline(canvas, candles, pinPrice, pinnedAt) {
+      function findCandleIndexAt(candles, timestamp) {
+        const at = Number(timestamp);
+        if (!Array.isArray(candles) || !candles.length) return -1;
+        if (!Number.isFinite(at) || at <= 0) return -1;
+        if (at < candles[0].time) return 0;
+        if (at >= candles[candles.length - 1].time) return candles.length - 1;
+        for (let i = 0; i < candles.length; i += 1) {
+          const start = candles[i].time;
+          const end =
+            i + 1 < candles.length
+              ? candles[i + 1].time
+              : Number.POSITIVE_INFINITY;
+          if (at >= start && at < end) return i;
+        }
+        return -1;
+      }
+
+      function notesMarksForSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return [];
+        return (momNoteItems || [])
+          .filter((note) => note && note.symbol === key)
+          .map((note) => ({
+            at: Number(note.at) || 0,
+            price: Number(note.price),
+            id: note.id,
+          }));
+      }
+
+      function drawKline(canvas, candles, pinPrice, pinnedAt, noteMarks) {
         const rect = canvas.getBoundingClientRect();
         const width = Math.max(1, Math.floor(rect.width));
         const height = Math.max(1, Math.floor(rect.height));
@@ -4588,33 +4684,20 @@
           max = Math.max(max, pin);
           min = Math.min(min, pin);
         }
+        const notes = Array.isArray(noteMarks) ? noteMarks : [];
+        notes.forEach((note) => {
+          const price = Number(note && note.price);
+          if (Number.isFinite(price) && price > 0) {
+            max = Math.max(max, price);
+            min = Math.min(min, price);
+          }
+        });
         const range = max - min || max * 0.01 || 1;
         const slot = chartW / candles.length;
         const bodyW = Math.max(1, slot * 0.62);
         const yOf = (price) => pad.top + ((max - price) / range) * chartH;
 
-        // 盯住时刻落在哪根 K 线上（开盘时间区间）。
-        let pinIndex = -1;
-        const at = Number(pinnedAt);
-        if (hasPin && Number.isFinite(at) && at > 0) {
-          if (at < candles[0].time) {
-            pinIndex = 0;
-          } else if (at >= candles[candles.length - 1].time) {
-            pinIndex = candles.length - 1;
-          } else {
-            for (let i = 0; i < candles.length; i += 1) {
-              const start = candles[i].time;
-              const end =
-                i + 1 < candles.length
-                  ? candles[i + 1].time
-                  : Number.POSITIVE_INFINITY;
-              if (at >= start && at < end) {
-                pinIndex = i;
-                break;
-              }
-            }
-          }
-        }
+        const pinIndex = hasPin ? findCandleIndexAt(candles, pinnedAt) : -1;
 
         if (hasPin) {
           const y = yOf(pin);
@@ -4643,7 +4726,7 @@
           ctx.fillRect(x - bodyW / 2, Math.min(y1, y2), bodyW, bodyH);
         });
 
-        // 竖虚线 + 交点：标出盯住发生的时间柱。
+        // 盯住：竖虚线 + 白心绿边点。
         if (hasPin && pinIndex >= 0) {
           const x = pad.left + slot * pinIndex + slot / 2;
           const y = yOf(pin);
@@ -4665,6 +4748,29 @@
           ctx.stroke();
           ctx.restore();
         }
+
+        // 记一笔：时间对齐到 K 线柱，价位用记录价（旧数据无价则用该柱收盘）。
+        const noteRadius = Math.max(2.2, Math.min(3.2, slot * 0.28));
+        notes.forEach((note) => {
+          const idx = findCandleIndexAt(candles, note && note.at);
+          if (idx < 0) return;
+          let price = Number(note.price);
+          if (!Number.isFinite(price) || price <= 0) {
+            price = Number(candles[idx].close);
+          }
+          if (!Number.isFinite(price) || price <= 0) return;
+          const x = pad.left + slot * idx + slot / 2;
+          const y = yOf(price);
+          ctx.save();
+          ctx.fillStyle = "#c45c5c";
+          ctx.beginPath();
+          ctx.arc(x, y, noteRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.restore();
+        });
       }
 
       async function renderKlineCard(card, symbol, interval, signal, pinItem) {
@@ -4752,6 +4858,7 @@
             candles,
             pinItem ? pinItem.pinPrice : null,
             pinItem ? pinItem.pinnedAt : null,
+            notesMarksForSymbol(symbol),
           );
         } catch (error) {
           if (error.name === "AbortError") return;
@@ -4776,6 +4883,7 @@
         const pairClass = options.isPair ? " is-pair" : "";
         const pinClass = options.isPin ? " is-pin" : "";
         const noteClass = options.isNote ? " is-note" : "";
+        const rewarmClass = options.isRewarm ? " is-rewarm" : "";
         const selectClass =
           options.selectMode && options.isPinSection ? " is-select-mode" : "";
         const selectedClass =
@@ -4789,7 +4897,9 @@
         const marks = [];
         if (options.showMark) marks.push('<span class="fav-mark">★</span>');
         // Notes view: only show 盯 when there is a real pin row.
-        if (options.isPin && (options.pinItem || !options.isNote)) {
+        if (options.isRewarm) {
+          marks.push('<span class="rewarm-mark">回暖</span>');
+        } else if (options.isPin && (options.pinItem || !options.isNote)) {
           marks.push(
             `<span class="pin-mark">${
               WatchFavorites.PIN_EXPIRY_ENABLED && options.isExpired
@@ -4816,7 +4926,7 @@
           ? "kline-card-head is-pin-head"
           : "kline-card-head";
         const statusClass = options.pinItem ? ' class="pin-stats"' : "";
-        return `<div class="kline-card${favClass}${pairClass}${pinClass}${noteClass}${selectClass}${selectedClass}${posClass}${expiredClass}" id="card-${options.section}-${symbol}" data-symbol="${symbol}" data-section="${options.section}"><div class="${headClass}"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status${statusClass}>${statusText}</span></div>${marks.join("")}${checkHtml}<canvas></canvas></div>`;
+        return `<div class="kline-card${favClass}${pairClass}${pinClass}${noteClass}${rewarmClass}${selectClass}${selectedClass}${posClass}${expiredClass}" id="card-${options.section}-${symbol}" data-symbol="${symbol}" data-section="${options.section}"><div class="${headClass}"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status${statusClass}>${statusText}</span></div>${marks.join("")}${checkHtml}<canvas></canvas></div>`;
       }
 
       function closeCardActions(force) {
@@ -5392,6 +5502,13 @@
                   isPin: isPinSection || pinSymbols().has(symbol),
                   isNote: isNotesView() && section === "pin",
                   isPinSection,
+                  isRewarm:
+                    isPinSection &&
+                    isRewarmPinItem(pinItem) &&
+                    (section === "pin-recent" ||
+                      ((Number(pinItem.pinnedAt) || 0) > 0 &&
+                        Date.now() - (Number(pinItem.pinnedAt) || 0) <=
+                          NEW_AUTO_PIN_MS)),
                   selectMode: pinSelectMode && isPinSection,
                   isSelected: selectedPinSymbols.has(symbol),
                   hasPosition: positionSymbols().has(symbol),
@@ -5411,7 +5528,7 @@
                   : section === "pin-hidden"
                     ? "当前没有隐藏的盯一下（窗口回落）"
                     : section === "pin-recent"
-                      ? "暂无新自动盯"
+                      ? "暂无新自动盯 / 回暖"
                       : "暂无窗口上涨的收藏"
             }</div>`;
 
@@ -5742,15 +5859,29 @@
           return;
         }
 
-        const risingRaw = getRisingSymbols();
-        const autoPinned = await autoPinNewRising(risingRaw);
-        if (autoPinned.length) {
-          showToast(
-            `自动盯 ${autoPinned.length} 个新上涨：${autoPinned
-              .slice(0, 4)
-              .map((s) => s.replace(/USDT$/i, ""))
-              .join(" · ")}${autoPinned.length > 4 ? "…" : ""}`,
-          );
+        const risingZone = getRisingZoneSymbols();
+        const edgeResult = await autoPinNewRising(risingZone);
+        const autoPinned = edgeResult.newcomers || [];
+        const autoRewarmed = edgeResult.rewarmed || [];
+        if (autoPinned.length || autoRewarmed.length) {
+          const parts = [];
+          if (autoPinned.length) {
+            parts.push(
+              `自动盯 ${autoPinned.length}：${autoPinned
+                .slice(0, 3)
+                .map((s) => s.replace(/USDT$/i, ""))
+                .join(" · ")}${autoPinned.length > 3 ? "…" : ""}`,
+            );
+          }
+          if (autoRewarmed.length) {
+            parts.push(
+              `回暖 ${autoRewarmed.length}：${autoRewarmed
+                .slice(0, 3)
+                .map((s) => s.replace(/USDT$/i, ""))
+                .join(" · ")}${autoRewarmed.length > 3 ? "…" : ""}`,
+            );
+          }
+          showToast(parts.join(" · "));
         }
         const rising = getRisingSymbols();
         const favRising = getFavoriteRisingSymbols(rising);
@@ -5943,7 +6074,14 @@
           if (recentAutoList.length) {
             recentSection.hidden = false;
             if (recentMeta) {
-              recentMeta.textContent = `新自动盯 · 近12小时 ${recentAutoList.length} 个`;
+              const rewarmCount = listRecentAutoPins().filter((item) =>
+                isRewarmPinItem(item),
+              ).length;
+              const newCount = recentAutoList.length - rewarmCount;
+              const bits = [];
+              if (newCount > 0) bits.push(`新自动盯 ${newCount}`);
+              if (rewarmCount > 0) bits.push(`回暖 ${rewarmCount}`);
+              recentMeta.textContent = `${bits.join(" · ") || "边沿"} · 近12小时`;
             }
             await fillGrid(
               recentGrid,
