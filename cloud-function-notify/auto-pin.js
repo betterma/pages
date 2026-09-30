@@ -23,6 +23,10 @@ const CONFIG = {
   WINDOW_INTERVAL: process.env.PIN_WINDOW_INTERVAL || '4h',
   WINDOW_TOLERANCE_MS: Number(process.env.WINDOW_TOLERANCE_MS || 2 * 60 * 1000),
   PIN_TTL_MS: Number(process.env.PIN_TTL_MS || 12 * 60 * 60 * 1000),
+  // 与页面一致：暂时不设盯一下过期。改 true / 环境变量 PIN_EXPIRY_ENABLED=1 可恢复。
+  PIN_EXPIRY_ENABLED: /^(1|true|yes)$/i.test(
+    String(process.env.PIN_EXPIRY_ENABLED || ''),
+  ),
   AUTO_PIN_EVENTS_MAX: Number(process.env.AUTO_PIN_EVENTS_MAX || 40),
   ENABLED:
     String(process.env.AUTO_PIN_ENABLED === undefined ? '1' : process.env.AUTO_PIN_ENABLED) !==
@@ -76,7 +80,7 @@ function addPin(list, symbol, pinPrice, source, now) {
   next.unshift({
     symbol: key,
     pinnedAt: ts,
-    expiresAt: ts + CONFIG.PIN_TTL_MS,
+    expiresAt: CONFIG.PIN_EXPIRY_ENABLED ? ts + CONFIG.PIN_TTL_MS : 0,
     pinPrice: Number.isFinite(price) ? price : null,
     source: source || 'auto-cloud',
   });

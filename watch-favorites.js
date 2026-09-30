@@ -22,6 +22,8 @@
   const MOM_NOTES_PATH = "watch-mom-notes.json";
   const LEGACY_DATA_PATH = "watch-data.json";
   const PIN_TTL_MS = 12 * 60 * 60 * 1000;
+  // 暂时关闭盯一下过期；改 true 可恢复 12h TTL。
+  const PIN_EXPIRY_ENABLED = false;
   const MOM_NOTES_MAX = 30;
 
   const TOKEN_PART_A = "gh";
@@ -546,7 +548,7 @@
     throw lastError || new Error("保存黑名单失败");
   }
 
-  // Temporary pins / 盯一下 — 12h TTL; expired entries stay until cleared.
+  // Temporary pins / 盯一下 — optional 12h TTL (PIN_EXPIRY_ENABLED).
   function normalizePinItem(item) {
     if (!item || typeof item !== "object" || !item.symbol) return null;
     const symbol = String(item.symbol).trim().toUpperCase();
@@ -555,11 +557,14 @@
       ? Number(item.pinnedAt)
       : 0;
     const pinPrice = Number(item.pinPrice);
-    const expiresAt = Number.isFinite(Number(item.expiresAt))
-      ? Number(item.expiresAt)
-      : pinnedAt > 0
-        ? pinnedAt + PIN_TTL_MS
-        : 0;
+    let expiresAt = 0;
+    if (PIN_EXPIRY_ENABLED) {
+      expiresAt = Number.isFinite(Number(item.expiresAt))
+        ? Number(item.expiresAt)
+        : pinnedAt > 0
+          ? pinnedAt + PIN_TTL_MS
+          : 0;
+    }
     return {
       symbol,
       pinnedAt,
@@ -608,6 +613,7 @@
   }
 
   function isPinExpired(item, now) {
+    if (!PIN_EXPIRY_ENABLED) return false;
     const ts = Number.isFinite(Number(now)) ? Number(now) : Date.now();
     const expiresAt = Number(item && item.expiresAt);
     return Number.isFinite(expiresAt) && expiresAt > 0 && ts >= expiresAt;
@@ -628,7 +634,7 @@
     next.unshift({
       symbol: key,
       pinnedAt: now,
-      expiresAt: now + ttl,
+      expiresAt: PIN_EXPIRY_ENABLED ? now + ttl : 0,
       pinPrice: Number.isFinite(price) ? price : null,
       source: source || "manual",
     });
@@ -1132,6 +1138,7 @@
     PINS_PATH,
     POSITIONS_PATH,
     PIN_TTL_MS,
+    PIN_EXPIRY_ENABLED,
     LEGACY_DATA_PATH,
     getGithubToken,
     normalizeFavorites,

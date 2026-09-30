@@ -194,8 +194,14 @@
         margin: 0 0 6px;
       }
       .recent-auto-pin .kline-card {
-        border-color: #2f8f6e;
-        box-shadow: 0 0 0 1px rgba(47, 143, 110, 0.18);
+        border-color: #7a9a90;
+        box-shadow: 0 0 0 1px rgba(90, 120, 110, 0.12);
+        opacity: 0.62;
+        filter: grayscale(0.35);
+      }
+      .recent-auto-pin .kline-card:hover {
+        opacity: 0.84;
+        filter: grayscale(0.2);
       }
       .mode-progress {
         position: fixed;
@@ -708,38 +714,70 @@
         position: relative;
         min-width: 0;
         padding: 8px 10px 10px;
-        background: #fbfcfa;
-        border: 1px solid #d8ddda;
+        background: #f7f8f6;
+        border: 1px solid #e2e6e3;
         border-radius: 8px;
+        color: #6a7572;
         user-select: none;
         -webkit-user-select: none;
         touch-action: manipulation;
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        /* 沿用原「过期」淡雅观感，作为默认素色 */
+        opacity: 0.52;
+        filter: grayscale(0.5);
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease,
+          opacity 0.18s ease,
+          filter 0.18s ease;
         scroll-margin-top: 12px;
+      }
+      .kline-card:hover {
+        opacity: 0.78;
+        filter: grayscale(0.28);
       }
       .kline-card.is-pressed {
         transform: scale(0.98);
-        box-shadow: 0 0 0 2px rgba(113, 139, 136, 0.35);
+        box-shadow: 0 0 0 2px rgba(113, 139, 136, 0.22);
+        opacity: 0.82;
+        filter: grayscale(0.22);
       }
       .kline-card.is-favorite {
-        border-color: #b7c4b8;
+        border-color: #c5cec6;
       }
       .kline-card.is-pair {
         border-width: 2px;
-        border-color: #1a1a1a;
+        border-color: #5a6460;
       }
       .kline-card.is-pin {
-        border-color: #5a6a68;
+        border-color: #8a9490;
       }
       .kline-card.is-expired {
-        opacity: 0.48;
-        filter: grayscale(0.55);
+        /* 过期已关；样式并入默认，保留类名便于以后恢复 */
+        opacity: 0.52;
+        filter: grayscale(0.5);
       }
       .kline-card.is-expired:hover {
-        opacity: 0.72;
+        opacity: 0.78;
+        filter: grayscale(0.28);
       }
       .kline-card.is-position {
-        border-color: #6b7f6e;
+        border-color: #8a9a90;
+      }
+      .kline-card.is-selected {
+        opacity: 0.88;
+        filter: grayscale(0.18);
+      }
+      .kline-card.is-jump-target {
+        opacity: 0.9;
+        filter: grayscale(0.15);
+        outline: 2px solid #7a9a90;
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px rgba(90, 120, 110, 0.14);
+        transition:
+          outline 0.2s ease,
+          box-shadow 0.2s ease,
+          opacity 0.18s ease,
+          filter 0.18s ease;
       }
       .pin-mark,
       .pos-mark {
@@ -871,12 +909,6 @@
       }
       .kline-card-head.is-pin-head .symbol-copy {
         font-size: 13px;
-      }
-      .kline-card.is-jump-target {
-        outline: 2px solid #2f8f6e;
-        outline-offset: 2px;
-        box-shadow: 0 0 0 4px rgba(47, 143, 110, 0.18);
-        transition: outline 0.2s ease, box-shadow 0.2s ease;
       }
       .notify-float {
         position: fixed;
@@ -2620,12 +2652,14 @@
         const rel = pinChangePercent(pinItem);
         const current = marketMap[symbol]?.price;
         const change24h = marketMap[symbol]?.change24h;
-        const expired = WatchFavorites.isPinExpired(pinItem);
-        const remain = formatRemainCompact(pinItem.expiresAt);
         const flagParts = [];
-        flagParts.push(
-          `<span class="pin-flag ${expired ? "is-expired" : "is-remain"}" title="观察剩余时间">${escapeHtml(remain)}</span>`,
-        );
+        if (WatchFavorites.PIN_EXPIRY_ENABLED) {
+          const expired = WatchFavorites.isPinExpired(pinItem);
+          const remain = formatRemainCompact(pinItem.expiresAt);
+          flagParts.push(
+            `<span class="pin-flag ${expired ? "is-expired" : "is-remain"}" title="观察剩余时间">${escapeHtml(remain)}</span>`,
+          );
+        }
         if (flags && flags.priceUpVsLast) {
           flagParts.push(
             `<span class="pin-flag is-at" title="现价高于上次企微推送价">@@@</span>`,
@@ -2640,13 +2674,18 @@
             `<span class="pin-flag is-15m" title="近 3 根已收盘 15m 至少 2 根收涨">15m</span>`,
           );
         }
-        return [
+        const rows = [
           `<span class="pin-stat-row">盯住价格：${escapeHtml(formatPinPrice(pinItem.pinPrice))}</span>`,
           `<span class="pin-stat-row">现在价格：${escapeHtml(formatPinPrice(current))}</span>`,
           `<span class="pin-stat-row">盯住涨幅：<span class="${pctClass(rel)}">${escapeHtml(formatPercent(rel))}</span></span>`,
           `<span class="pin-stat-row">24h涨幅：<span class="${pctClass(change24h)}">${escapeHtml(formatPercent(change24h))}</span></span>`,
-          `<span class="pin-stat-row pin-flags">${flagParts.join(" / ")}</span>`,
-        ].join("");
+        ];
+        if (flagParts.length) {
+          rows.push(
+            `<span class="pin-stat-row pin-flags">${flagParts.join(" / ")}</span>`,
+          );
+        }
+        return rows.join("");
       }
 
       async function copyName(name) {
@@ -4566,7 +4605,7 @@
         if (hasPin) {
           const y = yOf(pin);
           ctx.save();
-          ctx.strokeStyle = "#5a6a68";
+          ctx.strokeStyle = "rgba(120, 130, 126, 0.75)";
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(pad.left, y);
@@ -4578,8 +4617,8 @@
         candles.forEach((candle, index) => {
           const x = pad.left + slot * index + slot / 2;
           const up = candle.close >= candle.open;
-          ctx.strokeStyle = up ? "#718b88" : "#8d7771";
-          ctx.fillStyle = up ? "#718b88" : "#8d7771";
+          ctx.strokeStyle = up ? "#8a9a96" : "#9a8e88";
+          ctx.fillStyle = up ? "#8a9a96" : "#9a8e88";
           ctx.beginPath();
           ctx.moveTo(x, yOf(candle.high));
           ctx.lineTo(x, yOf(candle.low));
@@ -4595,7 +4634,7 @@
           const x = pad.left + slot * pinIndex + slot / 2;
           const y = yOf(pin);
           ctx.save();
-          ctx.strokeStyle = "rgba(90, 106, 104, 0.85)";
+          ctx.strokeStyle = "rgba(130, 140, 136, 0.7)";
           ctx.lineWidth = 1;
           ctx.setLineDash([3, 3]);
           ctx.beginPath();
@@ -4603,11 +4642,11 @@
           ctx.lineTo(x, pad.top + chartH);
           ctx.stroke();
           ctx.setLineDash([]);
-          ctx.fillStyle = "#2f8f6e";
+          ctx.fillStyle = "#7a9a90";
           ctx.beginPath();
           ctx.arc(x, y, Math.max(2.5, Math.min(4, slot * 0.35)), 0, Math.PI * 2);
           ctx.fill();
-          ctx.strokeStyle = "#fbfcfa";
+          ctx.strokeStyle = "#f4f5f3";
           ctx.lineWidth = 1;
           ctx.stroke();
           ctx.restore();
@@ -4660,7 +4699,9 @@
               `现价 ${formatPinPrice(current)}`,
               `盯幅 ${formatPercent(pinChangePercent(pinItem))}`,
               `24h ${formatPercent(marketMap[symbol]?.change24h)}`,
-              formatRemaining(pinItem.expiresAt) || "",
+              WatchFavorites.PIN_EXPIRY_ENABLED
+                ? formatRemaining(pinItem.expiresAt) || ""
+                : "",
             ]
               .filter(Boolean)
               .join(" · ");
@@ -4736,7 +4777,11 @@
         // Notes view: only show 盯 when there is a real pin row.
         if (options.isPin && (options.pinItem || !options.isNote)) {
           marks.push(
-            `<span class="pin-mark">${options.isExpired ? "过期" : "盯"}</span>`,
+            `<span class="pin-mark">${
+              WatchFavorites.PIN_EXPIRY_ENABLED && options.isExpired
+                ? "过期"
+                : "盯"
+            }</span>`,
           );
         }
         if (options.hasPosition) {
@@ -4826,6 +4871,7 @@
         const held = positionSymbols().has(symbol);
         const canAddNote = !isNotesView() && pinned;
         const expired = (() => {
+          if (!WatchFavorites.PIN_EXPIRY_ENABLED) return false;
           const item = pinItemBySymbol(symbol);
           return item ? WatchFavorites.isPinExpired(item) : false;
         })();
@@ -5631,9 +5677,9 @@
             "clearAllPositionsBtn",
           );
           const maintEmptyHint = document.getElementById("maintEmptyHint");
-          const expiredPins = pinItems.filter((item) =>
-            WatchFavorites.isPinExpired(item),
-          ).length;
+          const expiredPins = WatchFavorites.PIN_EXPIRY_ENABLED
+            ? pinItems.filter((item) => WatchFavorites.isPinExpired(item)).length
+            : 0;
           const positionCount = positionItems.length;
           if (clearExpiredBtn) clearExpiredBtn.hidden = expiredPins <= 0;
           if (clearPositionsBtn) clearPositionsBtn.hidden = positionCount <= 0;
@@ -5741,16 +5787,23 @@
         ];
         const activePins = pinItems.filter(
           (item) =>
-            !blocked.has(item.symbol) && !WatchFavorites.isPinExpired(item),
+            !blocked.has(item.symbol) &&
+            (!WatchFavorites.PIN_EXPIRY_ENABLED ||
+              !WatchFavorites.isPinExpired(item)),
         ).length;
-        const expiredPins = pinItems.filter(
-          (item) =>
-            !blocked.has(item.symbol) && WatchFavorites.isPinExpired(item),
-        ).length;
-        const expiredHidden = pinCandidates.filter((item) => {
-          if (!WatchFavorites.isPinExpired(item)) return false;
-          return !hasWindowGain(item.symbol, interval);
-        }).length;
+        const expiredPins = WatchFavorites.PIN_EXPIRY_ENABLED
+          ? pinItems.filter(
+              (item) =>
+                !blocked.has(item.symbol) &&
+                WatchFavorites.isPinExpired(item),
+            ).length
+          : 0;
+        const expiredHidden = WatchFavorites.PIN_EXPIRY_ENABLED
+          ? pinCandidates.filter((item) => {
+              if (!WatchFavorites.isPinExpired(item)) return false;
+              return !hasWindowGain(item.symbol, interval);
+            }).length
+          : 0;
 
         if (klineAbort) klineAbort.abort();
         klineAbort = new AbortController();
@@ -5773,7 +5826,10 @@
         const clearPositionsBtn = document.getElementById("clearAllPositionsBtn");
         const maintEmptyHint = document.getElementById("maintEmptyHint");
         const positionCount = positionItems.length;
-        if (clearExpiredBtn) clearExpiredBtn.hidden = expiredPins <= 0;
+        if (clearExpiredBtn) {
+          clearExpiredBtn.hidden =
+            !WatchFavorites.PIN_EXPIRY_ENABLED || expiredPins <= 0;
+        }
         if (clearPositionsBtn) clearPositionsBtn.hidden = positionCount <= 0;
         if (maintEmptyHint) {
           maintEmptyHint.hidden = expiredPins > 0 || positionCount > 0;
@@ -6025,6 +6081,10 @@
       }
 
       async function clearAllExpiredPins() {
+        if (!WatchFavorites.PIN_EXPIRY_ENABLED) {
+          showToast("盯一下过期已关闭");
+          return;
+        }
         if (pinSaving) return;
         const expired = pinItems.filter((item) =>
           WatchFavorites.isPinExpired(item),
@@ -6119,6 +6179,10 @@
       }
 
       async function renewPinForSymbol(symbol) {
+        if (!WatchFavorites.PIN_EXPIRY_ENABLED) {
+          showToast("盯一下过期已关闭，无需续盯");
+          return false;
+        }
         if (!symbol || pinSaving) return false;
         const label = symbol.replace("USDT", "");
         const price = marketMap[symbol]?.price;
