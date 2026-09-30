@@ -20,11 +20,13 @@
   const BLACKLIST_PATH = "watch-blacklist.json";
   const PINS_PATH = "watch-pins.json";
   const MOM_NOTES_PATH = "watch-mom-notes.json";
+  const ACTION_LOG_PATH = "watch-action-log.json";
   const LEGACY_DATA_PATH = "watch-data.json";
   const PIN_TTL_MS = 12 * 60 * 60 * 1000;
   // 暂时关闭盯一下过期；改 true 可恢复 12h TTL。
   const PIN_EXPIRY_ENABLED = false;
   const MOM_NOTES_MAX = 30;
+  const ACTION_LOG_MAX = 80;
 
   const TOKEN_PART_A = "gh";
   const TOKEN_PART_B = "p_Xrmz1DjzLfbjyiXZqFyJGd9O8aWFIq4D9758";
@@ -874,6 +876,157 @@
     throw lastError || new Error("保存记一笔失败");
   }
 
+  function normalizeActionLogEntry(item) {
+    if (!item || typeof item !== "object") return null;
+    const kind = String(item.kind || "").trim();
+    const at = Number(item.at) || 0;
+    const symbols = [
+      ...new Set(
+        (Array.isArray(item.symbols) ? item.symbols : [])
+          .map((symbol) => String(symbol || "").trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    ];
+    if (!kind || !symbols.length) return null;
+    const entry = { at: at || Date.now(), kind, symbols };
+    const price = Number(item.price);
+    if (Number.isFinite(price) && price > 0) entry.price = price;
+    return entry;
+  }
+
+  function normalizeActionLog(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map(normalizeActionLogEntry)
+      .filter(Boolean)
+      .sort((a, b) => (b.at || 0) - (a.at || 0))
+      .slice(0, ACTION_LOG_MAX);
+  }
+
+  function serializeActionLog(list) {
+    return normalizeActionLog(list).map((item) => {
+      const entry = {
+        at: item.at,
+        kind: item.kind,
+        symbols: item.symbols.slice(),
+      };
+      if (Number.isFinite(item.price) && item.price > 0) {
+        entry.price = item.price;
+      }
+      return entry;
+    });
+  }
+
+  function mergeActionLogs(a, b) {
+    return normalizeActionLog([...(a || []), ...(b || [])]);
+  }
+
+  async function loadActionLogRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || ACTION_LOG_PATH;
+
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          entries: normalizeActionLog(current.data.entries),
+          entriesUpdatedAt: Number.isFinite(Number(current.data.entriesUpdatedAt))
+            ? Number(current.data.entriesUpdatedAt)
+            : null,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadActionLog via API failed, trying raw", error);
+    }
+
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          entries: normalizeActionLog(data.entries),
+          entriesUpdatedAt: Number.isFinite(Number(data.entriesUpdatedAt))
+            ? Number(data.entriesUpdatedAt)
+            : null,
+          source: "raw-commit",
+        };
+      }
+      if (response.status !== 404) {
+        console.warn(`读取动作日志 raw 失败: ${response.status}`);
+      }
+    } catch (error) {
+      console.warn("loadActionLog via commit-raw failed", error);
+    }
+
+    return { entries: [], entriesUpdatedAt: null, source: "empty" };
+  }
+
+  async function patchActionLog(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || ACTION_LOG_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = current.data || {
+          entries: [],
+          entriesUpdatedAt: null,
+        };
+        const entries = normalizeActionLog(base.entries);
+        let nextList = entries;
+        if (typeof options.mutate === "function") {
+          const result = options.mutate(entries.slice());
+          nextList = Array.isArray(result)
+            ? result
+            : result && result.list
+              ? result.list
+              : entries;
+        }
+        const nextEntries = serializeActionLog(nextList).slice(0, ACTION_LOG_MAX);
+        const nextData = {
+          entries: nextEntries,
+          entriesUpdatedAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update action log",
+        });
+        return {
+          entries: nextEntries,
+          entriesUpdatedAt: nextData.entriesUpdatedAt,
+        };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存动作日志失败");
+  }
+
   async function patchPins(options) {
     const repo = (options && options.repo) || DEFAULT_REPO;
     const path = (options && options.path) || PINS_PATH;
@@ -1179,6 +1332,13 @@
     serializeMomNotes,
     loadMomNotesRaw,
     patchMomNotes,
+    ACTION_LOG_PATH,
+    ACTION_LOG_MAX,
+    normalizeActionLog,
+    serializeActionLog,
+    mergeActionLogs,
+    loadActionLogRaw,
+    patchActionLog,
     normalizePositions,
     serializePositions,
     positionsToSymbolSet,

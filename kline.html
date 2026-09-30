@@ -1980,6 +1980,7 @@
         BLACKLIST_PATH: "watch-blacklist.json",
         PINS_PATH: "watch-pins.json",
         MOM_NOTES_PATH: "watch-mom-notes.json",
+        ACTION_LOG_PATH: "watch-action-log.json",
         POSITIONS_PATH: "watch-positions.json",
         WATCH_POOL_RANK: 30,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
@@ -2068,11 +2069,13 @@
       const RISING_SNAP_SEEDED_KEY = "kline-rising-zone-snap-seeded-v1";
       const ACTION_LOG_KEY = "kline-action-log-v1";
       const ACTION_LOG_MAX = 80;
+      let actionLogEntries = [];
+      let actionLogSaving = false;
       const PIN_SORT_KEY = "kline-pin-sort-v1";
       const AUTO_PIN_EVENTS_SEEN_KEY = "kline-auto-pin-events-seen-v1";
       const NEW_AUTO_PIN_MS = 12 * 60 * 60 * 1000;
       // Same-symbol edge cooldown (page ↔ cloud). Skip rewarm / re-pin.
-      const AUTO_PIN_EDGE_COOLDOWN_MS = 2 * 60 * 60 * 1000;
+      const AUTO_PIN_EDGE_COOLDOWN_MS = 12 * 60 * 60 * 1000;
       let pinSortMode = "pin";
       // 默认盯幅；不恢复「爬升」，避免一进页就后台算动量。
       let notifyPollTimer = null;
@@ -2904,7 +2907,7 @@
         );
       }
 
-      function readActionLog() {
+      function readLocalActionLogCache() {
         try {
           const raw = localStorage.getItem(ACTION_LOG_KEY);
           const list = raw ? JSON.parse(raw) : [];
@@ -2914,14 +2917,96 @@
         }
       }
 
-      function writeActionLog(list) {
+      function readActionLog() {
+        return actionLogEntries.slice();
+      }
+
+      function writeActionLogCache(list) {
+        actionLogEntries = compactActionLogEntries(list).slice(0, ACTION_LOG_MAX);
         try {
           localStorage.setItem(
             ACTION_LOG_KEY,
-            JSON.stringify((list || []).slice(0, ACTION_LOG_MAX)),
+            JSON.stringify(actionLogEntries),
           );
         } catch (error) {
-          console.warn("action log save failed", error);
+          console.warn("action log cache save failed", error);
+        }
+      }
+
+      /**
+       * Collapse spammy auto-pin / rewarm rows: same symbol + same kind
+       * within EDGE cooldown keeps only the earliest hit.
+       * Buy/sell rows untouched.
+       */
+      function compactActionLogEntries(list, cooldownMs) {
+        const cooldown =
+          Number.isFinite(Number(cooldownMs)) && Number(cooldownMs) > 0
+            ? Number(cooldownMs)
+            : AUTO_PIN_EDGE_COOLDOWN_MS;
+        const edgeKinds = new Set(["auto-pin", "rewarm"]);
+        const chron = (Array.isArray(list) ? list : [])
+          .slice()
+          .sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0));
+        const lastKept = new Map();
+        const keptAsc = [];
+        for (const entry of chron) {
+          if (!entry || !Array.isArray(entry.symbols)) continue;
+          const kind = String(entry.kind || "");
+          const at = Number(entry.at) || 0;
+          let symbols = [
+            ...new Set(
+              entry.symbols
+                .map((symbol) => String(symbol || "").trim().toUpperCase())
+                .filter(Boolean),
+            ),
+          ];
+          if (edgeKinds.has(kind)) {
+            symbols = symbols.filter((symbol) => {
+              const key = `${kind}:${symbol}`;
+              const prev = lastKept.get(key);
+              if (Number.isFinite(prev) && at - prev < cooldown) return false;
+              lastKept.set(key, at);
+              return true;
+            });
+          }
+          if (!symbols.length) continue;
+          const next = { at, kind, symbols };
+          if (Number.isFinite(entry.price) && entry.price > 0) {
+            next.price = entry.price;
+          }
+          keptAsc.push(next);
+        }
+        return keptAsc.reverse().slice(0, ACTION_LOG_MAX);
+      }
+
+      async function persistActionLog(nextList, message, options) {
+        const replace = !!(options && options.replace);
+        const compact = compactActionLogEntries(nextList);
+        writeActionLogCache(compact);
+        renderActionLogBody();
+        if (actionLogSaving) return compact;
+        actionLogSaving = true;
+        try {
+          const result = await WatchFavorites.patchActionLog({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.ACTION_LOG_PATH,
+            message: message || "Update action log",
+            mutate: (remote) =>
+              replace
+                ? compact
+                : compactActionLogEntries([
+                    ...(compact || []),
+                    ...(remote || []),
+                  ]),
+          });
+          writeActionLogCache(result.entries || compact);
+          renderActionLogBody();
+          return actionLogEntries;
+        } catch (error) {
+          console.warn("persist action log failed", error);
+          return compact;
+        } finally {
+          actionLogSaving = false;
         }
       }
 
@@ -2940,9 +3025,48 @@
         if (extra && Number.isFinite(extra.price) && extra.price > 0) {
           entry.price = extra.price;
         }
-        const next = [entry, ...readActionLog()].slice(0, ACTION_LOG_MAX);
-        writeActionLog(next);
+        void persistActionLog(
+          [entry, ...readActionLog()],
+          `Action log ${entry.kind}`,
+        );
+      }
+
+      async function loadSharedActionLog() {
+        let remote = [];
+        try {
+          const state = await WatchFavorites.loadActionLogRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.ACTION_LOG_PATH,
+          });
+          remote = state.entries || [];
+        } catch (error) {
+          console.warn("load action log failed", error);
+          remote = [];
+        }
+        const local = readLocalActionLogCache();
+        const merged = compactActionLogEntries(
+          WatchFavorites.mergeActionLogs(remote, local),
+        );
+        writeActionLogCache(merged);
+        // First-time migrate / catch-up: push merged if remote empty or shorter.
+        if (local.length && merged.length && merged.length !== remote.length) {
+          try {
+            const result = await WatchFavorites.patchActionLog({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.ACTION_LOG_PATH,
+              message: "Sync action log across devices",
+              mutate: (list) =>
+                compactActionLogEntries(
+                  WatchFavorites.mergeActionLogs(list, merged),
+                ),
+            });
+            writeActionLogCache(result.entries || merged);
+          } catch (error) {
+            console.warn("migrate action log failed", error);
+          }
+        }
         renderActionLogBody();
+        return actionLogEntries;
       }
 
       function formatActionLogTime(at) {
@@ -3326,12 +3450,14 @@
           lastPinPrices = notifyState.lastPinPrices || {};
           lastPinNotify = notifyState.lastPinNotify || null;
           lastPositionNotify = notifyState.lastPositionNotify || null;
+          await loadSharedActionLog();
           mergeCloudAutoPinEvents(notifyState.autoPinEvents || []);
         } catch (error) {
           console.warn(error);
           lastPinPrices = {};
           lastPinNotify = null;
           lastPositionNotify = null;
+          await loadSharedActionLog();
         }
         pruneHistory();
       }
@@ -3441,6 +3567,7 @@
           .sort((a, b) => Number(a.at) - Number(b.at));
         if (!fresh.length) return;
         let maxAt = seenAt;
+        const incoming = [];
         for (const event of fresh) {
           const at = Number(event.at) || 0;
           if (at > maxAt) maxAt = at;
@@ -3464,15 +3591,18 @@
             ],
           };
           if (!entry.symbols.length) continue;
-          const next = [entry, ...readActionLog()].slice(0, ACTION_LOG_MAX);
-          writeActionLog(next);
+          incoming.push(entry);
         }
         try {
           localStorage.setItem(AUTO_PIN_EVENTS_SEEN_KEY, String(maxAt));
         } catch (error) {
           /* ignore */
         }
-        renderActionLogBody();
+        if (!incoming.length) return;
+        void persistActionLog(
+          [...incoming, ...readActionLog()],
+          `Action log cloud ${incoming.length}`,
+        );
       }
 
       function parseNotifyStateData(data) {
@@ -6979,8 +7109,7 @@
         setActionLogOpen(false);
       });
       document.getElementById("actionLogClear").addEventListener("click", () => {
-        writeActionLog([]);
-        renderActionLogBody();
+        void persistActionLog([], "Clear action log", { replace: true });
       });
       document
         .getElementById("actionLogBody")

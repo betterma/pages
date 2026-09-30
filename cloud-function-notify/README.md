@@ -28,7 +28,7 @@
 **云端自动盯 / 回暖**：每轮在推送前读取 OBS `watch-data`，识别「观察池 ∩ 窗口上涨」边沿（相对 `risingZoneSnap`）：
 - **新人**（未盯）→ 写入 `watch-pins.json`（`source: auto-cloud`）
 - **回暖**（已盯）→ 按现价重钉、`source: auto-rewarm`，置顶 12h
-- **同币冷却**（默认 **2 小时**，`AUTO_PIN_EDGE_COOLDOWN_MS`）：距上次盯入过近则只更新快照、不改盯入价，避免窗口抖动反复重钉
+- **同币冷却**（默认 **12 小时**，`AUTO_PIN_EDGE_COOLDOWN_MS`）：距上次盯入过近则只更新快照、不改盯入价，避免窗口抖动反复重钉
 事件写入 `watch-notify-state.json` 的 `autoPinEvents`，网页打开即可看到。
 
 **若出现「一整套消息连发 4 遍」**：先检查函数是否挂了多个定时触发器；代码已加 90 秒去重锁。务必把超时调到 ≥60～120 秒（全量拼图 + 动量 K 线更耗时）。
