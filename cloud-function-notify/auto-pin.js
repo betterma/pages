@@ -28,6 +28,11 @@ const CONFIG = {
     String(process.env.PIN_EXPIRY_ENABLED || ''),
   ),
   AUTO_PIN_EVENTS_MAX: Number(process.env.AUTO_PIN_EVENTS_MAX || 40),
+  // Same-symbol edge cooldown: skip rewarm / re-pin while recent.
+  // Default 2h — kills window flicker without blocking real later rewarms.
+  EDGE_COOLDOWN_MS: Number(
+    process.env.AUTO_PIN_EDGE_COOLDOWN_MS || 2 * 60 * 60 * 1000,
+  ),
   ENABLED:
     String(process.env.AUTO_PIN_ENABLED === undefined ? '1' : process.env.AUTO_PIN_ENABLED) !==
     '0',
@@ -92,6 +97,24 @@ function hasPin(list, symbol) {
     .trim()
     .toUpperCase();
   return normalizePinList(list).some((item) => item.symbol === key);
+}
+
+function findPin(list, symbol) {
+  const key = String(symbol || '')
+    .trim()
+    .toUpperCase();
+  return normalizePinList(list).find((item) => item.symbol === key) || null;
+}
+
+/** True if this pin was written too recently to accept another edge update. */
+function isEdgeCooling(pin, now) {
+  if (!pin) return false;
+  const cooldown = Number(CONFIG.EDGE_COOLDOWN_MS) || 0;
+  if (cooldown <= 0) return false;
+  const at = Number(pin.pinnedAt) || 0;
+  if (at <= 0) return false;
+  const ts = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+  return ts - at < cooldown;
 }
 
 async function fetchWatchData() {
@@ -312,8 +335,16 @@ async function runAutoPin(options) {
 
   const prevSet = new Set(prevSnap);
   const edges = zone.filter((symbol) => !prevSet.has(symbol));
+  // Always advance zone snap (even when cooldown skips writes), so flicker
+  // does not keep re-firing the same edge every cycle.
   const newcomers = edges.filter((symbol) => !hasPin(pins, symbol));
-  const rewarmed = edges.filter((symbol) => hasPin(pins, symbol));
+  const rewarmCandidates = edges.filter((symbol) => hasPin(pins, symbol));
+  const rewarmSkipped = rewarmCandidates.filter((symbol) =>
+    isEdgeCooling(findPin(pins, symbol), now),
+  );
+  const rewarmed = rewarmCandidates.filter(
+    (symbol) => !isEdgeCooling(findPin(pins, symbol), now),
+  );
 
   let pinsChanged = false;
   if (newcomers.length || rewarmed.length) {
@@ -349,9 +380,16 @@ async function runAutoPin(options) {
       JSON.stringify({
         newcomers: newcomers.length,
         rewarmed: rewarmed.length,
+        skippedCooling: rewarmSkipped.length,
         newSymbols: newcomers,
         rewarmSymbols: rewarmed,
+        skippedSymbols: rewarmSkipped,
       }),
+    );
+  } else if (rewarmSkipped.length) {
+    console.log(
+      'auto-pin zone edges cooled',
+      JSON.stringify({ skippedCooling: rewarmSkipped.length, skippedSymbols: rewarmSkipped }),
     );
   }
 

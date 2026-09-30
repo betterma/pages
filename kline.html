@@ -860,6 +860,29 @@
       .action-log-body .notify-coin:hover {
         color: #2f8f6e;
       }
+      .action-log-body .notify-coin.is-pin-confirm {
+        background: rgba(47, 143, 110, 0.22);
+        color: #1f6b52;
+        border-bottom-color: transparent;
+        border-radius: 3px;
+        padding: 0 4px;
+        margin: 0 1px;
+        font-weight: 600;
+      }
+      .action-log-hint {
+        font-size: 11px;
+        font-weight: 500;
+        color: #7a8a84;
+        margin-left: 8px;
+      }
+      .action-log-hint em {
+        font-style: normal;
+        background: rgba(47, 143, 110, 0.22);
+        color: #1f6b52;
+        border-radius: 3px;
+        padding: 0 3px;
+        font-weight: 600;
+      }
       .action-log-empty {
         color: #9aa3a0;
         padding: 12px 4px;
@@ -1860,7 +1883,11 @@
 
     <div id="actionLogFloat" class="notify-float is-action-log" hidden>
       <div class="notify-float-head">
-        <strong>动作日志</strong>
+        <strong title="绿底币名：当前处于盯入后第2或第3个4h窗口（确认期）"
+          >动作日志<span class="action-log-hint"
+            >· <em>绿</em>=盯第2/3窗</span
+          ></strong
+        >
         <button
           type="button"
           class="notify-float-close"
@@ -2044,6 +2071,8 @@
       const PIN_SORT_KEY = "kline-pin-sort-v1";
       const AUTO_PIN_EVENTS_SEEN_KEY = "kline-auto-pin-events-seen-v1";
       const NEW_AUTO_PIN_MS = 12 * 60 * 60 * 1000;
+      // Same-symbol edge cooldown (page ↔ cloud). Skip rewarm / re-pin.
+      const AUTO_PIN_EDGE_COOLDOWN_MS = 2 * 60 * 60 * 1000;
       let pinSortMode = "pin";
       // 默认盯幅；不恢复「爬升」，避免一进页就后台算动量。
       let notifyPollTimer = null;
@@ -2933,6 +2962,28 @@
         return kind || "动";
       }
 
+      /**
+       * 0 = 被盯第一窗口 (含盯入时刻的对齐窗口),
+       * 1 = 第二窗口, 2 = 第三窗口, …
+       * Uses same 4h alignment as 窗口上涨.
+       */
+      function pinWindowIndexSincePin(pinnedAt, now) {
+        const duration = DURATION_MS[CONFIG.KLINE_INTERVAL];
+        const at = Number(pinnedAt) || 0;
+        const ts = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+        if (!duration || at <= 0 || ts < at) return -1;
+        const firstStart = getWindowStart(at, duration);
+        return Math.floor((ts - firstStart) / duration);
+      }
+
+      /** Still pinned, and now sits in 2nd or 3rd pin window. */
+      function isPinInConfirmWindows(symbol, now) {
+        const item = pinItemBySymbol(symbol);
+        if (!item) return false;
+        const idx = pinWindowIndexSincePin(item.pinnedAt, now);
+        return idx === 1 || idx === 2;
+      }
+
       function renderActionLogBody() {
         const body = document.getElementById("actionLogBody");
         if (!body) return;
@@ -2942,13 +2993,26 @@
             '<div class="action-log-empty">暂无 · 自动盯 / 回暖 / 买 / 卖</div>';
           return;
         }
+        const now = Date.now();
         body.innerHTML = list
           .map((entry) => {
             const kind = actionLogKindLabel(entry.kind);
             const names = (entry.symbols || [])
               .map((symbol) => {
-                const label = String(symbol).replace(/USDT$/i, "");
-                return `<a href="#card" class="notify-coin" data-jump="${escapeHtml(symbol)}">${escapeHtml(label)}</a>`;
+                const key = String(symbol || "")
+                  .trim()
+                  .toUpperCase();
+                const label = key.replace(/USDT$/i, "");
+                const confirm = isPinInConfirmWindows(key, now);
+                const cls = confirm
+                  ? "notify-coin is-pin-confirm"
+                  : "notify-coin";
+                const title = confirm
+                  ? "当前处于被盯第2或第3个4h窗口"
+                  : "";
+                return `<a href="#card" class="${cls}" data-jump="${escapeHtml(key)}"${
+                  title ? ` title="${title}"` : ""
+                }>${escapeHtml(label)}</a>`;
               })
               .join(" ");
             const price =
@@ -3058,10 +3122,21 @@
         openFloatPanel(name);
       }
 
+      function isPinEdgeCooling(item, now) {
+        if (!item) return false;
+        const cooldown = Number(AUTO_PIN_EDGE_COOLDOWN_MS) || 0;
+        if (cooldown <= 0) return false;
+        const at = Number(item.pinnedAt) || 0;
+        if (at <= 0) return false;
+        const ts = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+        return ts - at < cooldown;
+      }
+
       /**
        * Edge into 窗口上涨 zone (watch-pool ∩ window-up):
        * - not pinned → auto-pin (auto-rising)
-       * - already pinned → rewarm: re-pin at current price (auto-rewarm)
+       * - already pinned → rewarm at current price (auto-rewarm),
+       *   unless same-symbol edge cooldown is still active
        * First visit seeds baseline without mass action.
        * @returns {{ newcomers: string[], rewarmed: string[] }}
        */
@@ -3077,11 +3152,16 @@
         const prevSet = new Set(readRisingSnapshot());
         const pinned = pinSymbols();
         const blocked = blacklistSymbols();
+        const now = Date.now();
         const edges = current.filter(
           (symbol) => !prevSet.has(symbol) && !blocked.has(symbol),
         );
         const newcomers = edges.filter((symbol) => !pinned.has(symbol));
-        const rewarmed = edges.filter((symbol) => pinned.has(symbol));
+        const rewarmed = edges.filter((symbol) => {
+          if (!pinned.has(symbol)) return false;
+          return !isPinEdgeCooling(pinItemBySymbol(symbol), now);
+        });
+        // Advance snap even when cooldown skips writes (kill flicker re-fire).
         if (!newcomers.length && !rewarmed.length) {
           writeRisingSnapshot(current);
           return empty;
@@ -3093,6 +3173,7 @@
             message: `Auto-pin zone edge ${newcomers.length}+${rewarmed.length}`,
             mutate: (list) => {
               let next = list.slice();
+              const ts = Date.now();
               for (const symbol of newcomers) {
                 if (WatchFavorites.hasPin(next, symbol)) continue;
                 next = WatchFavorites.addPin(
@@ -3103,6 +3184,10 @@
                 );
               }
               for (const symbol of rewarmed) {
+                const existing = next.find(
+                  (item) => item && item.symbol === symbol,
+                );
+                if (isPinEdgeCooling(existing, ts)) continue;
                 next = WatchFavorites.addPin(
                   next,
                   symbol,
