@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>作曲台 · Composer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg0: #070b12;
+      --bg1: #0c1422;
+      --ink: #e8eef7;
+      --muted: #8b9bb0;
+      --line: rgba(120, 180, 255, 0.14);
+      --panel: rgba(14, 22, 36, 0.82);
+      --accent: #3de0c5;
+      --accent-warm: #f0a35e;
+      --note: #3de0c5;
+      --note-active: #f0a35e;
+      --playhead: #6ea8ff;
+      --key-white: #dce6f2;
+      --key-black: #1a2436;
+      --cell: rgba(120, 180, 255, 0.06);
+      --cell-bar: rgba(120, 180, 255, 0.12);
+      --cell-beat: rgba(120, 180, 255, 0.09);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      font-family: "Syne", "PingFang SC", sans-serif;
+      color: var(--ink);
+      background-color: var(--bg0);
+      background-image:
+        radial-gradient(ellipse 90% 55% at 15% -5%, rgba(61, 224, 197, 0.14), transparent 55%),
+        radial-gradient(ellipse 70% 45% at 95% 5%, rgba(110, 168, 255, 0.1), transparent 50%),
+        linear-gradient(180deg, var(--bg0) 0%, var(--bg1) 100%);
+      padding: 1.25rem 1rem 2rem;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image:
+        linear-gradient(rgba(120, 180, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(120, 180, 255, 0.035) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse 80% 70% at 50% 20%, #000 15%, transparent 75%);
+    }
+
+    .shell {
+      max-width: 1180px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.75rem 1.25rem;
+      margin-bottom: 1.1rem;
+    }
+
+    .brand {
+      font-size: clamp(1.7rem, 4vw, 2.35rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+
+    .brand em {
+      font-style: normal;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .back {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-decoration: none;
+      border: 1px solid var(--line);
+      padding: 0.4rem 0.7rem;
+      border-radius: 8px;
+      background: rgba(8, 14, 24, 0.6);
+      transition: color 0.2s, border-color 0.2s;
+    }
+
+    .back:hover {
+      color: var(--accent);
+      border-color: rgba(61, 224, 197, 0.45);
+    }
+
+    .lede {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 1.15rem;
+      line-height: 1.55;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+      align-items: center;
+      padding: 0.85rem 0.95rem;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      margin-bottom: 0.85rem;
+      backdrop-filter: blur(12px);
+    }
+
+    .toolbar .group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      align-items: center;
+    }
+
+    .toolbar .sep {
+      width: 1px;
+      height: 1.6rem;
+      background: var(--line);
+      margin: 0 0.15rem;
+    }
+
+    button, select, input[type="range"] {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.74rem;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      background: rgba(8, 14, 24, 0.65);
+      color: var(--ink);
+      padding: 0.45rem 0.75rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
+    }
+
+    .btn:hover {
+      border-color: rgba(61, 224, 197, 0.4);
+      color: var(--accent);
+    }
+
+    .btn:active { transform: translateY(1px); }
+
+    .btn.primary {
+      background: rgba(61, 224, 197, 0.14);
+      border-color: rgba(61, 224, 197, 0.45);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .btn.primary.playing {
+      background: rgba(240, 163, 94, 0.16);
+      border-color: rgba(240, 163, 94, 0.5);
+      color: var(--accent-warm);
+    }
+
+    .btn.danger:hover {
+      color: #ff8e8e;
+      border-color: rgba(255, 120, 120, 0.4);
+    }
+
+    .field {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--muted);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.72rem;
+    }
+
+    .field select {
+      background: rgba(8, 14, 24, 0.75);
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.4rem 0.55rem;
+      outline: none;
+    }
+
+    .field select:focus {
+      border-color: rgba(61, 224, 197, 0.5);
+    }
+
+    .field input[type="range"] {
+      width: 90px;
+      accent-color: var(--accent);
+    }
+
+    .field .val {
+      min-width: 2.4rem;
+      color: var(--ink);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0.85rem;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      backdrop-filter: blur(12px);
+    }
+
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.7rem 0.95rem;
+      border-bottom: 1px solid var(--line);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .panel-head span {
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--muted);
+    }
+
+    .roll-wrap {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      height: min(52vh, 460px);
+      overflow: auto;
+      position: relative;
+    }
+
+    .keys, .grid-scroll {
+      display: grid;
+      grid-template-rows: repeat(var(--rows), 22px);
+    }
+
+    .keys {
+      position: sticky;
+      left: 0;
+      z-index: 3;
+      background: #0a101a;
+      border-right: 1px solid var(--line);
+    }
+
+    .key {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 0.45rem;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.62rem;
+      border-bottom: 1px solid rgba(120, 180, 255, 0.06);
+      cursor: pointer;
+      user-select: none;
+      color: var(--muted);
+    }
+
+    .key.white { background: rgba(220, 230, 242, 0.06); }
+    .key.black { background: rgba(0, 0, 0, 0.35); color: #6a7a90; }
+    .key:hover { color: var(--accent); background: rgba(61, 224, 197, 0.1); }
+    .key.active { color: var(--accent-warm); background: rgba(240, 163, 94, 0.18); }
+
+    .grid-scroll {
+      position: relative;
+      min-width: calc(var(--cols) * 28px);
+      background:
+        repeating-linear-gradient(
+          to right,
+          transparent 0,
+          transparent calc(28px * 4 - 1px),
+          rgba(110, 168, 255, 0.18) calc(28px * 4 - 1px),
+          rgba(110, 168, 255, 0.18) calc(28px * 4)
+        );
+    }
+
+    .cell {
+      border-right: 1px solid rgba(120, 180, 255, 0.05);
+      border-bottom: 1px solid rgba(120, 180, 255, 0.05);
+      background: var(--cell);
+      cursor: crosshair;
+    }
+
+    .cell.beat { background: var(--cell-beat); }
+    .cell.bar { background: var(--cell-bar); }
+    .cell.on {
+      background: linear-gradient(180deg, rgba(61, 224, 197, 0.85), rgba(61, 224, 197, 0.55));
+      box-shadow: inset 0 0 0 1px rgba(61, 224, 197, 0.55);
+    }
+    .cell.on.playing {
+      background: linear-gradient(180deg, rgba(240, 163, 94, 0.95), rgba(240, 163, 94, 0.6));
+      box-shadow: inset 0 0 0 1px rgba(240, 163, 94, 0.7);
+    }
+
+    .playhead {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--playhead);
+      pointer-events: none;
+      z-index: 2;
+      opacity: 0;
+      transition: opacity 0.15s;
+      box-shadow: 0 0 10px rgba(110, 168, 255, 0.45);
+    }
+
+    .playhead.show { opacity: 1; }
+
+    .piano {
+      padding: 0.85rem 0.95rem 1rem;
+    }
+
+    .piano-keys {
+      display: flex;
+      height: 118px;
+      width: 100%;
+      max-width: 920px;
+      margin: 0 auto;
+      position: relative;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .pk {
+      flex: 1;
+      border: 1px solid rgba(8, 14, 24, 0.55);
+      border-radius: 0 0 6px 6px;
+      background: linear-gradient(180deg, #f4f7fb 0%, var(--key-white) 70%, #c8d2e0 100%);
+      color: #2a3548;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 0.4rem;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.62rem;
+      cursor: pointer;
+      position: relative;
+      z-index: 1;
+    }
+
+    .pk.black {
+      position: absolute;
+      width: calc(100% / 14 * 0.58);
+      height: 68%;
+      background: linear-gradient(180deg, #2a3548 0%, var(--key-black) 100%);
+      color: #9aabbf;
+      z-index: 2;
+      border-color: #0a101a;
+      top: 0;
+    }
+
+    .pk:hover { filter: brightness(1.05); }
+    .pk.active {
+      background: linear-gradient(180deg, #9ff0e2 0%, var(--accent) 100%);
+      color: #06231e;
+    }
+    .pk.black.active {
+      background: linear-gradient(180deg, #f7c48a 0%, var(--accent-warm) 100%);
+      color: #2a1805;
+    }
+
+    .hint-bar {
+      margin-top: 0.75rem;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .status {
+      margin-top: 0.75rem;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .status strong {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    @media (max-width: 720px) {
+      .toolbar .sep { display: none; }
+      .roll-wrap { grid-template-columns: 54px 1fr; height: 42vh; }
+      .key { font-size: 0.55rem; padding-right: 0.3rem; }
+      .piano-keys { height: 96px; }
+      .pk.black { height: 62%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <h1 class="brand">作曲 <em>台</em></h1>
+      <a class="back" href="index.html">← 返回入口</a>
+    </header>
+    <p class="lede">点选钢琴卷帘编写旋律，切换乐器试听；下方琴键可实时弹奏。旋律保存在本机浏览器。</p>
+
+    <div class="toolbar">
+      <div class="group">
+        <button class="btn primary" id="btnPlay" type="button">播放</button>
+        <button class="btn" id="btnStop" type="button">停止</button>
+      </div>
+      <div class="sep"></div>
+      <div class="group">
+        <label class="field">
+          乐器
+          <select id="instrument"></select>
+        </label>
+      </div>
+      <div class="sep"></div>
+      <div class="group">
+        <label class="field">
+          速度
+          <input id="bpm" type="range" min="60" max="180" value="120">
+          <span class="val" id="bpmVal">120</span>
+        </label>
+        <label class="field">
+          音量
+          <input id="volume" type="range" min="0" max="100" value="70">
+          <span class="val" id="volVal">70</span>
+        </label>
+      </div>
+      <div class="sep"></div>
+      <div class="group">
+        <button class="btn" id="btnDemo" type="button">示例曲</button>
+        <button class="btn" id="btnSave" type="button">保存</button>
+        <button class="btn" id="btnLoad" type="button">读取</button>
+        <button class="btn danger" id="btnClear" type="button">清空</button>
+      </div>
+    </div>
+
+    <div class="workspace">
+      <section class="panel">
+        <div class="panel-head">
+          钢琴卷帘
+          <span>单击落音 · 再点取消 · 拖拽可连画</span>
+        </div>
+        <div class="roll-wrap" id="rollWrap">
+          <div class="keys" id="keys"></div>
+          <div class="grid-scroll" id="grid" style="--cols: 32;">
+            <div class="playhead" id="playhead"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          实时琴键
+          <span>电脑键盘 A–L / W E T Y U 也可弹</span>
+        </div>
+        <div class="piano">
+          <div class="piano-keys" id="pianoKeys"></div>
+          <p class="hint-bar">当前乐器会同时用于卷帘播放与琴键试弹。建议先写一小段，再换乐器对比音色。</p>
+        </div>
+      </section>
+    </div>
+
+    <p class="status" id="status">就绪 · 音符 <strong>0</strong></p>
+  </div>
+
+  <script>
+    (() => {
+      const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+      const LOW_MIDI = 48;  // C3
+      const HIGH_MIDI = 72; // C5
+      const ROWS = HIGH_MIDI - LOW_MIDI + 1;
+      const COLS = 32;
+      const CELL_W = 28;
+
+      const INSTRUMENTS = {
+        piano: { label: "钢琴", color: "#3de0c5" },
+        strings: { label: "弦乐", color: "#6ea8ff" },
+        bass: { label: "贝斯", color: "#f0a35e" },
+        flute: { label: "长笛", color: "#7dd3fc" },
+        guitar: { label: "吉他", color: "#f0b90b" },
+        bell: { label: "钟琴", color: "#c4b5fd" },
+        organ: { label: "管风琴", color: "#fb7185" },
+        synth: { label: "合成器", color: "#34d399" },
+        brass: { label: "铜管", color: "#fbbf24" },
+        marimba: { label: "马林巴", color: "#a3e635" },
+      };
+
+      const KEYBOARD_MAP = {
+        KeyA: 60, KeyW: 61, KeyS: 62, KeyE: 63, KeyD: 64,
+        KeyF: 65, KeyT: 66, KeyG: 67, KeyY: 68, KeyH: 69,
+        KeyU: 70, KeyJ: 71, KeyK: 72, KeyO: 73, KeyL: 74,
+      };
+
+      let audioCtx = null;
+      let masterGain = null;
+      let notes = new Set(); // "col:midi"
+      let playing = false;
+      let playTimer = null;
+      let step = 0;
+      let painting = null; // true=add, false=remove
+      const activeVoices = new Map();
+
+      const el = {
+        instrument: document.getElementById("instrument"),
+        bpm: document.getElementById("bpm"),
+        bpmVal: document.getElementById("bpmVal"),
+        volume: document.getElementById("volume"),
+        volVal: document.getElementById("volVal"),
+        btnPlay: document.getElementById("btnPlay"),
+        btnStop: document.getElementById("btnStop"),
+        btnDemo: document.getElementById("btnDemo"),
+        btnSave: document.getElementById("btnSave"),
+        btnLoad: document.getElementById("btnLoad"),
+        btnClear: document.getElementById("btnClear"),
+        keys: document.getElementById("keys"),
+        grid: document.getElementById("grid"),
+        playhead: document.getElementById("playhead"),
+        pianoKeys: document.getElementById("pianoKeys"),
+        status: document.getElementById("status"),
+        rollWrap: document.getElementById("rollWrap"),
+      };
+
+      function midiToFreq(midi) {
+        return 440 * Math.pow(2, (midi - 69) / 12);
+      }
+
+      function midiLabel(midi) {
+        const name = NOTE_NAMES[midi % 12];
+        const oct = Math.floor(midi / 12) - 1;
+        return name + oct;
+      }
+
+      function isBlack(midi) {
+        return [1, 3, 6, 8, 10].includes(midi % 12);
+      }
+
+      function ensureAudio() {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          masterGain = audioCtx.createGain();
+          masterGain.gain.value = Number(el.volume.value) / 100 * 0.55;
+          masterGain.connect(audioCtx.destination);
+        }
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        return audioCtx;
+      }
+
+      function envGain(ctx, peak, a, d, s, r, dur) {
+        const g = ctx.createGain();
+        const t = ctx.currentTime;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(peak, t + a);
+        g.gain.exponentialRampToValueAtTime(Math.max(peak * s, 0.0001), t + a + d);
+        const releaseAt = t + Math.max(dur, a + d);
+        g.gain.setValueAtTime(Math.max(peak * s, 0.0001), releaseAt);
+        g.gain.exponentialRampToValueAtTime(0.0001, releaseAt + r);
+        return { gain: g, stopAt: releaseAt + r + 0.02 };
+      }
+
+      function connectVoice(nodes, out, stopAt) {
+        nodes.forEach((n) => {
+          if (n.start) n.start();
+          if (n.stop) n.stop(stopAt);
+        });
+      }
+
+      function playTone(midi, duration = 0.35, velocity = 0.85) {
+        const ctx = ensureAudio();
+        const freq = midiToFreq(midi);
+        const type = el.instrument.value;
+        const out = masterGain;
+        let stopAt = ctx.currentTime + duration + 0.5;
+
+        if (type === "piano") {
+          const partials = [1, 2, 3, 4.2];
+          const gains = [1, 0.45, 0.2, 0.08];
+          const env = envGain(ctx, 0.28 * velocity, 0.008, 0.18, 0.22, 0.55, duration);
+          partials.forEach((p, i) => {
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = "sine";
+            o.frequency.value = freq * p;
+            g.gain.value = gains[i];
+            o.connect(g);
+            g.connect(env.gain);
+            o.start();
+            o.stop(env.stopAt);
+          });
+          env.gain.connect(out);
+          stopAt = env.stopAt;
+        } else if (type === "strings") {
+          const env = envGain(ctx, 0.18 * velocity, 0.12, 0.2, 0.7, 0.35, duration);
+          const filter = ctx.createBiquadFilter();
+          filter.type = "lowpass";
+          filter.frequency.value = 1800;
+          filter.Q.value = 0.7;
+          [0, 4].forEach((cents) => {
+            const o = ctx.createOscillator();
+            o.type = "sawtooth";
+            o.frequency.value = freq;
+            o.detune.value = cents;
+            o.connect(filter);
+            o.start();
+            o.stop(env.stopAt);
+          });
+          filter.connect(env.gain);
+          env.gain.connect(out);
+          stopAt = env.stopAt;
+        } else if (type === "bass") {
+          const env = envGain(ctx, 0.4 * velocity, 0.01, 0.12, 0.45, 0.18, duration);
+          const filter = ctx.createBiquadFilter();
+          filter.type = "lowpass";
+          filter.frequency.setValueAtTime(900, ctx.currentTime);
+          filter.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.2);
+          const o = ctx.createOscillator();
+          o.type = "square";
+          o.frequency.value = freq / 2;
+          const o2 = ctx.createOscillator();
+          o2.type = "triangle";
+          o2.frequency.value = freq / 2;
+          const mix = ctx.createGain();
+          mix.gain.value = 0.7;
+          o.connect(filter);
+          o2.connect(mix);
+          mix.connect(filter);
+          filter.connect(env.gain);
+          env.gain.connect(out);
+          o.start(); o2.start();
+          o.stop(env.stopAt); o2.stop(env.stopAt);
+          stopAt = env.stopAt;
+        } else if (type === "flute") {
+          const env = envGain(ctx, 0.2 * velocity, 0.06, 0.1, 0.65, 0.2, duration);
+          const o = ctx.createOscillator();
+          o.type = "sine";
+          o.frequency.value = freq;
+          const vib = ctx.createOscillator();
+          const vibGain = ctx.createGain();
+          vib.frequency.value = 5.2;
+          vibGain.gain.value = 4;
+          vib.connect(vibGain);
+          vibGain.connect(o.frequency);
+          const noise = ctx.createBufferSource();
+          const nbuf = ctx.createBuffer(1, ctx.sampleRate * 0.2, ctx.sampleRate);
+          const data = nbuf.getChannelData(0);
+          for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+          noise.buffer = nbuf;
+          noise.loop = true;
+          const ng = ctx.createGain();
+          ng.gain.value = 0.015;
+          const nf = ctx.createBiquadFilter();
+          nf.type = "bandpass";
+          nf.frequency.value = freq * 2;
+          noise.connect(nf);
+          nf.connect(ng);
+          ng.connect(env.gain);
+          o.connect(env.gain);
+          env.gain.connect(out);
+          o.start(); vib.start(); noise.start();
+          o.stop(env.stopAt); vib.stop(env.stopAt); noise.stop(env.stopAt);
+          stopAt = env.stopAt;
+        } else if (type === "guitar") {
+          // Karplus-Strong-ish noise burst + delay
+          const env = envGain(ctx, 0.35 * velocity, 0.002, 0.05, 0.35, 0.6, duration);
+          const burst = ctx.createBufferSource();
+          const len = Math.max(1, Math.floor(ctx.sampleRate / freq));
+          const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+          const ch = buf.getChannelData(0);
+          for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
+          burst.buffer = buf;
+          const filter = ctx.createBiquadFilter();
+          filter.type = "lowpass";
+          filter.frequency.value = 2800;
+          burst.connect(filter);
+          filter.connect(env.gain);
+          env.gain.connect(out);
+          burst.start();
+          burst.stop(ctx.currentTime + 0.03);
+          const o = ctx.createOscillator();
+          o.type = "triangle";
+          o.frequency.value = freq;
+          const og = ctx.createGain();
+          og.gain.value = 0.2;
+          o.connect(og);
+          og.connect(env.gain);
+          o.start();
+          o.stop(env.stopAt);
+          stopAt = env.stopAt;
+        } else if (type === "bell") {
+          const env = envGain(ctx, 0.22 * velocity, 0.002, 0.3, 0.05, 1.2, duration * 0.4);
+          [1, 2.76, 5.4].forEach((p, i) => {
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = "sine";
+            o.frequency.value = freq * p;
+            g.gain.value = [1, 0.35, 0.15][i];
+            o.connect(g);
+            g.connect(env.gain);
+            o.start();
+            o.stop(env.stopAt);
+          });
+          env.gain.connect(out);
+          stopAt = env.stopAt;
+        } else if (type === "organ") {
+          const env = envGain(ctx, 0.16 * velocity, 0.02, 0.05, 0.9, 0.12, duration);
+          [1, 2, 3, 4, 6].forEach((p, i) => {
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = "sine";
+            o.frequency.value = freq * p;
+            g.gain.value = [0.9, 0.5, 0.35, 0.2, 0.12][i];
+            o.connect(g);
+            g.connect(env.gain);
+            o.start();
+            o.stop(env.stopAt);
+          });
+          env.gain.connect(out);
+          stopAt = env.stopAt;
+        } else if (type === "synth") {
+          const env = envGain(ctx, 0.22 * velocity, 0.02, 0.1, 0.5, 0.2, duration);
+          const filter = ctx.createBiquadFilter();
+          filter.type = "lowpass";
+          filter.Q.value = 8;
+          filter.frequency.setValueAtTime(400, ctx.currentTime);
+          filter.frequency.exponentialRampToValueAtTime(3200, ctx.currentTime + 0.08);
+          filter.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + duration);
+          [-7, 7].forEach((det) => {
+            const o = ctx.createOscillator();
+            o.type = "sawtooth";
+            o.frequency.value = freq;
+            o.detune.value = det;
+            o.connect(filter);
+            o.start();
+            o.stop(env.stopAt);
+          });
+          filter.connect(env.gain);
+          env.gain.connect(out);
+          stopAt = env.stopAt;
+        } else if (type === "brass") {
+          const env = envGain(ctx, 0.2 * velocity, 0.08, 0.12, 0.7, 0.18, duration);
+          const filter = ctx.createBiquadFilter();
+          filter.type = "lowpass";
+          filter.frequency.setValueAtTime(500, ctx.currentTime);
+          filter.frequency.linearRampToValueAtTime(2200, ctx.currentTime + 0.1);
+          const o = ctx.createOscillator();
+          o.type = "sawtooth";
+          o.frequency.value = freq;
+          o.connect(filter);
+          filter.connect(env.gain);
+          env.gain.connect(out);
+          o.start();
+          o.stop(env.stopAt);
+          stopAt = env.stopAt;
+        } else if (type === "marimba") {
+          const env = envGain(ctx, 0.3 * velocity, 0.002, 0.15, 0.08, 0.45, duration * 0.5);
+          [1, 3.95].forEach((p, i) => {
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = "sine";
+            o.frequency.value = freq * p;
+            g.gain.value = i === 0 ? 1 : 0.25;
+            o.connect(g);
+            g.connect(env.gain);
+            o.start();
+            o.stop(env.stopAt);
+          });
+          env.gain.connect(out);
+          stopAt = env.stopAt;
+        }
+
+        return stopAt;
+      }
+
+      function noteKey(col, midi) {
+        return col + ":" + midi;
+      }
+
+      function hasNote(col, midi) {
+        return notes.has(noteKey(col, midi));
+      }
+
+      function setNote(col, midi, on) {
+        const k = noteKey(col, midi);
+        if (on) notes.add(k);
+        else notes.delete(k);
+        const cell = el.grid.querySelector(`[data-col="${col}"][data-midi="${midi}"]`);
+        if (cell) cell.classList.toggle("on", on);
+        updateStatus();
+      }
+
+      function updateStatus() {
+        el.status.innerHTML = (playing ? "播放中" : "就绪") + " · 音符 <strong>" + notes.size + "</strong> · " +
+          INSTRUMENTS[el.instrument.value].label + " · " + el.bpm.value + " BPM";
+      }
+
+      function buildInstrumentSelect() {
+        el.instrument.innerHTML = Object.entries(INSTRUMENTS)
+          .map(([id, meta]) => `<option value="${id}">${meta.label}</option>`)
+          .join("");
+      }
+
+      function buildRoll() {
+        el.keys.style.setProperty("--rows", ROWS);
+        el.grid.style.setProperty("--rows", ROWS);
+        el.grid.style.setProperty("--cols", COLS);
+
+        const keyFrag = document.createDocumentFragment();
+        for (let midi = HIGH_MIDI; midi >= LOW_MIDI; midi--) {
+          const k = document.createElement("div");
+          k.className = "key " + (isBlack(midi) ? "black" : "white");
+          k.textContent = midiLabel(midi);
+          k.dataset.midi = midi;
+          k.addEventListener("mousedown", () => previewKey(midi, true));
+          k.addEventListener("mouseup", () => previewKey(midi, false));
+          k.addEventListener("mouseleave", () => previewKey(midi, false));
+          keyFrag.appendChild(k);
+        }
+        el.keys.appendChild(keyFrag);
+
+        const gridFrag = document.createDocumentFragment();
+        for (let midi = HIGH_MIDI; midi >= LOW_MIDI; midi--) {
+          for (let col = 0; col < COLS; col++) {
+            const cell = document.createElement("div");
+            cell.className = "cell";
+            if (col % 8 === 0) cell.classList.add("bar");
+            else if (col % 4 === 0) cell.classList.add("beat");
+            cell.dataset.col = col;
+            cell.dataset.midi = midi;
+            gridFrag.appendChild(cell);
+          }
+        }
+        el.grid.appendChild(gridFrag);
+        el.grid.appendChild(el.playhead);
+      }
+
+      function buildPiano() {
+        // Two octaves white keys C4-B5 visually simplified: C4 to C5 + C5 to next whites
+        const whites = [];
+        for (let midi = 60; midi <= 72; midi++) {
+          if (!isBlack(midi)) whites.push(midi);
+        }
+
+        whites.forEach((midi) => {
+          const key = document.createElement("div");
+          key.className = "pk";
+          key.dataset.midi = midi;
+          key.textContent = midiLabel(midi).replace(/[0-9]/g, "");
+          el.pianoKeys.appendChild(key);
+        });
+
+        // black keys positioned over whites
+        const blackMidi = [61, 63, 66, 68, 70]; // C# D# F# G# A# in octave 4; skip higher for layout simplicity
+        // Also include next octave blacks that fall in range if whites include them
+        const allBlack = [];
+        for (let midi = 60; midi <= 72; midi++) {
+          if (isBlack(midi)) allBlack.push(midi);
+        }
+
+        const whiteWidthPct = 100 / whites.length;
+        allBlack.forEach((midi) => {
+          // find preceding white index
+          let idx = whites.findIndex((w) => w > midi) - 1;
+          if (idx < 0) return;
+          const key = document.createElement("div");
+          key.className = "pk black";
+          key.dataset.midi = midi;
+          key.style.left = `calc(${(idx + 0.72) * whiteWidthPct}% )`;
+          key.style.width = `calc(${whiteWidthPct * 0.58}%)`;
+          el.pianoKeys.appendChild(key);
+        });
+
+        const press = (midi, on) => {
+          ensureAudio();
+          const nodes = el.pianoKeys.querySelectorAll(`[data-midi="${midi}"]`);
+          nodes.forEach((n) => n.classList.toggle("active", on));
+          if (on) {
+            if (!activeVoices.has("p" + midi)) {
+              playTone(midi, 0.9, 0.9);
+              activeVoices.set("p" + midi, true);
+            }
+          } else {
+            activeVoices.delete("p" + midi);
+          }
+        };
+
+        el.pianoKeys.addEventListener("mousedown", (e) => {
+          const t = e.target.closest(".pk");
+          if (!t) return;
+          press(Number(t.dataset.midi), true);
+        });
+        window.addEventListener("mouseup", () => {
+          el.pianoKeys.querySelectorAll(".pk.active").forEach((n) => {
+            n.classList.remove("active");
+            activeVoices.delete("p" + n.dataset.midi);
+          });
+        });
+
+        // touch
+        el.pianoKeys.addEventListener("touchstart", (e) => {
+          const t = e.target.closest(".pk");
+          if (!t) return;
+          e.preventDefault();
+          press(Number(t.dataset.midi), true);
+        }, { passive: false });
+        el.pianoKeys.addEventListener("touchend", () => {
+          el.pianoKeys.querySelectorAll(".pk.active").forEach((n) => n.classList.remove("active"));
+        });
+      }
+
+      function previewKey(midi, on) {
+        const keyEl = el.keys.querySelector(`[data-midi="${midi}"]`);
+        if (keyEl) keyEl.classList.toggle("active", on);
+        if (on) {
+          ensureAudio();
+          playTone(midi, 0.35, 0.8);
+        }
+      }
+
+      function bindGridPaint() {
+        const onDown = (e) => {
+          const cell = e.target.closest(".cell");
+          if (!cell) return;
+          e.preventDefault();
+          ensureAudio();
+          const col = Number(cell.dataset.col);
+          const midi = Number(cell.dataset.midi);
+          const next = !hasNote(col, midi);
+          painting = next;
+          setNote(col, midi, next);
+          if (next) playTone(midi, 0.25, 0.75);
+        };
+
+        const onMove = (e) => {
+          if (painting === null) return;
+          const cell = e.target.closest(".cell");
+          if (!cell) return;
+          const col = Number(cell.dataset.col);
+          const midi = Number(cell.dataset.midi);
+          if (hasNote(col, midi) !== painting) {
+            setNote(col, midi, painting);
+            if (painting) playTone(midi, 0.18, 0.55);
+          }
+        };
+
+        const end = () => { painting = null; };
+
+        el.grid.addEventListener("mousedown", onDown);
+        el.grid.addEventListener("mouseover", onMove);
+        window.addEventListener("mouseup", end);
+
+        el.grid.addEventListener("touchstart", (e) => {
+          const touch = e.touches[0];
+          const target = document.elementFromPoint(touch.clientX, touch.clientY);
+          const cell = target && target.closest(".cell");
+          if (!cell) return;
+          e.preventDefault();
+          ensureAudio();
+          const col = Number(cell.dataset.col);
+          const midi = Number(cell.dataset.midi);
+          const next = !hasNote(col, midi);
+          painting = next;
+          setNote(col, midi, next);
+          if (next) playTone(midi, 0.25, 0.75);
+        }, { passive: false });
+
+        el.grid.addEventListener("touchmove", (e) => {
+          if (painting === null) return;
+          const touch = e.touches[0];
+          const target = document.elementFromPoint(touch.clientX, touch.clientY);
+          const cell = target && target.closest(".cell");
+          if (!cell) return;
+          e.preventDefault();
+          const col = Number(cell.dataset.col);
+          const midi = Number(cell.dataset.midi);
+          if (hasNote(col, midi) !== painting) {
+            setNote(col, midi, painting);
+            if (painting) playTone(midi, 0.18, 0.55);
+          }
+        }, { passive: false });
+
+        window.addEventListener("touchend", end);
+      }
+
+      function stepDuration() {
+        const bpm = Number(el.bpm.value);
+        return (60 / bpm) / 4; // 16th notes
+      }
+
+      function clearPlayingCells() {
+        el.grid.querySelectorAll(".cell.playing").forEach((c) => c.classList.remove("playing"));
+      }
+
+      function tick() {
+        clearPlayingCells();
+        el.playhead.classList.add("show");
+        el.playhead.style.left = (step * CELL_W + CELL_W / 2 - 1) + "px";
+
+        const beatNotes = [];
+        notes.forEach((k) => {
+          const [c, m] = k.split(":").map(Number);
+          if (c === step) beatNotes.push(m);
+        });
+
+        beatNotes.forEach((midi) => {
+          const cell = el.grid.querySelector(`[data-col="${step}"][data-midi="${midi}"]`);
+          if (cell) cell.classList.add("playing");
+          playTone(midi, stepDuration() * 1.6, 0.85);
+        });
+
+        // auto-scroll playhead into view
+        const left = step * CELL_W;
+        const view = el.rollWrap;
+        if (left < view.scrollLeft + 40 || left > view.scrollLeft + view.clientWidth - 80) {
+          view.scrollLeft = Math.max(0, left - 80);
+        }
+
+        step = (step + 1) % COLS;
+        updateStatus();
+      }
+
+      function play() {
+        ensureAudio();
+        if (playing) {
+          stop(false);
+          return;
+        }
+        playing = true;
+        step = 0;
+        el.btnPlay.textContent = "暂停";
+        el.btnPlay.classList.add("playing");
+        tick();
+        playTimer = setInterval(tick, stepDuration() * 1000);
+        updateStatus();
+      }
+
+      function stop(reset = true) {
+        playing = false;
+        if (playTimer) {
+          clearInterval(playTimer);
+          playTimer = null;
+        }
+        el.btnPlay.textContent = "播放";
+        el.btnPlay.classList.remove("playing");
+        clearPlayingCells();
+        if (reset) {
+          step = 0;
+          el.playhead.classList.remove("show");
+          el.playhead.style.left = "0px";
+        }
+        updateStatus();
+      }
+
+      function clearAll() {
+        stop();
+        notes.clear();
+        el.grid.querySelectorAll(".cell.on").forEach((c) => c.classList.remove("on"));
+        updateStatus();
+      }
+
+      function loadDemo() {
+        clearAll();
+        // Simple C major motif across 2 bars
+        const pattern = [
+          [0, 60], [1, 64], [2, 67], [3, 72],
+          [4, 67], [5, 64], [6, 60], [7, 64],
+          [8, 62], [9, 65], [10, 69], [11, 74],
+          [12, 69], [13, 65], [14, 62], [15, 60],
+          [16, 60], [16, 67], [18, 64], [18, 72],
+          [20, 65], [20, 69], [22, 67], [22, 74],
+          [24, 60], [25, 64], [26, 67], [27, 64],
+          [28, 60], [29, 55], [30, 60], [31, 48],
+        ];
+        pattern.forEach(([col, midi]) => {
+          if (midi >= LOW_MIDI && midi <= HIGH_MIDI) setNote(col, midi, true);
+        });
+        el.instrument.value = "piano";
+        el.bpm.value = 112;
+        el.bpmVal.textContent = "112";
+        updateStatus();
+      }
+
+      function saveSong() {
+        const data = {
+          instrument: el.instrument.value,
+          bpm: Number(el.bpm.value),
+          volume: Number(el.volume.value),
+          notes: Array.from(notes),
+        };
+        localStorage.setItem("composer-song-v1", JSON.stringify(data));
+        el.status.innerHTML = "已保存到本机 · 音符 <strong>" + notes.size + "</strong>";
+      }
+
+      function loadSong() {
+        const raw = localStorage.getItem("composer-song-v1");
+        if (!raw) {
+          el.status.textContent = "没有找到已保存的旋律";
+          return;
+        }
+        try {
+          const data = JSON.parse(raw);
+          clearAll();
+          if (data.instrument && INSTRUMENTS[data.instrument]) el.instrument.value = data.instrument;
+          if (data.bpm) {
+            el.bpm.value = data.bpm;
+            el.bpmVal.textContent = String(data.bpm);
+          }
+          if (typeof data.volume === "number") {
+            el.volume.value = data.volume;
+            el.volVal.textContent = String(data.volume);
+            if (masterGain) masterGain.gain.value = data.volume / 100 * 0.55;
+          }
+          (data.notes || []).forEach((k) => {
+            const [col, midi] = k.split(":").map(Number);
+            if (col >= 0 && col < COLS && midi >= LOW_MIDI && midi <= HIGH_MIDI) {
+              setNote(col, midi, true);
+            }
+          });
+          updateStatus();
+        } catch {
+          el.status.textContent = "读取失败：数据损坏";
+        }
+      }
+
+      // Computer keyboard
+      const heldKeys = new Set();
+      window.addEventListener("keydown", (e) => {
+        if (e.repeat) return;
+        if (e.code === "Space") {
+          e.preventDefault();
+          play();
+          return;
+        }
+        const midi = KEYBOARD_MAP[e.code];
+        if (midi == null) return;
+        if (heldKeys.has(e.code)) return;
+        heldKeys.add(e.code);
+        ensureAudio();
+        playTone(midi, 0.85, 0.9);
+        const pk = el.pianoKeys.querySelector(`[data-midi="${midi}"]`);
+        if (pk) pk.classList.add("active");
+        const rk = el.keys.querySelector(`[data-midi="${midi}"]`);
+        if (rk) rk.classList.add("active");
+      });
+
+      window.addEventListener("keyup", (e) => {
+        heldKeys.delete(e.code);
+        const midi = KEYBOARD_MAP[e.code];
+        if (midi == null) return;
+        const pk = el.pianoKeys.querySelector(`[data-midi="${midi}"]`);
+        if (pk) pk.classList.remove("active");
+        const rk = el.keys.querySelector(`[data-midi="${midi}"]`);
+        if (rk) rk.classList.remove("active");
+      });
+
+      el.btnPlay.addEventListener("click", play);
+      el.btnStop.addEventListener("click", () => stop(true));
+      el.btnClear.addEventListener("click", clearAll);
+      el.btnDemo.addEventListener("click", loadDemo);
+      el.btnSave.addEventListener("click", saveSong);
+      el.btnLoad.addEventListener("click", loadSong);
+
+      el.bpm.addEventListener("input", () => {
+        el.bpmVal.textContent = el.bpm.value;
+        if (playing) {
+          clearInterval(playTimer);
+          playTimer = setInterval(tick, stepDuration() * 1000);
+        }
+        updateStatus();
+      });
+
+      el.volume.addEventListener("input", () => {
+        el.volVal.textContent = el.volume.value;
+        if (masterGain) masterGain.gain.value = Number(el.volume.value) / 100 * 0.55;
+      });
+
+      el.instrument.addEventListener("change", updateStatus);
+
+      buildInstrumentSelect();
+      buildRoll();
+      buildPiano();
+      bindGridPaint();
+      updateStatus();
+    })();
+  </script>
+</body>
+</html>
