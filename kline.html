@@ -1766,10 +1766,15 @@
             id="recentAutoSortSwitch"
             role="group"
             aria-label="置顶排序"
-            title="时间：按盯入先后；盯幅：按相对盯住价"
+            title="时间：点按切换早→新 / 新→早；盯幅：按相对盯住价"
           >
-            <button type="button" data-recent-sort="time" class="is-active">
-              时间
+            <button
+              type="button"
+              data-recent-sort="time"
+              class="is-active"
+              title="点击切换时间正序/倒序"
+            >
+              时间·早
             </button>
             <button type="button" data-recent-sort="pin">盯幅</button>
           </div>
@@ -2072,12 +2077,21 @@
       // Same-symbol edge cooldown (page ↔ cloud). Skip rewarm / re-pin.
       const AUTO_PIN_EDGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
       let pinSortMode = "pin";
-      const RECENT_AUTO_SORT_KEY = "kline-recent-auto-sort-v1";
-      let recentAutoSortMode = "time";
+      const RECENT_AUTO_SORT_KEY = "kline-recent-auto-sort-v2";
+      // time-asc = 更早在前；time-desc = 最新在前；pin = 盯幅
+      let recentAutoSortMode = "time-asc";
       try {
         const savedRecent = localStorage.getItem(RECENT_AUTO_SORT_KEY);
-        if (savedRecent === "pin" || savedRecent === "time") {
+        if (
+          savedRecent === "pin" ||
+          savedRecent === "time-asc" ||
+          savedRecent === "time-desc"
+        ) {
           recentAutoSortMode = savedRecent;
+        } else {
+          const legacy = localStorage.getItem("kline-recent-auto-sort-v1");
+          if (legacy === "pin") recentAutoSortMode = "pin";
+          else if (legacy === "time") recentAutoSortMode = "time-asc";
         }
       } catch (error) {
         /* ignore */
@@ -3484,10 +3498,13 @@
             const hasB = Number.isFinite(changeB);
             if (hasA && hasB && changeB !== changeA) return changeB - changeA;
             if (hasA !== hasB) return hasA ? -1 : 1;
-            return (b.pinnedAt || 0) - (a.pinnedAt || 0);
+            return (a.pinnedAt || 0) - (b.pinnedAt || 0);
           });
-        } else {
+        } else if (recentAutoSortMode === "time-desc") {
           list.sort((a, b) => (b.pinnedAt || 0) - (a.pinnedAt || 0));
+        } else {
+          // time-asc：更早盯入的在前
+          list.sort((a, b) => (a.pinnedAt || 0) - (b.pinnedAt || 0));
         }
         return list;
       }
@@ -3496,19 +3513,45 @@
         return item && String(item.source || "") === "auto-rewarm";
       }
 
+      function isRecentTimeSortMode(mode) {
+        return mode === "time-asc" || mode === "time-desc";
+      }
+
       function syncRecentAutoSortUi() {
         document
           .querySelectorAll("#recentAutoSortSwitch [data-recent-sort]")
           .forEach((btn) => {
-            btn.classList.toggle(
-              "is-active",
-              btn.dataset.recentSort === recentAutoSortMode,
-            );
+            const key = btn.dataset.recentSort;
+            if (key === "time") {
+              const timeMode = isRecentTimeSortMode(recentAutoSortMode);
+              btn.classList.toggle("is-active", timeMode);
+              btn.textContent =
+                recentAutoSortMode === "time-desc" ? "时间·新" : "时间·早";
+              btn.title =
+                recentAutoSortMode === "time-desc"
+                  ? "最新在前 · 再点切到更早在前"
+                  : "更早在前 · 再点切到最新在前";
+              return;
+            }
+            btn.classList.toggle("is-active", key === recentAutoSortMode);
           });
       }
 
       function setRecentAutoSortMode(mode) {
-        const next = mode === "pin" ? "pin" : "time";
+        let next = mode;
+        if (mode === "time") {
+          if (recentAutoSortMode === "time-asc") next = "time-desc";
+          else if (recentAutoSortMode === "time-desc") next = "time-asc";
+          else next = "time-asc";
+        } else if (mode === "pin") {
+          next = "pin";
+        } else if (
+          mode !== "time-asc" &&
+          mode !== "time-desc" &&
+          mode !== "pin"
+        ) {
+          next = "time-asc";
+        }
         if (next === recentAutoSortMode) return;
         recentAutoSortMode = next;
         try {
