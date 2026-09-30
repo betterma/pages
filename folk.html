@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>民谣台 · 校园木吉他</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+SC:wght@500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg0: #12100e;
+      --bg1: #1a1714;
+      --ink: #f3ebe1;
+      --muted: #a89884;
+      --line: rgba(232, 196, 150, 0.14);
+      --panel: rgba(28, 24, 20, 0.88);
+      --wood: #d4a574;
+      --wood-deep: #b8794a;
+      --leaf: #8fbc8f;
+      --dusk: #e8a87c;
+      --night: #7a9eb8;
+      --danger: #e89a9a;
+      --cell: rgba(232, 196, 150, 0.05);
+      --cell-on: #d4a574;
+      --play: #e8a87c;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      font-family: "Noto Serif SC", "Songti SC", serif;
+      color: var(--ink);
+      background-color: var(--bg0);
+      background-image:
+        radial-gradient(ellipse 80% 50% at 10% -10%, rgba(212, 165, 116, 0.18), transparent 55%),
+        radial-gradient(ellipse 60% 40% at 90% 0%, rgba(122, 158, 184, 0.12), transparent 50%),
+        radial-gradient(ellipse 50% 35% at 50% 100%, rgba(143, 188, 143, 0.08), transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      padding: 1.2rem 1rem 2.5rem;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.35;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.45'/%3E%3C/svg%3E");
+      mix-blend-mode: overlay;
+      z-index: 0;
+    }
+
+    .shell {
+      max-width: 1080px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.55rem;
+    }
+
+    .brand {
+      font-family: "Syne", sans-serif;
+      font-size: clamp(1.65rem, 4vw, 2.25rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+
+    .brand em {
+      font-style: normal;
+      color: var(--wood);
+      font-weight: 700;
+    }
+
+    .back {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-decoration: none;
+      border: 1px solid var(--line);
+      padding: 0.38rem 0.65rem;
+      border-radius: 8px;
+      background: rgba(18, 16, 14, 0.55);
+    }
+
+    .back:hover { color: var(--wood); border-color: rgba(212, 165, 116, 0.45); }
+
+    .lede {
+      font-size: 0.92rem;
+      color: var(--muted);
+      line-height: 1.65;
+      margin-bottom: 1.1rem;
+      max-width: 40rem;
+    }
+
+    .transport {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      padding: 0.8rem 0.9rem;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      margin-bottom: 0.85rem;
+    }
+
+    .sep {
+      width: 1px;
+      height: 1.5rem;
+      background: var(--line);
+      margin: 0 0.1rem;
+    }
+
+    button, select {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.72rem;
+    }
+
+    .btn {
+      border: 1px solid var(--line);
+      background: rgba(18, 16, 14, 0.7);
+      color: var(--ink);
+      padding: 0.45rem 0.8rem;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
+    }
+
+    .btn:hover { border-color: rgba(212, 165, 116, 0.45); color: var(--wood); }
+
+    .btn.primary {
+      background: rgba(212, 165, 116, 0.16);
+      border-color: rgba(212, 165, 116, 0.5);
+      color: var(--wood);
+      font-weight: 600;
+    }
+
+    .btn.primary.on {
+      background: rgba(232, 168, 124, 0.2);
+      border-color: rgba(232, 168, 124, 0.55);
+      color: var(--dusk);
+    }
+
+    .field {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: var(--muted);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.7rem;
+    }
+
+    .field select {
+      background: rgba(18, 16, 14, 0.8);
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.38rem 0.5rem;
+      outline: none;
+      max-width: 11rem;
+    }
+
+    .field input[type="range"] {
+      width: 88px;
+      accent-color: var(--wood);
+    }
+
+    .field .val { color: var(--ink); min-width: 2.2rem; }
+
+    .section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 0.95rem 1rem 1.05rem;
+      margin-bottom: 0.85rem;
+      animation: rise 0.45s ease both;
+    }
+
+    .section:nth-of-type(2) { animation-delay: 0.04s; }
+    .section:nth-of-type(3) { animation-delay: 0.08s; }
+    .section:nth-of-type(4) { animation-delay: 0.12s; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .section h2 {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.68rem;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--wood);
+      margin-bottom: 0.35rem;
+    }
+
+    .section .sub {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+      line-height: 1.5;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      background: rgba(18, 16, 14, 0.55);
+      color: var(--ink);
+      padding: 0.55rem 0.75rem;
+      border-radius: 10px;
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.15s, background 0.15s, transform 0.12s;
+      min-width: 7.5rem;
+    }
+
+    .chip:hover {
+      border-color: rgba(212, 165, 116, 0.4);
+      transform: translateY(-1px);
+    }
+
+    .chip.active {
+      border-color: rgba(212, 165, 116, 0.65);
+      background: rgba(212, 165, 116, 0.12);
+    }
+
+    .chip .t {
+      display: block;
+      font-size: 0.92rem;
+      font-weight: 600;
+      margin-bottom: 0.15rem;
+    }
+
+    .chip .d {
+      display: block;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+
+    .row2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.85rem;
+    }
+
+    @media (max-width: 720px) {
+      .row2 { grid-template-columns: 1fr; }
+      .sep { display: none; }
+    }
+
+    .track {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(18, 16, 14, 0.35);
+    }
+
+    .track-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: 0.65rem 0.8rem;
+      border-bottom: 1px solid var(--line);
+      background: rgba(212, 165, 116, 0.04);
+    }
+
+    .track-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 600;
+      font-size: 0.98rem;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--wood);
+    }
+
+    .dot.melody { background: var(--night); }
+    .dot.bass { background: var(--leaf); }
+    .dot.perc { background: var(--dusk); }
+
+    .track-body { padding: 0.75rem 0.8rem 0.9rem; }
+
+    .chord-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.45rem;
+    }
+
+    .chord-box {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.7rem 0.5rem;
+      text-align: center;
+      background: rgba(18, 16, 14, 0.45);
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .chord-box.now {
+      border-color: rgba(232, 168, 124, 0.7);
+      background: rgba(232, 168, 124, 0.14);
+    }
+
+    .chord-box .name {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--wood);
+      letter-spacing: 0.02em;
+    }
+
+    .chord-box .bar {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.62rem;
+      color: var(--muted);
+      margin-top: 0.2rem;
+    }
+
+    .pattern-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.7rem;
+    }
+
+    .mini {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      padding: 0.35rem 0.6rem;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 0.68rem;
+    }
+
+    .mini.active {
+      color: var(--wood);
+      border-color: rgba(212, 165, 116, 0.55);
+      background: rgba(212, 165, 116, 0.1);
+    }
+
+    .section-tabs {
+      display: flex;
+      gap: 0.4rem;
+      margin-bottom: 0.7rem;
+    }
+
+    .tab {
+      flex: 1;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      padding: 0.5rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: "Noto Serif SC", serif;
+      font-size: 0.88rem;
+    }
+
+    .tab.active {
+      color: var(--ink);
+      border-color: rgba(212, 165, 116, 0.5);
+      background: rgba(212, 165, 116, 0.1);
+    }
+
+    .melody-wrap { overflow-x: auto; }
+
+    .melody-grid {
+      display: grid;
+      grid-template-columns: 42px repeat(16, minmax(28px, 1fr));
+      gap: 2px;
+      min-width: 520px;
+    }
+
+    .m-label {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 0.35rem;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.62rem;
+      color: var(--muted);
+    }
+
+    .m-cell {
+      aspect-ratio: 1;
+      min-height: 28px;
+      border-radius: 5px;
+      background: var(--cell);
+      border: 1px solid transparent;
+      cursor: pointer;
+    }
+
+    .m-cell:hover { border-color: rgba(122, 158, 184, 0.45); }
+    .m-cell.on {
+      background: linear-gradient(180deg, #9bb8cc, var(--night));
+      box-shadow: inset 0 0 0 1px rgba(180, 210, 230, 0.35);
+    }
+    .m-cell.now-col { outline: 1px solid rgba(232, 168, 124, 0.35); }
+
+    .toggle {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      padding: 0.3rem 0.55rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.65rem;
+    }
+
+    .toggle.off { opacity: 0.45; text-decoration: line-through; }
+
+    .status {
+      margin-top: 0.35rem;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+
+    .status strong { color: var(--wood); font-weight: 500; }
+
+    .hint-line {
+      margin-top: 0.55rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <h1 class="brand">民谣 <em>台</em></h1>
+      <a class="back" href="index.html">← 返回入口</a>
+    </header>
+    <p class="lede">木吉他 · 温情校园民谣。先选一种心情，再点和弦与弹法；主旋律只给「不会难听」的音。贝斯和轻打击会跟着走。</p>
+
+    <div class="transport">
+      <button class="btn primary" id="btnPlay" type="button">播放</button>
+      <button class="btn" id="btnStop" type="button">停止</button>
+      <button class="btn" id="btnGen" type="button">一键成曲</button>
+      <div class="sep"></div>
+      <label class="field">速度 <input id="bpm" type="range" min="68" max="120" value="88"><span class="val" id="bpmVal">88</span></label>
+      <label class="field">音量 <input id="vol" type="range" min="0" max="100" value="72"><span class="val" id="volVal">72</span></label>
+      <div class="sep"></div>
+      <button class="btn" id="btnSave" type="button">保存</button>
+      <button class="btn" id="btnLoad" type="button">读取</button>
+    </div>
+
+    <section class="section">
+      <h2>心情</h2>
+      <p class="sub">点一种气氛，会自动带出调性、速度和和弦底子。</p>
+      <div class="chips" id="moods"></div>
+    </section>
+
+    <div class="row2">
+      <section class="section">
+        <h2>和弦故事</h2>
+        <p class="sub">用感觉选进行，不用记乐理。当前段落：<span id="sectionLabel">主歌</span></p>
+        <div class="section-tabs">
+          <button class="tab active" data-sec="verse" type="button">主歌</button>
+          <button class="tab" data-sec="chorus" type="button">副歌</button>
+        </div>
+        <div class="chips" id="progressions"></div>
+      </section>
+
+      <section class="section">
+        <h2>木吉他弹法</h2>
+        <p class="sub">同一串和弦，换弹法就像换了一种叙事语气。</p>
+        <div class="chips" id="patterns"></div>
+      </section>
+    </div>
+
+    <section class="section">
+      <h2>四轨编排</h2>
+      <p class="sub">静音某轨做对比；主旋律点格子即可，只开放五声音阶，不太会踩到怪音。</p>
+
+      <div class="track" style="margin-bottom:0.7rem;">
+        <div class="track-head">
+          <div class="track-title"><span class="dot"></span>木吉他</div>
+          <button class="toggle" data-mute="guitar" type="button">发声中</button>
+        </div>
+        <div class="track-body">
+          <div class="chord-strip" id="chordStrip"></div>
+          <p class="hint-line" id="guitarHint">分解和弦 · 像手指轻轻拨过琴弦</p>
+        </div>
+      </div>
+
+      <div class="track" style="margin-bottom:0.7rem;">
+        <div class="track-head">
+          <div class="track-title"><span class="dot melody"></span>主旋律</div>
+          <div style="display:flex;gap:0.35rem;align-items:center;">
+            <button class="btn" id="btnClearMel" type="button" style="padding:0.3rem 0.55rem;">清空旋律</button>
+            <button class="toggle" data-mute="melody" type="button">发声中</button>
+          </div>
+        </div>
+        <div class="track-body">
+          <div class="melody-wrap">
+            <div class="melody-grid" id="melodyGrid"></div>
+          </div>
+          <p class="hint-line">从低到高五颗音，横向是时间。点一下落音，再点取消。可叠在同一拍上做简单和声。</p>
+        </div>
+      </div>
+
+      <div class="row2">
+        <div class="track">
+          <div class="track-head">
+            <div class="track-title"><span class="dot bass"></span>贝斯</div>
+            <button class="toggle" data-mute="bass" type="button">发声中</button>
+          </div>
+          <div class="track-body">
+            <div class="pattern-row" id="bassModes"></div>
+            <p class="hint-line">默认跟着和弦根音走，像有人在旁边轻轻托着。</p>
+          </div>
+        </div>
+        <div class="track">
+          <div class="track-head">
+            <div class="track-title"><span class="dot perc"></span>轻打击</div>
+            <button class="toggle" data-mute="perc" type="button">发声中</button>
+          </div>
+          <div class="track-body">
+            <div class="pattern-row" id="percModes"></div>
+            <p class="hint-line">木箱鼓与沙锤，保持校园民谣的留白感。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <p class="status" id="status">就绪</p>
+  </div>
+
+  <script>
+    (() => {
+      /* ---------- Data ---------- */
+      const NOTE = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
+
+      const MOODS = [
+        { id: "dusk",   name: "操场黄昏", desc: "C 调 · 慢温", key: "C", bpm: 84, verse: "home", chorus: "lift", pattern: "finger", bass: "roots", perc: "soft" },
+        { id: "dorm",   name: "宿舍夜谈", desc: "Am · 低语", key: "Am", bpm: 76, verse: "night", chorus: "nightLift", pattern: "broken", bass: "roots", perc: "none" },
+        { id: "road",   name: "放学路上", desc: "G 调 · 踱步", key: "G", bpm: 96, verse: "walk", chorus: "walkUp", pattern: "strum", bass: "fifth", perc: "cajon" },
+        { id: "diary",  name: "轻快日记", desc: "C 调 · 轻跳", key: "C", bpm: 108, verse: "diary", chorus: "diaryUp", pattern: "strumSoft", bass: "roots", perc: "shaker" },
+        { id: "letter", name: "未寄出的信", desc: "D 调 · 思念", key: "D", bpm: 80, verse: "letter", chorus: "letterUp", pattern: "finger", bass: "long", perc: "soft" },
+      ];
+
+      const PROGRESSIONS = {
+        home:      { name: "有点想家", feel: "温暖收束", chords: ["C", "G", "Am", "F"] },
+        lift:      { name: "副歌抬高", feel: "往前走一点", chords: ["Am", "F", "C", "G"] },
+        night:     { name: "夜里低语", feel: "淡淡忧伤", chords: ["Am", "F", "C", "G"] },
+        nightLift: { name: "窗边亮起", feel: "轻声鼓励", chords: ["F", "G", "Am", "Am"] },
+        walk:      { name: "慢步回家", feel: "松弛叙事", chords: ["G", "Em", "C", "D"] },
+        walkUp:    { name: "转角遇见", feel: "明亮一点", chords: ["C", "D", "Em", "D"] },
+        diary:     { name: "随手记下", feel: "轻快干净", chords: ["C", "Am", "F", "G"] },
+        diaryUp:   { name: "翻页微笑", feel: "小雀跃", chords: ["F", "G", "Em", "Am"] },
+        letter:    { name: "信纸折痕", feel: "思念绵长", chords: ["D", "Bm", "G", "A"] },
+        letterUp:  { name: "落款之前", feel: "轻轻收住", chords: ["G", "A", "Bm", "A"] },
+      };
+
+      const PATTERNS = [
+        { id: "finger",    name: "指弹分解", desc: "像手指慢慢拨弦" },
+        { id: "broken",    name: "碎分解", desc: "更碎、更私密" },
+        { id: "strum",     name: "轻扫弦", desc: "赶路时的节奏" },
+        { id: "strumSoft", name: "轻闷扫", desc: "右手贴弦，更软" },
+        { id: "hold",      name: "长音托底", desc: "几乎静止的空气" },
+      ];
+
+      const BASS_MODES = [
+        { id: "roots", name: "根音跟随" },
+        { id: "fifth", name: "根音+五度" },
+        { id: "long",  name: "长音铺底" },
+        { id: "none",  name: "关闭" },
+      ];
+
+      const PERC_MODES = [
+        { id: "none",   name: "无打击" },
+        { id: "soft",   name: "轻木箱" },
+        { id: "cajon",  name: "木箱 2/4" },
+        { id: "shaker", name: "沙锤" },
+      ];
+
+      // Chord midi voicings (guitar-ish, mid register)
+      const VOICINGS = {
+        C:  [48, 52, 55, 60, 64],
+        D:  [50, 54, 57, 62],
+        E:  [40, 47, 52, 56, 59],
+        F:  [41, 48, 53, 57, 60],
+        G:  [43, 47, 50, 55, 59, 67],
+        A:  [45, 49, 52, 57, 61],
+        Am: [45, 52, 57, 60, 64],
+        Bm: [47, 54, 59, 62],
+        Dm: [50, 53, 57, 62],
+        Em: [40, 47, 52, 55, 59],
+        Fmaj7: [41, 48, 52, 57, 60],
+      };
+
+      const KEY_ROOT = { C: 0, G: 7, D: 2, Am: 9, Em: 4 };
+      // Pentatonic scale degrees relative to key root (major pent for major keys, minor pent for Am/Em)
+      const PENT_MAJOR = [0, 2, 4, 7, 9];
+      const PENT_MINOR = [0, 3, 5, 7, 10];
+
+      const STEPS = 16; // 16th-note slots across 4 bars (1 chord per bar)
+      const MEL_ROWS = 5;
+
+      /* ---------- State ---------- */
+      const state = {
+        mood: "dusk",
+        key: "C",
+        bpm: 88,
+        section: "verse",
+        verseProg: "home",
+        chorusProg: "lift",
+        pattern: "finger",
+        bass: "roots",
+        perc: "soft",
+        mute: { guitar: false, melody: false, bass: false, perc: false },
+        melody: { verse: new Set(), chorus: new Set() }, // "step:row"
+      };
+
+      let audioCtx = null;
+      let master = null;
+      let playing = false;
+      let timer = null;
+      let step = 0;
+
+      const el = {
+        moods: document.getElementById("moods"),
+        progressions: document.getElementById("progressions"),
+        patterns: document.getElementById("patterns"),
+        chordStrip: document.getElementById("chordStrip"),
+        guitarHint: document.getElementById("guitarHint"),
+        melodyGrid: document.getElementById("melodyGrid"),
+        bassModes: document.getElementById("bassModes"),
+        percModes: document.getElementById("percModes"),
+        sectionLabel: document.getElementById("sectionLabel"),
+        btnPlay: document.getElementById("btnPlay"),
+        btnStop: document.getElementById("btnStop"),
+        btnGen: document.getElementById("btnGen"),
+        btnSave: document.getElementById("btnSave"),
+        btnLoad: document.getElementById("btnLoad"),
+        btnClearMel: document.getElementById("btnClearMel"),
+        bpm: document.getElementById("bpm"),
+        bpmVal: document.getElementById("bpmVal"),
+        vol: document.getElementById("vol"),
+        volVal: document.getElementById("volVal"),
+        status: document.getElementById("status"),
+      };
+
+      /* ---------- Audio helpers ---------- */
+      function ensureAudio() {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          master = audioCtx.createGain();
+          master.gain.value = Number(el.vol.value) / 100 * 0.5;
+          const comp = audioCtx.createDynamicsCompressor();
+          comp.threshold.value = -18;
+          comp.knee.value = 18;
+          comp.ratio.value = 3;
+          comp.attack.value = 0.01;
+          comp.release.value = 0.2;
+          master.connect(comp);
+          comp.connect(audioCtx.destination);
+        }
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        return audioCtx;
+      }
+
+      function freq(midi) {
+        return 440 * Math.pow(2, (midi - 69) / 12);
+      }
+
+      function env(peak, a, d, s, r, dur) {
+        const g = audioCtx.createGain();
+        const t = audioCtx.currentTime;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(peak, t + a);
+        g.gain.exponentialRampToValueAtTime(Math.max(peak * s, 0.0001), t + a + d);
+        const rel = t + Math.max(dur, a + d);
+        g.gain.setValueAtTime(Math.max(peak * s, 0.0001), rel);
+        g.gain.exponentialRampToValueAtTime(0.0001, rel + r);
+        return { node: g, stop: rel + r + 0.02 };
+      }
+
+      function pluckString(midi, when, vel = 0.3, soft = 1.4) {
+        const ctx = audioCtx;
+        const f = freq(midi);
+        const dur = decay;
+        // Warm acoustic-ish: triangle + sine + short noise burst through lowpass
+        const out = env(vel, 0.004, 0.12, 0.25, 0.9, dur * 0.35);
+        out.node.connect(master);
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.value = 2200 + vel * 800;
+        filter.Q.value = 0.8;
+        filter.connect(out.node);
+
+        const o1 = ctx.createOscillator();
+        o1.type = "triangle";
+        o1.frequency.setValueAtTime(f, when);
+        const g1 = ctx.createGain();
+        g1.gain.value = 0.7;
+        o1.connect(g1);
+        g1.connect(filter);
+
+        const o2 = ctx.createOscillator();
+        o2.type = "sine";
+        o2.frequency.setValueAtTime(f * 2.002, when);
+        const g2 = ctx.createGain();
+        g2.gain.value = 0.18;
+        o2.connect(g2);
+        g2.connect(filter);
+
+        // soft pick noise
+        const nlen = Math.floor(ctx.sampleRate * 0.03);
+        const buf = ctx.createBuffer(1, nlen, ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < nlen; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / nlen);
+        const noise = ctx.createBufferSource();
+        noise.buffer = buf;
+        const ng = ctx.createGain();
+        ng.gain.value = 0.08 * vel;
+        const nf = ctx.createBiquadFilter();
+        nf.type = "bandpass";
+        nf.frequency.value = 1200;
+        noise.connect(nf);
+        nf.connect(ng);
+        ng.connect(filter);
+
+        o1.start(when); o2.start(when); noise.start(when);
+        o1.stop(out.stop); o2.stop(out.stop); noise.stop(when + 0.04);
+      }
+
+      function playGuitarChord(chordName, pattern, beatInBar, barDur) {
+        if (state.mute.guitar) return;
+        const notes = VOICINGS[chordName] || VOICINGS.C;
+        const t0 = audioCtx.currentTime;
+        const soft = pattern === "strumSoft" || pattern === "hold";
+
+        if (pattern === "hold") {
+          if (beatInBar === 0) {
+            notes.forEach((m, i) => pluckString(m, t0 + i * 0.012, soft ? 0.18 : 0.22, barDur * 0.95));
+          }
+          return;
+        }
+
+        if (pattern === "strum" || pattern === "strumSoft") {
+          // down on 0,2 ; up on 1,3 lightly
+          const down = beatInBar % 2 === 0;
+          const seq = down ? notes : notes.slice().reverse().slice(0, Math.max(3, notes.length - 1));
+          const vel = soft ? (down ? 0.22 : 0.12) : (down ? 0.28 : 0.14);
+          seq.forEach((m, i) => pluckString(m, t0 + i * (down ? 0.014 : 0.01), vel, 0.55));
+          return;
+        }
+
+        if (pattern === "broken") {
+          // more notes per beat
+          const order = [0, 2, 1, 3, 2, 4, 1, 3].map((i) => notes[i % notes.length]);
+          const idx = (beatInBar * 2) % order.length;
+          pluckString(order[idx], t0, 0.24, 0.7);
+          pluckString(order[(idx + 1) % order.length], t0 + barDur / 8, 0.18, 0.6);
+          return;
+        }
+
+        // finger arpeggio: one chord tone per beat, cascade
+        const tone = notes[beatInBar % notes.length];
+        pluckString(tone, t0, 0.26, 0.85);
+        if (beatInBar === 0) pluckString(notes[0], t0 + 0.02, 0.12, 0.9);
+      }
+
+      function playBass(chordName, mode, beatInBar, barDur) {
+        if (state.mute.bass || mode === "none") return;
+        const notes = VOICINGS[chordName] || VOICINGS.C;
+        const root = notes[0];
+        const fifth = root + 7;
+        const t0 = audioCtx.currentTime;
+
+        const tone = (midi, vel, dur) => {
+          const o = audioCtx.createOscillator();
+          o.type = "sine";
+          o.frequency.value = freq(midi);
+          const o2 = audioCtx.createOscillator();
+          o2.type = "triangle";
+          o2.frequency.value = freq(midi);
+          const mix = env(vel, 0.01, 0.08, 0.5, 0.25, dur);
+          const g2 = audioCtx.createGain();
+          g2.gain.value = 0.35;
+          o.connect(mix.node);
+          o2.connect(g2);
+          g2.connect(mix.node);
+          mix.node.connect(master);
+          o.start(t0); o2.start(t0);
+          o.stop(mix.stop); o2.stop(mix.stop);
+        };
+
+        if (mode === "long") {
+          if (beatInBar === 0) tone(root, 0.28, barDur * 0.9);
+          return;
+        }
+        if (mode === "fifth") {
+          if (beatInBar === 0) tone(root, 0.3, barDur * 0.45);
+          if (beatInBar === 2) tone(fifth, 0.22, barDur * 0.4);
+          return;
+        }
+        // roots
+        if (beatInBar === 0 || beatInBar === 2) tone(root, beatInBar === 0 ? 0.3 : 0.2, barDur * 0.4);
+      }
+
+      function playMelodyNote(midi) {
+        if (state.mute.melody) return;
+        const t0 = audioCtx.currentTime;
+        const out = env(0.2, 0.02, 0.1, 0.45, 0.25, 0.35);
+        out.node.connect(master);
+        const o = audioCtx.createOscillator();
+        o.type = "sine";
+        o.frequency.value = freq(midi);
+        const o2 = audioCtx.createOscillator();
+        o2.type = "triangle";
+        o2.frequency.value = freq(midi);
+        const g2 = audioCtx.createGain();
+        g2.gain.value = 0.25;
+        o.connect(out.node);
+        o2.connect(g2);
+        g2.connect(out.node);
+        o.start(t0); o2.start(t0);
+        o.stop(out.stop); o2.stop(out.stop);
+      }
+
+      function playPerc(mode, beatInBar, subStep) {
+        if (state.mute.perc || mode === "none") return;
+        const t0 = audioCtx.currentTime;
+
+        const thud = (vel) => {
+          const o = audioCtx.createOscillator();
+          o.type = "sine";
+          o.frequency.setValueAtTime(90, t0);
+          o.frequency.exponentialRampToValueAtTime(45, t0 + 0.08);
+          const g = env(vel, 0.001, 0.05, 0.2, 0.12, 0.1);
+          o.connect(g.node);
+          g.node.connect(master);
+          o.start(t0);
+          o.stop(g.stop);
+        };
+
+        const shaker = (vel) => {
+          const len = Math.floor(audioCtx.sampleRate * 0.05);
+          const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+          const d = buf.getChannelData(0);
+          for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+          const src = audioCtx.createBufferSource();
+          src.buffer = buf;
+          const bp = audioCtx.createBiquadFilter();
+          bp.type = "bandpass";
+          bp.frequency.value = 4500;
+          const g = env(vel, 0.001, 0.02, 0.1, 0.04, 0.04);
+          src.connect(bp);
+          bp.connect(g.node);
+          g.node.connect(master);
+          src.start(t0);
+        };
+
+        if (mode === "soft" && (beatInBar === 1 || beatInBar === 3) && subStep === 0) thud(0.22);
+        if (mode === "cajon") {
+          if (beatInBar === 1 && subStep === 0) thud(0.32);
+          if (beatInBar === 3 && subStep === 0) thud(0.28);
+          if (beatInBar === 3 && subStep === 2) thud(0.12);
+        }
+        if (mode === "shaker" && subStep % 2 === 0) shaker(beatInBar % 2 === 0 ? 0.08 : 0.12);
+      }
+
+      /* ---------- Music theory helpers ---------- */
+      function pentMidiList() {
+        const rootPc = KEY_ROOT[state.key] ?? 0;
+        const minor = state.key === "Am" || state.key === "Em";
+        const ints = minor ? PENT_MINOR : PENT_MAJOR;
+        // mid register around C4-A4 area, shifted by key
+        const base = 60 + rootPc; // could be > 71; normalize into pleasant range
+        return ints.map((iv, rowFromBottom) => {
+          let m = base + iv;
+          while (m > 76) m -= 12;
+          while (m < 57) m += 12;
+          return m;
+        }).sort((a, b) => a - b); // low to high; row 0 = highest in UI
+      }
+
+      function currentProgId() {
+        return state.section === "verse" ? state.verseProg : state.chorusProg;
+      }
+
+      function currentChords() {
+        return PROGRESSIONS[currentProgId()].chords;
+      }
+
+      function chordAtStep(s) {
+        const chords = currentChords();
+        const bar = Math.floor(s / 4) % 4; // 4 steps per beat? Wait: STEPS=16 for 4 bars, 4 steps per bar = 1 beat = quarter? 
+        // Define: 16 steps = 4 bars × 4 beats. Each step is one beat.
+        // Actually for melody fineness, 16 steps = 4 bars × 4 beats (quarter notes).
+        return chords[Math.floor(s / 4) % 4];
+      }
+
+      function stepDur() {
+        // each of 16 steps = one beat (quarter note)
+        return 60 / state.bpm;
+      }
+
+      /* ---------- UI builders ---------- */
+      function setStatus(extra) {
+        const prog = PROGRESSIONS[currentProgId()];
+        const mel = state.melody[state.section].size;
+        el.status.innerHTML = (extra ? extra + " · " : "") +
+          (playing ? "播放中" : "就绪") +
+          " · <strong>" + state.key + "</strong> · " +
+          state.bpm + " BPM · " +
+          (state.section === "verse" ? "主歌" : "副歌") + "「" + prog.name + "」 · 旋律音 " + mel;
+      }
+
+      function renderMoods() {
+        el.moods.innerHTML = MOODS.map((m) =>
+          `<button class="chip${state.mood === m.id ? " active" : ""}" data-mood="${m.id}" type="button">
+            <span class="t">${m.name}</span><span class="d">${m.desc}</span>
+          </button>`
+        ).join("");
+      }
+
+      function renderProgressions() {
+        const allowed = state.section === "verse"
+          ? MOODS.find((m) => m.id === state.mood)?.verse
+          : MOODS.find((m) => m.id === state.mood)?.chorus;
+
+        // Show progressions that match current key's chord palette + a few swaps
+        const keyChords = {
+          C: ["home", "lift", "diary", "diaryUp"],
+          Am: ["night", "nightLift", "lift"],
+          G: ["walk", "walkUp"],
+          D: ["letter", "letterUp"],
+        };
+        const list = keyChords[state.key] || Object.keys(PROGRESSIONS);
+        const selected = currentProgId();
+
+        el.progressions.innerHTML = list.map((id) => {
+          const p = PROGRESSIONS[id];
+          return `<button class="chip${selected === id ? " active" : ""}" data-prog="${id}" type="button">
+            <span class="t">${p.name}</span><span class="d">${p.feel} · ${p.chords.join("–")}</span>
+          </button>`;
+        }).join("");
+      }
+
+      function renderPatterns() {
+        el.patterns.innerHTML = PATTERNS.map((p) =>
+          `<button class="chip${state.pattern === p.id ? " active" : ""}" data-pat="${p.id}" type="button">
+            <span class="t">${p.name}</span><span class="d">${p.desc}</span>
+          </button>`
+        ).join("");
+        const meta = PATTERNS.find((p) => p.id === state.pattern);
+        el.guitarHint.textContent = meta ? meta.name + " · " + meta.desc : "";
+      }
+
+      function renderChordStrip() {
+        const chords = currentChords();
+        const bar = playing ? Math.floor(step / 4) % 4 : -1;
+        el.chordStrip.innerHTML = chords.map((c, i) =>
+          `<div class="chord-box${bar === i ? " now" : ""}">
+            <div class="name">${c}</div>
+            <div class="bar">第 ${i + 1} 小节</div>
+          </div>`
+        ).join("");
+      }
+
+      function renderBassPerc() {
+        el.bassModes.innerHTML = BASS_MODES.map((m) =>
+          `<button class="mini${state.bass === m.id ? " active" : ""}" data-bass="${m.id}" type="button">${m.name}</button>`
+        ).join("");
+        el.percModes.innerHTML = PERC_MODES.map((m) =>
+          `<button class="mini${state.perc === m.id ? " active" : ""}" data-perc="${m.id}" type="button">${m.name}</button>`
+        ).join("");
+      }
+
+      function melKey(stepIdx, row) {
+        return stepIdx + ":" + row;
+      }
+
+      function renderMelody() {
+        const pent = pentMidiList(); // low→high
+        const labels = ["高", "↑", "中", "↓", "低"];
+        // UI rows top=high: reverse pent for display
+        const rows = [4, 3, 2, 1, 0]; // row index into pent (0=low)
+        const set = state.melody[state.section];
+        let html = `<div class="m-label"></div>`;
+        for (let s = 0; s < STEPS; s++) {
+          html += `<div class="m-label" style="justify-content:center;font-size:0.55rem;opacity:${s % 4 === 0 ? 1 : 0.35}">${s % 4 === 0 ? (s / 4 + 1) : "·"}</div>`;
+        }
+        rows.forEach((rowIdx, visualRow) => {
+          html += `<div class="m-label">${labels[visualRow]}</div>`;
+          for (let s = 0; s < STEPS; s++) {
+            const on = set.has(melKey(s, rowIdx));
+            const now = playing && step === s;
+            html += `<button class="m-cell${on ? " on" : ""}${now ? " now-col" : ""}" data-s="${s}" data-r="${rowIdx}" type="button" aria-label="melody"></button>`;
+          }
+        });
+        el.melodyGrid.innerHTML = html;
+      }
+
+      function applyMood(id) {
+        const m = MOODS.find((x) => x.id === id);
+        if (!m) return;
+        state.mood = m.id;
+        state.key = m.key;
+        state.bpm = m.bpm;
+        state.verseProg = m.verse;
+        state.chorusProg = m.chorus;
+        state.pattern = m.pattern;
+        state.bass = m.bass;
+        state.perc = m.perc;
+        el.bpm.value = m.bpm;
+        el.bpmVal.textContent = String(m.bpm);
+        refreshAll();
+      }
+
+      function refreshAll() {
+        el.sectionLabel.textContent = state.section === "verse" ? "主歌" : "副歌";
+        document.querySelectorAll(".tab").forEach((t) => {
+          t.classList.toggle("active", t.dataset.sec === state.section);
+        });
+        renderMoods();
+        renderProgressions();
+        renderPatterns();
+        renderChordStrip();
+        renderBassPerc();
+        renderMelody();
+        setStatus();
+      }
+
+      /* ---------- Generate beginner melody ---------- */
+      function generateSong() {
+        // Light motif: chord tones approximated by pent degrees, call-response
+        const sections = ["verse", "chorus"];
+        sections.forEach((sec) => {
+          const set = new Set();
+          const dens = sec === "chorus" ? 0.55 : 0.4;
+          for (let s = 0; s < STEPS; s++) {
+            if (Math.random() > dens) continue;
+            // prefer 0,2,4 (low mid high pent) and land on beat
+            if (s % 2 === 1 && Math.random() < 0.5) continue;
+            let row = [0, 2, 4, 3, 1][Math.floor(Math.random() * 5)];
+            if (s % 4 === 0) row = sec === "chorus" ? 4 : 2;
+            if (s === STEPS - 1) row = 0; // resolve low
+            set.add(melKey(s, row));
+          }
+          // ensure a few notes exist
+          if (set.size < 4) {
+            [0, 4, 8, 12].forEach((s, i) => set.add(melKey(s, [2, 4, 3, 0][i])));
+          }
+          state.melody[sec] = set;
+        });
+        setStatus("已生成温情小调");
+        renderMelody();
+      }
+
+      /* ---------- Transport ---------- */
+      function tick() {
+        ensureAudio();
+        const chords = currentChords();
+        const bar = Math.floor(step / 4) % 4;
+        const beatInBar = step % 4;
+        const chord = chords[bar];
+        const barDur = stepDur() * 4;
+
+        playGuitarChord(chord, state.pattern, beatInBar, barDur);
+        playBass(chord, state.bass, beatInBar, barDur);
+        playPerc(state.perc, beatInBar, 0);
+
+        // melody at this step
+        const pent = pentMidiList();
+        const set = state.melody[state.section];
+        for (let r = 0; r < MEL_ROWS; r++) {
+          if (set.has(melKey(step, r))) playMelodyNote(pent[r]);
+        }
+
+        renderChordStrip();
+        // highlight melody column without full rebuild cost — soft rebuild ok at 88bpm
+        renderMelody();
+
+        step += 1;
+        if (step >= STEPS) {
+          // auto switch verse -> chorus -> verse
+          step = 0;
+          state.section = state.section === "verse" ? "chorus" : "verse";
+          el.sectionLabel.textContent = state.section === "verse" ? "主歌" : "副歌";
+          document.querySelectorAll(".tab").forEach((t) => {
+            t.classList.toggle("active", t.dataset.sec === state.section);
+          });
+          renderProgressions();
+          renderChordStrip();
+          renderMelody();
+        }
+        setStatus();
+      }
+
+      function play() {
+        ensureAudio();
+        if (playing) {
+          stop(false);
+          return;
+        }
+        playing = true;
+        step = 0;
+        el.btnPlay.textContent = "暂停";
+        el.btnPlay.classList.add("on");
+        tick();
+        timer = setInterval(tick, stepDur() * 1000);
+        setStatus();
+      }
+
+      function stop(resetSection) {
+        playing = false;
+        if (timer) { clearInterval(timer); timer = null; }
+        el.btnPlay.textContent = "播放";
+        el.btnPlay.classList.remove("on");
+        step = 0;
+        if (resetSection !== false) {
+          /* keep section */
+        }
+        renderChordStrip();
+        renderMelody();
+        setStatus();
+      }
+
+      /* ---------- Save / Load ---------- */
+      function save() {
+        const data = {
+          ...state,
+          melody: {
+            verse: Array.from(state.melody.verse),
+            chorus: Array.from(state.melody.chorus),
+          },
+        };
+        localStorage.setItem("folk-song-v1", JSON.stringify(data));
+        setStatus("已保存到本机");
+      }
+
+      function load() {
+        const raw = localStorage.getItem("folk-song-v1");
+        if (!raw) { setStatus("没有已存歌曲"); return; }
+        try {
+          const data = JSON.parse(raw);
+          Object.assign(state, data, {
+            melody: {
+              verse: new Set(data.melody?.verse || []),
+              chorus: new Set(data.melody?.chorus || []),
+            },
+            mute: data.mute || state.mute,
+          });
+          el.bpm.value = state.bpm;
+          el.bpmVal.textContent = String(state.bpm);
+          document.querySelectorAll("[data-mute]").forEach((btn) => {
+            const k = btn.dataset.mute;
+            btn.classList.toggle("off", state.mute[k]);
+            btn.textContent = state.mute[k] ? "已静音" : "发声中";
+          });
+          refreshAll();
+          setStatus("已读取");
+        } catch {
+          setStatus("读取失败");
+        }
+      }
+
+      /* ---------- Events ---------- */
+      el.moods.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-mood]");
+        if (b) applyMood(b.dataset.mood);
+      });
+
+      el.progressions.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-prog]");
+        if (!b) return;
+        if (state.section === "verse") state.verseProg = b.dataset.prog;
+        else state.chorusProg = b.dataset.prog;
+        renderProgressions();
+        renderChordStrip();
+        setStatus();
+      });
+
+      el.patterns.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-pat]");
+        if (!b) return;
+        state.pattern = b.dataset.pat;
+        renderPatterns();
+        setStatus();
+      });
+
+      el.bassModes.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-bass]");
+        if (!b) return;
+        state.bass = b.dataset.bass;
+        renderBassPerc();
+      });
+
+      el.percModes.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-perc]");
+        if (!b) return;
+        state.perc = b.dataset.perc;
+        renderBassPerc();
+      });
+
+      document.querySelectorAll(".tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          state.section = tab.dataset.sec;
+          refreshAll();
+        });
+      });
+
+      el.melodyGrid.addEventListener("click", (e) => {
+        const cell = e.target.closest(".m-cell");
+        if (!cell) return;
+        ensureAudio();
+        const s = Number(cell.dataset.s);
+        const r = Number(cell.dataset.r);
+        const k = melKey(s, r);
+        const set = state.melody[state.section];
+        if (set.has(k)) set.delete(k);
+        else {
+          set.add(k);
+          playMelodyNote(pentMidiList()[r]);
+        }
+        renderMelody();
+        setStatus();
+      });
+
+      el.btnClearMel.addEventListener("click", () => {
+        state.melody[state.section] = new Set();
+        renderMelody();
+        setStatus("已清空当前段落旋律");
+      });
+
+      document.querySelectorAll("[data-mute]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const k = btn.dataset.mute;
+          state.mute[k] = !state.mute[k];
+          btn.classList.toggle("off", state.mute[k]);
+          btn.textContent = state.mute[k] ? "已静音" : "发声中";
+        });
+      });
+
+      el.btnPlay.addEventListener("click", play);
+      el.btnStop.addEventListener("click", () => stop());
+      el.btnGen.addEventListener("click", () => { generateSong(); });
+      el.btnSave.addEventListener("click", save);
+      el.btnLoad.addEventListener("click", load);
+
+      el.bpm.addEventListener("input", () => {
+        state.bpm = Number(el.bpm.value);
+        el.bpmVal.textContent = el.bpm.value;
+        if (playing) {
+          clearInterval(timer);
+          timer = setInterval(tick, stepDur() * 1000);
+        }
+        setStatus();
+      });
+
+      el.vol.addEventListener("input", () => {
+        el.volVal.textContent = el.vol.value;
+        if (master) master.gain.value = Number(el.vol.value) / 100 * 0.5;
+      });
+
+      window.addEventListener("keydown", (e) => {
+        if (e.code === "Space" && e.target === document.body) {
+          e.preventDefault();
+          play();
+        }
+      });
+
+      // init
+      applyMood("dusk");
+      generateSong();
+      setStatus("已准备好一首示例 · 可改心情或旋律");
+    })();
+  </script>
+</body>
+</html>
