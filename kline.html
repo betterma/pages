@@ -1910,8 +1910,8 @@
         NOTIFY_STATE_PATH: "watch-notify-state.json",
         // WeCom notify runs ~5m; poll often enough without hammering GitHub.
         NOTIFY_POLL_MS: 60 * 1000,
-        // Skip focus auto-refresh if data is still fresher than this.
-        DATA_FOCUS_REFRESH_MIN_MS: 45 * 1000,
+        // 切回页面：距上次成功刷新不足此时长则跳过整页重拉。
+        DATA_FOCUS_REFRESH_MIN_MS: 3 * 60 * 1000,
         // 近2h 五段轨迹（15m 回算）+ 爬升判定；可按真实案例调。
         MOMENTUM_TREND: {
           // 15m bars to fetch (need ≥14 closed for 60m of 2h history).
@@ -4510,7 +4510,7 @@
         }
       }
 
-      function drawKline(canvas, candles, pinPrice) {
+      function drawKline(canvas, candles, pinPrice, pinnedAt) {
         const rect = canvas.getBoundingClientRect();
         const width = Math.max(1, Math.floor(rect.width));
         const height = Math.max(1, Math.floor(rect.height));
@@ -4540,6 +4540,29 @@
         const bodyW = Math.max(1, slot * 0.62);
         const yOf = (price) => pad.top + ((max - price) / range) * chartH;
 
+        // 盯住时刻落在哪根 K 线上（开盘时间区间）。
+        let pinIndex = -1;
+        const at = Number(pinnedAt);
+        if (hasPin && Number.isFinite(at) && at > 0) {
+          if (at < candles[0].time) {
+            pinIndex = 0;
+          } else if (at >= candles[candles.length - 1].time) {
+            pinIndex = candles.length - 1;
+          } else {
+            for (let i = 0; i < candles.length; i += 1) {
+              const start = candles[i].time;
+              const end =
+                i + 1 < candles.length
+                  ? candles[i + 1].time
+                  : Number.POSITIVE_INFINITY;
+              if (at >= start && at < end) {
+                pinIndex = i;
+                break;
+              }
+            }
+          }
+        }
+
         if (hasPin) {
           const y = yOf(pin);
           ctx.save();
@@ -4566,6 +4589,29 @@
           const bodyH = Math.max(1, Math.abs(y2 - y1));
           ctx.fillRect(x - bodyW / 2, Math.min(y1, y2), bodyW, bodyH);
         });
+
+        // 竖虚线 + 交点：标出盯住发生的时间柱。
+        if (hasPin && pinIndex >= 0) {
+          const x = pad.left + slot * pinIndex + slot / 2;
+          const y = yOf(pin);
+          ctx.save();
+          ctx.strokeStyle = "rgba(90, 106, 104, 0.85)";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(x, pad.top);
+          ctx.lineTo(x, pad.top + chartH);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = "#2f8f6e";
+          ctx.beginPath();
+          ctx.arc(x, y, Math.max(2.5, Math.min(4, slot * 0.35)), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#fbfcfa";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.restore();
+        }
       }
 
       async function renderKlineCard(card, symbol, interval, signal, pinItem) {
@@ -4646,7 +4692,12 @@
               change24h > 0 ? "up" : change24h < 0 ? "price-down" : "neutral";
             applyPinMomentum(card, null);
           }
-          drawKline(canvas, candles, pinItem ? pinItem.pinPrice : null);
+          drawKline(
+            canvas,
+            candles,
+            pinItem ? pinItem.pinPrice : null,
+            pinItem ? pinItem.pinnedAt : null,
+          );
         } catch (error) {
           if (error.name === "AbortError") return;
           reportApiIssue(error);
@@ -4773,8 +4824,7 @@
         const pinned = pinSymbols().has(symbol);
         const favored = favoriteSymbols().has(symbol);
         const held = positionSymbols().has(symbol);
-        const canAddNote =
-          !isNotesView() && pinSortMode === "momentum";
+        const canAddNote = !isNotesView() && pinned;
         const expired = (() => {
           const item = pinItemBySymbol(symbol);
           return item ? WatchFavorites.isPinExpired(item) : false;
@@ -4783,7 +4833,7 @@
         sheet.className = "card-actions";
         sheet.innerHTML = [
           canAddNote
-            ? `<button type="button" data-action="add-note">记一下</button>`
+            ? `<button type="button" data-action="add-note">记一笔</button>`
             : "",
           expired
             ? `<button type="button" data-action="renew">续盯（现价起算）</button>`
