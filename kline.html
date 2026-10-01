@@ -3406,7 +3406,7 @@
       /**
        * Collapse spammy auto-pin / rewarm rows: same symbol + same kind
        * within EDGE cooldown keeps only the earliest hit.
-       * Buy/sell rows untouched.
+       * Exact duplicates (any kind, same at/kind/symbols/price) are dropped.
        */
       function compactActionLogEntries(list, cooldownMs) {
         const cooldown =
@@ -3418,6 +3418,7 @@
           .slice()
           .sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0));
         const lastKept = new Map();
+        const seenExact = new Set();
         const keptAsc = [];
         for (const entry of chron) {
           if (!entry || !Array.isArray(entry.symbols)) continue;
@@ -3429,7 +3430,7 @@
                 .map((symbol) => String(symbol || "").trim().toUpperCase())
                 .filter(Boolean),
             ),
-          ];
+          ].sort();
           if (edgeKinds.has(kind)) {
             symbols = symbols.filter((symbol) => {
               const key = `${kind}:${symbol}`;
@@ -3444,6 +3445,12 @@
           if (Number.isFinite(entry.price) && entry.price > 0) {
             next.price = entry.price;
           }
+          const exactKey =
+            typeof WatchFavorites.actionLogEntryKey === "function"
+              ? WatchFavorites.actionLogEntryKey(next)
+              : `${at}|${kind}|${symbols.join(",")}|${next.price || ""}`;
+          if (exactKey && seenExact.has(exactKey)) continue;
+          if (exactKey) seenExact.add(exactKey);
           keptAsc.push(next);
         }
         return keptAsc.reverse().slice(0, ACTION_LOG_MAX);
@@ -3518,8 +3525,12 @@
           WatchFavorites.mergeActionLogs(remote, local),
         );
         writeActionLogCache(merged);
-        // First-time migrate / catch-up: push merged if remote empty or shorter.
-        if (local.length && merged.length && merged.length !== remote.length) {
+        // Push only when local has fingerprints remote lacks (never on length alone).
+        if (
+          local.length &&
+          merged.length &&
+          WatchFavorites.hasLocalOnlyActionLogEntries(remote, local)
+        ) {
           try {
             const result = await WatchFavorites.patchActionLog({
               repo: CONFIG.GITHUB_REPO,

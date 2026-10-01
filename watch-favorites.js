@@ -887,7 +887,7 @@
           .map((symbol) => String(symbol || "").trim().toUpperCase())
           .filter(Boolean),
       ),
-    ];
+    ].sort();
     if (!kind || !symbols.length) return null;
     const entry = { at: at || Date.now(), kind, symbols };
     const price = Number(item.price);
@@ -895,11 +895,34 @@
     return entry;
   }
 
+  function actionLogEntryKey(entry) {
+    if (!entry) return "";
+    const symbols = (Array.isArray(entry.symbols) ? entry.symbols : [])
+      .map((symbol) => String(symbol || "").trim().toUpperCase())
+      .filter(Boolean)
+      .sort()
+      .join(",");
+    if (!symbols) return "";
+    const price =
+      Number.isFinite(entry.price) && entry.price > 0
+        ? String(entry.price)
+        : "";
+    return `${Number(entry.at) || 0}|${String(entry.kind || "").trim()}|${symbols}|${price}`;
+  }
+
   function normalizeActionLog(raw) {
     if (!Array.isArray(raw)) return [];
-    return raw
-      .map(normalizeActionLogEntry)
-      .filter(Boolean)
+    const seen = new Set();
+    const out = [];
+    for (const item of raw) {
+      const entry = normalizeActionLogEntry(item);
+      if (!entry) continue;
+      const key = actionLogEntryKey(entry);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(entry);
+    }
+    return out
       .sort((a, b) => (b.at || 0) - (a.at || 0))
       .slice(0, ACTION_LOG_MAX);
   }
@@ -920,6 +943,24 @@
 
   function mergeActionLogs(a, b) {
     return normalizeActionLog([...(a || []), ...(b || [])]);
+  }
+
+  /** True when local has at least one entry fingerprint not present remotely. */
+  function hasLocalOnlyActionLogEntries(remote, local) {
+    const seen = new Set();
+    for (const item of remote || []) {
+      const entry = normalizeActionLogEntry(item);
+      if (!entry) continue;
+      const key = actionLogEntryKey(entry);
+      if (key) seen.add(key);
+    }
+    for (const item of local || []) {
+      const entry = normalizeActionLogEntry(item);
+      if (!entry) continue;
+      const key = actionLogEntryKey(entry);
+      if (key && !seen.has(key)) return true;
+    }
+    return false;
   }
 
   async function loadActionLogRaw(options) {
@@ -1461,6 +1502,8 @@
     normalizeActionLog,
     serializeActionLog,
     mergeActionLogs,
+    actionLogEntryKey,
+    hasLocalOnlyActionLogEntries,
     loadActionLogRaw,
     patchActionLog,
     CARD_EGGS_PATH,
