@@ -1139,7 +1139,7 @@
         display: none !important;
       }
       .notify-float.is-momentum {
-        width: min(480px, calc(100vw - 24px));
+        width: min(720px, calc(100vw - 24px));
       }
       .notify-float-head {
         display: flex;
@@ -1237,6 +1237,27 @@
       .notify-col-empty {
         color: #9aa3a0;
         font-size: 12px;
+      }
+      .break-high-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 4px 8px;
+        margin: 0 0 8px;
+        padding: 0 0 8px;
+        border-bottom: 1px solid rgba(220, 226, 222, 0.45);
+        font-size: 12px;
+        line-height: 1.4;
+        color: #5a6a68;
+      }
+      .break-high-row .break-high-pct {
+        color: #2f8f6e;
+        font-weight: 650;
+      }
+      .break-high-meta {
+        font-size: 11px;
+        color: #9aa3a0;
+        margin: 0 0 8px;
       }
       .notify-float-body .nc-info {
         color: #2f8f6e;
@@ -2053,25 +2074,25 @@
           type="button"
           class="notify-float-refresh"
           id="momentumFloatRefresh"
-          title="按当前盯一下重算近1h/2h与2h轨迹"
-          aria-label="刷新近2h/1h"
+          title="重算左侧近2h/1h（破点高仍按10分钟间隔）"
+          aria-label="刷新动态"
         >
           刷新
         </button>
         <strong
-          >近2h / 1h<span class="notify-time" id="momentumFloatTime"></span
+          >动态<span class="notify-time" id="momentumFloatTime"></span
         ></strong>
         <button
           type="button"
           class="notify-float-close"
           id="momentumFloatClose"
           title="关闭"
-          aria-label="关闭动量浮层"
+          aria-label="关闭动态浮层"
         >
           ×
         </button>
       </div>
-      <div class="notify-float-body" id="momentumFloatBody"></div>
+      <div class="notify-float-body notify-float-split" id="momentumFloatBody"></div>
     </div>
 
     <div id="actionLogFloat" class="notify-float is-action-log" hidden>
@@ -2105,9 +2126,9 @@
         class="notify-float-tab"
         id="momentumFloatTab"
         data-float="momentum"
-        title="近2h/1h（爬升优先 · 含2h轨迹）"
+        title="动态：近2h/1h + 破点高"
       >
-        近2h/1h
+        动态
       </button>
       <button
         type="button"
@@ -2185,6 +2206,7 @@
         MOM_NOTES_PATH: "watch-mom-notes.json",
         ACTION_LOG_PATH: "watch-action-log.json",
         CARD_EGGS_PATH: "watch-card-eggs.json",
+        BREAK_HIGH_PATH: "watch-break-high.json",
         POSITIONS_PATH: "watch-positions.json",
         WATCH_POOL_RANK: 30,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
@@ -2269,6 +2291,13 @@
       let momNotesExpanded = true;
       const MOM_NOTES_LOCAL_KEY = "kline-mom-notes-v1";
       const MOM_NOTES_MAX = 30;
+      const BREAK_HIGH_COOLDOWN_MS = 10 * 60 * 1000;
+      const BREAK_HIGH_LEGACY_KEY = "kline-break-high-v1";
+      let breakHighState = WatchFavorites.emptyBreakHigh
+        ? WatchFavorites.emptyBreakHigh()
+        : { bases: {}, lastCheckAt: 0, hits: [] };
+      let breakHighSaving = false;
+      let breakHighChecking = false;
       const RISING_SNAP_KEY = "kline-rising-zone-snap-v1";
       const RISING_SNAP_SEEDED_KEY = "kline-rising-zone-snap-seeded-v1";
       const ACTION_LOG_KEY = "kline-action-log-v1";
@@ -3925,6 +3954,7 @@
           lastPositionNotify = notifyState.lastPositionNotify || null;
           await loadSharedActionLog();
           await loadSharedCardEggs();
+          await loadSharedBreakHigh();
           mergeCloudAutoPinEvents(notifyState.autoPinEvents || []);
         } catch (error) {
           console.warn(error);
@@ -3933,6 +3963,7 @@
           lastPositionNotify = null;
           await loadSharedActionLog();
           await loadSharedCardEggs();
+          await loadSharedBreakHigh();
         }
         pruneHistory();
       }
@@ -4793,20 +4824,27 @@
           (total > 0 ? `计算近2h/1h ${done}/${total}` : "计算近2h/1h…");
         if (tab) {
           if (!tab.dataset.idleText) {
-            tab.dataset.idleText = "近2h/1h";
+            tab.dataset.idleText = "动态";
           }
           tab.classList.toggle("is-computing", !!busy);
           tab.hidden = false;
           tab.disabled = !!busy;
           tab.style.setProperty("--mom-pct", busy ? `${pct}%` : "0%");
+          const hitCount = (breakHighState.hits || []).length;
+          const idle =
+            hitCount > 0
+              ? `动态·${hitCount}`
+              : tab.dataset.idleText || "动态";
           tab.textContent = busy
             ? total > 0
-              ? `近2h/1h ${done}/${total}`
-              : "近2h/1h…"
-            : tab.dataset.idleText || "近2h/1h";
+              ? `动态 ${done}/${total}`
+              : "动态…"
+            : idle;
           tab.title = busy
             ? text
-            : "近2h/1h（爬升优先 · 含2h轨迹）";
+            : hitCount > 0
+              ? `动态：近2h/1h + 破点高 ${hitCount} 个`
+              : "动态：近2h/1h + 破点高";
         }
         syncPinSortUi();
         if (!loading) {
@@ -4828,7 +4866,9 @@
           timeEl.textContent = ` · ${done}/${total || "…"}`;
         }
         if (busy && panel && !panel.hidden && body && !hasRows) {
-          body.innerHTML = `<div class="notify-col-empty">${escapeHtml(text)}</div>`;
+          body.innerHTML = renderMomentumFloatHtml(lastMomentumSnapshot, {
+            leftBusyText: text,
+          });
         }
       }
 
@@ -5285,15 +5325,349 @@
         }
       }
 
+      function readLegacyBreakHighLocal() {
+        try {
+          const raw = localStorage.getItem(BREAK_HIGH_LEGACY_KEY);
+          const parsed = raw ? JSON.parse(raw) : null;
+          if (!parsed || typeof parsed !== "object") return null;
+          return WatchFavorites.normalizeBreakHigh(parsed);
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function clearLegacyBreakHighLocal() {
+        try {
+          localStorage.removeItem(BREAK_HIGH_LEGACY_KEY);
+        } catch (error) {
+          /* ignore */
+        }
+      }
+
+      async function loadSharedBreakHigh() {
+        try {
+          const state = await WatchFavorites.loadBreakHighRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.BREAK_HIGH_PATH,
+          });
+          let next = state.state || WatchFavorites.emptyBreakHigh();
+          const legacy = readLegacyBreakHighLocal();
+          const remoteEmpty =
+            !Object.keys(next.bases || {}).length &&
+            !(next.hits || []).length &&
+            !(Number(next.lastCheckAt) > 0);
+          if (remoteEmpty && legacy) {
+            try {
+              const migrated = await WatchFavorites.patchBreakHigh({
+                repo: CONFIG.GITHUB_REPO,
+                path: CONFIG.BREAK_HIGH_PATH,
+                message: "Migrate break-high from localStorage",
+                mutate: () => ({ state: legacy }),
+              });
+              next = migrated.state || legacy;
+              clearLegacyBreakHighLocal();
+            } catch (error) {
+              console.warn("migrate break-high failed", error);
+              next = legacy;
+            }
+          } else if (legacy) {
+            clearLegacyBreakHighLocal();
+          }
+          breakHighState = next;
+          syncBreakHighTabChrome();
+        } catch (error) {
+          console.warn("load break-high failed", error);
+          breakHighState = WatchFavorites.emptyBreakHigh();
+        }
+        return breakHighState;
+      }
+
+      async function persistBreakHighState(message) {
+        if (breakHighSaving) return breakHighState;
+        breakHighSaving = true;
+        const snapshot = WatchFavorites.normalizeBreakHigh(breakHighState);
+        try {
+          const result = await WatchFavorites.patchBreakHigh({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.BREAK_HIGH_PATH,
+            message: message || "Update break-high",
+            mutate: () => ({ state: snapshot }),
+          });
+          breakHighState = result.state || snapshot;
+          syncBreakHighTabChrome();
+          return breakHighState;
+        } catch (error) {
+          console.warn("persist break-high failed", error);
+          return breakHighState;
+        } finally {
+          breakHighSaving = false;
+        }
+      }
+
+      function listBreakHighUniverse() {
+        const blocked = blacklistSymbols();
+        const set = new Set();
+        for (const item of pinItems || []) {
+          const symbol = String(item && item.symbol || "")
+            .trim()
+            .toUpperCase();
+          if (symbol && !blocked.has(symbol)) set.add(symbol);
+        }
+        for (const note of momNoteItems || []) {
+          const symbol = String(note && note.symbol || "")
+            .trim()
+            .toUpperCase();
+          if (symbol && !blocked.has(symbol)) set.add(symbol);
+        }
+        return [...set];
+      }
+
+      function latestMomNoteForSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return null;
+        let best = null;
+        for (const note of momNoteItems || []) {
+          if (!note || String(note.symbol || "").toUpperCase() !== key) continue;
+          if (!best || Number(note.at) > Number(best.at)) best = note;
+        }
+        return best;
+      }
+
+      function pinItemForSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return null;
+        return (
+          (pinItems || []).find(
+            (item) =>
+              item && String(item.symbol || "").toUpperCase() === key,
+          ) || null
+        );
+      }
+
+      /** 有记住点 → 最新记住价；否则 → 盯住价 */
+      function naturalBreakBase(symbol) {
+        const note = latestMomNoteForSymbol(symbol);
+        const notePrice = Number(note && note.price);
+        if (note && Number.isFinite(notePrice) && notePrice > 0) {
+          return {
+            base: notePrice,
+            noteAt: Number(note.at) || 0,
+            pinAt: 0,
+            source: "note",
+          };
+        }
+        const pin = pinItemForSymbol(symbol);
+        const pinPrice = Number(pin && pin.pinPrice);
+        if (pin && Number.isFinite(pinPrice) && pinPrice > 0) {
+          return {
+            base: pinPrice,
+            noteAt: 0,
+            pinAt: Number(pin.pinnedAt) || 0,
+            source: "pin",
+          };
+        }
+        return null;
+      }
+
+      function resolveBreakBase(symbol, stored) {
+        const natural = naturalBreakBase(symbol);
+        if (!natural) return null;
+        if (!stored || !Number.isFinite(Number(stored.base))) return natural;
+        if (natural.noteAt > (Number(stored.noteAt) || 0)) return natural;
+        if (
+          !natural.noteAt &&
+          natural.pinAt > (Number(stored.pinAt) || 0)
+        ) {
+          return natural;
+        }
+        return {
+          base: Number(stored.base),
+          noteAt: Number(stored.noteAt) || natural.noteAt || 0,
+          pinAt: Number(stored.pinAt) || natural.pinAt || 0,
+          source: "stored",
+        };
+      }
+
+      function renderBreakHighColHtml() {
+        const hits = Array.isArray(breakHighState.hits)
+          ? breakHighState.hits
+          : [];
+        const lastAt = Number(breakHighState.lastCheckAt) || 0;
+        const lastLabel = lastAt ? formatNotifyAt(lastAt) : "";
+        const meta = lastLabel
+          ? `<div class="break-high-meta">上次检测 ${escapeHtml(lastLabel)} · 间隔10分钟</div>`
+          : `<div class="break-high-meta">间隔10分钟检测 · 盯住/记住范围</div>`;
+        if (!hits.length) {
+          return `${meta}<div class="notify-col-empty">暂无破点高</div>`;
+        }
+        const rows = hits
+          .slice()
+          .sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0))
+          .map((hit) => {
+            const symbol = String(hit.symbol || "").toUpperCase();
+            const label =
+              hit.label ||
+              symbol.replace(/USDT$/i, "") ||
+              symbol;
+            const base = Number(hit.base);
+            const price = Number(hit.price);
+            const pct =
+              Number.isFinite(base) &&
+              base > 0 &&
+              Number.isFinite(price)
+                ? ((price - base) / base) * 100
+                : null;
+            return [
+              `<div class="break-high-row">`,
+              `<a href="#card" class="notify-coin" data-jump="${escapeHtml(symbol)}">${escapeHtml(label)}</a>`,
+              Number.isFinite(pct)
+                ? `<span class="break-high-pct">${escapeHtml(formatPercent(pct))}</span>`
+                : "",
+              `<span>${escapeHtml(formatPinPrice(base))} → ${escapeHtml(formatPinPrice(price))}</span>`,
+              `</div>`,
+            ].join("");
+          })
+          .join("");
+        return meta + rows;
+      }
+
+      /**
+       * 破点高：现价相对基准点（记住优先，否则盯住；触发后抬升基准）。
+       * 判断与基准更新均受 10 分钟冷却限制；状态存 GitHub，两端共用。
+       */
+      async function maybeRunBreakHighCheck(options) {
+        const force = !!(options && options.force);
+        if (breakHighChecking) {
+          return { skipped: true, hits: breakHighState.hits || [] };
+        }
+        breakHighChecking = true;
+        try {
+          // 先拉远程，保证手机/电脑共用冷却与基准。
+          try {
+            const remote = await WatchFavorites.loadBreakHighRaw({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.BREAK_HIGH_PATH,
+            });
+            if (remote && remote.state) {
+              breakHighState = remote.state;
+              syncBreakHighTabChrome();
+            }
+          } catch (error) {
+            console.warn("refresh break-high before check failed", error);
+          }
+
+          const now = Date.now();
+          const last = Number(breakHighState.lastCheckAt) || 0;
+          if (!force && last > 0 && now - last < BREAK_HIGH_COOLDOWN_MS) {
+            refreshMomentumFloatBody();
+            return {
+              skipped: true,
+              hits: breakHighState.hits || [],
+            };
+          }
+          const universe = listBreakHighUniverse();
+          const nextBases = { ...(breakHighState.bases || {}) };
+          const hits = [];
+          let priced = 0;
+          for (const symbol of universe) {
+            const current = Number(marketMap[symbol]?.price);
+            if (!Number.isFinite(current) || current <= 0) continue;
+            priced += 1;
+            const resolved = resolveBreakBase(symbol, nextBases[symbol]);
+            if (
+              !resolved ||
+              !Number.isFinite(resolved.base) ||
+              resolved.base <= 0
+            ) {
+              continue;
+            }
+            const base = resolved.base;
+            if (current > base) {
+              hits.push({
+                symbol,
+                label: symbol.replace(/USDT$/i, ""),
+                base,
+                price: current,
+                at: now,
+                source: resolved.source,
+              });
+              nextBases[symbol] = {
+                base: current,
+                at: now,
+                noteAt: resolved.noteAt || 0,
+                pinAt: resolved.pinAt || 0,
+              };
+            } else if (!nextBases[symbol]) {
+              nextBases[symbol] = {
+                base,
+                at: now,
+                noteAt: resolved.noteAt || 0,
+                pinAt: resolved.pinAt || 0,
+              };
+            }
+          }
+          if (!priced && universe.length) {
+            return {
+              skipped: true,
+              hits: breakHighState.hits || [],
+            };
+          }
+          const keep = new Set(universe);
+          for (const key of Object.keys(nextBases)) {
+            if (!keep.has(key)) delete nextBases[key];
+          }
+          breakHighState = {
+            bases: nextBases,
+            lastCheckAt: now,
+            hits,
+          };
+          await persistBreakHighState(
+            hits.length
+              ? `Break-high ${hits.length}`
+              : "Break-high check",
+          );
+          syncBreakHighTabChrome();
+          refreshMomentumFloatBody();
+          if (hits.length) {
+            openFloatPanel("momentum");
+            showToast(`破点高 ${hits.length} 个`);
+          }
+          return { skipped: false, hits };
+        } finally {
+          breakHighChecking = false;
+        }
+      }
+
+      function syncBreakHighTabChrome() {
+        const tab = document.getElementById("momentumFloatTab");
+        if (!tab || momentumBusy) return;
+        const hitCount = (breakHighState.hits || []).length;
+        tab.dataset.idleText = "动态";
+        tab.textContent = hitCount > 0 ? `动态·${hitCount}` : "动态";
+        tab.title =
+          hitCount > 0
+            ? `动态：近2h/1h + 破点高 ${hitCount} 个`
+            : "动态：近2h/1h + 破点高";
+      }
+
       function refreshMomentumFloatBody() {
         const body = document.getElementById("momentumFloatBody");
         if (!body) return;
+        body.classList.add("notify-float-split");
         body.innerHTML = renderMomentumFloatHtml(lastMomentumSnapshot);
       }
 
-      function renderMomentumFloatHtml(snapshot) {
+      function renderMomentumLeftHtml(snapshot, options) {
         const rows = (snapshot && snapshot.rows) || [];
         const notesHtml = renderMomNotesHtml();
+        const busyText = options && options.leftBusyText;
+        if (busyText && !rows.length) {
+          return `${notesHtml}<div class="notify-col-empty">${escapeHtml(busyText)}</div>`;
+        }
         if (!rows.length) {
           return `${notesHtml}<div class="notify-col-empty">暂无近2h/1h 数据</div>`;
         }
@@ -5325,6 +5699,21 @@
         return notesHtml + list;
       }
 
+      function renderMomentumFloatHtml(snapshot, options) {
+        const left = renderMomentumLeftHtml(snapshot, options);
+        const right = renderBreakHighColHtml();
+        return [
+          `<div class="notify-col">`,
+          `<div class="notify-col-title">近2h/1h</div>`,
+          left,
+          `</div>`,
+          `<div class="notify-col">`,
+          `<div class="notify-col-title">破点高</div>`,
+          right,
+          `</div>`,
+        ].join("");
+      }
+
       function setMomentumFloatOpen(open) {
         if (open) openFloatPanel("momentum");
         else if (isFloatPanelOpen("momentum")) closeAllFloatPanels();
@@ -5344,38 +5733,37 @@
 
         const snap = lastMomentumSnapshot;
         const hasRows = snap && Array.isArray(snap.rows) && snap.rows.length;
+        const hitCount = (breakHighState.hits || []).length;
         tab.hidden = false;
-        tab.disabled = momentumBusy || !hasRows;
+        tab.disabled = momentumBusy;
         if (momentumBusy) {
           tab.classList.add("is-computing");
           const total = momentumProgress.total || 0;
           const done = momentumProgress.done || 0;
           const pct = total > 0 ? Math.round((done / total) * 100) : 0;
           tab.style.setProperty("--mom-pct", `${pct}%`);
+        } else {
+          tab.classList.remove("is-computing");
+          tab.style.setProperty("--mom-pct", "0%");
+          syncBreakHighTabChrome();
         }
-        if (!hasRows) {
-          if (!momentumBusy && !panel.hidden) panel.hidden = true;
+        if (!hasRows && !hitCount && !momentumBusy && panel.hidden) {
+          // keep closed when nothing to show and panel already closed
+        }
+        if (timeEl) {
           if (momentumBusy) {
             const total = momentumProgress.total || 0;
             const done = momentumProgress.done || 0;
-            const text =
-              total > 0
-                ? `正在计算近2h/1h ${done}/${total}`
-                : "正在计算近2h/1h…";
-            body.innerHTML = `<div class="notify-col-empty">${escapeHtml(text)}</div>`;
-            if (timeEl) timeEl.textContent = ` · ${done}/${total || "…"}`;
+            timeEl.textContent = ` · ${done}/${total || "…"}`;
+          } else if (hasRows) {
+            const label = formatNotifyAt(snap.at);
+            timeEl.textContent = label ? ` · ${label}` : "";
+          } else if (hitCount) {
+            const label = formatNotifyAt(breakHighState.lastCheckAt);
+            timeEl.textContent = label ? ` · ${label}` : "";
           } else {
-            body.innerHTML =
-              '<div class="notify-col-empty">暂无近2h/1h 数据</div>';
-            if (timeEl) timeEl.textContent = "";
-            tab.classList.remove("is-active");
+            timeEl.textContent = "";
           }
-          return;
-        }
-
-        if (timeEl) {
-          const label = formatNotifyAt(snap.at);
-          timeEl.textContent = label ? ` · ${label}` : "";
         }
         if (!panel.hidden) {
           refreshMomentumFloatBody();
@@ -6807,6 +7195,7 @@
           }
           syncSortRailRecentVisibility();
           void schedulePinMomentum(scoreSymbols);
+          void maybeRunBreakHighCheck();
           return;
         }
 
@@ -7089,6 +7478,7 @@
         updateNotifyFloatPanel();
         updatePinSelectUi();
         void schedulePinMomentum(scoreUniverse);
+        void maybeRunBreakHighCheck();
       }
 
       async function toggleFavoriteForSymbol(symbol) {

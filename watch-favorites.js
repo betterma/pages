@@ -22,6 +22,7 @@
   const MOM_NOTES_PATH = "watch-mom-notes.json";
   const ACTION_LOG_PATH = "watch-action-log.json";
   const CARD_EGGS_PATH = "watch-card-eggs.json";
+  const BREAK_HIGH_PATH = "watch-break-high.json";
   const LEGACY_DATA_PATH = "watch-data.json";
   const PIN_TTL_MS = 12 * 60 * 60 * 1000;
   // 暂时关闭盯一下过期；改 true 可恢复 12h TTL。
@@ -1192,6 +1193,177 @@
     throw lastError || new Error("保存卡片彩蛋失败");
   }
 
+  function emptyBreakHigh() {
+    return {
+      bases: {},
+      lastCheckAt: 0,
+      hits: [],
+    };
+  }
+
+  function normalizeBreakHighHit(item) {
+    if (!item || typeof item !== "object") return null;
+    const symbol = String(item.symbol || "")
+      .trim()
+      .toUpperCase();
+    if (!symbol) return null;
+    const base = Number(item.base);
+    const price = Number(item.price);
+    const at = Number(item.at) || 0;
+    if (!Number.isFinite(base) || base <= 0) return null;
+    if (!Number.isFinite(price) || price <= 0) return null;
+    return {
+      symbol,
+      label: item.label
+        ? String(item.label)
+        : symbol.replace(/USDT$/i, ""),
+      base,
+      price,
+      at,
+      source: item.source ? String(item.source) : null,
+    };
+  }
+
+  function normalizeBreakHighBase(item) {
+    if (!item || typeof item !== "object") return null;
+    const base = Number(item.base);
+    if (!Number.isFinite(base) || base <= 0) return null;
+    return {
+      base,
+      at: Number(item.at) || 0,
+      noteAt: Number(item.noteAt) || 0,
+      pinAt: Number(item.pinAt) || 0,
+    };
+  }
+
+  function normalizeBreakHigh(raw) {
+    const empty = emptyBreakHigh();
+    if (!raw || typeof raw !== "object") return empty;
+    const bases = {};
+    const rawBases =
+      raw.bases && typeof raw.bases === "object" && !Array.isArray(raw.bases)
+        ? raw.bases
+        : {};
+    for (const [key, value] of Object.entries(rawBases)) {
+      const symbol = String(key || "")
+        .trim()
+        .toUpperCase();
+      const normalized = normalizeBreakHighBase(value);
+      if (!symbol || !normalized) continue;
+      bases[symbol] = normalized;
+    }
+    const hits = Array.isArray(raw.hits)
+      ? raw.hits.map(normalizeBreakHighHit).filter(Boolean)
+      : [];
+    return {
+      bases,
+      lastCheckAt: Number(raw.lastCheckAt) || 0,
+      hits,
+    };
+  }
+
+  async function loadBreakHighRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || BREAK_HIGH_PATH;
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          state: normalizeBreakHigh(current.data),
+          updatedAt: Number.isFinite(Number(current.data.updatedAt))
+            ? Number(current.data.updatedAt)
+            : null,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadBreakHigh via API failed, trying raw", error);
+    }
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          state: normalizeBreakHigh(data),
+          updatedAt: Number.isFinite(Number(data.updatedAt))
+            ? Number(data.updatedAt)
+            : null,
+          source: "raw-commit",
+        };
+      }
+      if (response.status !== 404) {
+        console.warn(`读取破点高 raw 失败: ${response.status}`);
+      }
+    } catch (error) {
+      console.warn("loadBreakHigh via commit-raw failed", error);
+    }
+    return { state: emptyBreakHigh(), updatedAt: null, source: "empty" };
+  }
+
+  async function patchBreakHigh(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || BREAK_HIGH_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = normalizeBreakHigh(current.data || emptyBreakHigh());
+        let next = base;
+        if (typeof options.mutate === "function") {
+          const result = options.mutate({ ...base, bases: { ...base.bases } });
+          if (result && result.skipWrite) {
+            return {
+              state: normalizeBreakHigh(result.state || base),
+              updatedAt: Number(current.data && current.data.updatedAt) || null,
+              skipped: true,
+            };
+          }
+          next = normalizeBreakHigh(
+            result && result.state ? result.state : result || base,
+          );
+        }
+        const nextData = {
+          ...next,
+          updatedAt: Date.now(),
+        };
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update break-high",
+        });
+        return {
+          state: normalizeBreakHigh(nextData),
+          updatedAt: nextData.updatedAt,
+          skipped: false,
+        };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存破点高失败");
+  }
+
   async function patchPins(options) {
     const repo = (options && options.repo) || DEFAULT_REPO;
     const path = (options && options.path) || PINS_PATH;
@@ -1511,6 +1683,11 @@
     normalizeCardEggs,
     loadCardEggsRaw,
     patchCardEggs,
+    BREAK_HIGH_PATH,
+    emptyBreakHigh,
+    normalizeBreakHigh,
+    loadBreakHighRaw,
+    patchBreakHigh,
     normalizePositions,
     serializePositions,
     positionsToSymbolSet,

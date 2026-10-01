@@ -1,0 +1,14 @@
+---
+description: Shared watch/kline state must live on GitHub, not localStorage
+alwaysApply: true
+---
+
+# Shared state → GitHub, not localStorage
+
+For this `pages` project (kline / watch pool):
+
+- **Do not** store cross-device or durable feature state in `localStorage` / `sessionStorage`.
+- Persist shared state in a GitHub JSON file via `watch-favorites.js` helpers (`load*Raw` / `patch*`), same pattern as pins, mom-notes, action-log, card-eggs, break-high.
+- `localStorage` is only OK for ephemeral UI chrome that must not sync (e.g. panel open/closed, one-shot dismiss of a transient toast) — and even then prefer in-memory when possible.
+- When adding a new mechanism (baselines, cooldowns, eggs, logs, flags), default to a dedicated `watch-*.json` on the repo and wire load on boot + patch on change.
+- Phone and desktop must see the same data after refresh.
