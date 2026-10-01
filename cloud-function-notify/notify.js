@@ -10,6 +10,13 @@ const {
 } = require('./github-wecom');
 const { buildTopChartsCollage, fetchKlines } = require('./kline-chart');
 const { runAutoPin, savePinsFile, normalizePinList } = require('./auto-pin');
+const {
+  evaluateBreakHigh,
+  persistBreakHigh,
+  loadMomNotes,
+  listBreakHighUniverse,
+  CONFIG: BREAK_HIGH_CONFIG,
+} = require('./break-high');
 
 function webhookKeyHint(url) {
   try {
@@ -655,7 +662,15 @@ async function main() {
     return `auto-pin:${autoPinned.length}+rewarm:${autoRewarmed.length}`;
   }
 
-  if (!pins.length && !positions.length) {
+  let momNotes = [];
+  try {
+    momNotes = await loadMomNotes();
+  } catch (error) {
+    console.warn('load mom notes failed', error.message || error);
+    momNotes = [];
+  }
+
+  if (!pins.length && !positions.length && !momNotes.length) {
     // Still persist rising zone snap / events so seeding works with empty pins.
     try {
       const tag = await sendAutoPinWecom();
@@ -681,7 +696,7 @@ async function main() {
       activeStateFile.sha,
       'Update watch notify state (auto-pin only)',
     );
-    console.log('notify skip: empty pins and positions after auto-pin');
+    console.log('notify skip: empty pins, positions, and notes after auto-pin');
     return {
       ok: true,
       skipped: true,
@@ -695,6 +710,7 @@ async function main() {
     ...new Set([
       ...pins.map((item) => item.symbol),
       ...positions.map((item) => item.symbol),
+      ...listBreakHighUniverse(pins, momNotes, new Set()),
     ]),
   ];
   const tickers = await fetchBinanceTickers(symbols);
@@ -753,7 +769,7 @@ async function main() {
     ? buildPinReport(pinRows, { totalUp: pinCap.totalUp })
     : null;
 
-  let chartSymbols = [];
+  // 盯一下：只写网页 lastPinNotify，不再发企微 / 拼图。
   const momentumHits = pinRows
     .filter((row) => row.streak5 || row.heat15)
     .map((row) => ({
@@ -762,33 +778,85 @@ async function main() {
       heat15: row.heat15,
     }));
   if (pinText) {
-    if (!CONFIG.WECOM_WEBHOOK_PINS) {
-      console.warn('pin report skipped: missing WECOM_WEBHOOK_PINS');
-    } else {
-      try {
-        await sendWecomMarkdown(pinText, CONFIG.WECOM_WEBHOOK_PINS);
-        sent.push('pins');
-      } catch (error) {
-        const message = error && error.message ? error.message : String(error);
-        sendErrors.push(`pins:${message}`);
-        console.warn('pin report failed', message);
-      }
-      try {
-        chartSymbols = await sendTopPinCharts(
-          pinRows,
-          CONFIG.WECOM_WEBHOOK_PINS,
-        );
-        if (chartSymbols.length) sent.push(`charts:${chartSymbols.length}`);
-      } catch (error) {
-        const message = error && error.message ? error.message : String(error);
-        sendErrors.push(`charts:${message}`);
-        console.warn('pin charts failed', message);
-      }
-    }
+    sent.push('pins-page');
   }
 
-  // Only advance last-pin prices when pin markdown actually went out.
-  const nextPinPrices = sent.includes('pins')
+  // 破点高：占原盯一下企微通道；10 分钟冷却，名单 + K 线（无则「无符合条件」）。
+  let chartSymbols = [];
+  let breakHighHits = [];
+  let breakHighSkipped = true;
+  try {
+    const breakResult = await evaluateBreakHigh({
+      pins,
+      notes: momNotes,
+      tickers,
+      now,
+    });
+    breakHighSkipped = !!breakResult.skipped;
+    breakHighHits = breakResult.hits || [];
+    if (!breakResult.skipped) {
+      try {
+        await persistBreakHigh(
+          breakResult.state,
+          breakResult.sha,
+          breakHighHits.length
+            ? `Break-high ${breakHighHits.length}`
+            : 'Break-high check',
+        );
+      } catch (error) {
+        const message = error && error.message ? error.message : String(error);
+        sendErrors.push(`break-high-save:${message}`);
+        console.warn('persist break-high failed', message);
+      }
+
+      if (!CONFIG.WECOM_WEBHOOK_PINS) {
+        console.warn('break-high report skipped: missing WECOM_WEBHOOK_PINS');
+      } else if (breakResult.text) {
+        try {
+          await sendWecomMarkdown(breakResult.text, CONFIG.WECOM_WEBHOOK_PINS);
+          sent.push(
+            breakHighHits.length
+              ? `break-high:${breakHighHits.length}`
+              : 'break-high:empty',
+          );
+        } catch (error) {
+          const message =
+            error && error.message ? error.message : String(error);
+          sendErrors.push(`break-high:${message}`);
+          console.warn('break-high wecom failed', message);
+        }
+        if (breakResult.chartRows && breakResult.chartRows.length) {
+          try {
+            const chartCap = Math.max(
+              1,
+              Number(BREAK_HIGH_CONFIG.BREAK_HIGH_CHART_MAX) || 12,
+            );
+            chartSymbols = await sendTopPinCharts(
+              breakResult.chartRows.slice(0, chartCap),
+              CONFIG.WECOM_WEBHOOK_PINS,
+            );
+            if (chartSymbols.length) {
+              sent.push(`break-high-charts:${chartSymbols.length}`);
+            }
+          } catch (error) {
+            const message =
+              error && error.message ? error.message : String(error);
+            sendErrors.push(`break-high-charts:${message}`);
+            console.warn('break-high charts failed', message);
+          }
+        }
+      }
+    } else {
+      console.log('break-high skipped: cooldown');
+    }
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    sendErrors.push(`break-high:${message}`);
+    console.warn('break-high failed', message);
+  }
+
+  // 网页盯一下文案更新即推进 lastPinPrices（@@@ 相对上次网页公布价）。
+  const nextPinPrices = pinText
     ? nextLastPinPrices(lastPinPrices, pinRows)
     : lastPinPrices;
   const prevNotify =
@@ -801,14 +869,13 @@ async function main() {
       activeStateFile.data &&
       activeStateFile.data.lastPositionNotify) ||
     null;
-  const lastPinNotify =
-    pinText && sent.includes('pins')
-      ? {
-          at: now,
-          markdown: pinText,
-          symbols: pinRows.map((row) => row.symbol),
-        }
-      : prevNotify;
+  const lastPinNotify = pinText
+    ? {
+        at: now,
+        markdown: pinText,
+        symbols: pinRows.map((row) => row.symbol),
+      }
+    : prevNotify;
   const lastPositionNotify =
     positionText && sent.includes('positions')
       ? {
@@ -864,9 +931,12 @@ async function main() {
     JSON.stringify({
       pins: pins.length,
       positions: positions.length,
+      notes: momNotes.length,
       sent,
       charts: chartSymbols,
       momentum: momentumHits,
+      breakHighSkipped,
+      breakHighHits: breakHighHits.map((hit) => hit.symbol),
       dropsArmed: Object.keys(dropAlertsToSave).length,
       autoPinned,
       autoRewarmed,
@@ -878,9 +948,12 @@ async function main() {
     ok: true,
     pins: pins.length,
     positions: positions.length,
+    notes: momNotes.length,
     sent,
     charts: chartSymbols,
     momentum: momentumHits,
+    breakHighSkipped,
+    breakHighHits: breakHighHits.map((hit) => hit.symbol),
     autoPinned,
     autoRewarmed,
     sendErrors,
