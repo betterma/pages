@@ -801,6 +801,77 @@
       .kline-card.is-position {
         border-color: #8a9a90;
       }
+      .kline-card.is-egg-fireworks {
+        background:
+          radial-gradient(circle at 12% 22%, rgba(255, 120, 120, 0.35), transparent 42%),
+          radial-gradient(circle at 78% 18%, rgba(255, 210, 90, 0.4), transparent 40%),
+          radial-gradient(circle at 30% 78%, rgba(120, 200, 255, 0.32), transparent 45%),
+          radial-gradient(circle at 88% 72%, rgba(190, 120, 255, 0.28), transparent 42%),
+          radial-gradient(circle at 55% 45%, rgba(255, 255, 255, 0.35), transparent 28%),
+          linear-gradient(165deg, #fff8f0 0%, #f7f8f6 55%, #eef6f2 100%);
+        border-color: #d4b48a;
+        opacity: 0.92;
+        filter: none;
+      }
+      .kline-card.is-egg-fireworks:hover {
+        opacity: 1;
+        filter: none;
+      }
+      .kline-card.is-egg-new {
+        background:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0%, transparent 40%),
+          repeating-linear-gradient(
+            -18deg,
+            transparent,
+            transparent 10px,
+            rgba(70, 110, 90, 0.04) 10px,
+            rgba(70, 110, 90, 0.04) 11px
+          ),
+          #f3f7f4;
+        border-color: #7a9a88;
+        opacity: 0.9;
+        filter: none;
+      }
+      .kline-card.is-egg-new:hover {
+        opacity: 1;
+        filter: none;
+      }
+      .kline-card.is-egg-new::before {
+        content: "NEW";
+        position: absolute;
+        left: 10px;
+        bottom: 14px;
+        z-index: 0;
+        font-family: "Segoe Print", "Comic Sans MS", "KaiTi", cursive;
+        font-size: 42px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        color: rgba(55, 95, 75, 0.14);
+        transform: rotate(-14deg);
+        pointer-events: none;
+        line-height: 1;
+      }
+      .kline-card.is-egg-fireworks canvas,
+      .kline-card.is-egg-new canvas,
+      .kline-card.is-egg-fireworks .kline-card-head,
+      .kline-card.is-egg-new .kline-card-head {
+        position: relative;
+        z-index: 1;
+      }
+      .egg-mark {
+        position: absolute;
+        left: 8px;
+        top: 6px;
+        z-index: 2;
+        font-size: 10px;
+        line-height: 1;
+        color: #8a6a4a;
+        pointer-events: none;
+        opacity: 0.85;
+      }
+      .kline-card.is-egg-new .egg-mark {
+        color: #4f7a66;
+      }
       .kline-card.is-selected {
         opacity: 0.88;
         filter: grayscale(0.18);
@@ -1981,6 +2052,7 @@
         PINS_PATH: "watch-pins.json",
         MOM_NOTES_PATH: "watch-mom-notes.json",
         ACTION_LOG_PATH: "watch-action-log.json",
+        CARD_EGGS_PATH: "watch-card-eggs.json",
         POSITIONS_PATH: "watch-positions.json",
         WATCH_POOL_RANK: 30,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
@@ -2076,6 +2148,18 @@
       const NEW_AUTO_PIN_MS = 12 * 60 * 60 * 1000;
       // Same-symbol edge cooldown (page ↔ cloud). Skip rewarm / re-pin.
       const AUTO_PIN_EDGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+      let cardEggState = WatchFavorites.emptyCardEggs
+        ? WatchFavorites.emptyCardEggs()
+        : {
+            periodHigh: {},
+            periodHighDismiss: {},
+            fromHidden: {},
+            fromHiddenDismiss: {},
+            hiddenSnap: [],
+            hiddenSnapSeeded: false,
+          };
+      let cardEggSaving = false;
+      let cardEggPersistTimer = null;
       let pinSortMode = "pin";
       const RECENT_AUTO_SORT_KEY = "kline-recent-auto-sort-v2";
       // time-asc = 更早在前；time-desc = 最新在前；pin = 盯幅
@@ -2507,6 +2591,254 @@
             return (b.pinnedAt || 0) - (a.pinnedAt || 0);
           })
           .map((item) => item.symbol);
+      }
+
+      function listHiddenPinSymbols(interval) {
+        const iv = interval || CONFIG.KLINE_INTERVAL;
+        const blocked = blacklistSymbols();
+        return pinItems
+          .filter(
+            (item) =>
+              item &&
+              item.symbol &&
+              !blocked.has(item.symbol) &&
+              !hasWindowGain(item.symbol, iv),
+          )
+          .map((item) => item.symbol);
+      }
+
+      function eggSymbolKey(symbol) {
+        return String(symbol || "")
+          .trim()
+          .toUpperCase();
+      }
+
+      function schedulePersistCardEggs(message) {
+        if (cardEggPersistTimer) {
+          clearTimeout(cardEggPersistTimer);
+          cardEggPersistTimer = null;
+        }
+        cardEggPersistTimer = setTimeout(() => {
+          cardEggPersistTimer = null;
+          void persistCardEggs(message);
+        }, 400);
+      }
+
+      async function persistCardEggs(message) {
+        if (cardEggSaving) {
+          schedulePersistCardEggs(message);
+          return;
+        }
+        cardEggSaving = true;
+        const snapshot = {
+          periodHigh: { ...(cardEggState.periodHigh || {}) },
+          periodHighDismiss: { ...(cardEggState.periodHighDismiss || {}) },
+          fromHidden: { ...(cardEggState.fromHidden || {}) },
+          fromHiddenDismiss: { ...(cardEggState.fromHiddenDismiss || {}) },
+          hiddenSnap: [...(cardEggState.hiddenSnap || [])],
+          hiddenSnapSeeded: !!cardEggState.hiddenSnapSeeded,
+        };
+        try {
+          const result = await WatchFavorites.patchCardEggs({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.CARD_EGGS_PATH,
+            message: message || "Update card eggs",
+            mutate: () => snapshot,
+          });
+          cardEggState = result.eggs || snapshot;
+        } catch (error) {
+          console.warn("persist card eggs failed", error);
+        } finally {
+          cardEggSaving = false;
+        }
+      }
+
+      async function loadSharedCardEggs() {
+        try {
+          const state = await WatchFavorites.loadCardEggsRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.CARD_EGGS_PATH,
+          });
+          cardEggState = state.eggs || WatchFavorites.emptyCardEggs();
+        } catch (error) {
+          console.warn("load card eggs failed", error);
+          cardEggState = WatchFavorites.emptyCardEggs();
+        }
+      }
+
+      function hasPeriodHighEgg(symbol) {
+        const key = eggSymbolKey(symbol);
+        return !!(cardEggState.periodHigh && cardEggState.periodHigh[key]);
+      }
+
+      function hasFromHiddenEgg(symbol) {
+        const key = eggSymbolKey(symbol);
+        return !!(cardEggState.fromHidden && cardEggState.fromHidden[key]);
+      }
+
+      /**
+       * 区间新高礼花：
+       * - 当前处于时段新高 → 若未「取消压制中」则点亮并常驻
+       * - 取消后：只要还停在新高上就不再显示；一旦离开新高，取消压制解除
+       * - 之后不论峰值比第一次高还是低（窗口滚动），只要再次处于时段新高就再显示
+       */
+      function notePeriodHighEgg(symbol, atHigh, peak) {
+        const key = eggSymbolKey(symbol);
+        if (!key) return false;
+        if (!cardEggState.periodHigh) cardEggState.periodHigh = {};
+        if (!cardEggState.periodHighDismiss) cardEggState.periodHighDismiss = {};
+        let changed = false;
+        if (!atHigh) {
+          if (cardEggState.periodHighDismiss[key]) {
+            delete cardEggState.periodHighDismiss[key];
+            changed = true;
+          }
+          if (changed) schedulePersistCardEggs(`Card egg leave high ${key}`);
+          return false;
+        }
+        if (cardEggState.periodHighDismiss[key]) return false;
+        const prev = cardEggState.periodHigh[key];
+        const prevPeak = Number(prev && prev.peak);
+        if (
+          prev &&
+          Number.isFinite(prevPeak) &&
+          Number.isFinite(peak) &&
+          peak <= prevPeak * 1.0000001
+        ) {
+          return false;
+        }
+        cardEggState.periodHigh[key] = {
+          at: Date.now(),
+          peak: Number.isFinite(peak) ? peak : prevPeak || null,
+        };
+        schedulePersistCardEggs(`Card egg period high ${key}`);
+        return true;
+      }
+
+      function dismissPeriodHighEgg(symbol) {
+        const key = eggSymbolKey(symbol);
+        if (!key) return;
+        if (cardEggState.periodHigh) delete cardEggState.periodHigh[key];
+        if (!cardEggState.periodHighDismiss) cardEggState.periodHighDismiss = {};
+        cardEggState.periodHighDismiss[key] = { at: Date.now() };
+        schedulePersistCardEggs(`Dismiss period-high egg ${key}`);
+      }
+
+      function activateFromHiddenEgg(symbol) {
+        const key = eggSymbolKey(symbol);
+        if (!key) return false;
+        if (cardEggState.fromHiddenDismiss && cardEggState.fromHiddenDismiss[key]) {
+          return false;
+        }
+        if (!cardEggState.fromHidden) cardEggState.fromHidden = {};
+        if (cardEggState.fromHidden[key]) return false;
+        cardEggState.fromHidden[key] = { at: Date.now() };
+        schedulePersistCardEggs(`Card egg from-hidden ${key}`);
+        return true;
+      }
+
+      function dismissFromHiddenEgg(symbol) {
+        const key = eggSymbolKey(symbol);
+        if (!key) return;
+        if (cardEggState.fromHidden) delete cardEggState.fromHidden[key];
+        if (!cardEggState.fromHiddenDismiss) cardEggState.fromHiddenDismiss = {};
+        cardEggState.fromHiddenDismiss[key] = Date.now();
+        schedulePersistCardEggs(`Dismiss from-hidden egg ${key}`);
+      }
+
+      function clearFromHiddenDismiss(symbol) {
+        const key = eggSymbolKey(symbol);
+        if (!key || !cardEggState.fromHiddenDismiss) return;
+        if (!cardEggState.fromHiddenDismiss[key]) return;
+        delete cardEggState.fromHiddenDismiss[key];
+        schedulePersistCardEggs(`Clear from-hidden dismiss ${key}`);
+      }
+
+      /** Hidden → window-up 边沿触发 NEW；再次掉进隐藏会清掉 dismiss. */
+      function syncFromHiddenEggs(interval) {
+        const hidden = listHiddenPinSymbols(interval);
+        const up = new Set(listWindowUpPinSymbols(interval));
+        const seeded = !!cardEggState.hiddenSnapSeeded;
+        const prevHidden = new Set(
+          (cardEggState.hiddenSnap || []).map(String),
+        );
+        if (!seeded) {
+          cardEggState.hiddenSnap = hidden.slice();
+          cardEggState.hiddenSnapSeeded = true;
+          schedulePersistCardEggs("Seed hidden egg snap");
+          return;
+        }
+        let changed = false;
+        for (const symbol of hidden) {
+          if (cardEggState.fromHiddenDismiss && cardEggState.fromHiddenDismiss[symbol]) {
+            delete cardEggState.fromHiddenDismiss[symbol];
+            changed = true;
+          }
+        }
+        for (const symbol of up) {
+          if (prevHidden.has(symbol)) {
+            if (activateFromHiddenEgg(symbol)) changed = true;
+          }
+        }
+        const nextSnap = hidden.slice();
+        if (JSON.stringify(nextSnap) !== JSON.stringify(cardEggState.hiddenSnap || [])) {
+          cardEggState.hiddenSnap = nextSnap;
+          changed = true;
+        }
+        if (changed) schedulePersistCardEggs("Sync from-hidden eggs");
+      }
+
+      function candlesPeriodPeak(candles) {
+        if (!Array.isArray(candles) || !candles.length) return null;
+        let peak = -Infinity;
+        for (const candle of candles) {
+          const high = Number(candle && candle.high);
+          if (Number.isFinite(high) && high > peak) peak = high;
+        }
+        return Number.isFinite(peak) && peak > 0 ? peak : null;
+      }
+
+      function isAtPeriodHigh(candles, symbol) {
+        const peak = candlesPeriodPeak(candles);
+        if (!Number.isFinite(peak)) return false;
+        const last = candles[candles.length - 1];
+        const lastHigh = Number(last && last.high);
+        const current = Number(marketMap[symbol]?.price);
+        const tol = Math.max(peak * 1e-8, 1e-12);
+        if (Number.isFinite(lastHigh) && lastHigh >= peak - tol) return true;
+        if (Number.isFinite(current) && current >= peak - tol) return true;
+        return false;
+      }
+
+      function applyCardEggChrome(card, symbol) {
+        if (!card || !symbol) return;
+        const showFireworks =
+          klineViewKey === "3d-4h" && hasPeriodHighEgg(symbol);
+        const showNew = hasFromHiddenEgg(symbol);
+        card.classList.toggle("is-egg-fireworks", showFireworks);
+        card.classList.toggle("is-egg-new", showNew && !showFireworks);
+        card.querySelectorAll(".egg-mark").forEach((el) => el.remove());
+        if (showFireworks) {
+          const mark = document.createElement("span");
+          mark.className = "egg-mark";
+          mark.textContent = "新高";
+          mark.title = "近3天·4h 区间新高 · 长按可取消背景";
+          card.appendChild(mark);
+        } else if (showNew) {
+          const mark = document.createElement("span");
+          mark.className = "egg-mark";
+          mark.textContent = "回升";
+          mark.title = "从隐藏盯一下回到窗口上涨 · 长按可取消背景";
+          card.appendChild(mark);
+        }
+      }
+
+      function refreshEggChromeForSymbol(symbol) {
+        const key = eggSymbolKey(symbol);
+        if (!key) return;
+        document
+          .querySelectorAll(`.kline-card[data-symbol="${key}"]`)
+          .forEach((card) => applyCardEggChrome(card, key));
       }
 
       async function removeNotesForSymbol(symbol) {
@@ -3438,6 +3770,7 @@
           lastPinNotify = notifyState.lastPinNotify || null;
           lastPositionNotify = notifyState.lastPositionNotify || null;
           await loadSharedActionLog();
+          await loadSharedCardEggs();
           mergeCloudAutoPinEvents(notifyState.autoPinEvents || []);
         } catch (error) {
           console.warn(error);
@@ -3445,6 +3778,7 @@
           lastPinNotify = null;
           lastPositionNotify = null;
           await loadSharedActionLog();
+          await loadSharedCardEggs();
         }
         pruneHistory();
       }
@@ -5144,6 +5478,12 @@
             pinItem ? pinItem.pinnedAt : null,
             notesMarksForSymbol(symbol),
           );
+          if (klineViewKey === "3d-4h") {
+            const atHigh = isAtPeriodHigh(candles, symbol);
+            const peak = candlesPeriodPeak(candles);
+            notePeriodHighEgg(symbol, atHigh, peak);
+          }
+          applyCardEggChrome(card, symbol);
         } catch (error) {
           if (error.name === "AbortError") return;
           reportApiIssue(error);
@@ -5178,6 +5518,12 @@
             : "";
         const posClass = options.hasPosition ? " is-position" : "";
         const expiredClass = options.isExpired ? " is-expired" : "";
+        const fireworks =
+          klineViewKey === "3d-4h" && hasPeriodHighEgg(symbol);
+        const fromHidden = hasFromHiddenEgg(symbol);
+        const eggFireClass = fireworks ? " is-egg-fireworks" : "";
+        const eggNewClass =
+          !fireworks && fromHidden ? " is-egg-new" : "";
         const marks = [];
         if (options.showMark) marks.push('<span class="fav-mark">★</span>');
         // Notes view: only show 盯 when there is a real pin row.
@@ -5195,6 +5541,15 @@
         if (options.hasPosition) {
           marks.push('<span class="pos-mark">持仓</span>');
         }
+        if (fireworks) {
+          marks.push(
+            '<span class="egg-mark" title="近3天·4h 区间新高 · 长按可取消背景">新高</span>',
+          );
+        } else if (fromHidden) {
+          marks.push(
+            '<span class="egg-mark" title="从隐藏盯一下回到窗口上涨 · 长按可取消背景">回升</span>',
+          );
+        }
         const checkHtml =
           options.selectMode && options.isPinSection
             ? `<input type="checkbox" class="pin-check" ${
@@ -5210,7 +5565,7 @@
           ? "kline-card-head is-pin-head"
           : "kline-card-head";
         const statusClass = options.pinItem ? ' class="pin-stats"' : "";
-        return `<div class="kline-card${favClass}${pairClass}${pinClass}${noteClass}${rewarmClass}${selectClass}${selectedClass}${posClass}${expiredClass}" id="card-${options.section}-${symbol}" data-symbol="${symbol}" data-section="${options.section}"><div class="${headClass}"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status${statusClass}>${statusText}</span></div>${marks.join("")}${checkHtml}<canvas></canvas></div>`;
+        return `<div class="kline-card${favClass}${pairClass}${pinClass}${noteClass}${rewarmClass}${eggFireClass}${eggNewClass}${selectClass}${selectedClass}${posClass}${expiredClass}" id="card-${options.section}-${symbol}" data-symbol="${symbol}" data-section="${options.section}"><div class="${headClass}"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status${statusClass}>${statusText}</span></div>${marks.join("")}${checkHtml}<canvas></canvas></div>`;
       }
 
       function closeCardActions(force) {
@@ -5278,6 +5633,8 @@
         const favored = favoriteSymbols().has(symbol);
         const held = positionSymbols().has(symbol);
         const canAddNote = !isNotesView() && pinned;
+        const hasFireEgg = hasPeriodHighEgg(symbol);
+        const hasNewEgg = hasFromHiddenEgg(symbol);
         const expired = (() => {
           if (!WatchFavorites.PIN_EXPIRY_ENABLED) return false;
           const item = pinItemBySymbol(symbol);
@@ -5307,6 +5664,12 @@
           isNotesView()
             ? `<button type="button" data-action="remove-note" class="is-danger">去掉记一笔</button>`
             : "",
+          hasFireEgg
+            ? `<button type="button" data-action="clear-egg-fire">取消礼花背景</button>`
+            : "",
+          hasNewEgg
+            ? `<button type="button" data-action="clear-egg-new">取消 NEW 背景</button>`
+            : "",
           `<button type="button" data-action="blacklist" class="is-danger">拉黑</button>`,
           `<button type="button" data-action="close" class="is-muted">关闭</button>`,
         ].join("");
@@ -5318,6 +5681,20 @@
           const action = btn.dataset.action;
           if (action === "close") {
             closeCardActions(true);
+            return;
+          }
+          if (action === "clear-egg-fire") {
+            dismissPeriodHighEgg(symbol);
+            refreshEggChromeForSymbol(symbol);
+            closeCardActions(true);
+            showToast("已取消礼花背景");
+            return;
+          }
+          if (action === "clear-egg-new") {
+            dismissFromHiddenEgg(symbol);
+            refreshEggChromeForSymbol(symbol);
+            closeCardActions(true);
+            showToast("已取消 NEW 背景");
             return;
           }
 
@@ -6172,6 +6549,7 @@
         const pairSet = buildPairSet(rising);
         const overlap = pairSet.size;
         const blocked = blacklistSymbols();
+        syncFromHiddenEggs(interval);
         const fallingHidden = favoriteItems.filter((item) => {
           const symbol = item.symbol;
           return (

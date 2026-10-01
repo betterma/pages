@@ -21,6 +21,7 @@
   const PINS_PATH = "watch-pins.json";
   const MOM_NOTES_PATH = "watch-mom-notes.json";
   const ACTION_LOG_PATH = "watch-action-log.json";
+  const CARD_EGGS_PATH = "watch-card-eggs.json";
   const LEGACY_DATA_PATH = "watch-data.json";
   const PIN_TTL_MS = 12 * 60 * 60 * 1000;
   // 暂时关闭盯一下过期；改 true 可恢复 12h TTL。
@@ -1027,6 +1028,129 @@
     throw lastError || new Error("保存动作日志失败");
   }
 
+  function emptyCardEggs() {
+    return {
+      periodHigh: {},
+      periodHighDismiss: {},
+      fromHidden: {},
+      fromHiddenDismiss: {},
+      hiddenSnap: [],
+      hiddenSnapSeeded: false,
+    };
+  }
+
+  function normalizeCardEggs(raw) {
+    const base = emptyCardEggs();
+    if (!raw || typeof raw !== "object") return base;
+    const asMap = (value) =>
+      value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    return {
+      periodHigh: asMap(raw.periodHigh),
+      periodHighDismiss: asMap(raw.periodHighDismiss),
+      fromHidden: asMap(raw.fromHidden),
+      fromHiddenDismiss: asMap(raw.fromHiddenDismiss),
+      hiddenSnap: Array.isArray(raw.hiddenSnap)
+        ? raw.hiddenSnap.map(String)
+        : [],
+      hiddenSnapSeeded: !!raw.hiddenSnapSeeded,
+    };
+  }
+
+  async function loadCardEggsRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || CARD_EGGS_PATH;
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          eggs: normalizeCardEggs(current.data),
+          eggsUpdatedAt: Number.isFinite(Number(current.data.eggsUpdatedAt))
+            ? Number(current.data.eggsUpdatedAt)
+            : null,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadCardEggs via API failed, trying raw", error);
+    }
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          eggs: normalizeCardEggs(data),
+          eggsUpdatedAt: Number.isFinite(Number(data.eggsUpdatedAt))
+            ? Number(data.eggsUpdatedAt)
+            : null,
+          source: "raw-commit",
+        };
+      }
+      if (response.status !== 404) {
+        console.warn(`读取卡片彩蛋 raw 失败: ${response.status}`);
+      }
+    } catch (error) {
+      console.warn("loadCardEggs via commit-raw failed", error);
+    }
+    return { eggs: emptyCardEggs(), eggsUpdatedAt: null, source: "empty" };
+  }
+
+  async function patchCardEggs(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || CARD_EGGS_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = normalizeCardEggs(current.data || emptyCardEggs());
+        let next = base;
+        if (typeof options.mutate === "function") {
+          const result = options.mutate({ ...base });
+          next = normalizeCardEggs(
+            result && result.eggs ? result.eggs : result || base,
+          );
+        }
+        const nextData = {
+          ...next,
+          eggsUpdatedAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update card eggs",
+        });
+        return {
+          eggs: normalizeCardEggs(nextData),
+          eggsUpdatedAt: nextData.eggsUpdatedAt,
+        };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存卡片彩蛋失败");
+  }
+
   async function patchPins(options) {
     const repo = (options && options.repo) || DEFAULT_REPO;
     const path = (options && options.path) || PINS_PATH;
@@ -1339,6 +1463,11 @@
     mergeActionLogs,
     loadActionLogRaw,
     patchActionLog,
+    CARD_EGGS_PATH,
+    emptyCardEggs,
+    normalizeCardEggs,
+    loadCardEggsRaw,
+    patchCardEggs,
     normalizePositions,
     serializePositions,
     positionsToSymbolSet,
