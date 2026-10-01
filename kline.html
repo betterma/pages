@@ -14,7 +14,15 @@
         color: #28323a;
         font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
         --float-dock-h: 48px;
+        /* 给顶部排序条留位，避免挡住标题 / 友情链接 */
+        --sort-rail-reserve: 46px;
+        padding-top: calc(
+          var(--sort-rail-reserve) + env(safe-area-inset-top, 0px)
+        );
         padding-bottom: var(--float-dock-h);
+      }
+      body.is-notes-view {
+        padding-top: 0;
       }
       .page {
         width: min(1400px, calc(100% - 20px));
