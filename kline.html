@@ -132,7 +132,7 @@
       body.is-notes-view .page-section,
       body.is-notes-view #hiddenPinTab,
       body.is-notes-view #hiddenPinDrawer,
-      body.is-notes-view #pinSortSwitch,
+      body.is-notes-view #sortRail,
       body.is-notes-view #recentAutoPinSection {
         display: none !important;
       }
@@ -179,7 +179,98 @@
       .pin-sort-switch {
         margin-left: 2px;
       }
-      .section-title-row .pin-sort-switch {
+      .sort-rail {
+        position: fixed;
+        top: calc(6px + env(safe-area-inset-top, 0px));
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 70;
+        width: min(380px, calc(100% - 20px));
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        pointer-events: none;
+      }
+      .sort-rail > * {
+        pointer-events: auto;
+      }
+      .sort-rail-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+        margin: 0;
+        padding: 7px 12px;
+        border: 1px solid rgba(90, 106, 104, 0.22);
+        border-radius: 999px;
+        background: rgba(251, 252, 250, 0.92);
+        box-shadow: 0 4px 14px rgba(40, 50, 58, 0.1);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        color: #3d4a48;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        line-height: 1.2;
+        cursor: pointer;
+        user-select: none;
+      }
+      .sort-rail-toggle:hover {
+        background: rgba(255, 255, 255, 0.96);
+        border-color: rgba(90, 106, 104, 0.32);
+      }
+      .sort-rail-summary {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .sort-rail-caret {
+        flex-shrink: 0;
+        font-size: 10px;
+        opacity: 0.65;
+        transition: transform 0.16s ease;
+      }
+      .sort-rail.is-open .sort-rail-caret {
+        transform: rotate(180deg);
+      }
+      .sort-rail-panel {
+        display: none;
+        flex-direction: column;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid rgba(90, 106, 104, 0.2);
+        border-radius: 14px;
+        background: rgba(251, 252, 250, 0.96);
+        box-shadow: 0 10px 28px rgba(40, 50, 58, 0.12);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+      .sort-rail.is-open .sort-rail-panel {
+        display: flex;
+      }
+      .sort-rail-panel[hidden] {
+        display: none !important;
+      }
+      .sort-rail-group {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .sort-rail-group[hidden] {
+        display: none !important;
+      }
+      .sort-rail-label {
+        flex-shrink: 0;
+        font-size: 11px;
+        font-weight: 650;
+        color: #78817f;
+        letter-spacing: 0.04em;
+      }
+      .sort-rail-group .pin-sort-switch {
         margin-left: 0;
       }
       .recent-auto-pin {
@@ -208,9 +299,6 @@
         margin: 0 0 8px;
         font-weight: 600;
         letter-spacing: 0.02em;
-      }
-      .recent-auto-pin-head .pin-sort-switch {
-        margin-left: auto;
       }
       .recent-auto-pin .kline-card {
         border-color: #7a9a90;
@@ -1781,16 +1869,6 @@
 
       <div class="section-title-row">
         <h2 class="section-title" id="pinSectionTitle">盯一下</h2>
-        <div
-          class="mode-switch pin-sort-switch"
-          id="pinSortSwitch"
-          role="group"
-          aria-label="盯一下排序"
-          title="盯幅：按相对盯住价；爬升：按近2h/1h信号"
-        >
-          <button type="button" data-pin-sort="pin" class="is-active">盯幅</button>
-          <button type="button" data-pin-sort="momentum">爬升</button>
-        </div>
         <button
           id="pinSelectBtn"
           class="ghost-action"
@@ -1832,6 +1910,52 @@
       <div id="recentAutoPinSection" class="recent-auto-pin" hidden>
         <div class="recent-auto-pin-head">
           <span id="recentAutoPinMeta">新自动盯 / 回暖 · 近12小时 · 窗口上涨</span>
+        </div>
+        <div id="recentAutoPinGrid" class="kline-grid"></div>
+      </div>
+      <div id="pinGrid" class="kline-grid"></div>
+
+      <div id="risingSection" class="page-section">
+      <h2 class="section-title">窗口上涨</h2>
+      <div id="risingMeta" class="meta"></div>
+      <div id="risingGrid" class="kline-grid"></div>
+      </div>
+
+      <div id="favSection" class="page-section">
+      <h2 class="section-title">我的收藏</h2>
+      <div id="favMeta" class="meta"></div>
+      <div id="favGrid" class="kline-grid"></div>
+      </div>
+    </div>
+
+    <aside id="sortRail" class="sort-rail" aria-label="排序控件">
+      <button
+        type="button"
+        id="sortRailToggle"
+        class="sort-rail-toggle"
+        aria-expanded="false"
+        aria-controls="sortRailPanel"
+        title="展开排序选项"
+      >
+        <span id="sortRailSummary" class="sort-rail-summary">盯幅</span>
+        <span class="sort-rail-caret" aria-hidden="true">▾</span>
+      </button>
+      <div id="sortRailPanel" class="sort-rail-panel" hidden>
+        <div class="sort-rail-group">
+          <span class="sort-rail-label">盯一下</span>
+          <div
+            class="mode-switch pin-sort-switch"
+            id="pinSortSwitch"
+            role="group"
+            aria-label="盯一下排序"
+            title="盯幅：按相对盯住价；爬升：按近2h/1h信号"
+          >
+            <button type="button" data-pin-sort="pin" class="is-active">盯幅</button>
+            <button type="button" data-pin-sort="momentum">爬升</button>
+          </div>
+        </div>
+        <div class="sort-rail-group" id="sortRailRecentGroup" hidden>
+          <span class="sort-rail-label">置顶</span>
           <div
             class="mode-switch pin-sort-switch"
             id="recentAutoSortSwitch"
@@ -1850,22 +1974,8 @@
             <button type="button" data-recent-sort="pin">盯幅</button>
           </div>
         </div>
-        <div id="recentAutoPinGrid" class="kline-grid"></div>
       </div>
-      <div id="pinGrid" class="kline-grid"></div>
-
-      <div id="risingSection" class="page-section">
-      <h2 class="section-title">窗口上涨</h2>
-      <div id="risingMeta" class="meta"></div>
-      <div id="risingGrid" class="kline-grid"></div>
-      </div>
-
-      <div id="favSection" class="page-section">
-      <h2 class="section-title">我的收藏</h2>
-      <div id="favMeta" class="meta"></div>
-      <div id="favGrid" class="kline-grid"></div>
-      </div>
-    </div>
+    </aside>
 
     <button
       type="button"
@@ -2247,6 +2357,7 @@
           closeAllFloatPanels();
           setHiddenPinDrawerOpen(false);
           setMaintPanelOpen(false);
+          setSortRailOpen(false);
         } else if (pinSelectMode) {
           // 离开记一笔时退出多选，避免和盯一下多选状态串台。
           pinSelectMode = false;
@@ -3851,6 +3962,75 @@
         return mode === "time-asc" || mode === "time-desc";
       }
 
+      let sortRailCollapseTimer = null;
+      let sortRailLastScrollY = window.scrollY || 0;
+
+      function pinSortLabel() {
+        return pinSortMode === "momentum" ? "爬升" : "盯幅";
+      }
+
+      function recentSortLabel() {
+        if (recentAutoSortMode === "pin") return "盯幅";
+        if (recentAutoSortMode === "time-desc") return "时间·新";
+        return "时间·早";
+      }
+
+      function isSortRailRecentVisible() {
+        const recentSection = document.getElementById("recentAutoPinSection");
+        return !!(recentSection && !recentSection.hidden);
+      }
+
+      function syncSortRailRecentVisibility() {
+        const group = document.getElementById("sortRailRecentGroup");
+        if (!group) return;
+        group.hidden = !isSortRailRecentVisible();
+        syncSortRailSummary();
+      }
+
+      function syncSortRailSummary() {
+        const summary = document.getElementById("sortRailSummary");
+        const toggle = document.getElementById("sortRailToggle");
+        if (!summary) return;
+        const parts = [pinSortLabel()];
+        if (isSortRailRecentVisible()) parts.push(recentSortLabel());
+        summary.textContent = parts.join("  ·  ");
+        if (toggle) {
+          toggle.title = isSortRailOpen()
+            ? "收起排序选项"
+            : "展开排序选项";
+        }
+      }
+
+      function isSortRailOpen() {
+        const rail = document.getElementById("sortRail");
+        return !!(rail && rail.classList.contains("is-open"));
+      }
+
+      function setSortRailOpen(open) {
+        const rail = document.getElementById("sortRail");
+        const panel = document.getElementById("sortRailPanel");
+        const toggle = document.getElementById("sortRailToggle");
+        if (!rail || !panel || !toggle) return;
+        const next = !!open && !isNotesView();
+        rail.classList.toggle("is-open", next);
+        panel.hidden = !next;
+        toggle.setAttribute("aria-expanded", next ? "true" : "false");
+        if (sortRailCollapseTimer) {
+          clearTimeout(sortRailCollapseTimer);
+          sortRailCollapseTimer = null;
+        }
+        syncSortRailSummary();
+      }
+
+      function scheduleSortRailCollapse(delayMs) {
+        if (!isSortRailOpen()) return;
+        if (sortRailCollapseTimer) clearTimeout(sortRailCollapseTimer);
+        sortRailCollapseTimer = setTimeout(() => {
+          sortRailCollapseTimer = null;
+          setSortRailOpen(false);
+        }, delayMs == null ? 900 : delayMs);
+      }
+
       function syncRecentAutoSortUi() {
         document
           .querySelectorAll("#recentAutoSortSwitch [data-recent-sort]")
@@ -3869,6 +4049,7 @@
             }
             btn.classList.toggle("is-active", key === recentAutoSortMode);
           });
+        syncSortRailSummary();
       }
 
       function setRecentAutoSortMode(mode) {
@@ -3896,6 +4077,7 @@
         syncRecentAutoSortUi();
         if (isNotesView() || loading) return;
         reorderRecentAutoPinGrid();
+        scheduleSortRailCollapse();
       }
 
       function reorderRecentAutoPinGrid() {
@@ -3936,6 +4118,7 @@
               : "近2h/1h 计算中"
             : "按近2h/1h 信号排序";
         });
+        syncSortRailSummary();
       }
 
       function setPinSortMode(mode) {
@@ -3954,6 +4137,7 @@
         } else {
           reorderPinGridByPinChange();
         }
+        scheduleSortRailCollapse();
       }
 
       function mergeCloudAutoPinEvents(events) {
@@ -6516,6 +6700,7 @@
             const recentGrid = document.getElementById("recentAutoPinGrid");
             if (recentGrid) recentGrid.innerHTML = "";
           }
+          syncSortRailRecentVisibility();
           void schedulePinMomentum(scoreSymbols);
           return;
         }
@@ -6736,6 +6921,7 @@
         if (recentSection && recentGrid) {
           if (recentAutoList.length) {
             recentSection.hidden = false;
+            syncSortRailRecentVisibility();
             syncRecentAutoSortUi();
             if (recentMeta) {
               const rewarmCount = recentAutoItems.filter((item) =>
@@ -6761,6 +6947,7 @@
           } else {
             recentSection.hidden = true;
             recentGrid.innerHTML = "";
+            syncSortRailRecentVisibility();
           }
         }
         if (signal.aborted) return;
@@ -7648,6 +7835,34 @@
         });
         syncRecentAutoSortUi();
       }
+      const sortRailToggle = document.getElementById("sortRailToggle");
+      if (sortRailToggle) {
+        sortRailToggle.addEventListener("click", () => {
+          closeCardActions();
+          setSortRailOpen(!isSortRailOpen());
+        });
+      }
+      syncSortRailRecentVisibility();
+      document.addEventListener("pointerdown", (event) => {
+        if (!isSortRailOpen()) return;
+        if (event.target.closest("#sortRail")) return;
+        setSortRailOpen(false);
+      });
+      window.addEventListener(
+        "scroll",
+        () => {
+          if (!isSortRailOpen()) {
+            sortRailLastScrollY = window.scrollY || 0;
+            return;
+          }
+          const y = window.scrollY || 0;
+          if (Math.abs(y - sortRailLastScrollY) > 18) {
+            setSortRailOpen(false);
+          }
+          sortRailLastScrollY = y;
+        },
+        { passive: true },
+      );
       document.addEventListener("pointerdown", (event) => {
         if (event.target.closest(".card-actions")) return;
         const open = document.querySelector(".card-actions");
