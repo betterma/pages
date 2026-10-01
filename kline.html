@@ -2150,6 +2150,20 @@
       >
         取消
       </button>
+      <button
+        type="button"
+        id="pinBatchClearEggFireBtn"
+        title="去掉选中项的礼花背景（无背景自动跳过）"
+      >
+        去礼花
+      </button>
+      <button
+        type="button"
+        id="pinBatchClearEggNewBtn"
+        title="去掉选中项的 NEW 背景（无背景自动跳过）"
+      >
+        去 NEW
+      </button>
       <button type="button" id="pinBatchClearBtn" title="清空选择">清空</button>
       <button type="button" id="pinBatchExitBtn" title="退出多选">×</button>
     </div>
@@ -2834,13 +2848,18 @@
         return true;
       }
 
-      function dismissPeriodHighEgg(symbol) {
+      function dismissPeriodHighEgg(symbol, options) {
         const key = eggSymbolKey(symbol);
-        if (!key) return;
-        if (cardEggState.periodHigh) delete cardEggState.periodHigh[key];
+        if (!key) return false;
+        const had = !!(cardEggState.periodHigh && cardEggState.periodHigh[key]);
+        if (!had) return false;
+        delete cardEggState.periodHigh[key];
         if (!cardEggState.periodHighDismiss) cardEggState.periodHighDismiss = {};
         cardEggState.periodHighDismiss[key] = { at: Date.now() };
-        schedulePersistCardEggs(`Dismiss period-high egg ${key}`);
+        if (!(options && options.skipPersist)) {
+          schedulePersistCardEggs(`Dismiss period-high egg ${key}`);
+        }
+        return true;
       }
 
       function activateFromHiddenEgg(symbol) {
@@ -2856,13 +2875,18 @@
         return true;
       }
 
-      function dismissFromHiddenEgg(symbol) {
+      function dismissFromHiddenEgg(symbol, options) {
         const key = eggSymbolKey(symbol);
-        if (!key) return;
-        if (cardEggState.fromHidden) delete cardEggState.fromHidden[key];
+        if (!key) return false;
+        const had = !!(cardEggState.fromHidden && cardEggState.fromHidden[key]);
+        if (!had) return false;
+        delete cardEggState.fromHidden[key];
         if (!cardEggState.fromHiddenDismiss) cardEggState.fromHiddenDismiss = {};
         cardEggState.fromHiddenDismiss[key] = Date.now();
-        schedulePersistCardEggs(`Dismiss from-hidden egg ${key}`);
+        if (!(options && options.skipPersist)) {
+          schedulePersistCardEggs(`Dismiss from-hidden egg ${key}`);
+        }
+        return true;
       }
 
       function clearFromHiddenDismiss(symbol) {
@@ -6016,10 +6040,18 @@
         }
         const renewBtn = document.getElementById("pinBatchRenewBtn");
         const unpinBtn = document.getElementById("pinBatchUnpinBtn");
+        const clearEggFireBtn = document.getElementById("pinBatchClearEggFireBtn");
+        const clearEggNewBtn = document.getElementById("pinBatchClearEggNewBtn");
         const clearBtn = document.getElementById("pinBatchClearBtn");
         const selectAllBtn = document.getElementById("pinBatchSelectAllBtn");
         const busy = isNotesView() ? momNotesSaving : pinSaving;
         const disabled = busy || selectedPinSymbols.size === 0;
+        const eggFireCount = [...selectedPinSymbols].filter((symbol) =>
+          hasPeriodHighEgg(symbol),
+        ).length;
+        const eggNewCount = [...selectedPinSymbols].filter((symbol) =>
+          hasFromHiddenEgg(symbol),
+        ).length;
         if (renewBtn) {
           renewBtn.hidden = isNotesView();
           renewBtn.disabled = disabled;
@@ -6030,6 +6062,22 @@
           unpinBtn.title = isNotesView()
             ? "取消选中币的记一笔"
             : "取消盯住";
+        }
+        if (clearEggFireBtn) {
+          clearEggFireBtn.hidden = isNotesView();
+          clearEggFireBtn.disabled = busy || eggFireCount === 0;
+          clearEggFireBtn.title =
+            eggFireCount > 0
+              ? `去掉选中项中 ${eggFireCount} 个礼花背景`
+              : "去掉选中项的礼花背景（无背景自动跳过）";
+        }
+        if (clearEggNewBtn) {
+          clearEggNewBtn.hidden = isNotesView();
+          clearEggNewBtn.disabled = busy || eggNewCount === 0;
+          clearEggNewBtn.title =
+            eggNewCount > 0
+              ? `去掉选中项中 ${eggNewCount} 个 NEW 背景`
+              : "去掉选中项的 NEW 背景（无背景自动跳过）";
         }
         if (clearBtn) clearBtn.disabled = selectedPinSymbols.size === 0;
         if (selectAllBtn) {
@@ -6178,6 +6226,44 @@
           pinSaving = false;
           updatePinSelectUi();
         }
+      }
+
+      function batchClearEggFireSelected() {
+        if (isNotesView() || !selectedPinSymbols.size) return;
+        const targets = [...selectedPinSymbols].filter((symbol) =>
+          hasPeriodHighEgg(symbol),
+        );
+        if (!targets.length) {
+          showToast("选中项没有礼花背景");
+          updatePinSelectUi();
+          return;
+        }
+        for (const symbol of targets) {
+          dismissPeriodHighEgg(symbol, { skipPersist: true });
+        }
+        schedulePersistCardEggs(`Batch dismiss period-high x${targets.length}`);
+        for (const symbol of targets) refreshEggChromeForSymbol(symbol);
+        showToast(`已取消礼花 ${targets.length} 个`);
+        updatePinSelectUi();
+      }
+
+      function batchClearEggNewSelected() {
+        if (isNotesView() || !selectedPinSymbols.size) return;
+        const targets = [...selectedPinSymbols].filter((symbol) =>
+          hasFromHiddenEgg(symbol),
+        );
+        if (!targets.length) {
+          showToast("选中项没有 NEW 背景");
+          updatePinSelectUi();
+          return;
+        }
+        for (const symbol of targets) {
+          dismissFromHiddenEgg(symbol, { skipPersist: true });
+        }
+        schedulePersistCardEggs(`Batch dismiss from-hidden x${targets.length}`);
+        for (const symbol of targets) refreshEggChromeForSymbol(symbol);
+        showToast(`已取消 NEW ${targets.length} 个`);
+        updatePinSelectUi();
       }
 
       async function batchRemoveNotesSelected() {
@@ -7749,6 +7835,16 @@
         .getElementById("pinBatchRenewBtn")
         .addEventListener("click", () => {
           batchRenewSelected();
+        });
+      document
+        .getElementById("pinBatchClearEggFireBtn")
+        .addEventListener("click", () => {
+          batchClearEggFireSelected();
+        });
+      document
+        .getElementById("pinBatchClearEggNewBtn")
+        .addEventListener("click", () => {
+          batchClearEggNewSelected();
         });
       document.getElementById("hiddenPinTab").addEventListener("click", () => {
         closeCardActions();
