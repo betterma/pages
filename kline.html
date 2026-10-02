@@ -9,17 +9,23 @@
         box-sizing: border-box;
       }
       :root {
-        --ios-bg: #f2f2f7;
-        --ios-grouped: #ffffff;
-        --ios-label: #1c1c1e;
+        --ios-bg: #000000;
+        --ios-grouped: #1c1c1e;
+        --ios-elevated: #2c2c2e;
+        --ios-label: #f5f5f7;
         --ios-secondary: #8e8e93;
-        --ios-separator: rgba(60, 60, 67, 0.12);
-        --ios-blue: #007aff;
-        --ios-fill: rgba(120, 120, 128, 0.16);
+        --ios-separator: rgba(84, 84, 88, 0.65);
+        --ios-blue: #0a84ff;
+        --ios-green: #30d158;
+        --ios-red: #ff453a;
+        --ios-orange: #ff9f0a;
+        --ios-fill: rgba(120, 120, 128, 0.36);
+        --ios-fill-strong: rgba(120, 120, 128, 0.48);
         --ios-radius: 12px;
         --ios-radius-lg: 16px;
         --chrome-top-h: 52px;
         --float-dock-h: 54px;
+        --chrome-blur: rgba(22, 22, 24, 0.78);
       }
       body {
         margin: 0;
@@ -59,7 +65,7 @@
         gap: 6px;
         height: calc(var(--chrome-top-h) + env(safe-area-inset-top, 0px));
         padding: env(safe-area-inset-top, 0px) 8px 0;
-        background: rgba(242, 242, 247, 0.82);
+        background: var(--chrome-blur);
         backdrop-filter: saturate(180%) blur(20px);
         -webkit-backdrop-filter: saturate(180%) blur(20px);
         border-bottom: 0.5px solid var(--ios-separator);
@@ -102,7 +108,7 @@
         color: var(--ios-label);
       }
       .app-chrome .sort-rail-toggle:hover {
-        background: rgba(120, 120, 128, 0.22);
+        background: var(--ios-fill-strong);
         border-color: transparent;
       }
       .app-chrome .sort-rail-panel {
@@ -111,6 +117,9 @@
         top: calc(100% + 4px);
         width: min(300px, calc(100vw - 16px));
         z-index: 80;
+        background: rgba(44, 44, 46, 0.96);
+        border: 0.5px solid var(--ios-separator);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
       }
       .app-chrome .mode-switch {
         padding: 2px;
@@ -123,12 +132,12 @@
         border-radius: 7px;
         font-size: 12px;
         font-weight: 600;
-        color: var(--ios-label);
+        color: var(--ios-secondary);
       }
       .app-chrome .mode-switch button.is-active {
-        background: var(--ios-grouped);
+        background: var(--ios-elevated);
         color: var(--ios-label);
-        box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.45);
       }
       .app-chrome .range-select {
         max-width: 108px;
@@ -246,8 +255,8 @@
         padding: 6px;
         border: 0.5px solid var(--ios-separator);
         border-radius: var(--ios-radius);
-        background: rgba(255, 255, 255, 0.94);
-        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+        background: rgba(44, 44, 46, 0.96);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
         display: flex;
         flex-direction: column;
         gap: 2px;
@@ -298,9 +307,9 @@
         background: transparent;
       }
       .mode-switch button.is-active {
-        background: var(--ios-grouped);
+        background: var(--ios-elevated);
         color: var(--ios-label);
-        box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.45);
       }
       .mode-switch button:disabled {
         opacity: 0.45;
@@ -348,8 +357,8 @@
         gap: 10px;
         padding: 12px;
         border-radius: var(--ios-radius-lg);
-        background: rgba(255, 255, 255, 0.96);
-        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
+        background: rgba(44, 44, 46, 0.96);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
         border: 0.5px solid var(--ios-separator);
       }
       .sort-rail.is-open .sort-rail-panel {
@@ -454,9 +463,9 @@
         align-items: center;
         justify-content: center;
         gap: 10px;
-        background: rgba(244, 245, 243, 0.55);
-        backdrop-filter: blur(2px);
-        -webkit-backdrop-filter: blur(2px);
+        background: rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.18s ease;
@@ -485,7 +494,7 @@
         display: block;
         height: 100%;
         width: 0;
-        background: linear-gradient(90deg, #71a89a, #2f8f6e);
+        background: linear-gradient(90deg, #64b5ff, var(--ios-blue));
         transition: width 0.28s ease;
       }
       .mode-progress-bar.is-indeterminate > span {
@@ -495,12 +504,12 @@
       }
       .mode-progress-label {
         font-size: 13px;
-        color: #5a6a68;
-        background: rgba(251, 252, 250, 0.92);
-        border: 1px solid rgba(200, 208, 204, 0.9);
-        border-radius: 8px;
+        color: var(--ios-label);
+        background: rgba(44, 44, 46, 0.94);
+        border: 0.5px solid var(--ios-separator);
+        border-radius: 10px;
         padding: 8px 14px;
-        box-shadow: 0 6px 18px rgba(40, 50, 48, 0.08);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
       }
       .stop-loss-gate {
         position: fixed;
@@ -630,7 +639,7 @@
       }
       button {
         border: 0.5px solid var(--ios-separator);
-        background: var(--ios-grouped);
+        background: var(--ios-elevated);
         color: var(--ios-label);
         padding: 8px 13px;
         border-radius: 10px;
@@ -638,7 +647,7 @@
         font: inherit;
       }
       button:hover {
-        background: rgba(120, 120, 128, 0.12);
+        background: var(--ios-fill-strong);
       }
       button:disabled {
         opacity: 0.45;
@@ -657,7 +666,7 @@
         max-width: min(220px, 52vw);
       }
       select.range-select:hover {
-        background: rgba(120, 120, 128, 0.22);
+        background: var(--ios-fill-strong);
       }
       select.range-select:disabled {
         opacity: 0.55;
@@ -698,11 +707,11 @@
         flex-shrink: 0;
       }
       .dot.online {
-        background: #34c759;
-        box-shadow: none;
+        background: var(--ios-green);
+        box-shadow: 0 0 8px rgba(48, 209, 88, 0.45);
       }
       .dot.offline {
-        background: #ff3b30;
+        background: var(--ios-red);
       }
       .meta {
         color: var(--ios-secondary);
@@ -911,9 +920,9 @@
         right: 0;
         width: min(420px, 92vw);
         height: 100%;
-        background: #f4f5f3;
-        border-left: 1px solid #d0d6d2;
-        box-shadow: -8px 0 28px rgba(20, 28, 26, 0.18);
+        background: var(--ios-grouped);
+        border-left: 0.5px solid var(--ios-separator);
+        box-shadow: -12px 0 36px rgba(0, 0, 0, 0.55);
         transform: translateX(104%);
         transition: transform 0.22s ease;
         display: flex;
@@ -928,16 +937,17 @@
         justify-content: space-between;
         gap: 10px;
         padding: 14px 14px 10px;
-        border-bottom: 1px solid #dce2de;
+        border-bottom: 0.5px solid var(--ios-separator);
       }
       .hidden-pin-head h3 {
         margin: 0;
         font-size: 16px;
+        color: var(--ios-label);
       }
       .hidden-pin-head p {
         margin: 4px 0 0;
         font-size: 12px;
-        color: #78817f;
+        color: var(--ios-secondary);
       }
       .hidden-pin-body {
         flex: 1;
@@ -964,13 +974,13 @@
         background: var(--ios-grouped);
         border: 0.5px solid var(--ios-separator);
         border-radius: var(--ios-radius);
-        color: #6a7572;
+        color: var(--ios-secondary);
         user-select: none;
         -webkit-user-select: none;
         touch-action: manipulation;
         /* 沿用原「过期」淡雅观感，作为默认素色 */
-        opacity: 0.52;
-        filter: grayscale(0.5);
+        opacity: 0.72;
+        filter: grayscale(0.35);
         transition:
           transform 0.15s ease,
           box-shadow 0.15s ease,
@@ -1099,10 +1109,10 @@
         37%,
         62%,
         87% {
-          outline-color: #7a9a90;
-          box-shadow: 0 0 0 4px rgba(90, 120, 110, 0.2);
-          opacity: 0.9;
-          filter: grayscale(0.12);
+          outline-color: var(--ios-blue);
+          box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.28);
+          opacity: 0.95;
+          filter: none;
         }
         25%,
         50%,
@@ -1287,10 +1297,10 @@
         border: 0.5px solid var(--ios-separator);
         border-bottom: none;
         border-radius: 14px 14px 0 0;
-        background: rgba(255, 255, 255, 0.92);
+        background: rgba(28, 28, 30, 0.94);
         backdrop-filter: saturate(180%) blur(20px);
         -webkit-backdrop-filter: saturate(180%) blur(20px);
-        box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.55);
       }
       .notify-float[hidden] {
         display: none !important;
@@ -1318,14 +1328,14 @@
       .notify-float-head .notify-time {
         margin-left: 6px;
         font-size: 11px;
-        color: #78817f;
+        color: var(--ios-secondary);
         font-weight: 400;
       }
       .notify-float-refresh,
       .notify-float-close {
         border: none;
-        background: rgba(90, 106, 104, 0.08);
-        color: #5a6a68;
+        background: var(--ios-fill);
+        color: var(--ios-blue);
         padding: 4px 10px;
         min-width: 36px;
         min-height: 32px;
@@ -1336,10 +1346,11 @@
       }
       .notify-float-close {
         font-size: 18px;
+        color: var(--ios-secondary);
       }
       .notify-float-refresh:hover,
       .notify-float-close:hover {
-        background: rgba(90, 106, 104, 0.16);
+        background: var(--ios-fill-strong);
       }
       .notify-float-refresh:disabled {
         opacity: 0.55;
@@ -1351,7 +1362,7 @@
         padding: 10px 12px 12px;
         font-size: 12px;
         line-height: 1.55;
-        color: #28323a;
+        color: var(--ios-label);
         white-space: pre-wrap;
         word-break: break-word;
         overscroll-behavior: contain;
@@ -1378,7 +1389,7 @@
         overscroll-behavior: contain;
       }
       .notify-col + .notify-col {
-        border-left: 1px solid rgba(220, 226, 222, 0.55);
+        border-left: 0.5px solid var(--ios-separator);
       }
       .notify-col-title {
         position: sticky;
@@ -1386,11 +1397,11 @@
         z-index: 1;
         font-size: 11px;
         font-weight: 650;
-        color: #78817f;
+        color: var(--ios-secondary);
         margin: -2px 0 8px;
         padding: 2px 0 6px;
         letter-spacing: 0.04em;
-        background: rgba(244, 245, 243, 0.92);
+        background: rgba(28, 28, 30, 0.94);
       }
       .notify-col-empty {
         color: #9aa3a0;
@@ -1434,7 +1445,7 @@
         background: transparent;
         padding: 0;
         margin: 0;
-        color: inherit;
+        color: var(--ios-blue);
         font: inherit;
         font-weight: 700;
         text-decoration: underline;
@@ -1444,7 +1455,7 @@
       }
       .notify-float-body .notify-coin:hover,
       .notify-float-body .notify-coin:active {
-        color: #1f6b52;
+        color: #64b5ff;
       }
       .mom-row {
         margin-bottom: 10px;
@@ -1689,7 +1700,7 @@
         margin: 0;
         padding: 0 0 env(safe-area-inset-bottom, 0px);
         border-top: 0.5px solid var(--ios-separator);
-        background: rgba(249, 249, 249, 0.92);
+        background: var(--chrome-blur);
         backdrop-filter: saturate(180%) blur(20px);
         -webkit-backdrop-filter: saturate(180%) blur(20px);
         box-shadow: none;
@@ -1765,7 +1776,7 @@
           bottom: var(--float-dock-h, 54px);
           width: 100%;
           max-height: min(48vh, calc(100vh - var(--float-dock-h, 54px) - 8px));
-          background: rgba(255, 255, 255, 0.94);
+          background: rgba(28, 28, 30, 0.96);
         }
         .notify-float-body {
           font-size: 11px;
@@ -1804,25 +1815,25 @@
         justify-content: center;
         gap: 8px;
         padding: 12px 14px;
-        background: rgba(244, 245, 243, 0.94);
-        border-radius: 8px;
+        background: rgba(28, 28, 30, 0.94);
+        border-radius: 12px;
       }
       .card-actions button {
         width: 100%;
-        border: 1px solid #c9d0d0;
-        background: #fbfcfa;
-        color: #28323a;
+        border: 0.5px solid var(--ios-separator);
+        background: var(--ios-elevated);
+        color: var(--ios-label);
         padding: 10px 12px;
-        border-radius: 6px;
+        border-radius: 10px;
         font-size: 14px;
         cursor: pointer;
       }
       .card-actions button:hover {
-        background: #eef1ee;
+        background: var(--ios-fill-strong);
       }
       .card-actions button.is-danger {
-        color: #8d7771;
-        border-color: #d5cbc6;
+        color: var(--ios-red);
+        border-color: rgba(255, 69, 58, 0.35);
       }
       .card-actions button.is-muted {
         color: #78817f;
@@ -3983,7 +3994,10 @@
         )];
         if (!keys.length) return;
         const entry = {
-          at: Date.now(),
+          at:
+            extra && Number.isFinite(extra.at) && extra.at > 0
+              ? Number(extra.at)
+              : Date.now(),
           kind: String(kind || ""),
           symbols: keys,
         };
@@ -3994,6 +4008,70 @@
           [entry, ...readActionLog()],
           `Action log ${entry.kind}`,
         );
+      }
+
+      /**
+       * 一次性/幂等：把 GitHub 记一笔（动态区历史数据）补进动作日志「记一下」。
+       * 不改 watch-mom-notes.json，不影响破点高等业务；已存在的 mom-note 日志不重复写入。
+       */
+      async function migrateMomNotesIntoActionLog() {
+        const notes = Array.isArray(momNoteItems) ? momNoteItems : [];
+        if (!notes.length) return [];
+        const existing = readActionLog();
+        const momLogs = existing.filter(
+          (entry) => entry && entry.kind === "mom-note",
+        );
+        const exactKeys = new Set(
+          momLogs
+            .map((entry) =>
+              typeof WatchFavorites.actionLogEntryKey === "function"
+                ? WatchFavorites.actionLogEntryKey(entry)
+                : "",
+            )
+            .filter(Boolean),
+        );
+        const noteAlreadyLogged = (note) => {
+          const symbol = String(note && note.symbol || "")
+            .trim()
+            .toUpperCase();
+          const at = Number(note && note.at) || 0;
+          if (!symbol) return true;
+          return momLogs.some((entry) => {
+            const symbols = Array.isArray(entry.symbols) ? entry.symbols : [];
+            if (!symbols.includes(symbol)) return false;
+            const eat = Number(entry.at) || 0;
+            // 新写入时 note.at 与日志 at 可能差几毫秒
+            return Math.abs(eat - at) <= 5000;
+          });
+        };
+        const toAdd = [];
+        for (const note of notes) {
+          if (noteAlreadyLogged(note)) continue;
+          const symbol = String(note && note.symbol || "")
+            .trim()
+            .toUpperCase();
+          if (!symbol) continue;
+          const entry = {
+            at: Number(note.at) || Date.now(),
+            kind: "mom-note",
+            symbols: [symbol],
+          };
+          const price = Number(note.price);
+          if (Number.isFinite(price) && price > 0) entry.price = price;
+          const key =
+            typeof WatchFavorites.actionLogEntryKey === "function"
+              ? WatchFavorites.actionLogEntryKey(entry)
+              : "";
+          if (key && exactKeys.has(key)) continue;
+          if (key) exactKeys.add(key);
+          toAdd.push(entry);
+        }
+        if (!toAdd.length) return [];
+        await persistActionLog(
+          [...toAdd, ...existing],
+          `Migrate mom notes to action log x${toAdd.length}`,
+        );
+        return toAdd;
       }
 
       async function loadSharedActionLog() {
@@ -4449,6 +4527,7 @@
           lastPinNotify = notifyState.lastPinNotify || null;
           lastPositionNotify = notifyState.lastPositionNotify || null;
           await loadSharedActionLog();
+          await migrateMomNotesIntoActionLog();
           await loadSharedCardEggs();
           await loadSharedBreakHigh();
           mergeCloudAutoPinEvents(notifyState.autoPinEvents || []);
@@ -4458,6 +4537,7 @@
           lastPinNotify = null;
           lastPositionNotify = null;
           await loadSharedActionLog();
+          await migrateMomNotesIntoActionLog();
           await loadSharedCardEggs();
           await loadSharedBreakHigh();
         }
@@ -5794,6 +5874,7 @@
           momNoteItems = result.notes || [];
           appendActionLog("mom-note", [entry.symbol], {
             price: entry.price,
+            at: entry.at,
           });
           showToast(`已记 ${entry.label}`);
           applyNotesFilter();
@@ -7509,31 +7590,63 @@
           .trim()
           .toUpperCase();
         if (!key) return;
-        const order = ["pin", "rising", "favorite", "pin-hidden"];
-        const cards = [
+        const order = [
+          "pin",
+          "pin-recent",
+          "rising",
+          "favorite",
+          "pin-hidden",
+        ];
+        const isShown = (el) => {
+          if (!el || el.classList.contains("is-notes-filtered-out")) return false;
+          const style = window.getComputedStyle(el);
+          if (style.display === "none" || style.visibility === "hidden") {
+            return false;
+          }
+          if (el.getClientRects().length === 0) return false;
+          return true;
+        };
+        // 若目标只在折叠的「新自动盯」里，先展开
+        const recentSection = document.getElementById("recentAutoPinSection");
+        if (
+          recentSection &&
+          recentSection.classList.contains("is-collapsed") &&
+          recentSection.querySelector(
+            `.kline-card[data-symbol="${key}"]`,
+          )
+        ) {
+          setRecentAutoPinCollapsed(false);
+        }
+        const all = [
           ...document.querySelectorAll(`.kline-card[data-symbol="${key}"]`),
         ].sort(
           (a, b) =>
             order.indexOf(a.dataset.section) - order.indexOf(b.dataset.section),
         );
-        const card = cards[0];
+        const card = all.find(isShown) || all[0];
         if (!card) {
           showToast(`${key.replace(/USDT$/i, "")} 当前页面未展示`);
           return;
         }
+        closeAllFloatPanels();
         if (card.dataset.section === "pin-hidden") {
           setHiddenPinDrawerOpen(true);
         }
-        card.scrollIntoView({ behavior: "smooth", block: "start" });
-        card.classList.remove("is-jump-target");
-        // Force reflow so re-click restarts the flash animation.
-        void card.offsetWidth;
-        card.classList.add("is-jump-target");
-        if (card._jumpFlashTimer) window.clearTimeout(card._jumpFlashTimer);
-        card._jumpFlashTimer = window.setTimeout(() => {
+        const scrollToCard = () => {
+          card.scrollIntoView({ behavior: "smooth", block: "start" });
           card.classList.remove("is-jump-target");
-          card._jumpFlashTimer = null;
-        }, 2900);
+          void card.offsetWidth;
+          card.classList.add("is-jump-target");
+          if (card._jumpFlashTimer) window.clearTimeout(card._jumpFlashTimer);
+          card._jumpFlashTimer = window.setTimeout(() => {
+            card.classList.remove("is-jump-target");
+            card._jumpFlashTimer = null;
+          }, 2900);
+        };
+        // 等浮层收起后再滚，避免被挡或量到错误高度
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(scrollToCard);
+        });
       }
 
       function renderPlainNotifyHtml(text, symbols) {
@@ -8391,9 +8504,11 @@
           refreshNotifyFloat({ silent: true }).catch((error) => {
             console.warn("light refresh notify failed", error);
           }),
-          loadSharedActionLog().catch((error) => {
-            console.warn("light refresh action log failed", error);
-          }),
+          loadSharedActionLog()
+            .then(() => migrateMomNotesIntoActionLog())
+            .catch((error) => {
+              console.warn("light refresh action log failed", error);
+            }),
         ];
         await Promise.all(tasks);
         const symbols = currentMomentumUniverse();
@@ -8818,6 +8933,15 @@
           if (!link) return;
           event.preventDefault();
           jumpToNotifySymbol(link.dataset.jump);
+      });
+      // 兜底：任意浮层/列表里的币名跳转（避免个别容器漏绑）
+      document.addEventListener("click", (event) => {
+        const link = event.target.closest("a.notify-coin[data-jump]");
+        if (!link) return;
+        // 已由更具体容器处理过则不再重复（仍允许跳转一次）
+        if (event.defaultPrevented) return;
+        event.preventDefault();
+        jumpToNotifySymbol(link.dataset.jump || link.getAttribute("data-jump"));
       });
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
