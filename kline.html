@@ -8,47 +8,175 @@
       * {
         box-sizing: border-box;
       }
+      :root {
+        --ios-bg: #f2f2f7;
+        --ios-grouped: #ffffff;
+        --ios-label: #1c1c1e;
+        --ios-secondary: #8e8e93;
+        --ios-separator: rgba(60, 60, 67, 0.12);
+        --ios-blue: #007aff;
+        --ios-fill: rgba(120, 120, 128, 0.16);
+        --ios-radius: 12px;
+        --ios-radius-lg: 16px;
+        --chrome-top-h: 52px;
+        --float-dock-h: 54px;
+      }
       body {
         margin: 0;
-        background: #f4f5f3;
-        color: #28323a;
-        font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
-        --float-dock-h: 48px;
-        /* 给顶部排序条留位，避免挡住标题 / 友情链接 */
-        --sort-rail-reserve: 46px;
+        background: var(--ios-bg);
+        color: var(--ios-label);
+        font-family:
+          -apple-system,
+          BlinkMacSystemFont,
+          "SF Pro Text",
+          "Segoe UI",
+          "PingFang SC",
+          "Microsoft YaHei",
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
         padding-top: calc(
-          var(--sort-rail-reserve) + env(safe-area-inset-top, 0px)
+          var(--chrome-top-h) + env(safe-area-inset-top, 0px)
         );
-        padding-bottom: var(--float-dock-h);
+        padding-bottom: calc(
+          var(--float-dock-h) + env(safe-area-inset-bottom, 0px)
+        );
       }
       body.is-notes-view .kline-card.is-notes-filtered-out {
         display: none !important;
       }
       .page {
         width: min(1400px, calc(100% - 20px));
-        margin: 12px auto 24px;
+        margin: 8px auto 24px;
       }
-      .topbar {
+      .app-chrome {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 70;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: calc(var(--chrome-top-h) + env(safe-area-inset-top, 0px));
+        padding: env(safe-area-inset-top, 0px) 8px 0;
+        background: rgba(242, 242, 247, 0.82);
+        backdrop-filter: saturate(180%) blur(20px);
+        -webkit-backdrop-filter: saturate(180%) blur(20px);
+        border-bottom: 0.5px solid var(--ios-separator);
+      }
+      .app-chrome-left,
+      .app-chrome-right {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+      }
+      .app-chrome-left {
+        flex: 1 1 auto;
+      }
+      .app-chrome-right {
+        flex: 0 0 auto;
+        margin-left: auto;
+      }
+      .app-chrome .sort-rail {
+        position: static;
+        transform: none;
+        left: auto;
+        top: auto;
+        width: auto;
+        max-width: min(132px, 30vw);
+        pointer-events: auto;
+        flex-shrink: 1;
+        min-width: 0;
+      }
+      .app-chrome .sort-rail-toggle {
+        padding: 6px 10px;
+        border-radius: 980px;
+        border: none;
+        background: var(--ios-fill);
+        box-shadow: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        font-weight: 600;
+        font-size: 12px;
+        color: var(--ios-label);
+      }
+      .app-chrome .sort-rail-toggle:hover {
+        background: rgba(120, 120, 128, 0.22);
+        border-color: transparent;
+      }
+      .app-chrome .sort-rail-panel {
+        position: absolute;
+        left: 8px;
+        top: calc(100% + 4px);
+        width: min(300px, calc(100vw - 16px));
+        z-index: 80;
+      }
+      .app-chrome .mode-switch {
+        padding: 2px;
+        border: none;
+        border-radius: 9px;
+        background: var(--ios-fill);
+      }
+      .app-chrome .mode-switch button {
+        padding: 5px 9px;
+        border-radius: 7px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ios-label);
+      }
+      .app-chrome .mode-switch button.is-active {
+        background: var(--ios-grouped);
+        color: var(--ios-label);
+        box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.08);
+      }
+      .app-chrome .range-select {
+        max-width: 108px;
+        padding: 6px 8px;
+        border: none;
+        border-radius: 9px;
+        background: var(--ios-fill);
+        color: var(--ios-label);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .app-chrome .chrome-btn {
+        flex-shrink: 0;
+        border: none;
+        border-radius: 9px;
+        background: var(--ios-blue);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+      .app-chrome .chrome-btn.is-secondary {
+        background: var(--ios-fill);
+        color: var(--ios-blue);
+      }
+      .app-chrome .chrome-btn:disabled {
+        opacity: 0.45;
+        cursor: wait;
+      }
+      .page-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
-        margin-bottom: 10px;
-        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 6px;
       }
-      .topbar-left {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        min-width: 0;
-      }
-      h1 {
+      .page-header h1 {
         margin: 0;
-        font-size: 20px;
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
       }
       h2.section-title {
         margin: 16px 0 6px;
-        font-size: 15px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ios-secondary);
       }
       .section-title-row {
         display: flex;
@@ -66,34 +194,31 @@
         flex-shrink: 0;
         border: none;
         background: transparent;
-        color: #9aa3a0;
-        font-size: 11px;
+        color: var(--ios-blue);
+        font-size: 13px;
         padding: 0 2px;
         line-height: 1;
         cursor: pointer;
-        opacity: 0.72;
+        opacity: 1;
       }
       .ghost-action:hover {
-        color: #5a6a68;
-        opacity: 1;
+        opacity: 0.7;
         background: transparent;
       }
       .ghost-action.is-active {
-        color: #2f8f6e;
+        color: var(--ios-blue);
+        font-weight: 600;
         opacity: 1;
       }
       .nav-link {
-        color: #5a6a68;
+        color: var(--ios-blue);
         font-size: 13px;
         text-decoration: none;
-      }
-      .nav-link:hover {
-        text-decoration: underline;
       }
       .friend-links {
         position: relative;
         font-size: 13px;
-        color: #5a6a68;
+        color: var(--ios-blue);
       }
       .friend-links > summary {
         list-style: none;
@@ -117,29 +242,31 @@
         left: 0;
         top: calc(100% + 4px);
         z-index: 30;
-        min-width: 140px;
+        min-width: 148px;
         padding: 6px;
-        border: 1px solid rgba(90, 106, 104, 0.22);
-        border-radius: 10px;
-        background: rgba(251, 252, 250, 0.96);
-        box-shadow: 0 8px 20px rgba(40, 50, 58, 0.1);
+        border: 0.5px solid var(--ios-separator);
+        border-radius: var(--ios-radius);
+        background: rgba(255, 255, 255, 0.94);
+        box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
         display: flex;
         flex-direction: column;
         gap: 2px;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
       }
       .friend-links-panel a {
-        color: #28323a;
+        color: var(--ios-label);
         text-decoration: none;
-        padding: 8px 10px;
-        border-radius: 8px;
-        font-size: 13px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        font-size: 15px;
       }
       .friend-links-panel a:hover {
-        background: rgba(90, 106, 104, 0.1);
+        background: var(--ios-fill);
       }
       body.is-notes-view .page-section.is-empty-after-notes-filter .meta::after {
         content: " · 记一笔过滤下无匹配";
-        color: #8a9490;
+        color: var(--ios-secondary);
       }
       /* 记一笔 = 仅前端过滤卡片，不再整页切换布局 */
       .topbar-actions {
@@ -151,78 +278,54 @@
         display: inline-flex;
         align-items: stretch;
         padding: 2px;
-        border: 1px solid #d8ddda;
-        border-radius: 8px;
-        background: #eef1ee;
+        border: none;
+        border-radius: 9px;
+        background: var(--ios-fill);
         flex-shrink: 0;
       }
       .mode-switch button {
         border: none;
         background: transparent;
-        color: #78817f;
+        color: var(--ios-label);
         padding: 5px 10px;
-        border-radius: 6px;
+        border-radius: 7px;
         font-size: 12px;
         line-height: 1.2;
         cursor: pointer;
+        font-weight: 600;
       }
       .mode-switch button:hover {
-        color: #3d4a48;
         background: transparent;
       }
       .mode-switch button.is-active {
-        background: #fbfcfa;
-        color: #28323a;
-        box-shadow: 0 1px 2px rgba(40, 50, 48, 0.08);
+        background: var(--ios-grouped);
+        color: var(--ios-label);
+        box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.08);
       }
       .mode-switch button:disabled {
-        opacity: 0.55;
+        opacity: 0.45;
         cursor: wait;
       }
       .pin-sort-switch {
-        margin-left: 2px;
+        margin-left: 0;
       }
       .sort-rail {
-        position: fixed;
-        top: calc(6px + env(safe-area-inset-top, 0px));
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 70;
-        width: min(380px, calc(100% - 20px));
+        position: relative;
+        z-index: 71;
         display: flex;
         flex-direction: column;
         align-items: stretch;
         gap: 6px;
-        pointer-events: none;
-      }
-      .sort-rail > * {
-        pointer-events: auto;
       }
       .sort-rail-toggle {
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
+        gap: 4px;
         width: 100%;
         margin: 0;
-        padding: 7px 12px;
-        border: 1px solid rgba(90, 106, 104, 0.22);
-        border-radius: 999px;
-        background: rgba(251, 252, 250, 0.92);
-        box-shadow: 0 4px 14px rgba(40, 50, 58, 0.1);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        color: #3d4a48;
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        line-height: 1.2;
         cursor: pointer;
         user-select: none;
-      }
-      .sort-rail-toggle:hover {
-        background: rgba(255, 255, 255, 0.96);
-        border-color: rgba(90, 106, 104, 0.32);
       }
       .sort-rail-summary {
         min-width: 0;
@@ -243,13 +346,11 @@
         display: none;
         flex-direction: column;
         gap: 10px;
-        padding: 10px 12px;
-        border: 1px solid rgba(90, 106, 104, 0.2);
-        border-radius: 14px;
-        background: rgba(251, 252, 250, 0.96);
-        box-shadow: 0 10px 28px rgba(40, 50, 58, 0.12);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
+        padding: 12px;
+        border-radius: var(--ios-radius-lg);
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
+        border: 0.5px solid var(--ios-separator);
       }
       .sort-rail.is-open .sort-rail-panel {
         display: flex;
@@ -270,7 +371,7 @@
         flex-shrink: 0;
         font-size: 11px;
         font-weight: 650;
-        color: #78817f;
+        color: var(--ios-secondary);
         letter-spacing: 0.04em;
       }
       .sort-rail-group .pin-sort-switch {
@@ -279,16 +380,15 @@
       .recent-auto-pin {
         margin: 0 0 14px;
         padding: 10px 10px 12px;
-        border-radius: 10px;
-        background: linear-gradient(
-          180deg,
-          rgba(232, 240, 236, 0.95) 0%,
-          rgba(238, 243, 240, 0.88) 100%
-        );
-        border: 1px solid rgba(170, 190, 180, 0.35);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+        border-radius: var(--ios-radius-lg);
+        background: var(--ios-grouped);
+        border: 0.5px solid var(--ios-separator);
+        box-shadow: none;
       }
       .recent-auto-pin[hidden] {
+        display: none !important;
+      }
+      .recent-auto-pin.is-collapsed .kline-grid {
         display: none !important;
       }
       .recent-auto-pin-head {
@@ -298,15 +398,28 @@
         gap: 8px;
         flex-wrap: wrap;
         font-size: 12px;
-        color: #5f736c;
+        color: var(--ios-secondary);
         margin: 0 0 8px;
         font-weight: 600;
         letter-spacing: 0.02em;
       }
+      .recent-auto-pin.is-collapsed .recent-auto-pin-head {
+        margin-bottom: 0;
+      }
+      .recent-auto-pin-toggle {
+        flex-shrink: 0;
+        border: none;
+        background: transparent;
+        color: var(--ios-blue);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 0 2px;
+        cursor: pointer;
+      }
       .recent-auto-pin .kline-card {
-        border-color: #7a9a90;
-        background: rgba(251, 252, 250, 0.72);
-        box-shadow: 0 0 0 1px rgba(90, 120, 110, 0.1);
+        border-color: rgba(60, 60, 67, 0.18);
+        background: rgba(242, 242, 247, 0.72);
+        box-shadow: none;
         opacity: 0.7;
         filter: grayscale(0.28);
       }
@@ -315,8 +428,8 @@
         filter: grayscale(0.12);
       }
       .recent-auto-pin .kline-card.is-rewarm {
-        border-color: #8a9a72;
-        background: rgba(248, 250, 244, 0.78);
+        border-color: rgba(52, 199, 89, 0.35);
+        background: rgba(242, 248, 244, 0.9);
         opacity: 0.78;
         filter: grayscale(0.12);
       }
@@ -516,33 +629,35 @@
         }
       }
       button {
-        border: 1px solid #c9d0d0;
-        background: #fbfcfa;
-        color: #28323a;
+        border: 0.5px solid var(--ios-separator);
+        background: var(--ios-grouped);
+        color: var(--ios-label);
         padding: 8px 13px;
-        border-radius: 6px;
+        border-radius: 10px;
         cursor: pointer;
+        font: inherit;
       }
       button:hover {
-        background: #eef1ee;
+        background: rgba(120, 120, 128, 0.12);
       }
       button:disabled {
-        opacity: 0.55;
+        opacity: 0.45;
         cursor: not-allowed;
       }
       select.range-select {
-        border: 1px solid #c9d0d0;
-        background: #fbfcfa;
-        color: #28323a;
+        border: none;
+        background: var(--ios-fill);
+        color: var(--ios-label);
         padding: 8px 10px;
-        border-radius: 6px;
+        border-radius: 10px;
         cursor: pointer;
         font: inherit;
         font-size: 13px;
+        font-weight: 600;
         max-width: min(220px, 52vw);
       }
       select.range-select:hover {
-        background: #eef1ee;
+        background: rgba(120, 120, 128, 0.22);
       }
       select.range-select:disabled {
         opacity: 0.55;
@@ -553,9 +668,12 @@
         align-items: center;
         flex-wrap: wrap;
         gap: 8px;
-        font-size: 13px;
-        color: #78817f;
-        margin-bottom: 10px;
+        font-size: 12px;
+        color: var(--ios-secondary);
+        margin-bottom: 8px;
+        padding: 8px 12px;
+        border-radius: var(--ios-radius);
+        background: var(--ios-grouped);
       }
       .status #statusText {
         min-width: 0;
@@ -564,30 +682,30 @@
       .data-as-of {
         flex-shrink: 0;
         font-size: 12px;
-        color: #5a6a68;
+        color: var(--ios-secondary);
         padding: 2px 8px;
         border-radius: 999px;
-        background: rgba(113, 139, 136, 0.12);
+        background: var(--ios-fill);
       }
       .data-as-of:empty {
         display: none;
       }
       .dot {
-        width: 9px;
-        height: 9px;
+        width: 8px;
+        height: 8px;
         border-radius: 50%;
-        background: #a39d95;
+        background: var(--ios-secondary);
         flex-shrink: 0;
       }
       .dot.online {
-        background: #718b88;
-        box-shadow: 0 0 8px rgba(113, 139, 136, 0.35);
+        background: #34c759;
+        box-shadow: none;
       }
       .dot.offline {
-        background: #8d7771;
+        background: #ff3b30;
       }
       .meta {
-        color: #78817f;
+        color: var(--ios-secondary);
         font-size: 12px;
         margin-bottom: 10px;
       }
@@ -843,9 +961,9 @@
         position: relative;
         min-width: 0;
         padding: 8px 10px 10px;
-        background: #f7f8f6;
-        border: 1px solid #e2e6e3;
-        border-radius: 8px;
+        background: var(--ios-grouped);
+        border: 0.5px solid var(--ios-separator);
+        border-radius: var(--ios-radius);
         color: #6a7572;
         user-select: none;
         -webkit-user-select: none;
@@ -858,7 +976,9 @@
           box-shadow 0.15s ease,
           opacity 0.18s ease,
           filter 0.18s ease;
-        scroll-margin-top: 12px;
+        scroll-margin-top: calc(
+          var(--chrome-top-h) + env(safe-area-inset-top, 0px) + 8px
+        );
       }
       .kline-card:hover {
         opacity: 0.78;
@@ -1015,43 +1135,66 @@
       }
       .notify-float.is-action-log {
         width: min(420px, 100vw);
-        max-height: min(42vh, calc(100vh - var(--float-dock-h, 48px) - 8px));
+        max-height: min(42vh, calc(100vh - var(--float-dock-h, 54px) - 8px));
+      }
+      .action-log-cats {
+        display: flex;
+        gap: 2px;
+        padding: 8px 10px 0;
+        background: transparent;
+      }
+      .action-log-cats button {
+        flex: 1 1 0;
+        border: none;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--ios-secondary);
+        font-size: 12px;
+        font-weight: 600;
+        padding: 7px 6px;
+        cursor: pointer;
+      }
+      .action-log-cats button.is-active {
+        background: var(--ios-fill);
+        color: var(--ios-label);
       }
       .action-log-body {
         padding: 8px 10px 10px;
         overflow: auto;
         font-size: 12px;
         line-height: 1.45;
-        color: #3d4a48;
+        color: var(--ios-label);
         -webkit-overflow-scrolling: touch;
       }
       .action-log-row {
-        padding: 4px 0;
-        border-bottom: 1px solid rgba(220, 226, 222, 0.45);
+        padding: 6px 0;
+        border-bottom: 0.5px solid var(--ios-separator);
       }
       .action-log-row:last-child {
         border-bottom: none;
       }
       .action-log-time {
-        color: #9aa3a0;
+        color: var(--ios-secondary);
         margin-right: 6px;
         font-variant-numeric: tabular-nums;
       }
       .action-log-kind {
-        color: #78817f;
+        color: var(--ios-secondary);
         margin-right: 4px;
       }
       .action-log-body .notify-coin {
-        color: #3d4a48;
+        color: var(--ios-blue);
         text-decoration: none;
-        border-bottom: 1px dotted rgba(90, 106, 104, 0.45);
+        border-bottom: 1px dotted rgba(0, 122, 255, 0.35);
       }
       .action-log-body .notify-coin:hover {
-        color: #2f8f6e;
+        color: var(--ios-blue);
+        opacity: 0.8;
       }
       .action-log-empty {
-        color: #9aa3a0;
+        color: var(--ios-secondary);
         padding: 12px 4px;
+        text-align: center;
       }
       /* Align with WeCom: 5m three-up = green, 15m 2/3 = orange */
       .kline-card-head .symbol-copy.is-streak5 {
@@ -1133,21 +1276,21 @@
         position: fixed;
         left: 0;
         right: 0;
-        bottom: var(--float-dock-h, 48px);
+        bottom: var(--float-dock-h, 54px);
         z-index: 40;
         width: min(680px, 100vw);
         max-width: 100vw;
-        max-height: min(52vh, calc(100vh - var(--float-dock-h, 48px) - 8px));
+        max-height: min(52vh, calc(100vh - var(--float-dock-h, 54px) - 8px));
         margin: 0 auto;
         display: flex;
         flex-direction: column;
-        border: 1px solid rgba(90, 106, 104, 0.22);
+        border: 0.5px solid var(--ios-separator);
         border-bottom: none;
-        border-radius: 12px 12px 0 0;
-        background: rgba(244, 245, 243, 0.92);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        box-shadow: 0 -8px 24px rgba(40, 50, 58, 0.1);
+        border-radius: 14px 14px 0 0;
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: saturate(180%) blur(20px);
+        -webkit-backdrop-filter: saturate(180%) blur(20px);
+        box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.08);
       }
       .notify-float[hidden] {
         display: none !important;
@@ -1159,17 +1302,18 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 8px 10px;
-        border-bottom: 1px solid rgba(220, 226, 222, 0.55);
+        padding: 10px 12px;
+        border-bottom: 0.5px solid var(--ios-separator);
         flex-shrink: 0;
-        background: rgba(255, 255, 255, 0.18);
-        border-radius: 12px 12px 0 0;
+        background: transparent;
+        border-radius: 14px 14px 0 0;
       }
       .notify-float-head strong {
         flex: 1;
         min-width: 0;
-        font-size: 13px;
+        font-size: 15px;
         font-weight: 650;
+        letter-spacing: -0.01em;
       }
       .notify-float-head .notify-time {
         margin-left: 6px;
@@ -1541,39 +1685,40 @@
         gap: 0;
         width: 100%;
         max-width: none;
-        height: var(--float-dock-h, 48px);
+        height: calc(var(--float-dock-h, 54px) + env(safe-area-inset-bottom, 0px));
         margin: 0;
-        padding: 0;
-        border-top: 1px solid rgba(90, 106, 104, 0.28);
-        background: rgba(251, 252, 250, 0.96);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        box-shadow: 0 -4px 16px rgba(40, 50, 58, 0.08);
+        padding: 0 0 env(safe-area-inset-bottom, 0px);
+        border-top: 0.5px solid var(--ios-separator);
+        background: rgba(249, 249, 249, 0.92);
+        backdrop-filter: saturate(180%) blur(20px);
+        -webkit-backdrop-filter: saturate(180%) blur(20px);
+        box-shadow: none;
       }
       .notify-float-tab {
         position: static;
         border: none;
         border-radius: 0;
         background: transparent;
-        color: #5a6a68;
+        color: var(--ios-secondary);
         padding: 0 8px;
         min-height: 0;
         height: 100%;
         width: 100%;
-        font-size: 13px;
+        font-size: 11px;
+        font-weight: 500;
         box-shadow: none;
         cursor: pointer;
       }
       .notify-float-tab + .notify-float-tab {
-        border-left: 1px solid rgba(90, 106, 104, 0.18);
+        border-left: 0.5px solid var(--ios-separator);
       }
       .notify-float-tab[hidden] {
         display: none !important;
       }
       .notify-float-tab.is-active {
-        background: rgba(113, 139, 136, 0.18);
-        border-color: rgba(90, 106, 104, 0.18);
-        color: #28323a;
+        background: transparent;
+        border-color: var(--ios-separator);
+        color: var(--ios-blue);
         font-weight: 650;
       }
       .notify-float-tab.is-computing {
@@ -1617,10 +1762,10 @@
         .notify-float {
           left: 0;
           right: 0;
-          bottom: var(--float-dock-h, 48px);
+          bottom: var(--float-dock-h, 54px);
           width: 100%;
-          max-height: min(48vh, calc(100vh - var(--float-dock-h, 48px) - 8px));
-          background: rgba(244, 245, 243, 0.94);
+          max-height: min(48vh, calc(100vh - var(--float-dock-h, 54px) - 8px));
+          background: rgba(255, 255, 255, 0.94);
         }
         .notify-float-body {
           font-size: 11px;
@@ -1845,71 +1990,129 @@
         </p>
       </div>
     </div>
-    <div class="page">
-      <div class="topbar">
-        <div class="topbar-left">
-          <h1>币安观察</h1>
-          <details class="friend-links">
-            <summary>友情链接</summary>
-            <div class="friend-links-panel">
-              <a href="./index.html">总导航</a>
-              <a href="./watch.html">冲榜雷达</a>
-              <a href="./range100.html">Range100 潜伏</a>
-              <a href="./okx/kline.html">OKX 自选</a>
-              <a href="https://betterma.github.io/">蚂蚱导航</a>
+    <div class="app-chrome" id="appChrome">
+      <div class="app-chrome-left">
+        <aside id="sortRail" class="sort-rail" aria-label="排序控件">
+          <button
+            type="button"
+            id="sortRailToggle"
+            class="sort-rail-toggle"
+            aria-expanded="false"
+            aria-controls="sortRailPanel"
+            title="展开排序选项"
+          >
+            <span id="sortRailSummary" class="sort-rail-summary">盯幅</span>
+            <span class="sort-rail-caret" aria-hidden="true">▾</span>
+          </button>
+          <div id="sortRailPanel" class="sort-rail-panel" hidden>
+            <div class="sort-rail-group" id="sortRailRecentGroup" hidden>
+              <span class="sort-rail-label">置顶</span>
+              <div
+                class="mode-switch pin-sort-switch"
+                id="recentAutoSortSwitch"
+                role="group"
+                aria-label="置顶排序"
+                title="时间：点按切换早→新 / 新→早；盯幅：相对盯住价；24h：24小时涨幅降序"
+              >
+                <button
+                  type="button"
+                  data-recent-sort="time"
+                  class="is-active"
+                  title="点击切换时间正序/倒序"
+                >
+                  时间·早
+                </button>
+                <button type="button" data-recent-sort="pin">盯幅</button>
+                <button
+                  type="button"
+                  data-recent-sort="change24h"
+                  title="按 24h 涨幅从高到低"
+                >
+                  24h
+                </button>
+              </div>
             </div>
-          </details>
-        </div>
-        <div class="topbar-actions">
-          <div
-            class="mode-switch"
-            id="modeSwitch"
-            role="group"
-            aria-label="页面模式"
-          >
-            <button
-              type="button"
-              id="modeWatchBtn"
-              data-mode="watch"
-              class="is-active"
-              title="币安观察：盯一下 / 窗口上涨 / 收藏"
-            >
-              观察
-          </button>
-            <button
-              type="button"
-              id="modeNotesBtn"
-              data-mode="notes"
-              title="只显示已记一笔的 K 线卡片（前端过滤，不重拉）"
-            >
-              记一笔
-            </button>
+            <div class="sort-rail-group">
+              <span class="sort-rail-label">盯一下</span>
+              <div
+                class="mode-switch pin-sort-switch"
+                id="pinSortSwitch"
+                role="group"
+                aria-label="盯一下排序"
+                title="盯幅：按相对盯住价；爬升：按近2h/1h信号"
+              >
+                <button type="button" data-pin-sort="pin" class="is-active">盯幅</button>
+                <button type="button" data-pin-sort="momentum">爬升</button>
+              </div>
+            </div>
           </div>
-          <select
-            id="rangeSelect"
-            class="range-select"
-            title="切换 K 线范围与周期（观察池/窗口涨跌仍按 4h）"
-          >
-            <option value="3d-4h">近3天 · 4h</option>
-            <option value="10d-4h">近10天 · 4h</option>
-            <option value="10d-1d">近10天 · 1天</option>
-          </select>
+        </aside>
+        <div
+          class="mode-switch"
+          id="modeSwitch"
+          role="group"
+          aria-label="页面模式"
+        >
           <button
-            id="refreshBtn"
             type="button"
-            title="轻刷新：币安现价/K线 + 动态/企微/日志（不拉 OBS）"
+            id="modeWatchBtn"
+            data-mode="watch"
+            class="is-active"
+            title="币安观察：盯一下 / 窗口上涨 / 收藏"
           >
-            刷新
+            观察
           </button>
           <button
-            id="syncPoolBtn"
             type="button"
-            class="ghost-action"
-            title="重同步：强制拉 OBS 观察池快照 + GitHub 状态"
+            id="modeNotesBtn"
+            data-mode="notes"
+            title="只显示已记一笔的 K 线卡片（前端过滤，不重拉）"
           >
-            同步池
+            记一笔
           </button>
         </div>
+      </div>
+      <div class="app-chrome-right">
+        <select
+          id="rangeSelect"
+          class="range-select"
+          title="切换 K 线范围与周期（观察池/窗口涨跌仍按 4h）"
+        >
+          <option value="3d-4h">近3天 · 4h</option>
+          <option value="10d-4h">近10天 · 4h</option>
+          <option value="10d-1d">近10天 · 1天</option>
+        </select>
+        <button
+          id="refreshBtn"
+          type="button"
+          class="chrome-btn"
+          title="轻刷新：币安现价/K线 + 动态/企微/日志（不拉 OBS）"
+        >
+          刷新
+        </button>
+        <button
+          id="syncPoolBtn"
+          type="button"
+          class="chrome-btn is-secondary"
+          title="重同步：强制拉 OBS 观察池快照 + GitHub 状态"
+        >
+          同步池
+        </button>
+      </div>
+    </div>
+    <div class="page">
+      <div class="page-header">
+        <h1>币安观察</h1>
+        <details class="friend-links">
+          <summary>友情链接</summary>
+          <div class="friend-links-panel">
+            <a href="./index.html">总导航</a>
+            <a href="./watch.html">冲榜雷达</a>
+            <a href="./range100.html">Range100 潜伏</a>
+            <a href="./okx/kline.html">OKX 自选</a>
+            <a href="https://betterma.github.io/">蚂蚱导航</a>
+          </div>
+        </details>
       </div>
       <div class="status">
         <span id="statusDot" class="dot"></span>
@@ -1967,6 +2170,15 @@
       <div id="recentAutoPinSection" class="recent-auto-pin" hidden>
         <div class="recent-auto-pin-head">
           <span id="recentAutoPinMeta">新自动盯 / 回暖 · 近12小时 · 窗口上涨</span>
+          <button
+            type="button"
+            id="recentAutoPinToggle"
+            class="recent-auto-pin-toggle"
+            aria-expanded="true"
+            title="折叠/展开新自动盯"
+          >
+            收起
+          </button>
         </div>
         <div id="recentAutoPinGrid" class="kline-grid"></div>
       </div>
@@ -1984,55 +2196,6 @@
       <div id="favGrid" class="kline-grid"></div>
       </div>
     </div>
-
-    <aside id="sortRail" class="sort-rail" aria-label="排序控件">
-      <button
-        type="button"
-        id="sortRailToggle"
-        class="sort-rail-toggle"
-        aria-expanded="false"
-        aria-controls="sortRailPanel"
-        title="展开排序选项"
-      >
-        <span id="sortRailSummary" class="sort-rail-summary">盯幅</span>
-        <span class="sort-rail-caret" aria-hidden="true">▾</span>
-      </button>
-      <div id="sortRailPanel" class="sort-rail-panel" hidden>
-        <div class="sort-rail-group">
-          <span class="sort-rail-label">盯一下</span>
-          <div
-            class="mode-switch pin-sort-switch"
-            id="pinSortSwitch"
-            role="group"
-            aria-label="盯一下排序"
-            title="盯幅：按相对盯住价；爬升：按近2h/1h信号"
-          >
-            <button type="button" data-pin-sort="pin" class="is-active">盯幅</button>
-            <button type="button" data-pin-sort="momentum">爬升</button>
-          </div>
-        </div>
-        <div class="sort-rail-group" id="sortRailRecentGroup" hidden>
-          <span class="sort-rail-label">置顶</span>
-          <div
-            class="mode-switch pin-sort-switch"
-            id="recentAutoSortSwitch"
-            role="group"
-            aria-label="置顶排序"
-            title="时间：点按切换早→新 / 新→早；盯幅：按相对盯住价"
-          >
-            <button
-              type="button"
-              data-recent-sort="time"
-              class="is-active"
-              title="点击切换时间正序/倒序"
-            >
-              时间·早
-            </button>
-            <button type="button" data-recent-sort="pin">盯幅</button>
-          </div>
-        </div>
-      </div>
-    </aside>
 
     <button
       type="button"
@@ -2145,10 +2308,51 @@
           ×
         </button>
       </div>
+      <div
+        class="action-log-cats"
+        id="actionLogCats"
+        role="tablist"
+        aria-label="日志分类"
+      >
+        <button
+          type="button"
+          data-log-cat="capture"
+          class="is-active"
+          role="tab"
+          aria-selected="true"
+        >
+          捕捉
+        </button>
+        <button
+          type="button"
+          data-log-cat="notes"
+          role="tab"
+          aria-selected="false"
+        >
+          记一下
+        </button>
+        <button
+          type="button"
+          data-log-cat="other"
+          role="tab"
+          aria-selected="false"
+        >
+          买卖等其他
+        </button>
+      </div>
       <div class="action-log-body" id="actionLogBody"></div>
     </div>
 
     <div class="float-tabs" role="tablist" aria-label="浮窗">
+      <button
+        type="button"
+        class="notify-float-tab"
+        id="actionLogTab"
+        data-float="log"
+        title="捕捉 / 记一下 / 买卖等其他"
+      >
+        日志
+      </button>
       <button
         type="button"
         class="notify-float-tab"
@@ -2158,23 +2362,14 @@
       >
         动态
       </button>
-    <button
-      type="button"
-      class="notify-float-tab"
-      id="notifyFloatTab"
-        data-float="notify"
-        title="企微同步（盯一下 / 持仓）"
-    >
-        企微
-    </button>
       <button
         type="button"
         class="notify-float-tab"
-        id="actionLogTab"
-        data-float="log"
-        title="自动盯 / 买 / 卖 / 触底退出 简要日志"
+        id="notifyFloatTab"
+        data-float="notify"
+        title="企微同步（盯一下 / 持仓）"
       >
-        日志
+        企微
       </button>
     </div>
 
@@ -2336,6 +2531,20 @@
       const ACTION_LOG_MAX = 80;
       let actionLogEntries = [];
       let actionLogSaving = false;
+      let actionLogCategory = "capture";
+      const ACTION_LOG_CAT_KINDS = {
+        capture: new Set(["auto-pin", "rewarm"]),
+        notes: new Set(["mom-note"]),
+        other: new Set(["buy", "sell", "sell-stop", "period-low-exit"]),
+      };
+      const RECENT_AUTO_COLLAPSE_KEY = "kline-recent-auto-collapsed-v1";
+      let recentAutoPinCollapsed = false;
+      try {
+        recentAutoPinCollapsed =
+          localStorage.getItem(RECENT_AUTO_COLLAPSE_KEY) === "1";
+      } catch (_) {
+        recentAutoPinCollapsed = false;
+      }
       const PIN_SORT_KEY = "kline-pin-sort-v1";
       const AUTO_PIN_EVENTS_SEEN_KEY = "kline-auto-pin-events-seen-v1";
       const NEW_AUTO_PIN_MS = 12 * 60 * 60 * 1000;
@@ -2364,6 +2573,7 @@
         const savedRecent = localStorage.getItem(RECENT_AUTO_SORT_KEY);
         if (
           savedRecent === "pin" ||
+          savedRecent === "change24h" ||
           savedRecent === "time-asc" ||
           savedRecent === "time-desc"
         ) {
@@ -2440,7 +2650,7 @@
         const notes = isNotesView();
         document.body.classList.toggle("is-notes-view", notes);
         document.title = notes ? "观察池 K 线 · 记一笔" : "观察池 K 线";
-        const h1 = document.querySelector(".topbar-left h1");
+        const h1 = document.querySelector(".page-header h1");
         if (h1) h1.textContent = notes ? "币安观察 · 记一笔" : "币安观察";
         const pinTitle = document.getElementById("pinSectionTitle");
         if (pinTitle) pinTitle.textContent = "盯一下";
@@ -2869,11 +3079,73 @@
         return !!(cardEggState.fromHidden && cardEggState.fromHidden[key]);
       }
 
+      function eggChromeSeen(egg) {
+        return !!(egg && egg.chromeSeen);
+      }
+
+      /**
+       * 礼花/回升背景：同一次触发只画一次（chromeSeen 写入 GitHub）。
+       * 下次刷新/重进不再画；离开条件或再次触发后 chromeSeen 重置，才会再画。
+       */
+      function eggChromePaintFlags(symbol) {
+        const key = eggSymbolKey(symbol);
+        const fireEgg =
+          key && cardEggState.periodHigh
+            ? cardEggState.periodHigh[key]
+            : null;
+        const newEgg =
+          key && cardEggState.fromHidden
+            ? cardEggState.fromHidden[key]
+            : null;
+        const hasFire = klineViewKey === "3d-4h" && !!fireEgg;
+        const hasNew = !!newEgg;
+        const showFireworks = !!(hasFire && !eggChromeSeen(fireEgg));
+        const showNew = !!(
+          !hasFire &&
+          hasNew &&
+          !eggChromeSeen(newEgg)
+        );
+        return { key, showFireworks, showNew };
+      }
+
+      function markEggChromeSeenFromDom() {
+        let changed = false;
+        document
+          .querySelectorAll(".kline-card.is-egg-fireworks[data-symbol]")
+          .forEach((card) => {
+            const key = eggSymbolKey(card.dataset.symbol);
+            const egg =
+              key && cardEggState.periodHigh
+                ? cardEggState.periodHigh[key]
+                : null;
+            if (egg && !egg.chromeSeen) {
+              egg.chromeSeen = true;
+              changed = true;
+            }
+          });
+        document
+          .querySelectorAll(".kline-card.is-egg-new[data-symbol]")
+          .forEach((card) => {
+            const key = eggSymbolKey(card.dataset.symbol);
+            const egg =
+              key && cardEggState.fromHidden
+                ? cardEggState.fromHidden[key]
+                : null;
+            if (egg && !egg.chromeSeen) {
+              egg.chromeSeen = true;
+              changed = true;
+            }
+          });
+        if (changed) {
+          schedulePersistCardEggs("Mark card egg chrome seen");
+        }
+      }
+
       /**
        * 区间新高礼花：
-       * - 当前处于时段新高 → 若未「取消压制中」则点亮并常驻
-       * - 取消后：只要还停在新高上就不再显示；一旦离开新高，取消压制解除
-       * - 之后不论峰值比第一次高还是低（窗口滚动），只要再次处于时段新高就再显示
+       * - 进入时段新高 → 写入彩蛋（chromeSeen=false），本页可画一次背景
+       * - 画过后 chromeSeen=true，刷新/重进不再画；长按仍可取消彩蛋记录
+       * - 离开新高 → 清掉彩蛋；再次进入新高（或峰值抬高）→ 重新触发再画一次
        */
       function notePeriodHighEgg(symbol, atHigh, peak) {
         const key = eggSymbolKey(symbol);
@@ -2882,6 +3154,10 @@
         if (!cardEggState.periodHighDismiss) cardEggState.periodHighDismiss = {};
         let changed = false;
         if (!atHigh) {
+          if (cardEggState.periodHigh[key]) {
+            delete cardEggState.periodHigh[key];
+            changed = true;
+          }
           if (cardEggState.periodHighDismiss[key]) {
             delete cardEggState.periodHighDismiss[key];
             changed = true;
@@ -2903,6 +3179,7 @@
         cardEggState.periodHigh[key] = {
           at: Date.now(),
           peak: Number.isFinite(peak) ? peak : prevPeak || null,
+          chromeSeen: false,
         };
         schedulePersistCardEggs(`Card egg period high ${key}`);
         return true;
@@ -2930,7 +3207,7 @@
         }
         if (!cardEggState.fromHidden) cardEggState.fromHidden = {};
         if (cardEggState.fromHidden[key]) return false;
-        cardEggState.fromHidden[key] = { at: Date.now() };
+        cardEggState.fromHidden[key] = { at: Date.now(), chromeSeen: false };
         schedulePersistCardEggs(`Card egg from-hidden ${key}`);
         return true;
       }
@@ -2975,6 +3252,11 @@
         for (const symbol of hidden) {
           if (cardEggState.fromHiddenDismiss && cardEggState.fromHiddenDismiss[symbol]) {
             delete cardEggState.fromHiddenDismiss[symbol];
+            changed = true;
+          }
+          // 再次掉进隐藏：清掉旧回升彩蛋，之后再回升可重新触发一次背景
+          if (cardEggState.fromHidden && cardEggState.fromHidden[symbol]) {
+            delete cardEggState.fromHidden[symbol];
             changed = true;
           }
         }
@@ -3136,23 +3418,23 @@
 
       function applyCardEggChrome(card, symbol) {
         if (!card || !symbol) return;
-        const showFireworks =
-          klineViewKey === "3d-4h" && hasPeriodHighEgg(symbol);
-        const showNew = hasFromHiddenEgg(symbol);
+        const { showFireworks, showNew } = eggChromePaintFlags(symbol);
         card.classList.toggle("is-egg-fireworks", showFireworks);
-        card.classList.toggle("is-egg-new", showNew && !showFireworks);
+        card.classList.toggle("is-egg-new", showNew);
         card.querySelectorAll(".egg-mark").forEach((el) => el.remove());
         if (showFireworks) {
           const mark = document.createElement("span");
           mark.className = "egg-mark";
           mark.textContent = "新高";
-          mark.title = "近3天·4h 区间新高 · 长按可取消背景";
+          mark.title =
+            "近3天·4h 区间新高 · 同一次触发只显示一次 · 长按可取消彩蛋";
           card.appendChild(mark);
         } else if (showNew) {
           const mark = document.createElement("span");
           mark.className = "egg-mark";
           mark.textContent = "回升";
-          mark.title = "从隐藏盯一下回到窗口上涨 · 长按可取消背景";
+          mark.title =
+            "从隐藏盯一下回到窗口上涨 · 同一次触发只显示一次 · 长按可取消彩蛋";
           card.appendChild(mark);
         }
       }
@@ -3767,6 +4049,7 @@
       function actionLogKindLabel(kind) {
         if (kind === "auto-pin") return "自动盯";
         if (kind === "rewarm") return "回暖";
+        if (kind === "mom-note") return "记一下";
         if (kind === "buy") return "买";
         if (kind === "sell") return "卖";
         if (kind === "sell-stop") return "止损";
@@ -3774,13 +4057,44 @@
         return kind || "动";
       }
 
+      function actionLogCategoryForKind(kind) {
+        const k = String(kind || "");
+        if (ACTION_LOG_CAT_KINDS.capture.has(k)) return "capture";
+        if (ACTION_LOG_CAT_KINDS.notes.has(k)) return "notes";
+        return "other";
+      }
+
+      function setActionLogCategory(cat) {
+        const next =
+          cat === "notes" || cat === "other" || cat === "capture"
+            ? cat
+            : "capture";
+        actionLogCategory = next;
+        const wrap = document.getElementById("actionLogCats");
+        if (wrap) {
+          wrap.querySelectorAll("[data-log-cat]").forEach((btn) => {
+            const on = btn.getAttribute("data-log-cat") === next;
+            btn.classList.toggle("is-active", on);
+            btn.setAttribute("aria-selected", on ? "true" : "false");
+          });
+        }
+        renderActionLogBody();
+      }
+
       function renderActionLogBody() {
         const body = document.getElementById("actionLogBody");
         if (!body) return;
-        const list = readActionLog();
+        const list = readActionLog().filter(
+          (entry) => actionLogCategoryForKind(entry.kind) === actionLogCategory,
+        );
         if (!list.length) {
-          body.innerHTML =
-            '<div class="action-log-empty">暂无 · 自动盯 / 回暖 / 买 / 卖 / 触底退出</div>';
+          const emptyHint =
+            actionLogCategory === "capture"
+              ? "暂无捕捉 · 自动盯 / 回暖"
+              : actionLogCategory === "notes"
+                ? "暂无记一下"
+                : "暂无 · 买 / 卖 / 止损 / 触底退出";
+          body.innerHTML = `<div class="action-log-empty">${emptyHint}</div>`;
           return;
         }
         body.innerHTML = list
@@ -3796,7 +4110,8 @@
               })
               .join(" ");
             const price =
-              entry.kind === "buy" && Number.isFinite(entry.price)
+              (entry.kind === "buy" || entry.kind === "mom-note") &&
+              Number.isFinite(entry.price)
                 ? ` ${escapeHtml(formatPinPrice(entry.price))}`
                 : "";
             return `<div class="action-log-row"><span class="action-log-time">${formatActionLogTime(entry.at)}</span><span class="action-log-kind">${escapeHtml(kind)}</span>${names}${price}</div>`;
@@ -4208,6 +4523,16 @@
             if (hasA !== hasB) return hasA ? -1 : 1;
             return (a.pinnedAt || 0) - (b.pinnedAt || 0);
           });
+        } else if (recentAutoSortMode === "change24h") {
+          list.sort((a, b) => {
+            const changeA = Number(marketMap[a.symbol]?.change24h);
+            const changeB = Number(marketMap[b.symbol]?.change24h);
+            const hasA = Number.isFinite(changeA);
+            const hasB = Number.isFinite(changeB);
+            if (hasA && hasB && changeB !== changeA) return changeB - changeA;
+            if (hasA !== hasB) return hasA ? -1 : 1;
+            return (b.pinnedAt || 0) - (a.pinnedAt || 0);
+          });
         } else if (recentAutoSortMode === "time-desc") {
           list.sort((a, b) => (b.pinnedAt || 0) - (a.pinnedAt || 0));
         } else {
@@ -4234,8 +4559,36 @@
 
       function recentSortLabel() {
         if (recentAutoSortMode === "pin") return "盯幅";
+        if (recentAutoSortMode === "change24h") return "24h";
         if (recentAutoSortMode === "time-desc") return "时间·新";
         return "时间·早";
+      }
+
+      function syncRecentAutoCollapseUi() {
+        const section = document.getElementById("recentAutoPinSection");
+        const btn = document.getElementById("recentAutoPinToggle");
+        if (!section) return;
+        section.classList.toggle("is-collapsed", !!recentAutoPinCollapsed);
+        if (btn) {
+          btn.textContent = recentAutoPinCollapsed ? "展开" : "收起";
+          btn.setAttribute(
+            "aria-expanded",
+            recentAutoPinCollapsed ? "false" : "true",
+          );
+        }
+      }
+
+      function setRecentAutoPinCollapsed(collapsed) {
+        recentAutoPinCollapsed = !!collapsed;
+        try {
+          localStorage.setItem(
+            RECENT_AUTO_COLLAPSE_KEY,
+            recentAutoPinCollapsed ? "1" : "0",
+          );
+        } catch (_) {
+          /* ignore */
+        }
+        syncRecentAutoCollapseUi();
       }
 
       function isSortRailRecentVisible() {
@@ -4254,8 +4607,9 @@
         const summary = document.getElementById("sortRailSummary");
         const toggle = document.getElementById("sortRailToggle");
         if (!summary) return;
-        const parts = [pinSortLabel()];
+        const parts = [];
         if (isSortRailRecentVisible()) parts.push(recentSortLabel());
+        parts.push(pinSortLabel());
         summary.textContent = parts.join("  ·  ");
         if (toggle) {
           toggle.title = isSortRailOpen()
@@ -4323,10 +4677,13 @@
           else next = "time-asc";
         } else if (mode === "pin") {
           next = "pin";
+        } else if (mode === "change24h") {
+          next = "change24h";
         } else if (
           mode !== "time-asc" &&
           mode !== "time-desc" &&
-          mode !== "pin"
+          mode !== "pin" &&
+          mode !== "change24h"
         ) {
           next = "time-asc";
         }
@@ -5421,12 +5778,27 @@
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.MOM_NOTES_PATH,
             message: `Note momentum ${entry.symbol}`,
-            mutate: (list) => [entry, ...list],
+            mutate: (list) => {
+              const key = String(entry.symbol || "")
+                .trim()
+                .toUpperCase();
+              const kept = (list || []).filter(
+                (note) =>
+                  String(note && note.symbol || "")
+                    .trim()
+                    .toUpperCase() !== key,
+              );
+              return [entry, ...kept];
+            },
           });
           momNoteItems = result.notes || [];
+          appendActionLog("mom-note", [entry.symbol], {
+            price: entry.price,
+          });
           showToast(`已记 ${entry.label}`);
           applyNotesFilter();
           refreshMomentumFloatBody();
+          renderActionLogBody();
           document
             .querySelectorAll(
               `.kline-card[data-symbol="${entry.symbol}"]`,
@@ -6291,12 +6663,10 @@
             : "";
         const posClass = options.hasPosition ? " is-position" : "";
         const expiredClass = options.isExpired ? " is-expired" : "";
-        const fireworks =
-          klineViewKey === "3d-4h" && hasPeriodHighEgg(symbol);
-        const fromHidden = hasFromHiddenEgg(symbol);
+        const { showFireworks: fireworks, showNew: fromHidden } =
+          eggChromePaintFlags(symbol);
         const eggFireClass = fireworks ? " is-egg-fireworks" : "";
-        const eggNewClass =
-          !fireworks && fromHidden ? " is-egg-new" : "";
+        const eggNewClass = fromHidden ? " is-egg-new" : "";
         const marks = [];
         if (options.showMark) marks.push('<span class="fav-mark">★</span>');
         // Notes view: only show 盯 when there is a real pin row.
@@ -6316,11 +6686,11 @@
         }
         if (fireworks) {
           marks.push(
-            '<span class="egg-mark" title="近3天·4h 区间新高 · 长按可取消背景">新高</span>',
+            '<span class="egg-mark" title="近3天·4h 区间新高 · 同一次触发只显示一次 · 长按可取消彩蛋">新高</span>',
           );
         } else if (fromHidden) {
           marks.push(
-            '<span class="egg-mark" title="从隐藏盯一下回到窗口上涨 · 长按可取消背景">回升</span>',
+            '<span class="egg-mark" title="从隐藏盯一下回到窗口上涨 · 同一次触发只显示一次 · 长按可取消彩蛋">回升</span>',
           );
         }
         const checkHtml =
@@ -7251,6 +7621,7 @@
 
       async function renderKlines(options) {
         const onProgress = options && options.onProgress;
+        markEggChromeSeenFromDom();
         const interval = CONFIG.KLINE_INTERVAL;
         const chartIv = chartInterval();
         const bars = klineLimit(chartIv);
@@ -7487,6 +7858,7 @@
             recentSection.hidden = false;
             syncSortRailRecentVisibility();
             syncRecentAutoSortUi();
+            syncRecentAutoCollapseUi();
             if (recentMeta) {
               const rewarmCount = recentAutoItems.filter((item) =>
                 isRewarmPinItem(item),
@@ -8321,10 +8693,17 @@
           jumpToNotifySymbol(link.dataset.jump);
         });
       document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") {
+          markEggChromeSeenFromDom();
+          return;
+        }
         if (document.visibilityState === "visible") {
           refreshNotifyFloat({ silent: true });
           maybeRefreshDataOnFocus();
         }
+      });
+      window.addEventListener("pagehide", () => {
+        markEggChromeSeenFromDom();
       });
       startNotifyPoll();
       document
@@ -8416,6 +8795,22 @@
       document.getElementById("actionLogClear").addEventListener("click", () => {
         void persistActionLog([], "Clear action log", { replace: true });
       });
+      const actionLogCats = document.getElementById("actionLogCats");
+      if (actionLogCats) {
+        actionLogCats.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-log-cat]");
+          if (!btn) return;
+          setActionLogCategory(btn.getAttribute("data-log-cat"));
+        });
+      }
+      const recentAutoPinToggle = document.getElementById("recentAutoPinToggle");
+      if (recentAutoPinToggle) {
+        recentAutoPinToggle.addEventListener("click", () => {
+          setRecentAutoPinCollapsed(!recentAutoPinCollapsed);
+        });
+      }
+      syncRecentAutoCollapseUi();
+      setActionLogCategory(actionLogCategory);
       document
         .getElementById("actionLogBody")
         .addEventListener("click", (event) => {
