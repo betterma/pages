@@ -1894,7 +1894,21 @@
             <option value="10d-4h">近10天 · 4h</option>
             <option value="10d-1d">近10天 · 1天</option>
           </select>
-          <button id="refreshBtn" type="button">刷新</button>
+          <button
+            id="refreshBtn"
+            type="button"
+            title="轻刷新：币安现价/K线 + 动态/企微/日志（不拉 OBS）"
+          >
+            刷新
+          </button>
+          <button
+            id="syncPoolBtn"
+            type="button"
+            class="ghost-action"
+            title="重同步：强制拉 OBS 观察池快照 + GitHub 状态"
+          >
+            同步池
+          </button>
         </div>
       </div>
       <div class="status">
@@ -1903,7 +1917,7 @@
         <span
           id="dataAsOf"
           class="data-as-of"
-          title="行情与 K 线最近一次成功刷新的本地时间"
+          title="行情与 K 线最近一次成功刷新的本地时间。轻刷新会同步动态/企微/日志，但不拉 OBS；「同步池」才强制更新观察池快照"
         ></span>
       </div>
       <!-- 指引已隐藏：熟悉操作后收起，需要时再解开
@@ -2244,6 +2258,10 @@
         NOTIFY_POLL_MS: 60 * 1000,
         // 切回页面：距上次成功刷新不足此时长则跳过整页重拉。
         DATA_FOCUS_REFRESH_MIN_MS: 3 * 60 * 1000,
+        // OBS watch-data（history/观察池）内存缓存；对齐 monitor ≈15min 写入。
+        OBS_CACHE_MS: 15 * 60 * 1000,
+        // GitHub 盯/记/仓等共享状态：轻刷新跳过；重同步时才全拉。
+        SHARED_STATE_CACHE_MS: 5 * 60 * 1000,
         // 近2h 五段轨迹（15m 回算）+ 爬升判定；可按真实案例调。
         MOMENTUM_TREND: {
           // 15m bars to fetch (need ≥14 closed for 60m of 2h history).
@@ -2367,6 +2385,8 @@
       let momentumProgress = { done: 0, total: 0 };
       let lastScoreUniverse = [];
       let lastDataAt = 0;
+      let lastObsFetchedAt = 0;
+      let lastSharedStateAt = 0;
       let favoriteSaving = false;
       let blacklistSaving = false;
       let pinSaving = false;
@@ -3997,18 +4017,29 @@
         return new Set(rising.filter((symbol) => favSet.has(symbol)));
       }
 
-      async function loadGithubStorage() {
-        const url = `${CONFIG.OBS_BASE}/${CONFIG.GITHUB_PATH}?t=${Date.now()}`;
-        const response = await fetch(url, { cache: "no-store" });
+      async function loadObsWatchData(options) {
+        const force = !!(options && options.force);
+        const now = Date.now();
+        const cacheMs = Number(CONFIG.OBS_CACHE_MS) || 15 * 60 * 1000;
+        if (
+          !force &&
+          lastObsFetchedAt > 0 &&
+          now - lastObsFetchedAt < cacheMs &&
+          (history.length > 0 || watchPool.size > 0)
+        ) {
+          return { fromCache: true };
+        }
+        const url = force
+          ? `${CONFIG.OBS_BASE}/${CONFIG.GITHUB_PATH}?t=${Date.now()}`
+          : `${CONFIG.OBS_BASE}/${CONFIG.GITHUB_PATH}`;
+        const response = await fetch(url, {
+          cache: force ? "no-store" : "default",
+        });
         if (response.status === 404) {
           history = [];
           watchPool = new Set();
-          favoriteItems = [];
-          blacklistItems = [];
-          pinItems = [];
-          positionItems = [];
-          momNoteItems = [];
-          return;
+          lastObsFetchedAt = Date.now();
+          return { fromCache: false, missing: true };
         }
         if (!response.ok) {
           throw new Error(`读取 OBS 失败: ${response.status}`);
@@ -4018,6 +4049,22 @@
         watchPool = new Set(
           Array.isArray(data.watchPool) ? data.watchPool : [],
         );
+        lastObsFetchedAt = Date.now();
+        pruneHistory();
+        return { fromCache: false };
+      }
+
+      async function loadSharedFeatureState(options) {
+        const force = !!(options && options.force);
+        const now = Date.now();
+        const cacheMs = Number(CONFIG.SHARED_STATE_CACHE_MS) || 5 * 60 * 1000;
+        if (
+          !force &&
+          lastSharedStateAt > 0 &&
+          now - lastSharedStateAt < cacheMs
+        ) {
+          return { fromCache: true };
+        }
         try {
           const favState = await WatchFavorites.loadFavoritesRaw({
             repo: CONFIG.GITHUB_REPO,
@@ -4099,6 +4146,14 @@
           await loadSharedCardEggs();
           await loadSharedBreakHigh();
         }
+        lastSharedStateAt = Date.now();
+        return { fromCache: false };
+      }
+
+      async function loadGithubStorage(options) {
+        const opts = options || {};
+        await loadObsWatchData(opts);
+        await loadSharedFeatureState(opts);
         pruneHistory();
       }
 
@@ -7958,53 +8013,131 @@
         }
       }
 
+      async function refreshFloatTabsLight() {
+        // 三个底栏 Tab 均不依赖 OBS：企微/日志 → GitHub；动态 → 币安 15m（破点高仍走 GitHub）。
+        const tasks = [
+          refreshNotifyFloat({ silent: true }).catch((error) => {
+            console.warn("light refresh notify failed", error);
+          }),
+          loadSharedActionLog().catch((error) => {
+            console.warn("light refresh action log failed", error);
+          }),
+        ];
+        await Promise.all(tasks);
+        const symbols = currentMomentumUniverse();
+        if (symbols.length) {
+          void schedulePinMomentum(symbols, { force: true });
+        } else {
+          updateMomentumFloatPanel();
+        }
+        if (isFloatPanelOpen("log")) renderActionLogBody();
+        if (isFloatPanelOpen("notify")) updateNotifyFloatPanel();
+        if (isFloatPanelOpen("momentum")) refreshMomentumFloatBody();
+      }
+
       async function refreshAll(options) {
         if (loading) return;
         loading = true;
         const reason = options && options.reason ? options.reason : "manual";
+        let mode =
+          options && options.mode
+            ? options.mode
+            : reason === "boot" || reason === "sync-pool"
+              ? "full"
+              : "light";
+        const forceObs = !!(
+          (options && options.forceObs) ||
+          reason === "sync-pool" ||
+          reason === "boot"
+        );
+        // 冷启动内存为空时，轻刷新也要走全量。
+        if (
+          mode === "light" &&
+          !history.length &&
+          !watchPool.size &&
+          !pinItems.length
+        ) {
+          mode = "full";
+        }
         const btn = document.getElementById("refreshBtn");
+        const syncBtn = document.getElementById("syncPoolBtn");
         const rangeSelect = document.getElementById("rangeSelect");
         btn.disabled = true;
+        if (syncBtn) syncBtn.disabled = true;
         if (rangeSelect) rangeSelect.disabled = true;
+        const progressLabel =
+          mode === "full"
+            ? reason === "boot"
+              ? "正在加载…"
+              : "正在同步观察池…"
+            : reason === "focus"
+              ? "轻刷新行情…"
+              : "轻刷新现价与 K 线…";
         setTopProgress(true, {
           overlay: false,
-          label:
-            reason === "focus"
-              ? "正在刷新…"
-              : reason === "boot"
-                ? "正在加载…"
-                : "正在刷新…",
+          label: progressLabel,
         });
         try {
-          if (reason === "focus") {
-            setStatus(false, "切回页面 · 正在刷新最新行情与 K 线...");
+          if (mode === "full") {
+            setStatus(
+              false,
+              forceObs
+                ? "1/3 读取 OBS 观察池 + GitHub 状态…"
+                : "1/3 同步共享状态（OBS 可用缓存）…",
+            );
+            await loadGithubStorage({ force: forceObs });
+            updateNotifyFloatPanel();
           } else {
-          setStatus(false, "1/3 读取 GitHub 快照 / 观察池 / 收藏...");
+            setStatus(
+              false,
+              "轻刷新 · 跳过 OBS · 更新行情/K线 + 动态/企微/日志…",
+            );
           }
-          await loadGithubStorage();
-          updateNotifyFloatPanel();
 
-          setStatus(false, "2/3 拉取行情…");
+          setStatus(
+            false,
+            mode === "full" ? "2/3 拉取行情…" : "拉取行情与 K 线…",
+          );
           await loadBinanceTicker();
           syncStopLossGate();
 
-          setStatus(false, "3/3 加载K线…");
+          setStatus(
+            false,
+            mode === "full" ? "3/3 加载K线…" : "更新 K 线…",
+          );
           updateWatchPool();
           await renderKlines({
             onProgress: (done, total) => {
               const label =
-                total > 0 ? `3/3 加载K线 ${done}/${total}` : "3/3 加载K线…";
+                total > 0
+                  ? `${mode === "full" ? "3/3 " : ""}加载K线 ${done}/${total}`
+                  : `${mode === "full" ? "3/3 " : ""}加载K线…`;
               setStatus(false, label);
               if (total > 0) setTopProgressValue(done / total, label);
             },
           });
           syncStopLossGate();
+          if (mode === "light") {
+            setStatus(false, "同步动态 / 企微 / 日志…");
+            await refreshFloatTabsLight();
+          }
           const rising = getRisingSymbols().length;
           const now = Date.now();
           updateDataAsOf(now);
+          const obsAge =
+            lastObsFetchedAt > 0
+              ? Math.max(0, Math.round((now - lastObsFetchedAt) / 60000))
+              : null;
+          const modeTag = mode === "full" ? "全量同步" : "轻刷新";
+          const obsTag =
+            obsAge == null
+              ? ""
+              : obsAge === 0
+                ? " · OBS刚更新"
+                : ` · OBS缓存${obsAge}分钟前`;
           setStatus(
             true,
-            `已更新 · 上涨 ${rising} · 盯 ${pinItems.length} · 持仓 ${positionItems.length} · 收藏 ${favoriteItems.length}`,
+            `${modeTag}${obsTag} · 上涨 ${rising} · 盯 ${pinItems.length} · 持仓 ${positionItems.length} · 收藏 ${favoriteItems.length}`,
           );
         } catch (error) {
           console.error(error);
@@ -8028,6 +8161,7 @@
           setTopProgress(false);
           loading = false;
           btn.disabled = false;
+          if (syncBtn) syncBtn.disabled = false;
           if (rangeSelect) rangeSelect.disabled = false;
           // 主加载结束后若后台还在算动量，接上顶部进度。
           if (momentumBusy) {
@@ -8052,13 +8186,20 @@
         ) {
           return;
         }
-        refreshAll({ reason: "focus" });
+        refreshAll({ reason: "focus", mode: "light" });
       }
 
       document.getElementById("refreshBtn").addEventListener("click", () => {
         closeCardActions();
-        refreshAll({ reason: "manual" });
+        refreshAll({ reason: "manual", mode: "light" });
       });
+      const syncPoolBtn = document.getElementById("syncPoolBtn");
+      if (syncPoolBtn) {
+        syncPoolBtn.addEventListener("click", () => {
+          closeCardActions();
+          refreshAll({ reason: "sync-pool", mode: "full", forceObs: true });
+        });
+      }
       document.addEventListener("click", (event) => {
         const open = document.querySelector("details.friend-links[open]");
         if (!open) return;
@@ -8440,7 +8581,7 @@
         }
       });
       applyPageChrome();
-      refreshAll({ reason: "boot" });
+      refreshAll({ reason: "boot", mode: "full", forceObs: true });
     </script>
   </body>
 </html>
