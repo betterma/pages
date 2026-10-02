@@ -4,28 +4,109 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>观察池 K 线</title>
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("kline-theme-v1");
+          if (t === "daylight" || t === "night" || t === "terminal") {
+            document.documentElement.setAttribute("data-theme", t);
+          } else {
+            document.documentElement.setAttribute("data-theme", "terminal");
+          }
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "terminal");
+        }
+      })();
+    </script>
     <style>
       * {
         box-sizing: border-box;
       }
-      :root {
-        --ios-bg: #000000;
-        --ios-grouped: #1c1c1e;
-        --ios-elevated: #2c2c2e;
-        --ios-label: #f5f5f7;
-        --ios-secondary: #8e8e93;
-        --ios-separator: rgba(84, 84, 88, 0.65);
-        --ios-blue: #0a84ff;
-        --ios-green: #30d158;
-        --ios-red: #ff453a;
-        --ios-orange: #ff9f0a;
-        --ios-fill: rgba(120, 120, 128, 0.36);
-        --ios-fill-strong: rgba(120, 120, 128, 0.48);
+      :root,
+      html[data-theme="terminal"] {
+        /* 01 深色终端 */
+        --bg: #111214;
+        --grouped: #181a1e;
+        --elevated: #22252a;
+        --label: #f5f7fa;
+        --secondary: #9aa1ac;
+        --separator: #30343b;
+        --accent: #4c9aff;
+        --fill: #2a2d33;
+        --fill-strong: #3a3e46;
+        --chrome-blur: rgba(17, 18, 20, 0.78);
+        --up: #35c98a;
+        --down: #ff5c64;
+        --warn: #f2b84b;
+        /* 置顶深 */
+        --pin-zone-bg: #191b20;
+        --pin-zone-card: #25282e;
+        --pin-zone-label: #f1f3f5;
+        /* 盯一下浅 */
+        --recent-zone-bg: #e9ebef;
+        --recent-zone-card: #ffffff;
+        --recent-zone-label: #17191d;
         --ios-radius: 12px;
         --ios-radius-lg: 16px;
         --chrome-top-h: 52px;
         --float-dock-h: 54px;
-        --chrome-blur: rgba(22, 22, 24, 0.78);
+        /* 兼容旧变量名 */
+        --ios-bg: var(--bg);
+        --ios-grouped: var(--grouped);
+        --ios-elevated: var(--elevated);
+        --ios-label: var(--label);
+        --ios-secondary: var(--secondary);
+        --ios-separator: var(--separator);
+        --ios-blue: var(--accent);
+        --ios-green: var(--up);
+        --ios-red: var(--down);
+        --ios-orange: var(--warn);
+        --ios-fill: var(--fill);
+        --ios-fill-strong: var(--fill-strong);
+      }
+      html[data-theme="daylight"] {
+        /* 02 浅色日间 */
+        --bg: #f2f3f5;
+        --grouped: #e9eaed;
+        --elevated: #ffffff;
+        --label: #17181a;
+        --secondary: #6d727a;
+        --separator: #d5d8dd;
+        --accent: #007aff;
+        --fill: #e1e4e9;
+        --fill-strong: #c9cdd4;
+        --chrome-blur: rgba(242, 243, 245, 0.82);
+        --up: #16a66a;
+        --down: #e0444a;
+        --warn: #d99000;
+        --pin-zone-bg: #dde0e5;
+        --pin-zone-card: #f8f9fa;
+        --pin-zone-label: #17181a;
+        --recent-zone-bg: #f7f8fa;
+        --recent-zone-card: #ffffff;
+        --recent-zone-label: #17181a;
+      }
+      html[data-theme="night"] {
+        /* 03 高对比夜盘 */
+        --bg: #080a0d;
+        --grouped: #0e1217;
+        --elevated: #151a20;
+        --label: #ffffff;
+        --secondary: #8b96a3;
+        --separator: #252d36;
+        --accent: #19c7d8;
+        --fill: #182028;
+        --fill-strong: #26323d;
+        --chrome-blur: rgba(8, 10, 13, 0.86);
+        --up: #20d990;
+        --down: #ff4652;
+        --warn: #ffc247;
+        --pin-zone-bg: #10151a;
+        --pin-zone-card: #1a222a;
+        --pin-zone-label: #ffffff;
+        --recent-zone-bg: #dce3e7;
+        --recent-zone-card: #f4f7f8;
+        --recent-zone-label: #101318;
       }
       body {
         margin: 0;
@@ -117,9 +198,9 @@
         top: calc(100% + 4px);
         width: min(300px, calc(100vw - 16px));
         z-index: 80;
-        background: rgba(44, 44, 46, 0.96);
+        background: var(--elevated);
         border: 0.5px solid var(--ios-separator);
-        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
       }
       .app-chrome .mode-switch {
         padding: 2px;
@@ -174,6 +255,12 @@
         justify-content: space-between;
         gap: 8px;
         margin-bottom: 6px;
+      }
+      .page-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
       }
       .page-header h1 {
         margin: 0;
@@ -390,9 +477,9 @@
         margin: 0 0 14px;
         padding: 10px 10px 12px;
         border-radius: var(--ios-radius-lg);
-        background: var(--ios-grouped);
+        background: var(--pin-zone-bg);
         border: 0.5px solid var(--ios-separator);
-        box-shadow: none;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
       }
       .recent-auto-pin[hidden] {
         display: none !important;
@@ -426,21 +513,83 @@
         cursor: pointer;
       }
       .recent-auto-pin .kline-card {
-        border-color: rgba(60, 60, 67, 0.18);
-        background: rgba(242, 242, 247, 0.72);
+        border-color: var(--ios-separator);
+        background: var(--pin-zone-card);
+        color: var(--ios-secondary);
         box-shadow: none;
-        opacity: 0.7;
-        filter: grayscale(0.28);
+        opacity: 0.88;
+        filter: grayscale(0.15);
       }
       .recent-auto-pin .kline-card:hover {
+        opacity: 1;
+        filter: grayscale(0.05);
+      }
+      .recent-auto-pin .kline-card.is-rewarm {
+        border-color: color-mix(in srgb, var(--up) 45%, transparent);
+        background: var(--pin-zone-card);
+        opacity: 0.95;
+        filter: grayscale(0.05);
+      }
+      .recent-auto-pin .kline-card .symbol-copy {
+        color: var(--pin-zone-label);
+      }
+      /* 盯一下主网格：浅色区 token = recent-zone-*（方案命名） */
+      #pinGrid {
+        margin: 0 0 14px;
+        padding: 10px;
+        border-radius: var(--ios-radius-lg);
+        background: var(--recent-zone-bg);
+        border: 0.5px solid var(--ios-separator);
+      }
+      #pinGrid:empty {
+        display: none;
+      }
+      #pinGrid .kline-card {
+        background: var(--recent-zone-card);
+        border-color: var(--ios-separator);
+        color: var(--ios-secondary);
         opacity: 0.9;
         filter: grayscale(0.12);
       }
-      .recent-auto-pin .kline-card.is-rewarm {
-        border-color: rgba(52, 199, 89, 0.35);
-        background: rgba(242, 248, 244, 0.9);
-        opacity: 0.78;
-        filter: grayscale(0.12);
+      #pinGrid .kline-card:hover {
+        opacity: 1;
+        filter: grayscale(0.04);
+      }
+      #pinGrid .kline-card .symbol-copy {
+        color: var(--recent-zone-label);
+      }
+      #pinGrid .kline-card.is-pin {
+        border-color: color-mix(in srgb, var(--recent-zone-label) 28%, transparent);
+      }
+      #pinGrid .kline-card.is-position {
+        border-color: color-mix(in srgb, var(--up) 45%, transparent);
+      }
+      #pinGrid .kline-card.is-pair {
+        border-color: var(--recent-zone-label);
+      }
+      .theme-switch {
+        display: inline-flex;
+        align-items: stretch;
+        padding: 2px;
+        border-radius: 9px;
+        background: var(--ios-fill);
+        flex-shrink: 0;
+      }
+      .theme-switch button {
+        border: none;
+        background: transparent;
+        color: var(--ios-secondary);
+        padding: 5px 8px;
+        border-radius: 7px;
+        font-size: 11px;
+        font-weight: 650;
+        line-height: 1.2;
+        cursor: pointer;
+      }
+      .theme-switch button.is-active {
+        background: var(--ios-elevated);
+        color: var(--ios-label);
+        box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.2);
       }
       .rewarm-mark {
         position: absolute;
@@ -1109,8 +1258,8 @@
         37%,
         62%,
         87% {
-          outline-color: var(--ios-blue);
-          box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.28);
+          outline-color: var(--accent);
+          box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 28%, transparent);
           opacity: 0.95;
           filter: none;
         }
@@ -1895,13 +2044,13 @@
         pointer-events: none;
       }
       .up {
-        color: #4f7a6e;
+        color: var(--up);
       }
       .price-down {
-        color: #8d7771;
+        color: var(--down);
       }
       .neutral {
-        color: #78817f;
+        color: var(--ios-secondary);
       }
       .empty {
         padding: 28px 12px;
@@ -2114,16 +2263,38 @@
     <div class="page">
       <div class="page-header">
         <h1>币安观察</h1>
-        <details class="friend-links">
-          <summary>友情链接</summary>
-          <div class="friend-links-panel">
-            <a href="./index.html">总导航</a>
-            <a href="./watch.html">冲榜雷达</a>
-            <a href="./range100.html">Range100 潜伏</a>
-            <a href="./okx/kline.html">OKX 自选</a>
-            <a href="https://betterma.github.io/">蚂蚱导航</a>
+        <div class="page-header-actions">
+          <div
+            class="theme-switch"
+            id="themeSwitch"
+            role="group"
+            aria-label="换肤预览"
+          >
+            <button
+              type="button"
+              data-theme="terminal"
+              title="01 深色终端"
+            >
+              终
+            </button>
+            <button type="button" data-theme="daylight" title="02 浅色日间">
+              日
+            </button>
+            <button type="button" data-theme="night" title="03 高对比夜盘">
+              夜
+            </button>
           </div>
-        </details>
+          <details class="friend-links">
+            <summary>友情链接</summary>
+            <div class="friend-links-panel">
+              <a href="./index.html">总导航</a>
+              <a href="./watch.html">冲榜雷达</a>
+              <a href="./range100.html">Range100 潜伏</a>
+              <a href="./okx/kline.html">OKX 自选</a>
+              <a href="https://betterma.github.io/">蚂蚱导航</a>
+            </div>
+          </details>
+        </div>
       </div>
       <div class="status">
         <span id="statusDot" class="dot"></span>
@@ -9100,6 +9271,41 @@
         }
       });
       applyPageChrome();
+      const themeSwitch = document.getElementById("themeSwitch");
+      const THEME_KEY = "kline-theme-v1";
+      const THEME_IDS = ["terminal", "daylight", "night"];
+      function syncThemeSwitchUi(theme) {
+        if (!themeSwitch) return;
+        themeSwitch.querySelectorAll("[data-theme]").forEach((btn) => {
+          btn.classList.toggle(
+            "is-active",
+            btn.getAttribute("data-theme") === theme,
+          );
+        });
+      }
+      function applyTheme(theme) {
+        const next = THEME_IDS.includes(theme) ? theme : "terminal";
+        document.documentElement.setAttribute("data-theme", next);
+        try {
+          localStorage.setItem(THEME_KEY, next);
+        } catch (_) {
+          /* ignore */
+        }
+        syncThemeSwitchUi(next);
+      }
+      {
+        const current =
+          document.documentElement.getAttribute("data-theme") || "terminal";
+        syncThemeSwitchUi(current);
+      }
+      if (themeSwitch) {
+        themeSwitch.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-theme]");
+          if (!btn) return;
+          applyTheme(btn.getAttribute("data-theme"));
+        });
+      }
+
       refreshAll({ reason: "boot", mode: "full", forceObs: true });
     </script>
   </body>
