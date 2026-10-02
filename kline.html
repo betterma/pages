@@ -967,17 +967,36 @@
         opacity: 0.88;
         filter: grayscale(0.18);
       }
+      @keyframes kline-jump-flash {
+        0%,
+        100% {
+          outline-color: transparent;
+          box-shadow: 0 0 0 0 transparent;
+          opacity: 1;
+          filter: none;
+        }
+        12%,
+        37%,
+        62%,
+        87% {
+          outline-color: #7a9a90;
+          box-shadow: 0 0 0 4px rgba(90, 120, 110, 0.2);
+          opacity: 0.9;
+          filter: grayscale(0.12);
+        }
+        25%,
+        50%,
+        75% {
+          outline-color: transparent;
+          box-shadow: 0 0 0 0 transparent;
+          opacity: 1;
+          filter: none;
+        }
+      }
       .kline-card.is-jump-target {
-        opacity: 0.9;
-        filter: grayscale(0.15);
-        outline: 2px solid #7a9a90;
+        outline: 2px solid transparent;
         outline-offset: 2px;
-        box-shadow: 0 0 0 4px rgba(90, 120, 110, 0.14);
-        transition:
-          outline 0.2s ease,
-          box-shadow 0.2s ease,
-          opacity 0.18s ease,
-          filter 0.18s ease;
+        animation: kline-jump-flash 2.8s ease-in-out 1;
       }
       .pin-mark,
       .pos-mark {
@@ -7081,8 +7100,15 @@
           setHiddenPinDrawerOpen(true);
         }
         card.scrollIntoView({ behavior: "smooth", block: "start" });
+        card.classList.remove("is-jump-target");
+        // Force reflow so re-click restarts the flash animation.
+        void card.offsetWidth;
         card.classList.add("is-jump-target");
-        window.setTimeout(() => card.classList.remove("is-jump-target"), 1600);
+        if (card._jumpFlashTimer) window.clearTimeout(card._jumpFlashTimer);
+        card._jumpFlashTimer = window.setTimeout(() => {
+          card.classList.remove("is-jump-target");
+          card._jumpFlashTimer = null;
+        }, 2900);
       }
 
       function renderPlainNotifyHtml(text, symbols) {
