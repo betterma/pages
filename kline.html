@@ -7810,7 +7810,6 @@
           showToast(`${key.replace(/USDT$/i, "")} 当前页面未展示`);
           return;
         }
-        closeAllFloatPanels();
         if (card.dataset.section === "pin-hidden") {
           setHiddenPinDrawerOpen(true);
         }
@@ -7825,7 +7824,7 @@
             card._jumpFlashTimer = null;
           }, 2900);
         };
-        // 等浮层收起后再滚，避免被挡或量到错误高度
+        // 展开抽屉/折叠区后下一帧再滚，避免量到错误高度
         window.requestAnimationFrame(() => {
           window.requestAnimationFrame(scrollToCard);
         });
