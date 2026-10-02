@@ -21,8 +21,8 @@
         );
         padding-bottom: var(--float-dock-h);
       }
-      body.is-notes-view {
-        padding-top: 0;
+      body.is-notes-view .kline-card.is-notes-filtered-out {
+        display: none !important;
       }
       .page {
         width: min(1400px, calc(100% - 20px));
@@ -137,16 +137,11 @@
       .friend-links-panel a:hover {
         background: rgba(90, 106, 104, 0.1);
       }
-      body.is-notes-view .page-section,
-      body.is-notes-view #hiddenPinTab,
-      body.is-notes-view #hiddenPinDrawer,
-      body.is-notes-view #sortRail,
-      body.is-notes-view #recentAutoPinSection {
-        display: none !important;
+      body.is-notes-view .page-section.is-empty-after-notes-filter .meta::after {
+        content: " · 记一笔过滤下无匹配";
+        color: #8a9490;
       }
-      body.is-notes-view #pinBatchRenewBtn {
-        display: none !important;
-      }
+      /* 记一笔 = 仅前端过滤卡片，不再整页切换布局 */
       .topbar-actions {
         display: flex;
         align-items: center;
@@ -1861,12 +1856,12 @@
               title="币安观察：盯一下 / 窗口上涨 / 收藏"
             >
               观察
-            </button>
+          </button>
             <button
               type="button"
               id="modeNotesBtn"
               data-mode="notes"
-              title="记一笔追踪：只看已记币种 K 线"
+              title="只显示已记一笔的 K 线卡片（前端过滤，不重拉）"
             >
               记一笔
             </button>
@@ -2034,37 +2029,37 @@
 
     <div id="notifyFloat" class="notify-float" hidden>
       <div class="notify-float-head">
-        <button
-          type="button"
-          class="notify-float-refresh"
-          id="notifyFloatRefresh"
-          title="立即从 GitHub 拉取最新企微文案"
-          aria-label="刷新企微通知"
-        >
-          刷新
-        </button>
+          <button
+            type="button"
+            class="notify-float-refresh"
+            id="notifyFloatRefresh"
+            title="立即从 GitHub 拉取最新企微文案"
+            aria-label="刷新企微通知"
+          >
+            刷新
+          </button>
         <strong
           >企微通知<span class="notify-time" id="notifyFloatTime"></span
         ></strong>
-        <button
-          type="button"
-          class="notify-float-close"
-          id="notifyFloatClose"
+          <button
+            type="button"
+            class="notify-float-close"
+            id="notifyFloatClose"
           title="关闭"
-          aria-label="关闭通知浮层"
-        >
-          ×
-        </button>
-      </div>
+            aria-label="关闭通知浮层"
+          >
+            ×
+          </button>
+        </div>
       <div class="notify-float-body notify-float-split" id="notifyFloatBody">
         <div class="notify-col">
           <div class="notify-col-title">盯一下</div>
           <div id="notifyFloatPins"></div>
-        </div>
+      </div>
         <div class="notify-col">
           <div class="notify-col-title">持仓</div>
           <div id="notifyFloatPositions"></div>
-        </div>
+    </div>
       </div>
     </div>
 
@@ -2130,21 +2125,21 @@
       >
         动态
       </button>
-      <button
-        type="button"
-        class="notify-float-tab"
-        id="notifyFloatTab"
+    <button
+      type="button"
+      class="notify-float-tab"
+      id="notifyFloatTab"
         data-float="notify"
         title="企微同步（盯一下 / 持仓）"
-      >
+    >
         企微
-      </button>
+    </button>
       <button
         type="button"
         class="notify-float-tab"
         id="actionLogTab"
         data-float="log"
-        title="自动盯 / 买 / 卖 简要日志"
+        title="自动盯 / 买 / 卖 / 触底退出 简要日志"
       >
         日志
       </button>
@@ -2218,7 +2213,7 @@
         // 盯一下卡每币最多 3 路请求，过大易触币安限流。
         KLINE_CARD_CONCURRENCY: 10,
         MOMENTUM_FETCH_CONCURRENCY: 12,
-        // 记一笔：卡片通常只拉主图；动量也单独提高。
+        // 记一笔改为前端过滤后不再单独提高并发；保留常量以免外部引用报错。
         NOTES_CARD_CONCURRENCY: 16,
         NOTES_MOMENTUM_FETCH_CONCURRENCY: 16,
         // 持仓相对买入价跌破该百分比 → 全屏强制确认卖出（与企微跌破告警对齐）。
@@ -2321,6 +2316,9 @@
           };
       let cardEggSaving = false;
       let cardEggPersistTimer = null;
+      const periodLowExitCandidates = new Set();
+      const periodLowExitQueued = new Set();
+      let periodLowExitFlushing = false;
       let pinSortMode = "pin";
       const RECENT_AUTO_SORT_KEY = "kline-recent-auto-sort-v2";
       // time-asc = 更早在前；time-desc = 最新在前；pin = 盯幅
@@ -2402,25 +2400,53 @@
       function applyPageChrome() {
         const notes = isNotesView();
         document.body.classList.toggle("is-notes-view", notes);
-        if (notes) {
-          selectedPinSymbols.clear();
-          updatePinSelectUi();
-          closeAllFloatPanels();
-          setHiddenPinDrawerOpen(false);
-          setMaintPanelOpen(false);
-          setSortRailOpen(false);
-        } else if (pinSelectMode) {
-          // 离开记一笔时退出多选，避免和盯一下多选状态串台。
-          pinSelectMode = false;
-          selectedPinSymbols.clear();
-          updatePinSelectUi();
-        }
-        document.title = notes ? "记一笔追踪" : "观察池 K 线";
+        document.title = notes ? "观察池 K 线 · 记一笔" : "观察池 K 线";
         const h1 = document.querySelector(".topbar-left h1");
-        if (h1) h1.textContent = notes ? "记一笔追踪" : "币安观察";
+        if (h1) h1.textContent = notes ? "币安观察 · 记一笔" : "币安观察";
         const pinTitle = document.getElementById("pinSectionTitle");
-        if (pinTitle) pinTitle.textContent = notes ? "记一笔 K 线" : "盯一下";
+        if (pinTitle) pinTitle.textContent = "盯一下";
         syncModeSwitchUi();
+      }
+
+      function applyNotesFilter() {
+        const notesOn = isNotesView();
+        const noted = notesOn ? noteSymbolSet() : null;
+        document.querySelectorAll(".kline-card[data-symbol]").forEach((card) => {
+          const symbol = String(card.dataset.symbol || "")
+            .trim()
+            .toUpperCase();
+          const hide = notesOn && symbol && !noted.has(symbol);
+          card.classList.toggle("is-notes-filtered-out", hide);
+        });
+        document.querySelectorAll(".page-section").forEach((section) => {
+          const grid = section.querySelector(".kline-grid");
+          if (!grid) {
+            section.classList.remove("is-empty-after-notes-filter");
+            return;
+          }
+          const cards = [...grid.querySelectorAll(".kline-card[data-symbol]")];
+          if (!notesOn || !cards.length) {
+            section.classList.remove("is-empty-after-notes-filter");
+            return;
+          }
+          const visible = cards.some(
+            (card) => !card.classList.contains("is-notes-filtered-out"),
+          );
+          section.classList.toggle("is-empty-after-notes-filter", !visible);
+        });
+      }
+
+      async function setNotesView(on, options) {
+        const next = !!on;
+        if (next === notesViewMode && !(options && options.force)) return;
+        notesViewMode = next;
+        syncNotesViewUrl();
+        closeCardActions(true);
+        applyPageChrome();
+        applyNotesFilter();
+        if (options && options.skipRender) return;
+        showToast(next ? "已过滤：只看记一笔" : "已显示全部");
+        setStatus(true, next ? "记一笔过滤中" : "观察池");
       }
 
       let modeProgressTimer = null;
@@ -2508,43 +2534,9 @@
         setTopProgress(on, { overlay: true, label: label || "正在切换…" });
       }
 
-      async function setNotesView(on, options) {
-        const next = !!on;
-        if (next === notesViewMode && !(options && options.force)) return;
-        notesViewMode = next;
-        syncNotesViewUrl();
-        closeCardActions(true);
-        applyPageChrome();
-        if (options && options.skipRender) return;
-        setModeSwitchBusy(true);
-        const baseLabel = next ? "切换到记一笔" : "切换到观察";
-        setModeProgress(true, `${baseLabel}…`);
-        try {
-          setStatus(false, `${baseLabel}…`);
-          await renderKlines({
-            onProgress: (done, total) => {
-              const label =
-                total > 0
-                  ? `${baseLabel} ${done}/${total}`
-                  : `${baseLabel}…`;
-              setStatus(false, label);
-              setTopProgressValue(done / Math.max(total, 1), label);
-              const labelEl = document.getElementById("modeProgressLabel");
-              if (labelEl) labelEl.textContent = label;
-            },
-          });
-          setStatus(true, next ? "已切换到记一笔" : "已切换到观察");
-        } catch (error) {
-          console.error(error);
-          setStatus(false, error.message || "切换模式失败");
-        } finally {
-          setModeProgress(false);
-          setModeSwitchBusy(false);
-        }
-      }
-
       function applyNotesViewChrome() {
         applyPageChrome();
+        applyNotesFilter();
       }
 
       function currentKlineView() {
@@ -2982,6 +2974,127 @@
         return false;
       }
 
+      function candlesPeriodTrough(candles) {
+        if (!Array.isArray(candles) || !candles.length) return null;
+        let trough = Infinity;
+        for (const candle of candles) {
+          const low = Number(candle && candle.low);
+          if (Number.isFinite(low) && low > 0 && low < trough) trough = low;
+        }
+        return Number.isFinite(trough) && trough > 0 && trough < Infinity
+          ? trough
+          : null;
+      }
+
+      function isAtPeriodLow(candles, symbol) {
+        const trough = candlesPeriodTrough(candles);
+        if (!Number.isFinite(trough)) return false;
+        const last = candles[candles.length - 1];
+        const lastLow = Number(last && last.low);
+        const current = Number(marketMap[symbol]?.price);
+        const tol = Math.max(trough * 1e-8, 1e-12);
+        if (Number.isFinite(lastLow) && lastLow <= trough + tol) return true;
+        if (Number.isFinite(current) && current <= trough + tol) return true;
+        return false;
+      }
+
+      function hasMomNoteForSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return false;
+        return (momNoteItems || []).some(
+          (note) =>
+            note &&
+            String(note.symbol || "")
+              .trim()
+              .toUpperCase() === key,
+        );
+      }
+
+      function notePeriodLowExitCandidate(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        if (periodLowExitQueued.has(key)) return;
+        periodLowExitCandidates.add(key);
+      }
+
+      async function flushPeriodLowExits() {
+        const symbols = [...periodLowExitCandidates].filter(Boolean);
+        periodLowExitCandidates.clear();
+        if (!symbols.length || periodLowExitFlushing) return [];
+        const actionable = symbols.filter(
+          (symbol) =>
+            !periodLowExitQueued.has(symbol) &&
+            (pinSymbols().has(symbol) || hasMomNoteForSymbol(symbol)),
+        );
+        if (!actionable.length) return [];
+        actionable.forEach((symbol) => periodLowExitQueued.add(symbol));
+        periodLowExitFlushing = true;
+        try {
+          const keySet = new Set(actionable);
+          let pinChanged = false;
+          let noteChanged = false;
+          if (actionable.some((symbol) => pinSymbols().has(symbol))) {
+            const result = await WatchFavorites.patchPins({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.PINS_PATH,
+              message: `Period-low exit pins ${actionable.length}`,
+              mutate: (list) => {
+                const next = list.filter(
+                  (item) => item && !keySet.has(String(item.symbol || "")),
+                );
+                pinChanged = next.length !== list.length;
+                return next;
+              },
+            });
+            pinItems = result.pins || [];
+          }
+          if (actionable.some((symbol) => hasMomNoteForSymbol(symbol))) {
+            const result = await WatchFavorites.patchMomNotes({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.MOM_NOTES_PATH,
+              message: `Period-low exit notes ${actionable.length}`,
+              mutate: (list) => {
+                const next = list.filter((note) => {
+                  const key = String(note && note.symbol || "")
+                    .trim()
+                    .toUpperCase();
+                  return key && !keySet.has(key);
+                });
+                noteChanged = next.length !== list.length;
+                return next;
+              },
+            });
+            momNoteItems = result.notes || [];
+          }
+          if (!pinChanged && !noteChanged) {
+            actionable.forEach((symbol) => periodLowExitQueued.delete(symbol));
+            return [];
+          }
+          appendActionLog("period-low-exit", actionable);
+          const labels = actionable
+            .slice(0, 5)
+            .map((symbol) => String(symbol).replace(/USDT$/i, ""));
+          const more =
+            actionable.length > 5 ? ` …+${actionable.length - 5}` : "";
+          showToast(
+            `触底退出 ${actionable.length}：${labels.join(" · ")}${more}`,
+          );
+          renderActionLogBody();
+          return actionable;
+        } catch (error) {
+          console.warn("period-low exit failed", error);
+          actionable.forEach((symbol) => periodLowExitQueued.delete(symbol));
+          showToast(error.message || "触底退出失败");
+          return [];
+        } finally {
+          periodLowExitFlushing = false;
+        }
+      }
+
       function applyCardEggChrome(card, symbol) {
         if (!card || !symbol) return;
         const showFireworks =
@@ -3034,6 +3147,7 @@
           });
           momNoteItems = result.notes || [];
           showToast(`已去掉记一笔 ${label}`);
+          applyNotesFilter();
           await renderKlines();
           setStatus(true, `已去掉记一笔 ${label}`);
           return true;
@@ -3617,6 +3731,7 @@
         if (kind === "buy") return "买";
         if (kind === "sell") return "卖";
         if (kind === "sell-stop") return "止损";
+        if (kind === "period-low-exit") return "触底退出";
         return kind || "动";
       }
 
@@ -3626,7 +3741,7 @@
         const list = readActionLog();
         if (!list.length) {
           body.innerHTML =
-            '<div class="action-log-empty">暂无 · 自动盯 / 回暖 / 买 / 卖</div>';
+            '<div class="action-log-empty">暂无 · 自动盯 / 回暖 / 买 / 卖 / 触底退出</div>';
           return;
         }
         body.innerHTML = list
@@ -4085,7 +4200,7 @@
         const panel = document.getElementById("sortRailPanel");
         const toggle = document.getElementById("sortRailToggle");
         if (!rail || !panel || !toggle) return;
-        const next = !!open && !isNotesView();
+        const next = !!open;
         rail.classList.toggle("is-open", next);
         panel.hidden = !next;
         toggle.setAttribute("aria-expanded", next ? "true" : "false");
@@ -4149,7 +4264,7 @@
           /* ignore */
         }
         syncRecentAutoSortUi();
-        if (isNotesView() || loading) return;
+        if (loading) return;
         reorderRecentAutoPinGrid();
         scheduleSortRailCollapse();
       }
@@ -4205,7 +4320,7 @@
           /* ignore */
         }
         syncPinSortUi();
-        if (isNotesView() || loading) return;
+        if (loading) return;
         if (next === "momentum") {
           void ensureMomentumThenReorder({ force: !lastMomentumSnapshot });
         } else {
@@ -4467,7 +4582,7 @@
             return;
           } catch (error) {
             if (error && error.kind) {
-              lastError = error;
+            lastError = error;
             } else {
               lastError = classifyFetchNetworkError(error, "币安行情");
             }
@@ -4512,7 +4627,7 @@
           } catch (error) {
             if (error.name === "AbortError") throw error;
             if (error && error.kind) {
-              lastError = error;
+            lastError = error;
             } else {
               lastError = classifyFetchNetworkError(error, "币安K线");
             }
@@ -4758,9 +4873,7 @@
         const list = [...new Set((symbols || []).filter(Boolean))];
         const batchSize = Math.max(
           1,
-          isNotesView()
-            ? CONFIG.NOTES_MOMENTUM_FETCH_CONCURRENCY || 16
-            : CONFIG.MOMENTUM_FETCH_CONCURRENCY || 12,
+          CONFIG.MOMENTUM_FETCH_CONCURRENCY || 12,
         );
         const limit = CONFIG.MOMENTUM_TREND.klineLimit;
         if (typeof onProgress === "function") onProgress(0, list.length);
@@ -4808,7 +4921,6 @@
 
       function shouldComputeMomentum(options) {
         if (options && options.force) return true;
-        if (isNotesView()) return true;
         if (pinSortMode === "momentum") return true;
         if (isFloatPanelOpen("momentum")) return true;
         return false;
@@ -4889,15 +5001,6 @@
 
       function currentMomentumUniverse() {
         if (lastScoreUniverse.length) return lastScoreUniverse.slice();
-        if (isNotesView()) {
-          const blocked = blacklistSymbols();
-          return [
-            ...new Set([
-              ...listWindowUpPinSymbols(),
-              ...noteSymbolList().filter((symbol) => !blocked.has(symbol)),
-            ]),
-          ];
-        }
         const recentAutoList = listRecentAutoPins().map((item) => item.symbol);
         return [
           ...new Set([
@@ -4922,15 +5025,6 @@
 
       function reorderPinGridByMomentum(scores) {
         const scoreMap = scores || scoresMapFromSnapshot(lastMomentumSnapshot);
-        if (isNotesView()) {
-          const blocked = blacklistSymbols();
-          const list = noteSymbolList()
-            .filter((symbol) => !blocked.has(symbol))
-            .slice()
-            .sort((a, b) => compareMomentumSignal(a, b, scoreMap));
-          applyPinGridOrder(list);
-          return;
-        }
         const recentAutoSet = new Set(
           listRecentAutoPins().map((item) => item.symbol),
         );
@@ -4942,7 +5036,6 @@
       }
 
       function reorderPinGridByPinChange() {
-        if (isNotesView()) return;
         const recentAutoSet = new Set(
           listRecentAutoPins().map((item) => item.symbol),
         );
@@ -4982,7 +5075,7 @@
           );
           if (signal.aborted) return null;
           updatePinMomentumMeta(scores, list);
-          if (pinSortMode === "momentum" || isNotesView()) {
+          if (pinSortMode === "momentum") {
             reorderPinGridByMomentum(scores);
           }
           return scores;
@@ -5258,6 +5351,7 @@
           });
           momNoteItems = result.notes || [];
           showToast(`已记 ${entry.label}`);
+          applyNotesFilter();
           refreshMomentumFloatBody();
           document
             .querySelectorAll(
@@ -5295,6 +5389,7 @@
             mutate: (list) => list.filter((note) => note.id !== id),
           });
           momNoteItems = result.notes || [];
+          applyNotesFilter();
           refreshMomentumFloatBody();
         } catch (error) {
           console.warn(error);
@@ -5315,6 +5410,7 @@
             mutate: () => [],
           });
           momNoteItems = result.notes || [];
+          applyNotesFilter();
           refreshMomentumFloatBody();
           showToast("记一笔已清空");
         } catch (error) {
@@ -5453,7 +5549,7 @@
         const note = latestMomNoteForSymbol(symbol);
         const notePrice = Number(note && note.price);
         if (note && Number.isFinite(notePrice) && notePrice > 0) {
-          return {
+        return {
             base: notePrice,
             noteAt: Number(note.at) || 0,
             pinAt: 0,
@@ -6013,15 +6109,15 @@
         try {
           const tasks = [fetchKlines(symbol, interval, signal)];
           // 记一笔只拉主图，少打 15m/5m，提速。
-          const needPinSignals = !!pinItem && !isNotesView();
+          const needPinSignals = !!pinItem;
           if (needPinSignals) {
             tasks.push(
-              fetchKlines(
-                symbol,
-                CONFIG.SIGNAL_INTERVAL,
-                signal,
-                CONFIG.SIGNAL_LIMIT,
-              ),
+            fetchKlines(
+              symbol,
+              CONFIG.SIGNAL_INTERVAL,
+              signal,
+              CONFIG.SIGNAL_LIMIT,
+            ),
               fetchKlines(symbol, "5m", signal, CONFIG.MOMENTUM_5M_LIMIT),
             );
           }
@@ -6059,24 +6155,6 @@
               .filter(Boolean)
               .join(" · ");
             applyPinMomentum(card, flags);
-          } else if (pinItem && isNotesView()) {
-            const current = marketMap[symbol]?.price;
-            const change24h = marketMap[symbol]?.change24h;
-            status.className = "pin-stats";
-            status.innerHTML = buildPinStatusHtml(pinItem, symbol, {
-              streak5: false,
-              heat15: false,
-              priceUpVsLast: false,
-            });
-            status.title = [
-              `盯住价 ${formatPinPrice(pinItem.pinPrice)}`,
-              `现价 ${formatPinPrice(current)}`,
-              `盯幅 ${formatPercent(pinChangePercent(pinItem))}`,
-              `24h ${formatPercent(change24h)}`,
-            ]
-              .filter(Boolean)
-              .join(" · ");
-            applyPinMomentum(card, null);
           } else {
             const change24h = marketMap[symbol]?.change24h;
             status.textContent = Number.isFinite(change24h)
@@ -6097,6 +6175,12 @@
             const atHigh = isAtPeriodHigh(candles, symbol);
             const peak = candlesPeriodPeak(candles);
             notePeriodHighEgg(symbol, atHigh, peak);
+          }
+          if (
+            (pinItem || hasMomNoteForSymbol(symbol)) &&
+            isAtPeriodLow(candles, symbol)
+          ) {
+            notePeriodLowExitCandidate(symbol);
           }
           applyCardEggChrome(card, symbol);
         } catch (error) {
@@ -6247,7 +6331,7 @@
         const pinned = pinSymbols().has(symbol);
         const favored = favoriteSymbols().has(symbol);
         const held = positionSymbols().has(symbol);
-        const canAddNote = !isNotesView() && pinned;
+        const canAddNote = pinned;
         const hasFireEgg = hasPeriodHighEgg(symbol);
         const hasNewEgg = hasFromHiddenEgg(symbol);
         const expired = (() => {
@@ -6276,7 +6360,7 @@
             ? `<button type="button" data-action="sell">卖出</button>`
             : "",
           `<button type="button" data-action="fav">${favored ? "取消收藏" : "收藏"}</button>`,
-          isNotesView()
+          hasMomNoteForSymbol(symbol)
             ? `<button type="button" data-action="remove-note" class="is-danger">去掉记一笔</button>`
             : "",
           hasFireEgg
@@ -6398,15 +6482,8 @@
       }
 
       function updatePinSelectUi() {
-        if (isNotesView()) {
-          const notes = noteSymbolSet();
-          for (const symbol of [...selectedPinSymbols]) {
-            if (!notes.has(symbol)) selectedPinSymbols.delete(symbol);
-          }
-        } else {
-          for (const symbol of [...selectedPinSymbols]) {
-            if (!pinSymbols().has(symbol)) selectedPinSymbols.delete(symbol);
-          }
+        for (const symbol of [...selectedPinSymbols]) {
+          if (!pinSymbols().has(symbol)) selectedPinSymbols.delete(symbol);
         }
         const btn = document.getElementById("pinSelectBtn");
         const bar = document.getElementById("pinBatchBar");
@@ -6415,9 +6492,7 @@
           btn.classList.toggle("is-active", pinSelectMode);
           btn.setAttribute("aria-pressed", pinSelectMode ? "true" : "false");
           btn.textContent = pinSelectMode ? "选中" : "多选";
-          btn.title = isNotesView()
-            ? "多选后可批量取消记一笔"
-            : "多选后可批量取消盯住或按现价续盯";
+          btn.title = "多选后可批量取消盯住或按现价续盯";
           btn.hidden = false;
         }
         if (bar) {
@@ -6432,7 +6507,7 @@
         const clearEggNewBtn = document.getElementById("pinBatchClearEggNewBtn");
         const clearBtn = document.getElementById("pinBatchClearBtn");
         const selectAllBtn = document.getElementById("pinBatchSelectAllBtn");
-        const busy = isNotesView() ? momNotesSaving : pinSaving;
+        const busy = pinSaving;
         const disabled = busy || selectedPinSymbols.size === 0;
         const eggFireCount = [...selectedPinSymbols].filter((symbol) =>
           hasPeriodHighEgg(symbol),
@@ -6441,18 +6516,16 @@
           hasFromHiddenEgg(symbol),
         ).length;
         if (renewBtn) {
-          renewBtn.hidden = isNotesView();
+          renewBtn.hidden = false;
           renewBtn.disabled = disabled;
         }
         if (unpinBtn) {
           unpinBtn.disabled = disabled;
-          unpinBtn.textContent = isNotesView() ? "取消记" : "取消";
-          unpinBtn.title = isNotesView()
-            ? "取消选中币的记一笔"
-            : "取消盯住";
+          unpinBtn.textContent = "取消";
+          unpinBtn.title = "取消盯住";
         }
         if (clearEggFireBtn) {
-          clearEggFireBtn.hidden = isNotesView();
+          clearEggFireBtn.hidden = false;
           clearEggFireBtn.disabled = busy || eggFireCount === 0;
           clearEggFireBtn.title =
             eggFireCount > 0
@@ -6460,7 +6533,7 @@
               : "去掉选中项的礼花背景（无背景自动跳过）";
         }
         if (clearEggNewBtn) {
-          clearEggNewBtn.hidden = isNotesView();
+          clearEggNewBtn.hidden = false;
           clearEggNewBtn.disabled = busy || eggNewCount === 0;
           clearEggNewBtn.title =
             eggNewCount > 0
@@ -6469,9 +6542,7 @@
         }
         if (clearBtn) clearBtn.disabled = selectedPinSymbols.size === 0;
         if (selectAllBtn) {
-          selectAllBtn.title = isNotesView()
-            ? "全选当前展示的记一笔"
-            : "全选当前展示的盯一下";
+          selectAllBtn.title = "全选当前展示的盯一下";
         }
       }
 
@@ -6524,9 +6595,7 @@
           .trim()
           .toUpperCase();
         if (!key) return;
-        if (isNotesView()) {
-          if (!noteSymbolSet().has(key)) return;
-        } else if (!pinSymbols().has(key)) {
+        if (!pinSymbols().has(key)) {
           return;
         }
         if (selectedPinSymbols.has(key)) selectedPinSymbols.delete(key);
@@ -6617,7 +6686,7 @@
       }
 
       function batchClearEggFireSelected() {
-        if (isNotesView() || !selectedPinSymbols.size) return;
+        if (!selectedPinSymbols.size) return;
         const targets = [...selectedPinSymbols].filter((symbol) =>
           hasPeriodHighEgg(symbol),
         );
@@ -6636,7 +6705,7 @@
       }
 
       function batchClearEggNewSelected() {
-        if (isNotesView() || !selectedPinSymbols.size) return;
+        if (!selectedPinSymbols.size) return;
         const targets = [...selectedPinSymbols].filter((symbol) =>
           hasFromHiddenEgg(symbol),
         );
@@ -6838,7 +6907,7 @@
                   isFavorite: favSet.has(symbol),
                   isPair: pairs.has(symbol),
                   isPin: isPinSection || pinSymbols().has(symbol),
-                  isNote: isNotesView() && section === "pin",
+                  isNote: hasMomNoteForSymbol(symbol),
                   isPinSection,
                   isRewarm:
                     isPinSection &&
@@ -6860,14 +6929,12 @@
               section === "rising"
                 ? "暂无上涨币种"
                 : section === "pin"
-                  ? isNotesView()
-                    ? "暂无记一笔 · 去币安观察近2h/1h 浮窗点「记」"
-                    : "暂无当前窗口上涨的盯一下 · 右侧可看窗口回落项"
+                  ? "暂无当前窗口上涨的盯一下 · 右侧可看窗口回落项"
                   : section === "pin-hidden"
                     ? "当前没有隐藏的盯一下（窗口回落）"
                     : section === "pin-recent"
                       ? "暂无新自动盯 / 回暖"
-                      : "暂无窗口上涨的收藏"
+                    : "暂无窗口上涨的收藏"
             }</div>`;
 
         bindCardInteractions(grid);
@@ -6875,9 +6942,7 @@
         const cards = [...grid.querySelectorAll(".kline-card")];
         const batchSize = Math.max(
           1,
-          isNotesView()
-            ? CONFIG.NOTES_CARD_CONCURRENCY || 16
-            : CONFIG.KLINE_CARD_CONCURRENCY || 10,
+          CONFIG.KLINE_CARD_CONCURRENCY || 10,
         );
         for (let index = 0; index < cards.length; index += batchSize) {
           if (signal.aborted) return;
@@ -7109,7 +7174,6 @@
         const chartIv = chartInterval();
         const bars = klineLimit(chartIv);
         const rangeText = klineRangeLabel();
-        const notesMode = isNotesView();
         let klineDone = 0;
         let klineTotal = 0;
         const bumpKline = (n) => {
@@ -7118,86 +7182,8 @@
             onProgress(klineDone, klineTotal);
           }
         };
-
-        if (notesMode) {
-          if (klineAbort) klineAbort.abort();
-          klineAbort = new AbortController();
-          const { signal } = klineAbort;
-          if (momentumAbort) {
-            momentumAbort.abort();
-            momentumAbort = null;
-            momentumBusy = false;
-            setMomentumUiBusy(false);
-          }
-          const noteSymbols = noteSymbolList();
-          const blocked = blacklistSymbols();
-          const pinMap = new Map(pinItems.map((item) => [item.symbol, item]));
-          const visibleNotes = noteSymbols.filter(
-            (symbol) => !blocked.has(symbol),
-          );
-          // 近2h/1h 浮窗与币安观察一致：全部窗口上涨盯一下，不限记一笔。
-          const floatPinSymbols = listWindowUpPinSymbols(interval);
-          const scoreSymbols = [
-            ...new Set([...floatPinSymbols, ...visibleNotes]),
-          ];
-
-          const clearExpiredBtn = document.getElementById("clearExpiredPinsBtn");
-          const clearPositionsBtn = document.getElementById(
-            "clearAllPositionsBtn",
-          );
-          const maintEmptyHint = document.getElementById("maintEmptyHint");
-          const expiredPins = WatchFavorites.PIN_EXPIRY_ENABLED
-            ? pinItems.filter((item) => WatchFavorites.isPinExpired(item)).length
-            : 0;
-          const positionCount = positionItems.length;
-          if (clearExpiredBtn) clearExpiredBtn.hidden = expiredPins <= 0;
-          if (clearPositionsBtn) clearPositionsBtn.hidden = positionCount <= 0;
-          if (maintEmptyHint) {
-            maintEmptyHint.hidden = expiredPins > 0 || positionCount > 0;
-          }
-
-          updateHiddenPinTab(0);
-
-          // 先出记一笔 K 线；近2h/1h 后台算完再按信号重排 + 更新浮窗。
-          const pinSymbolsList = visibleNotes.slice();
-          klineTotal = pinSymbolsList.length;
-          if (typeof onProgress === "function") onProgress(0, klineTotal);
-
-          const pinMeta = document.getElementById("pinMeta");
-          if (pinMeta) {
-            pinMeta.textContent = [
-              `记一笔 ${momNoteItems.length} 条`,
-              `追踪 ${pinSymbolsList.length} 币`,
-              `浮窗盯一下 ${floatPinSymbols.length}`,
-              "按信号强弱排序",
-              rangeText,
-              `${bars} 根`,
-              "多选可批量取消 · 长按去掉单条",
-            ].join(" · ");
-          }
-
-          await fillGrid(
-            document.getElementById("pinGrid"),
-            pinSymbolsList,
-            "pin",
-            signal,
-            new Set(),
-            pinMap,
-            bumpKline,
-          );
-          updatePinSelectUi();
-          applyPinSelectChrome();
-          const recentSection = document.getElementById("recentAutoPinSection");
-          if (recentSection) {
-            recentSection.hidden = true;
-            const recentGrid = document.getElementById("recentAutoPinGrid");
-            if (recentGrid) recentGrid.innerHTML = "";
-          }
-          syncSortRailRecentVisibility();
-          void schedulePinMomentum(scoreSymbols);
-          void maybeRunBreakHighCheck();
-          return;
-        }
+        periodLowExitCandidates.clear();
+        periodLowExitQueued.clear();
 
         const risingZone = getRisingZoneSymbols();
         const edgeResult = await autoPinNewRising(risingZone);
@@ -7280,15 +7266,15 @@
         ).length;
         const expiredPins = WatchFavorites.PIN_EXPIRY_ENABLED
           ? pinItems.filter(
-              (item) =>
+          (item) =>
                 !blocked.has(item.symbol) &&
                 WatchFavorites.isPinExpired(item),
             ).length
           : 0;
         const expiredHidden = WatchFavorites.PIN_EXPIRY_ENABLED
           ? pinCandidates.filter((item) => {
-              if (!WatchFavorites.isPinExpired(item)) return false;
-              return !hasWindowGain(item.symbol, interval);
+          if (!WatchFavorites.isPinExpired(item)) return false;
+          return !hasWindowGain(item.symbol, interval);
             }).length
           : 0;
 
@@ -7359,6 +7345,9 @@
                 ? `过期 ${expiredPins}（隐藏 ${expiredHidden}）`
                 : `过期 ${expiredPins}`,
             );
+          }
+          if (isNotesView()) {
+            parts.push(`记一笔过滤 ${noteSymbolList().length} 币`);
           }
           document.getElementById("pinMeta").textContent = parts.join(" · ");
         }
@@ -7477,6 +7466,15 @@
         if (signal.aborted) return;
         updateNotifyFloatPanel();
         updatePinSelectUi();
+        applyNotesFilter();
+        const exitedPins = await flushPeriodLowExits();
+        if (exitedPins.length && !(options && options.afterPeriodLowExit)) {
+          await renderKlines({
+            onProgress,
+            afterPeriodLowExit: true,
+          });
+          return;
+        }
         void schedulePinMomentum(scoreUniverse);
         void maybeRunBreakHighCheck();
       }
@@ -7826,7 +7824,7 @@
               : `${label} 已卖出，停止持仓观测`,
           );
           if (!(options && options.skipRender)) {
-            await renderKlines();
+          await renderKlines();
           }
           syncStopLossGate();
           setStatus(
@@ -7955,7 +7953,7 @@
           if (reason === "focus") {
             setStatus(false, "切回页面 · 正在刷新最新行情与 K 线...");
           } else {
-            setStatus(false, "1/3 读取 GitHub 快照 / 观察池 / 收藏...");
+          setStatus(false, "1/3 读取 GitHub 快照 / 观察池 / 收藏...");
           }
           await loadGithubStorage();
           updateNotifyFloatPanel();
@@ -8057,7 +8055,7 @@
         const name = btn.dataset.float;
         toggleFloatPanel(name);
         if (name === "notify" && isFloatPanelOpen("notify")) {
-          refreshNotifyFloat({ silent: true });
+        refreshNotifyFloat({ silent: true });
         }
         if (name === "momentum" && isFloatPanelOpen("momentum")) {
           const hasRows =
@@ -8199,13 +8197,13 @@
       document
         .getElementById("pinBatchSelectAllBtn")
         .addEventListener("click", () => {
-          const notes = isNotesView();
-          const allowed = notes ? noteSymbolSet() : pinSymbols();
+          const allowed = pinSymbols();
           document
             .querySelectorAll(
               "#pinGrid .kline-card[data-symbol], #recentAutoPinGrid .kline-card[data-symbol], #hiddenPinGrid .kline-card[data-symbol]",
             )
             .forEach((card) => {
+              if (card.classList.contains("is-notes-filtered-out")) return;
               const symbol = String(card.dataset.symbol || "").toUpperCase();
               if (!symbol || !allowed.has(symbol)) return;
               selectedPinSymbols.add(symbol);
@@ -8218,8 +8216,7 @@
       document
         .getElementById("pinBatchUnpinBtn")
         .addEventListener("click", () => {
-          if (isNotesView()) batchRemoveNotesSelected();
-          else batchUnpinSelected();
+          batchUnpinSelected();
         });
       document
         .getElementById("pinBatchRenewBtn")
@@ -8259,7 +8256,7 @@
           if (!link) return;
           event.preventDefault();
           jumpToNotifySymbol(link.dataset.jump);
-        });
+      });
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
           closeCardActions();
@@ -8273,7 +8270,7 @@
       document
         .getElementById("rangeSelect")
         .addEventListener("change", async (event) => {
-          closeCardActions();
+        closeCardActions();
           const select = event.target;
           if (loading) {
             syncRangeSelect();
@@ -8305,11 +8302,11 @@
             });
             updateDataAsOf(Date.now());
             setStatus(true, `已切换为${view.label}`);
-          } catch (error) {
-            console.error(error);
+        } catch (error) {
+          console.error(error);
             klineViewKey = prev;
             syncRangeSelect();
-            setStatus(false, error.message || "切换 K 线范围失败");
+          setStatus(false, error.message || "切换 K 线范围失败");
           } finally {
             setTopProgress(false);
             select.disabled = false;
@@ -8416,6 +8413,7 @@
           event.stopPropagation();
         }
       });
+      applyPageChrome();
       refreshAll({ reason: "boot" });
     </script>
   </body>
