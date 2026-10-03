@@ -5,7 +5,6 @@ const {
   saveJson,
   fetchBinanceTickers,
   sendWecomText,
-  sendWecomMarkdown,
   sendWecomImage,
 } = require('./github-wecom');
 const { buildTopChartsCollage, fetchKlines } = require('./kline-chart');
@@ -15,7 +14,6 @@ const {
   persistBreakHigh,
   loadMomNotes,
   listBreakHighUniverse,
-  CONFIG: BREAK_HIGH_CONFIG,
 } = require('./break-high');
 
 function webhookKeyHint(url) {
@@ -534,9 +532,9 @@ async function tryAcquireNotifyLock(stateFile, now) {
 }
 
 async function main() {
-  if (!CONFIG.WECOM_WEBHOOK_PINS && !CONFIG.WECOM_WEBHOOK_POSITIONS) {
+  if (!CONFIG.WECOM_WEBHOOK_POSITIONS) {
     throw new Error(
-      'Missing WECOM_WEBHOOK_PINS / WECOM_WEBHOOK_POSITIONS (or WECOM_WEBHOOK_URL)',
+      'Missing WECOM_WEBHOOK_POSITIONS (or WECOM_WEBHOOK_URL) for auto-pin/rewarm',
     );
   }
 
@@ -773,7 +771,7 @@ async function main() {
     sent.push('pins-page');
   }
 
-  // 破点高：占原盯一下企微通道；10 分钟冷却，名单 + K 线（无则「无符合条件」）。
+  // 破点高：只写 GitHub 供网页「动态」浮窗，不再发企微。
   let chartSymbols = [];
   let breakHighHits = [];
   let breakHighSkipped = true;
@@ -795,48 +793,15 @@ async function main() {
             ? `Break-high ${breakHighHits.length}`
             : 'Break-high check',
         );
+        sent.push(
+          breakHighHits.length
+            ? `break-high-page:${breakHighHits.length}`
+            : 'break-high-page:empty',
+        );
       } catch (error) {
         const message = error && error.message ? error.message : String(error);
         sendErrors.push(`break-high-save:${message}`);
         console.warn('persist break-high failed', message);
-      }
-
-      if (!CONFIG.WECOM_WEBHOOK_PINS) {
-        console.warn('break-high report skipped: missing WECOM_WEBHOOK_PINS');
-      } else if (breakResult.text) {
-        try {
-          await sendWecomMarkdown(breakResult.text, CONFIG.WECOM_WEBHOOK_PINS);
-          sent.push(
-            breakHighHits.length
-              ? `break-high:${breakHighHits.length}`
-              : 'break-high:empty',
-          );
-        } catch (error) {
-          const message =
-            error && error.message ? error.message : String(error);
-          sendErrors.push(`break-high:${message}`);
-          console.warn('break-high wecom failed', message);
-        }
-        if (breakResult.chartRows && breakResult.chartRows.length) {
-          try {
-            const chartCap = Math.max(
-              1,
-              Number(BREAK_HIGH_CONFIG.BREAK_HIGH_CHART_MAX) || 12,
-            );
-            chartSymbols = await sendTopPinCharts(
-              breakResult.chartRows.slice(0, chartCap),
-              CONFIG.WECOM_WEBHOOK_PINS,
-            );
-            if (chartSymbols.length) {
-              sent.push(`break-high-charts:${chartSymbols.length}`);
-            }
-          } catch (error) {
-            const message =
-              error && error.message ? error.message : String(error);
-            sendErrors.push(`break-high-charts:${message}`);
-            console.warn('break-high charts failed', message);
-          }
-        }
       }
     } else {
       console.log('break-high skipped: cooldown');
