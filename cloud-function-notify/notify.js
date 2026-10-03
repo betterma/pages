@@ -634,7 +634,8 @@ async function main() {
   }
 
   async function sendAutoPinWecom() {
-    if (!CONFIG.AUTO_PIN_WECOM || !CONFIG.WECOM_WEBHOOK_PINS) return null;
+    // 持仓警告群改发自动盯 / 回暖；不再走盯一下/破点高通道。
+    if (!CONFIG.AUTO_PIN_WECOM || !CONFIG.WECOM_WEBHOOK_POSITIONS) return null;
     const lines = [];
     if (autoPinned.length) {
       const names = autoPinned
@@ -655,9 +656,10 @@ async function main() {
       lines.push(`【回暖】${autoRewarmed.length}\n${names}${more}`);
     }
     if (!lines.length) return null;
+    const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
     await sendWecomText(
-      `${lines.join('\n')}\n（网页「日志 / 置顶」可看）`,
-      CONFIG.WECOM_WEBHOOK_PINS,
+      `【边沿提醒】${time}\n${lines.join('\n')}\n（网页「日志 / 置顶」可看）`,
+      CONFIG.WECOM_WEBHOOK_POSITIONS,
     );
     return `auto-pin:${autoPinned.length}+rewarm:${autoRewarmed.length}`;
   }
@@ -738,19 +740,9 @@ async function main() {
     }
   }
 
+  // 持仓：只写网页 lastPositionNotify，不再发企微（持仓群改发自动盯/回暖）。
   if (positionText) {
-    if (!CONFIG.WECOM_WEBHOOK_POSITIONS) {
-      console.warn('position report skipped: missing WECOM_WEBHOOK_POSITIONS');
-    } else {
-      try {
-        await sendWecomText(positionText, CONFIG.WECOM_WEBHOOK_POSITIONS);
-        sent.push('positions');
-      } catch (error) {
-        const message = error && error.message ? error.message : String(error);
-        sendErrors.push(`positions:${message}`);
-        console.warn('position report failed', message);
-      }
-    }
+    sent.push('positions-page');
   }
 
   let pinRows = listPinCandidateRows(pins, tickers);
@@ -876,19 +868,15 @@ async function main() {
         symbols: pinRows.map((row) => row.symbol),
       }
     : prevNotify;
-  const lastPositionNotify =
-    positionText && sent.includes('positions')
-      ? {
-          at: now,
-          text: positionText,
-          symbols: positions.map((item) => item.symbol),
-        }
-      : prevPositionNotify;
-  // Persist drop-alert cooldowns only after a successful position send, so a
-  // failed push can retry the same alerts next cycle.
-  const dropAlertsToSave = sent.includes('positions')
-    ? nextDropAlerts
-    : dropAlerts;
+  const lastPositionNotify = positionText
+    ? {
+        at: now,
+        text: positionText,
+        symbols: positions.map((item) => item.symbol),
+      }
+    : prevPositionNotify;
+  // 网页持仓文案更新时同步推进跌破冷却（不再依赖企微发送成功）。
+  const dropAlertsToSave = positionText ? nextDropAlerts : dropAlerts;
   const stateChanged =
     JSON.stringify(dropAlertsToSave) !== JSON.stringify(dropAlerts) ||
     JSON.stringify(nextPinPrices) !== JSON.stringify(lastPinPrices) ||
