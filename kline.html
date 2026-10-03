@@ -2723,6 +2723,7 @@
         : { bases: {}, lastCheckAt: 0, hits: [] };
       let breakHighSaving = false;
       let breakHighChecking = false;
+      let breakHighTimer = 0;
       const RISING_SNAP_KEY = "kline-rising-zone-snap-v1";
       const RISING_SNAP_SEEDED_KEY = "kline-rising-zone-snap-seeded-v1";
       const ACTION_LOG_KEY = "kline-action-log-v1";
@@ -6378,8 +6379,8 @@
         const lastAt = Number(breakHighState.lastCheckAt) || 0;
         const lastLabel = lastAt ? formatNotifyAt(lastAt) : "";
         const meta = lastLabel
-          ? `<div class="break-high-meta">上次检测 ${escapeHtml(lastLabel)} · 间隔10分钟</div>`
-          : `<div class="break-high-meta">间隔10分钟检测 · 盯住/记住范围</div>`;
+          ? `<div class="break-high-meta">上次检测 ${escapeHtml(lastLabel)} · 每10分钟</div>`
+          : `<div class="break-high-meta">每10分钟检测 · 盯住/记住范围</div>`;
         if (!hits.length) {
           return `${meta}<div class="notify-col-empty">暂无破点高</div>`;
         }
@@ -6414,9 +6415,42 @@
         return meta + rows;
       }
 
+      function scheduleBreakHighTick() {
+        if (breakHighTimer) {
+          clearTimeout(breakHighTimer);
+          breakHighTimer = 0;
+        }
+        const last = Number(breakHighState.lastCheckAt) || 0;
+        const elapsed = last > 0 ? Date.now() - last : BREAK_HIGH_COOLDOWN_MS;
+        const wait = Math.max(1500, BREAK_HIGH_COOLDOWN_MS - elapsed + 250);
+        breakHighTimer = window.setTimeout(() => {
+          void runScheduledBreakHighCheck();
+        }, wait);
+      }
+
+      async function runScheduledBreakHighCheck() {
+        breakHighTimer = 0;
+        if (document.visibilityState !== "visible") return;
+        if (loading || breakHighChecking) {
+          scheduleBreakHighTick();
+          return;
+        }
+        try {
+          await loadBinanceTicker();
+        } catch (error) {
+          console.warn("break-high tick ticker failed", error);
+        }
+        try {
+          await maybeRunBreakHighCheck();
+        } catch (error) {
+          console.warn("break-high tick failed", error);
+          scheduleBreakHighTick();
+        }
+      }
+
       /**
        * 破点高：现价相对基准点（记住优先，否则盯住；触发后抬升基准）。
-       * 判断与基准更新均受 10 分钟冷却限制；状态存 GitHub，两端共用。
+       * 冷却 10 分钟；页面打开时到点会再跑一轮（先拉现价再判断）。状态存 GitHub。
        */
       async function maybeRunBreakHighCheck(options) {
         const force = !!(options && options.force);
@@ -6518,6 +6552,7 @@
           return { skipped: false, hits };
         } finally {
           breakHighChecking = false;
+          scheduleBreakHighTick();
         }
       }
 
@@ -9092,6 +9127,7 @@
         if (document.visibilityState === "visible") {
           refreshNotifyFloat({ silent: true });
           maybeRefreshDataOnFocus();
+          scheduleBreakHighTick();
         }
       });
       window.addEventListener("pagehide", () => {
