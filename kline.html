@@ -5331,6 +5331,75 @@
         throw fail;
       }
 
+      async function fetchBinanceTickerForSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) throw new Error("缺少交易对");
+        const query = `symbol=${encodeURIComponent(key)}`;
+        const endpoints = [
+          `https://data-api.binance.vision/api/v3/ticker/24hr?${query}`,
+          `https://api.binance.com/api/v3/ticker/24hr?${query}`,
+        ];
+        let lastError = null;
+        for (const url of endpoints) {
+          try {
+            const response = await fetch(url, { cache: "no-store" });
+            if (!response.ok) {
+              lastError = await errorFromHttpResponse(response, "币安行情");
+              continue;
+            }
+            const ticker = await response.json();
+            const price = Number(ticker && ticker.lastPrice);
+            const change = Number(ticker && ticker.priceChangePercent);
+            if (!Number.isFinite(price) || !Number.isFinite(change)) {
+              lastError = new Error(`${key} 行情返回异常`);
+              lastError.kind = "bad_response";
+              lastError.userMessage = lastError.message;
+              continue;
+            }
+            marketMap[key] = { price, change24h: change };
+            return marketMap[key];
+          } catch (error) {
+            if (error && error.kind) lastError = error;
+            else lastError = classifyFetchNetworkError(error, "币安行情");
+          }
+        }
+        const fail = lastError || new Error("行情请求失败");
+        if (!fail.userMessage) fail.userMessage = fail.message;
+        throw fail;
+      }
+
+      async function refreshSingleKlineCard(card) {
+        if (!card) return false;
+        const symbol = String(card.dataset.symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!symbol) return false;
+        await fetchBinanceTickerForSymbol(symbol);
+        let canvas = card.querySelector("canvas");
+        if (!canvas) {
+          const empty = card.querySelector(".empty");
+          if (empty) empty.remove();
+          canvas = document.createElement("canvas");
+          card.appendChild(canvas);
+        }
+        const section = card.dataset.section || "";
+        const isPinSection =
+          section === "pin" ||
+          section === "pin-hidden" ||
+          section === "pin-recent";
+        const pinItem = isPinSection ? pinItemBySymbol(symbol) : null;
+        await renderKlineCard(
+          card,
+          symbol,
+          chartInterval(),
+          undefined,
+          pinItem,
+        );
+        return true;
+      }
+
       /** Drop forming candle; closed closes only (same as WeCom notify). */
       function closedCloses(candles) {
         if (!Array.isArray(candles) || candles.length < 2) return [];
@@ -7049,6 +7118,7 @@
         const sheet = document.createElement("div");
         sheet.className = "card-actions";
         sheet.innerHTML = [
+          `<button type="button" data-action="refresh">刷新</button>`,
           canAddNote
             ? `<button type="button" data-action="add-note">记一笔</button>`
             : "",
@@ -7101,6 +7171,24 @@
             refreshEggChromeForSymbol(symbol);
             closeCardActions(true);
             showToast("已取消 NEW 背景");
+            return;
+          }
+          if (action === "refresh") {
+            setCardActionsBusy(sheet, btn, "刷新中");
+            try {
+              await refreshSingleKlineCard(card);
+              closeCardActions(true);
+              const price = marketMap[symbol]?.price;
+              showToast(
+                Number.isFinite(price)
+                  ? `${symbol.replace(/USDT$/i, "")} 已刷新 · ${formatPinPrice(price)}`
+                  : `${symbol.replace(/USDT$/i, "")} 已刷新`,
+              );
+            } catch (error) {
+              console.error(error);
+              clearCardActionsBusy(sheet);
+              showToast(error.message || "刷新失败");
+            }
             return;
           }
 
