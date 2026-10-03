@@ -6,6 +6,7 @@ const {
   fetchBinanceTickers,
   sendWecomText,
   sendWecomImage,
+  sendPushPlus,
 } = require('./github-wecom');
 const { buildTopChartsCollage, fetchKlines } = require('./kline-chart');
 const { runAutoPin, savePinsFile, normalizePinList } = require('./auto-pin');
@@ -74,9 +75,13 @@ const CONFIG = {
   NOTIFY_DEBOUNCE_MS: Number(process.env.NOTIFY_DEBOUNCE_MS || 90 * 1000),
   // Parallel symbol fetches for 5m/15m momentum (each symbol = 2 kline calls).
   MOMENTUM_CONCURRENCY: Number(process.env.MOMENTUM_CONCURRENCY || 5),
-  // Keep WeCom auto-pin one-liner (optional). Page is the primary surface.
+  PUSHPLUS_TOKEN: String(process.env.PUSHPLUS_TOKEN || '').trim(),
+  // 新盯/回暖默认走微信 PushPlus；企微仅当显式打开。
+  AUTO_PIN_PUSHPLUS:
+    String(process.env.AUTO_PIN_PUSHPLUS === undefined ? '1' : process.env.AUTO_PIN_PUSHPLUS) !==
+    '0',
   AUTO_PIN_WECOM:
-    String(process.env.AUTO_PIN_WECOM === undefined ? '1' : process.env.AUTO_PIN_WECOM) !==
+    String(process.env.AUTO_PIN_WECOM === undefined ? '0' : process.env.AUTO_PIN_WECOM) !==
     '0',
 };
 
@@ -621,24 +626,29 @@ async function appendAutoPinActionLog(now, newcomers, rewarmed) {
 }
 
 async function main() {
-  if (!CONFIG.WECOM_WEBHOOK_POSITIONS) {
+  if (CONFIG.AUTO_PIN_PUSHPLUS && !CONFIG.PUSHPLUS_TOKEN) {
+    throw new Error('Missing PUSHPLUS_TOKEN for auto-pin/rewarm WeChat push');
+  }
+  if (CONFIG.AUTO_PIN_WECOM && !CONFIG.WECOM_WEBHOOK_POSITIONS) {
     throw new Error(
-      'Missing WECOM_WEBHOOK_POSITIONS (or WECOM_WEBHOOK_URL) for auto-pin/rewarm',
+      'Missing WECOM_WEBHOOK_POSITIONS (or WECOM_WEBHOOK_URL) for auto-pin WeCom',
     );
   }
 
   console.log(
     'webhook routing',
     JSON.stringify({
+      pushplus: CONFIG.PUSHPLUS_TOKEN
+        ? webhookKeyHint(`https://x/?key=${CONFIG.PUSHPLUS_TOKEN}`)
+        : null,
+      autoPinPushplus: CONFIG.AUTO_PIN_PUSHPLUS,
+      autoPinWecom: CONFIG.AUTO_PIN_WECOM,
       pins: CONFIG.WECOM_WEBHOOK_PINS
         ? webhookKeyHint(CONFIG.WECOM_WEBHOOK_PINS)
         : null,
       positions: CONFIG.WECOM_WEBHOOK_POSITIONS
         ? webhookKeyHint(CONFIG.WECOM_WEBHOOK_POSITIONS)
         : null,
-      sameTarget: WEBHOOKS.sameTarget,
-      legacyUsedForPins: WEBHOOKS.legacyUsedForPins,
-      legacyUsedForPositions: WEBHOOKS.legacyUsedForPositions,
     }),
   );
   if (WEBHOOKS.sameTarget) {
@@ -720,10 +730,9 @@ async function main() {
     console.warn('auto-pin failed', error.message || error);
   }
 
-  async function sendAutoPinWecom() {
-    // 持仓警告群改发自动盯 / 回暖；不再走盯一下/破点高通道。
-    if (!CONFIG.AUTO_PIN_WECOM || !CONFIG.WECOM_WEBHOOK_POSITIONS) return null;
+  function buildAutoPinAlert() {
     const lines = [];
+    const titleBits = [];
     if (autoPinned.length) {
       const names = autoPinned
         .slice(0, 12)
@@ -732,6 +741,12 @@ async function main() {
       const more =
         autoPinned.length > 12 ? ` …+${autoPinned.length - 12}` : '';
       lines.push(`【新自动盯】${autoPinned.length}\n${names}${more}`);
+      titleBits.push(
+        `新盯 ${autoPinned
+          .slice(0, 6)
+          .map((symbol) => labelOf(symbol))
+          .join(' ')}`,
+      );
     }
     if (autoRewarmed.length) {
       const names = autoRewarmed
@@ -741,14 +756,40 @@ async function main() {
       const more =
         autoRewarmed.length > 12 ? ` …+${autoRewarmed.length - 12}` : '';
       lines.push(`【回暖】${autoRewarmed.length}\n${names}${more}`);
+      titleBits.push(
+        `回暖 ${autoRewarmed
+          .slice(0, 6)
+          .map((symbol) => labelOf(symbol))
+          .join(' ')}`,
+      );
     }
     if (!lines.length) return null;
     const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
-    await sendWecomText(
-      `【边沿提醒】${time}\n${lines.join('\n')}\n（网页「日志 / 置顶」可看）`,
-      CONFIG.WECOM_WEBHOOK_POSITIONS,
-    );
-    return `auto-pin:${autoPinned.length}+rewarm:${autoRewarmed.length}`;
+    return {
+      title: titleBits.join(' · ') || `边沿 ${time}`,
+      content: `【边沿提醒】${time}\n${lines.join('\n')}\n（网页「日志 / 置顶」可看）`,
+      tag: `auto-pin:${autoPinned.length}+rewarm:${autoRewarmed.length}`,
+    };
+  }
+
+  async function sendAutoPinAlert() {
+    const alert = buildAutoPinAlert();
+    if (!alert) return null;
+    const sentTags = [];
+    if (CONFIG.AUTO_PIN_PUSHPLUS) {
+      await sendPushPlus({
+        token: CONFIG.PUSHPLUS_TOKEN,
+        title: alert.title,
+        content: alert.content,
+      });
+      sentTags.push(`pushplus:${alert.tag}`);
+    }
+    if (CONFIG.AUTO_PIN_WECOM && CONFIG.WECOM_WEBHOOK_POSITIONS) {
+      await sendWecomText(alert.content, CONFIG.WECOM_WEBHOOK_POSITIONS);
+      sentTags.push(`wecom:${alert.tag}`);
+    }
+    if (!sentTags.length) return null;
+    return sentTags.join(',');
   }
 
   let momNotes = [];
@@ -767,10 +808,10 @@ async function main() {
       console.warn('auto-pin action log failed', error.message || error);
     }
     try {
-      const tag = await sendAutoPinWecom();
-      if (tag) console.log('auto-pin wecom', tag);
+      const tag = await sendAutoPinAlert();
+      if (tag) console.log('auto-pin alert', tag);
     } catch (error) {
-      console.warn('auto-pin wecom failed', error.message || error);
+      console.warn('auto-pin alert failed', error.message || error);
     }
     await saveJson(
       CONFIG.NOTIFY_STATE_PATH,
@@ -828,12 +869,12 @@ async function main() {
       console.warn('auto-pin action log failed', error.message || error);
     }
     try {
-      const tag = await sendAutoPinWecom();
+      const tag = await sendAutoPinAlert();
       if (tag) sent.push(tag);
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
       sendErrors.push(`auto-pin:${message}`);
-      console.warn('auto-pin wecom failed', message);
+      console.warn('auto-pin alert failed', message);
     }
   }
 

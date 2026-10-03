@@ -1,31 +1,36 @@
-# 自动盯 / 回暖 · 企业微信推送
+# 自动盯 / 回暖 · 微信 PushPlus
 
 定时事件函数：默认每 5 分钟读取 GitHub 盯一下、记住、持仓，拉币安现价。
 
-## 企业微信（只发这一类）
+## 微信（新盯 / 回暖）
 
-**新自动盯 / 回暖** → `WECOM_WEBHOOK_POSITIONS`（原持仓警告群）  
-云端边沿触发时发短讯：`【新自动盯】` / `【回暖】` + 名单，并写入 `watch-action-log.json`（与网页「日志」同一批）。可用 `AUTO_PIN_WECOM=0` 关闭企微（日志仍写）。网页刷新不再单独自动盯/回暖。
+边沿触发时发 PushPlus 一对一微信：通知栏标题带币名（`新盯 FIL` / `回暖 C`），正文与原先企微短讯相同，并写入 `watch-action-log.json`。
 
-## 仅网页、不发企微
+- `PUSHPLUS_TOKEN`：一对一 token，只放云函数环境变量，不要写入仓库。
+- `AUTO_PIN_PUSHPLUS`：默认 `1`；`0` 关闭微信推送（日志仍写）。
+- `AUTO_PIN_WECOM`：默认 `0`。需要同时发企微时设为 `1`，并保留 `WECOM_WEBHOOK_POSITIONS`。
 
-1. **持仓** → `lastPositionNotify`（企微浮窗右侧）  
-2. **盯一下上涨文案** → `lastPinNotify`（企微浮窗左侧）  
+网页刷新不再单独自动盯/回暖。
+
+## 仅网页、不推微信
+
+1. **持仓** → `lastPositionNotify`（企微浮窗右侧）
+2. **盯一下上涨文案** → `lastPinNotify`（企微浮窗左侧）
 3. **破点高** → `watch-break-high.json`（动态浮窗右侧；10 分钟冷却照旧）
 
 ## 部署
 
-1. 上传本目录，Handler：`index.handler`，Node.js 18+  
-2. **超时建议 ≥ 60～120 秒**  
-3. 定时触发器：`0 */5 * * * *`  
+1. 上传本目录，Handler：`index.handler`，Node.js 18+
+2. **超时建议 ≥ 60～120 秒**
+3. 定时触发器：`0 */5 * * * *`
 4. 环境变量：
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `WECOM_WEBHOOK_POSITIONS` | 是* | **自动盯 / 回暖**群 Webhook（原持仓警告群） |
-| `WECOM_WEBHOOK_URL` | 否 | 未填 POSITIONS 时的兼容回退 |
-| `WECOM_WEBHOOK_PINS` | 否 | 已不再发企微，可留空 |
+| `PUSHPLUS_TOKEN` | 是* | PushPlus 一对一 token |
 | `GITHUB_TOKEN` | 是 | 读写 GitHub JSON |
-| `AUTO_PIN_WECOM` | 否 | 默认 `1`；`0` 关闭自动盯/回暖企微 |
+| `AUTO_PIN_PUSHPLUS` | 否 | 默认 `1` |
+| `AUTO_PIN_WECOM` | 否 | 默认 `0` |
+| `WECOM_WEBHOOK_POSITIONS` | 否 | 仅当 `AUTO_PIN_WECOM=1` |
 
-\* 或填 `WECOM_WEBHOOK_URL`。
+\* `AUTO_PIN_PUSHPLUS=0` 时可空。

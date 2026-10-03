@@ -2278,7 +2278,7 @@
     </div>
     <div class="page">
       <div class="page-header">
-        <h1>币安观察</h1>
+          <h1>币安观察</h1>
         <div class="page-header-actions">
           <div
             class="theme-switch"
@@ -2292,7 +2292,7 @@
               title="01 深色终端"
             >
               终
-            </button>
+          </button>
             <button type="button" data-theme="daylight" title="02 浅色日间">
               日
             </button>
@@ -2560,15 +2560,15 @@
       >
         动态
       </button>
-      <button
-        type="button"
-        class="notify-float-tab"
-        id="notifyFloatTab"
+    <button
+      type="button"
+      class="notify-float-tab"
+      id="notifyFloatTab"
         data-float="notify"
         title="企微同步（盯一下 / 持仓）"
-      >
+    >
         企微
-      </button>
+    </button>
     </div>
 
     <div id="pinBatchBar" class="pin-batch-bar" hidden>
@@ -7886,7 +7886,7 @@
           card.scrollIntoView({ behavior: "smooth", block: "start" });
           card.classList.remove("is-jump-target");
           void card.offsetWidth;
-          card.classList.add("is-jump-target");
+        card.classList.add("is-jump-target");
           if (card._jumpFlashTimer) window.clearTimeout(card._jumpFlashTimer);
           card._jumpFlashTimer = window.setTimeout(() => {
             card.classList.remove("is-jump-target");
@@ -8823,7 +8823,7 @@
                 : "1/3 同步共享状态（OBS 可用缓存）…",
             );
             await loadGithubStorage({ force: forceObs });
-            updateNotifyFloatPanel();
+          updateNotifyFloatPanel();
           } else {
             setStatus(
               false,

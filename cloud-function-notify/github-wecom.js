@@ -322,6 +322,45 @@ async function sendWecomImage(image, webhookUrl) {
   return data;
 }
 
+/**
+ * PushPlus 一对一微信。title 会进通知栏；免费通道正文常要点进公众号才看全。
+ * @see https://www.pushplus.plus/doc/guide/api.html
+ */
+async function sendPushPlus(options) {
+  const opts = options || {};
+  const token = String(opts.token || process.env.PUSHPLUS_TOKEN || '').trim();
+  if (!token) throw new Error('Missing PUSHPLUS_TOKEN');
+  const title = truncateUtf8(String(opts.title || '边沿提醒'), 100);
+  const content = String(opts.content || '').trim();
+  if (!content) throw new Error('PushPlus content empty');
+  const body = JSON.stringify({
+    token,
+    title,
+    content: truncateUtf8(content, 8000),
+    template: 'txt',
+    channel: 'wechat',
+  });
+  const response = await requestRaw('https://www.pushplus.plus/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  });
+  const raw = response.text();
+  if (!response.ok) {
+    throw new Error(`PushPlus HTTP ${response.status} ${raw.slice(0, 200)}`);
+  }
+  let data = {};
+  try {
+    data = JSON.parse(raw || '{}');
+  } catch (error) {
+    throw new Error(`PushPlus bad JSON ${raw.slice(0, 200)}`);
+  }
+  if (Number(data.code) !== 200) {
+    throw new Error(`PushPlus code ${data.code}: ${data.msg || data.message || ''}`);
+  }
+  return data;
+}
+
 module.exports = {
   loadJson,
   saveJson,
@@ -330,6 +369,7 @@ module.exports = {
   sendWecomMarkdown,
   sendWecomText,
   sendWecomImage,
+  sendPushPlus,
   requestRaw,
   splitMarkdownByBytes,
   truncateUtf8,
