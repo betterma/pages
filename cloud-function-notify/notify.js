@@ -50,6 +50,8 @@ const CONFIG = {
   PINS_PATH: process.env.PINS_PATH || 'watch-pins.json',
   POSITIONS_PATH: process.env.POSITIONS_PATH || 'watch-positions.json',
   NOTIFY_STATE_PATH: process.env.NOTIFY_STATE_PATH || 'watch-notify-state.json',
+  ACTION_LOG_PATH: process.env.ACTION_LOG_PATH || 'watch-action-log.json',
+  ACTION_LOG_MAX: Number(process.env.ACTION_LOG_MAX || 80),
   WECOM_WEBHOOK_PINS: WEBHOOKS.pinsUrl,
   WECOM_WEBHOOK_POSITIONS: WEBHOOKS.positionsUrl,
   DROP_THRESHOLD: Number(process.env.DROP_THRESHOLD || 0.05),
@@ -531,6 +533,93 @@ async function tryAcquireNotifyLock(stateFile, now) {
   }
 }
 
+function actionLogKey(entry) {
+  const symbols = (Array.isArray(entry && entry.symbols) ? entry.symbols : [])
+    .map((symbol) => String(symbol || '').trim().toUpperCase())
+    .filter(Boolean)
+    .sort();
+  const kind = String((entry && entry.kind) || '').trim();
+  if (!kind || !symbols.length) return '';
+  const price =
+    Number.isFinite(entry.price) && entry.price > 0 ? String(entry.price) : '';
+  return `${Number(entry.at) || 0}|${kind}|${symbols.join(',')}|${price}`;
+}
+
+function normalizeActionLogEntry(item) {
+  if (!item || typeof item !== 'object') return null;
+  const kind = String(item.kind || '').trim();
+  const symbols = [
+    ...new Set(
+      (Array.isArray(item.symbols) ? item.symbols : [])
+        .map((symbol) => String(symbol || '').trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  ].sort();
+  if (!kind || !symbols.length) return null;
+  const entry = { at: Number(item.at) || Date.now(), kind, symbols };
+  const price = Number(item.price);
+  if (Number.isFinite(price) && price > 0) entry.price = price;
+  return entry;
+}
+
+/** Same batches as WeCom: webpage 日志 follows cloud edges, not page refresh. */
+async function appendAutoPinActionLog(now, newcomers, rewarmed) {
+  const incoming = [];
+  if (newcomers.length) {
+    incoming.push({
+      at: now,
+      kind: 'auto-pin',
+      symbols: newcomers.map((symbol) => String(symbol).toUpperCase()),
+    });
+  }
+  if (rewarmed.length) {
+    incoming.push({
+      at: now,
+      kind: 'rewarm',
+      symbols: rewarmed.map((symbol) => String(symbol).toUpperCase()),
+    });
+  }
+  if (!incoming.length) return;
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const file = await loadJson(CONFIG.ACTION_LOG_PATH);
+    const prev = Array.isArray(file.data && file.data.entries)
+      ? file.data.entries
+      : [];
+    const seen = new Set();
+    const entries = [];
+    for (const item of [...incoming, ...prev]) {
+      const entry = normalizeActionLogEntry(item);
+      if (!entry) continue;
+      const key = actionLogKey(entry);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      entries.push(entry);
+    }
+    entries.sort((a, b) => (b.at || 0) - (a.at || 0));
+    try {
+      await saveJson(
+        CONFIG.ACTION_LOG_PATH,
+        {
+          entries: entries.slice(0, CONFIG.ACTION_LOG_MAX),
+          updatedAt: Date.now(),
+        },
+        file.sha,
+        `Action log auto-pin ${incoming.length}`,
+      );
+      return;
+    } catch (error) {
+      lastError = error;
+      const message = error && error.message ? error.message : String(error);
+      if (!/409|conflict|sha/i.test(message)) break;
+    }
+  }
+  console.warn(
+    'append auto-pin action log failed',
+    lastError && lastError.message ? lastError.message : lastError,
+  );
+}
+
 async function main() {
   if (!CONFIG.WECOM_WEBHOOK_POSITIONS) {
     throw new Error(
@@ -673,6 +762,11 @@ async function main() {
   if (!pins.length && !positions.length && !momNotes.length) {
     // Still persist rising zone snap / events so seeding works with empty pins.
     try {
+      await appendAutoPinActionLog(now, autoPinned, autoRewarmed);
+    } catch (error) {
+      console.warn('auto-pin action log failed', error.message || error);
+    }
+    try {
       const tag = await sendAutoPinWecom();
       if (tag) console.log('auto-pin wecom', tag);
     } catch (error) {
@@ -728,6 +822,11 @@ async function main() {
   const sendErrors = [];
 
   if (autoPinned.length || autoRewarmed.length) {
+    try {
+      await appendAutoPinActionLog(now, autoPinned, autoRewarmed);
+    } catch (error) {
+      console.warn('auto-pin action log failed', error.message || error);
+    }
     try {
       const tag = await sendAutoPinWecom();
       if (tag) sent.push(tag);

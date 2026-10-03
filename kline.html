@@ -4091,15 +4091,15 @@
       }
 
       /**
-       * Collapse spammy auto-pin / rewarm rows: same symbol + same kind
-       * within EDGE cooldown keeps only the earliest hit.
+       * Collapse same-cycle auto-pin / rewarm rows (page+cloud race).
+       * Do not use the 24h pin cooldown here — that hid WeCom-visible hits.
        * Exact duplicates (any kind, same at/kind/symbols/price) are dropped.
        */
       function compactActionLogEntries(list, cooldownMs) {
         const cooldown =
           Number.isFinite(Number(cooldownMs)) && Number(cooldownMs) > 0
             ? Number(cooldownMs)
-            : AUTO_PIN_EDGE_COOLDOWN_MS;
+            : 8 * 60 * 1000;
         const edgeKinds = new Set(["auto-pin", "rewarm"]);
         const chron = (Array.isArray(list) ? list : [])
           .slice()
@@ -4494,81 +4494,18 @@
       }
 
       /**
-       * Edge into 窗口上涨 zone (watch-pool ∩ window-up):
-       * - not pinned → auto-pin (auto-rising)
-       * - already pinned → rewarm at current price (auto-rewarm),
-       *   unless same-symbol edge cooldown is still active
-       * First visit seeds baseline without mass action.
-       * @returns {{ newcomers: string[], rewarmed: string[] }}
+       * 边沿只由云函数写（钉 + 日志 + 企微同一批）。
+       * 网页只跟着更新本地 snap，避免刷新时多记一截、企微对不上。
        */
       async function autoPinNewRising(zoneSymbols) {
-        const empty = { newcomers: [], rewarmed: [] };
         const current = (zoneSymbols || []).filter(Boolean);
-        const seeded = localStorage.getItem(RISING_SNAP_SEEDED_KEY) === "1";
-        if (!seeded) {
-          writeRisingSnapshot(current);
-          localStorage.setItem(RISING_SNAP_SEEDED_KEY, "1");
-          return empty;
-        }
-        const prevSet = new Set(readRisingSnapshot());
-        const pinned = pinSymbols();
-        const blocked = blacklistSymbols();
-        const now = Date.now();
-        const edges = current.filter(
-          (symbol) => !prevSet.has(symbol) && !blocked.has(symbol),
-        );
-        const newcomers = edges.filter((symbol) => !pinned.has(symbol));
-        const rewarmed = edges.filter((symbol) => {
-          if (!pinned.has(symbol)) return false;
-          return !isPinEdgeCooling(pinItemBySymbol(symbol), now);
-        });
-        // Advance snap even when cooldown skips writes (kill flicker re-fire).
-        if (!newcomers.length && !rewarmed.length) {
-          writeRisingSnapshot(current);
-          return empty;
-        }
+        writeRisingSnapshot(current);
         try {
-          const result = await WatchFavorites.patchPins({
-            repo: CONFIG.GITHUB_REPO,
-            path: CONFIG.PINS_PATH,
-            message: `Auto-pin zone edge ${newcomers.length}+${rewarmed.length}`,
-            mutate: (list) => {
-              let next = list.slice();
-              const ts = Date.now();
-              for (const symbol of newcomers) {
-                if (WatchFavorites.hasPin(next, symbol)) continue;
-                next = WatchFavorites.addPin(
-                  next,
-                  symbol,
-                  marketMap[symbol]?.price,
-                  "auto-rising",
-                );
-              }
-              for (const symbol of rewarmed) {
-                const existing = next.find(
-                  (item) => item && item.symbol === symbol,
-                );
-                if (isPinEdgeCooling(existing, ts)) continue;
-                next = WatchFavorites.addPin(
-                  next,
-                  symbol,
-                  marketMap[symbol]?.price,
-                  "auto-rewarm",
-                );
-              }
-              return { list: next, added: true };
-            },
-          });
-          pinItems = result.pins;
-          writeRisingSnapshot(getRisingZoneSymbols());
-          if (newcomers.length) appendActionLog("auto-pin", newcomers);
-          if (rewarmed.length) appendActionLog("rewarm", rewarmed);
-          return { newcomers, rewarmed };
+          localStorage.setItem(RISING_SNAP_SEEDED_KEY, "1");
         } catch (error) {
-          console.warn("auto-pin rising failed", error);
-          writeRisingSnapshot(current);
-          return empty;
+          /* ignore */
         }
+        return { newcomers: [], rewarmed: [] };
       }
 
       function getFavoriteRisingSymbols(risingSymbols) {
@@ -5214,6 +5151,7 @@
           const result = applyNotifyState(state, {
             forceOpen: !!(options && options.forceOpen),
           });
+          mergeCloudAutoPinEvents(state.autoPinEvents || []);
           if (options && options.silent) return result;
           if (result.isNewer) {
             showToast("已更新到最新企微通知");
