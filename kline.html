@@ -1149,6 +1149,11 @@
         opacity: 0.82;
         filter: grayscale(0.22);
       }
+      .kline-card.is-actions-open {
+        z-index: 30;
+        opacity: 1;
+        filter: none;
+      }
       .kline-card.is-favorite {
         border-color: #c5cec6;
       }
@@ -1969,7 +1974,7 @@
       .card-actions {
         position: absolute;
         inset: 0;
-        z-index: 5;
+        z-index: 40;
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -7046,6 +7051,8 @@
       function closeCardActions(force) {
         document.querySelectorAll(".card-actions").forEach((el) => {
           if (!force && el.classList.contains("is-busy")) return;
+          const host = el.closest(".kline-card");
+          if (host) host.classList.remove("is-actions-open");
           el.remove();
         });
       }
@@ -7239,6 +7246,7 @@
             showToast(error.message || "操作失败");
           }
         });
+        card.classList.add("is-actions-open");
         card.appendChild(sheet);
       }
 
