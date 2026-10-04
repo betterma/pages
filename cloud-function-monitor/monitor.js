@@ -7,14 +7,21 @@ const CONFIG = {
   GITHUB_REPO: process.env.GITHUB_REPO || 'betterma/pages',
   DATA_PATH: process.env.DATA_PATH || 'watch-data.json',
   BLACKLIST_PATH: process.env.BLACKLIST_PATH || 'watch-blacklist.json',
+  PINS_PATH: process.env.PINS_PATH || 'watch-pins.json',
   GITHUB_API: 'https://api.github.com',
   GITHUB_TOKEN: process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '',
   SNAPSHOT_INTERVAL: 15 * 60 * 1000,
+  // OBS 完整档：约 3 天全市场快照（云函数自用 / 备份）。
   HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000,
+  // GitHub 瘦身档：给页面狂读；只留近 N 小时 + 观察池/榜前/盯住币种。
+  GH_HISTORY_MS: Number(
+    process.env.GH_HISTORY_MS || 48 * 60 * 60 * 1000,
+  ),
+  GH_SLIM_RANK_KEEP: Number(process.env.GH_SLIM_RANK_KEEP || 80),
   TOP20: 20,
   WATCH_POOL_RANK: 30,
   MAX_EVENTS: 300,
-  // Store all USDT symbols in each snapshot (no Top-N trim).
+  // Store all USDT symbols in each OBS snapshot (no Top-N trim).
   // File size stays bounded by HISTORY_DURATION (~3 days of 15m snaps).
   DURATION_MS: {
     '15m': 15 * 60 * 1000,
@@ -270,40 +277,134 @@ function updateWatchPool(history, marketMap, watchPool, blacklist) {
   return nextPool;
 }
 
+async function loadGithubJsonFile(path) {
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'binance-radar-monitor',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+  if (CONFIG.GITHUB_TOKEN) {
+    headers.Authorization = `Bearer ${CONFIG.GITHUB_TOKEN}`;
+  }
+  const url = `${CONFIG.GITHUB_API}/repos/${CONFIG.GITHUB_REPO}/contents/${path}`;
+  const response = await requestJson(url, { headers, timeout: 12000 });
+  if (response.status === 404) {
+    return { data: null, sha: null };
+  }
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(
+      `读取 GitHub ${path} 失败: ${response.status} :: ${text.slice(0, 200)}`,
+    );
+  }
+  const file = await response.json();
+  if (!file.content) {
+    return { data: null, sha: file.sha || null };
+  }
+  return {
+    data: JSON.parse(decodeBase64(file.content)),
+    sha: file.sha || null,
+  };
+}
+
 async function loadBlacklistSymbols() {
   const path = CONFIG.BLACKLIST_PATH;
   try {
-    const headers = {
-      Accept: 'application/vnd.github+json',
-      'User-Agent': 'binance-radar-monitor',
-      'X-GitHub-Api-Version': '2022-11-28',
-    };
-    if (CONFIG.GITHUB_TOKEN) {
-      headers.Authorization = `Bearer ${CONFIG.GITHUB_TOKEN}`;
-    }
-    const url = `${CONFIG.GITHUB_API}/repos/${CONFIG.GITHUB_REPO}/contents/${path}`;
-    const response = await requestJson(url, { headers, timeout: 12000 });
-    if (response.status === 404) {
+    const file = await loadGithubJsonFile(path);
+    if (!file.data) {
       console.log(`Blacklist file not found: ${path}`);
       return new Set();
     }
-    if (!response.ok) {
-      console.warn(`读取黑名单失败: ${response.status}`);
-      return new Set();
-    }
-    const file = await response.json();
-    if (!file.content) {
-      console.warn('黑名单 Contents 无 content');
-      return new Set();
-    }
-    const parsed = JSON.parse(decodeBase64(file.content));
-    const list = normalizeFavorites(parsed.blacklist);
+    const list = normalizeFavorites(file.data.blacklist);
     console.log(`Loaded blacklist ${list.length} symbols`);
     return new Set(list.map((item) => item.symbol));
   } catch (error) {
     console.warn(`loadBlacklist failed: ${error.message}`);
     return new Set();
   }
+}
+
+async function loadPinSymbols() {
+  try {
+    const file = await loadGithubJsonFile(CONFIG.PINS_PATH);
+    const raw =
+      (file.data && file.data.pins) ||
+      (Array.isArray(file.data) ? file.data : []);
+    const set = new Set();
+    (raw || []).forEach((item) => {
+      const symbol =
+        typeof item === 'string'
+          ? item.trim().toUpperCase()
+          : String((item && item.symbol) || '')
+              .trim()
+              .toUpperCase();
+      if (symbol) set.add(symbol);
+    });
+    console.log(`Loaded pins ${set.size} symbols for GitHub slim keep-set`);
+    return set;
+  } catch (error) {
+    console.warn(`loadPinSymbols failed: ${error.message}`);
+    return new Set();
+  }
+}
+
+/**
+ * GitHub 热库：短历史 + 少量币种价格，供页面/notify 高频读取。
+ * OBS 仍保留完整 history（全市场 × 约 3 天）。
+ */
+function buildGithubSlimState(fullState, marketMap, extraSymbols) {
+  const keep = new Set();
+  for (const symbol of fullState.watchPool || []) {
+    const key = String(symbol || '')
+      .trim()
+      .toUpperCase();
+    if (key) keep.add(key);
+  }
+  for (const symbol of extraSymbols || []) {
+    const key = String(symbol || '')
+      .trim()
+      .toUpperCase();
+    if (key) keep.add(key);
+  }
+  const ranked = ranking(marketMap || {});
+  const rankKeep = Math.max(
+    CONFIG.WATCH_POOL_RANK,
+    Number(CONFIG.GH_SLIM_RANK_KEEP) || 80,
+  );
+  ranked.slice(0, rankKeep).forEach((symbol) => keep.add(symbol));
+
+  const cutoff = Date.now() - (Number(CONFIG.GH_HISTORY_MS) || 48 * 60 * 60 * 1000);
+  const history = (Array.isArray(fullState.history) ? fullState.history : [])
+    .filter((snap) => Number(snap && snap.timestamp) >= cutoff)
+    .map((snap) => {
+      const prices = {};
+      const src = (snap && snap.prices) || {};
+      for (const symbol of keep) {
+        const price = Number(src[symbol]);
+        if (Number.isFinite(price)) prices[symbol] = price;
+      }
+      return {
+        timestamp: Number(snap.timestamp) || 0,
+        prices,
+      };
+    })
+    .filter((snap) => snap.timestamp > 0);
+
+  return {
+    history,
+    watchPool: Array.isArray(fullState.watchPool)
+      ? fullState.watchPool.slice()
+      : [],
+    selectedDimension: fullState.selectedDimension || CONFIG.SELECTED_DIMENSION,
+    savedAt: Number(fullState.savedAt) || Date.now(),
+    source: 'github-slim',
+    slim: {
+      historyMs: Number(CONFIG.GH_HISTORY_MS) || 48 * 60 * 60 * 1000,
+      keepCount: keep.size,
+      rankKeep,
+      snapshots: history.length,
+    },
+  };
 }
 
 function pruneHistory(history) {
@@ -464,18 +565,26 @@ async function readGithubState() {
 
 async function writeGithubState(state, sha) {
   const url = `${CONFIG.GITHUB_API}/repos/${CONFIG.GITHUB_REPO}/contents/${CONFIG.DATA_PATH}`;
+  const body = JSON.stringify(state);
+  const bytes = Buffer.byteLength(body, 'utf8');
+  if (bytes > 900 * 1024) {
+    throw new Error(
+      `GitHub slim watch-data too large: ${(bytes / 1024).toFixed(1)}KB (limit ~900KB)`,
+    );
+  }
   const payload = {
-    message: 'Update Binance radar data',
-    content: encodeBase64(JSON.stringify(state)),
+    message: `Update slim watch-data (${(bytes / 1024).toFixed(0)}KB)`,
+    content: encodeBase64(body),
   };
 
   if (sha) payload.sha = sha;
 
-  console.log(`Writing GitHub state to ${url}`);
+  console.log(`Writing GitHub slim state to ${url} · ${(bytes / 1024).toFixed(1)}KB`);
   const response = await requestJson(url, {
     method: 'PUT',
     headers: githubHeaders(),
     body: JSON.stringify(payload),
+    timeout: 30000,
   });
 
   if (!response.ok) {
@@ -484,7 +593,29 @@ async function writeGithubState(state, sha) {
   }
 
   const result = await response.json();
-  return result.content.sha;
+  return {
+    sha: result.content && result.content.sha,
+    bytes,
+  };
+}
+
+async function writeGithubSlimState(slimState) {
+  if (!CONFIG.GITHUB_TOKEN) {
+    throw new Error('Missing GITHUB_TOKEN for GitHub slim write');
+  }
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const current = await loadGithubJsonFile(CONFIG.DATA_PATH);
+      return await writeGithubState(slimState, current.sha);
+    } catch (error) {
+      lastError = error;
+      const message = error && error.message ? error.message : String(error);
+      if (!/409|conflict|sha/i.test(message)) break;
+      console.warn(`GitHub slim write conflict, retry ${attempt + 1}`);
+    }
+  }
+  throw lastError || new Error('GitHub slim write failed');
 }
 
 async function readObsState() {
@@ -649,7 +780,7 @@ async function runMonitorOnce() {
 
   const key = await writeObsState(nextState);
   const resultSummary = {
-    storage: 'obs',
+    storage: 'obs+github-slim',
     bucket: obsConfig().bucket,
     path: key,
     publicBase: obsConfig().publicBase,
@@ -658,10 +789,36 @@ async function runMonitorOnce() {
     events: events.length,
     watchPool: watchPool.size,
     bytes: encodedSize,
+    githubSlim: null,
   };
   console.log(
     `Updated OBS ${resultSummary.bucket}/${key} | snapshots=${history.length} | watchPool=${watchPool.size} | bytes=${encodedSize}`,
   );
+
+  // 页面热路径：瘦身写入 GitHub（失败不回滚 OBS）。
+  try {
+    const pinSymbols = await loadPinSymbols();
+    const slimState = buildGithubSlimState(nextState, marketMap, pinSymbols);
+    const slimBytes = Buffer.byteLength(JSON.stringify(slimState), 'utf8');
+    console.log(
+      `Prepared GitHub slim · ${(slimBytes / 1024).toFixed(1)}KB · snaps=${slimState.history.length} · keep≈${slimState.slim && slimState.slim.keepCount}`,
+    );
+    const written = await writeGithubSlimState(slimState);
+    resultSummary.githubSlim = {
+      path: CONFIG.DATA_PATH,
+      bytes: written.bytes,
+      snapshots: slimState.history.length,
+      keepCount: slimState.slim && slimState.slim.keepCount,
+    };
+    console.log(
+      `Updated GitHub slim ${CONFIG.DATA_PATH} | bytes=${written.bytes} | snaps=${slimState.history.length}`,
+    );
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    resultSummary.githubSlim = { error: message };
+    console.warn(`GitHub slim write skipped: ${message}`);
+  }
+
   return resultSummary;
 }
 

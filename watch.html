@@ -936,29 +936,50 @@
       }
 
       async function loadGithubStorage() {
-        setStep("github", "loading", "正在读取 OBS watch-data.json");
-        const url = `${CONFIG.OBS_BASE}/${CONFIG.GITHUB_PATH}?t=${Date.now()}`;
-        const response = await fetch(url, { cache: "no-store" });
-        if (response.status === 404) {
-          history = [];
-          events = [];
-          favorites = new Set();
-          favoriteItems = [];
-          blacklist = new Set();
-          blacklistItems = [];
-          watchPool = new Set();
-          setStep("github", "warn", "OBS 文件不存在，将使用空数据");
-          return;
-        }
-        if (!response.ok)
-          throw new Error(`读取 OBS 数据失败: ${response.status}`);
-        const content = await response.text();
-        if (!content.trim()) throw new Error("watch-data.json 内容为空");
-        let data;
+        setStep("github", "loading", "正在读取观察池 watch-data（GitHub 优先）");
+        let data = null;
+        let source = "";
         try {
-          data = JSON.parse(content);
+          const file = await WatchFavorites.fetchJsonFile({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.GITHUB_PATH,
+          });
+          if (
+            file &&
+            file.data &&
+            (Array.isArray(file.data.history) ||
+              Array.isArray(file.data.watchPool))
+          ) {
+            data = file.data;
+            source = "github";
+          }
         } catch (error) {
-          throw new Error(`watch-data.json 不是有效 JSON: ${error.message}`);
+          console.warn("GitHub watch-data failed, fallback OBS", error);
+        }
+        if (!data) {
+          const url = `${CONFIG.OBS_BASE}/${CONFIG.GITHUB_PATH}?t=${Date.now()}`;
+          const response = await fetch(url, { cache: "no-store" });
+          if (response.status === 404) {
+            history = [];
+            events = [];
+            favorites = new Set();
+            favoriteItems = [];
+            blacklist = new Set();
+            blacklistItems = [];
+            watchPool = new Set();
+            setStep("github", "warn", "观察池文件不存在，将使用空数据");
+            return;
+          }
+          if (!response.ok)
+            throw new Error(`读取观察池失败: ${response.status}`);
+          const content = await response.text();
+          if (!content.trim()) throw new Error("watch-data.json 内容为空");
+          try {
+            data = JSON.parse(content);
+          } catch (error) {
+            throw new Error(`watch-data.json 不是有效 JSON: ${error.message}`);
+          }
+          source = "obs";
         }
         history = Array.isArray(data.history) ? data.history : [];
         events = Array.isArray(data.events) ? data.events : [];
@@ -1001,12 +1022,13 @@
         }
 
         const latest = history.length ? history[history.length - 1].timestamp : 0;
+        const sourceLabel = source === "github" ? "GitHub" : "OBS";
         setStep(
           "github",
           "ok",
           latest
-            ? `OBS已加载 · ${history.length} 张快照 · 收藏 ${favorites.size} · 黑名单 ${blacklist.size} · ${formatAge(latest)}`
-            : `OBS已加载 · 暂无快照 · 收藏 ${favorites.size} · 黑名单 ${blacklist.size}`,
+            ? `${sourceLabel}已加载 · ${history.length} 张快照 · 收藏 ${favorites.size} · 黑名单 ${blacklist.size} · ${formatAge(latest)}`
+            : `${sourceLabel}已加载 · 暂无快照 · 收藏 ${favorites.size} · 黑名单 ${blacklist.size}`,
         );
       }
 

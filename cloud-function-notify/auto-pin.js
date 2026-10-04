@@ -14,6 +14,7 @@ const {
 } = require('./github-wecom');
 
 const CONFIG = {
+  DATA_PATH: process.env.DATA_PATH || 'watch-data.json',
   OBS_DATA_URL:
     process.env.OBS_DATA_URL ||
     'https://mpctest.obs.cn-north-4.myhuaweicloud.com/watch-data.json',
@@ -118,6 +119,22 @@ function isEdgeCooling(pin, now) {
 }
 
 async function fetchWatchData() {
+  // 优先 GitHub 瘦身版；失败再回落 OBS 完整版。
+  try {
+    const file = await loadJson(CONFIG.DATA_PATH);
+    if (
+      file &&
+      file.data &&
+      (Array.isArray(file.data.history) || Array.isArray(file.data.watchPool))
+    ) {
+      return file.data;
+    }
+  } catch (error) {
+    console.warn(
+      'GitHub watch-data load failed, fallback OBS',
+      error && error.message ? error.message : error,
+    );
+  }
   const response = await requestRaw(CONFIG.OBS_DATA_URL, {
     method: 'GET',
     timeout: 20000,

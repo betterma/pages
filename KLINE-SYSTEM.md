@@ -43,22 +43,22 @@
                 ▼                              │
 ┌───────────────────────────┐    ┌────────────────────────────────┐
 │ 华为云函数 notify（≈5min）  │    │ 华为云函数 monitor（≈15min）      │
-│ 持仓企微 · 破点高企微        │    │ 拉币安 24hr → 写 OBS             │
-│ 自动盯/回暖 · 网页盯一下文案  │    │ watch-data.json（history+池）    │
+│ 自动盯/回暖 → PushPlus     │    │ 拉币安 24hr → 双写               │
+│ 破点高/盯一下文案仅网页      │    │ OBS 完整档 + GitHub 瘦身档       │
 └─────────────┬─────────────┘    └───────────────┬────────────────┘
-              │ 企微 Webhook                      │
+              │ PushPlus / 网页                    │
               ▼                                   ▼
-        企业微信群 A/B                    华为 OBS watch-data.json
-                                         （kline / notify 读历史）
+        微信服务通知              OBS 完整 watch-data（冷库）
+                                 GitHub 瘦身 watch-data（热库，页面优先读）
 ```
 
 | 组件 | 路径 | 职责 |
 |------|------|------|
 | 主 UI | `kline.html` | 双模式页面：观察 / 记一笔；卡片 K 线、动量、破点高、企微浮窗、止损门闩 |
 | 共享状态 SDK | `watch-favorites.js` | 所有 `watch-*.json` 的 load/patch（含 409 冲突重试） |
-| 推送函数 | `cloud-function-notify/` | 每 5 分钟：自动盯 → 持仓企微 → 盯一下网页文案 → 破点高企微 |
-| 行情快照 | `cloud-function-monitor/` | 定期写 OBS `watch-data.json`（history + watchPool） |
-| 冲榜雷达 | `watch.html` | 消费 OBS 历史；与 kline 共用观察池概念，不跑破点高 |
+| 推送函数 | `cloud-function-notify/` | 每 5 分钟：自动盯 → PushPlus；破点高/盯一下文案写网页状态 |
+| 行情快照 | `cloud-function-monitor/` | 写 OBS 完整 history；另写 GitHub 瘦身版（近 48h × 池/榜前/盯） |
+| 冲榜雷达 | `watch.html` | 优先读 GitHub 瘦身 watch-data；失败回落 OBS |
 
 **状态存储原则（硬规则）：**
 
