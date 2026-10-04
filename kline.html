@@ -675,6 +675,143 @@
       .stop-loss-gate[hidden] {
         display: none !important;
       }
+      .notes-rank-gate {
+        position: fixed;
+        inset: 0;
+        z-index: 110;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg);
+        color: var(--label);
+      }
+      .notes-rank-gate[hidden] {
+        display: none !important;
+      }
+      .notes-rank-head {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 12px 10px;
+        border-bottom: 0.5px solid var(--separator);
+        background: var(--chrome-blur);
+        backdrop-filter: saturate(180%) blur(16px);
+        -webkit-backdrop-filter: saturate(180%) blur(16px);
+      }
+      .notes-rank-head-text {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .notes-rank-head h2 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .notes-rank-meta {
+        margin: 0;
+        font-size: 12px;
+        color: var(--secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      .notes-rank-close {
+        flex: 0 0 auto;
+        border: none;
+        background: var(--fill);
+        color: var(--label);
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        font-size: 22px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .notes-rank-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .notes-rank-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+      .notes-rank-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--grouped);
+        border-bottom: 0.5px solid var(--separator);
+        padding: 0;
+        font-weight: 650;
+        color: var(--secondary);
+        text-align: right;
+      }
+      .notes-rank-table thead th:first-child {
+        text-align: left;
+      }
+      .notes-rank-table th button {
+        display: block;
+        width: 100%;
+        margin: 0;
+        padding: 10px 10px;
+        border: none;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-weight: 650;
+        text-align: inherit;
+        cursor: pointer;
+      }
+      .notes-rank-table th.is-active {
+        color: var(--accent);
+      }
+      .notes-rank-table th.is-active button::after {
+        content: " ↓";
+        font-weight: 700;
+      }
+      .notes-rank-table tbody td {
+        padding: 11px 10px;
+        border-bottom: 0.5px solid var(--separator);
+        text-align: right;
+        color: var(--label);
+      }
+      .notes-rank-table tbody td:first-child {
+        text-align: left;
+        font-weight: 650;
+      }
+      .notes-rank-table tbody tr:active {
+        background: var(--fill);
+      }
+      .notes-rank-sym {
+        border: none;
+        background: none;
+        padding: 0;
+        margin: 0;
+        color: var(--accent);
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        text-decoration: underline;
+        text-decoration-style: dotted;
+        text-underline-offset: 2px;
+      }
+      .notes-rank-empty,
+      .notes-rank-loading {
+        padding: 28px 16px;
+        text-align: center;
+        color: var(--secondary);
+        font-size: 13px;
+      }
+      .notes-rank-table .is-hot {
+        color: var(--up);
+        font-weight: 650;
+      }
+      .notes-rank-table .is-cool {
+        color: var(--down);
+      }
       .stop-loss-panel {
         width: min(420px, 100%);
         max-height: min(80vh, 640px);
@@ -2166,6 +2303,33 @@
         </p>
       </div>
     </div>
+    <div
+      id="notesRankGate"
+      class="notes-rank-gate"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="notesRankTitle"
+    >
+      <div class="notes-rank-head">
+        <div class="notes-rank-head-text">
+          <h2 id="notesRankTitle">记一笔排序</h2>
+          <p class="notes-rank-meta" id="notesRankMeta">相对记住点 · 近2h · 近1h</p>
+        </div>
+        <button
+          type="button"
+          class="notes-rank-close"
+          id="notesRankClose"
+          title="关闭"
+          aria-label="关闭记一笔排序"
+        >
+          ×
+        </button>
+      </div>
+      <div class="notes-rank-scroll" id="notesRankScroll">
+        <div class="notes-rank-loading" id="notesRankBody">加载中…</div>
+      </div>
+    </div>
     <div class="app-chrome" id="appChrome">
       <div class="app-chrome-left">
         <aside id="sortRail" class="sort-rail" aria-label="排序控件">
@@ -2714,6 +2878,10 @@
       let momNoteItems = [];
       let momNotesSaving = false;
       let momNotesExpanded = true;
+      let notesRankSortKey = "gain";
+      let notesRankRows = [];
+      let notesRankBusy = false;
+      let notesRankAbort = null;
       const MOM_NOTES_LOCAL_KEY = "kline-mom-notes-v1";
       const MOM_NOTES_MAX = 30;
       const BREAK_HIGH_COOLDOWN_MS = 10 * 60 * 1000;
@@ -6253,6 +6421,190 @@
         return best;
       }
 
+      function isNotesRankOpen() {
+        const gate = document.getElementById("notesRankGate");
+        return !!(gate && !gate.hidden);
+      }
+
+      function noteGainVsLatest(symbol) {
+        const note = latestMomNoteForSymbol(symbol);
+        const notePrice = Number(note && note.price);
+        const current = Number(marketMap[symbol]?.price);
+        if (
+          !Number.isFinite(notePrice) ||
+          notePrice <= 0 ||
+          !Number.isFinite(current)
+        ) {
+          return null;
+        }
+        return ((current - notePrice) / notePrice) * 100;
+      }
+
+      function buildNotesRankRows(symbols, scoreMap) {
+        const scores = scoreMap || new Map();
+        return (symbols || []).map((symbol) => {
+          const note = latestMomNoteForSymbol(symbol);
+          const score = scores.get(symbol) || {};
+          return {
+            symbol,
+            label:
+              (note && note.label) ||
+              String(symbol || "").replace(/USDT$/i, "") ||
+              symbol,
+            gain: noteGainVsLatest(symbol),
+            change2h: Number.isFinite(score.change2h) ? score.change2h : null,
+            change1h: Number.isFinite(score.change1h) ? score.change1h : null,
+            noteAt: Number(note && note.at) || 0,
+          };
+        });
+      }
+
+      function sortNotesRankRows(rows, key) {
+        const sortKey = key || notesRankSortKey || "gain";
+        return (rows || []).slice().sort((a, b) => {
+          const va = Number.isFinite(a[sortKey]) ? a[sortKey] : -Infinity;
+          const vb = Number.isFinite(b[sortKey]) ? b[sortKey] : -Infinity;
+          if (vb !== va) return vb - va;
+          return (Number(b.noteAt) || 0) - (Number(a.noteAt) || 0);
+        });
+      }
+
+      function notesRankSortLabel(key) {
+        if (key === "change2h") return "近2h";
+        if (key === "change1h") return "近1h";
+        return "涨幅";
+      }
+
+      function renderNotesRankTable(options) {
+        const meta = document.getElementById("notesRankMeta");
+        const scroll = document.getElementById("notesRankScroll");
+        if (!scroll) return;
+        const loading = !!(options && options.loading);
+        const rows = sortNotesRankRows(notesRankRows, notesRankSortKey);
+        if (meta) {
+          meta.textContent = loading
+            ? "正在拉取近2h/1h…"
+            : rows.length
+              ? `共 ${rows.length} 个 · 按${notesRankSortLabel(notesRankSortKey)}↓`
+              : "暂无记一笔";
+        }
+        if (loading) {
+          scroll.innerHTML =
+            '<div class="notes-rank-loading">加载中…</div>';
+          return;
+        }
+        if (!rows.length) {
+          scroll.innerHTML =
+            '<div class="notes-rank-empty">暂无记一笔币种</div>';
+          return;
+        }
+        const headCell = (key, label) => {
+          const active = notesRankSortKey === key ? "is-active" : "";
+          return `<th class="${active}" data-notes-sort="${key}"><button type="button">${escapeHtml(label)}</button></th>`;
+        };
+        const pctCell = (value) => {
+          const cls = hourClass(value);
+          return `<td class="${cls}">${escapeHtml(formatPercent(value))}</td>`;
+        };
+        const tableRows = rows
+          .map((row) => {
+            return [
+              `<tr data-symbol="${escapeHtml(row.symbol)}">`,
+              `<td><button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button></td>`,
+              pctCell(row.gain),
+              pctCell(row.change2h),
+              pctCell(row.change1h),
+              `</tr>`,
+            ].join("");
+          })
+          .join("");
+        scroll.innerHTML = [
+          `<table class="notes-rank-table">`,
+          `<thead><tr>`,
+          `<th>币种</th>`,
+          headCell("gain", "涨幅"),
+          headCell("change2h", "2h"),
+          headCell("change1h", "1h"),
+          `</tr></thead>`,
+          `<tbody>${tableRows}</tbody>`,
+          `</table>`,
+        ].join("");
+      }
+
+      function closeNotesRankOverlay() {
+        const gate = document.getElementById("notesRankGate");
+        if (gate) gate.hidden = true;
+        if (notesRankAbort) {
+          try {
+            notesRankAbort.abort();
+          } catch (error) {
+            /* ignore */
+          }
+          notesRankAbort = null;
+        }
+        notesRankBusy = false;
+        if (!document.body.classList.contains("is-stop-loss-locked")) {
+          document.body.style.overflow = "";
+        }
+      }
+
+      async function openNotesRankOverlay() {
+        const gate = document.getElementById("notesRankGate");
+        if (!gate) return;
+        gate.hidden = false;
+        document.body.style.overflow = "hidden";
+        const symbols = noteSymbolList();
+        notesRankRows = buildNotesRankRows(symbols, new Map());
+        renderNotesRankTable({ loading: true });
+        if (!symbols.length) {
+          renderNotesRankTable();
+          return;
+        }
+        if (notesRankAbort) {
+          try {
+            notesRankAbort.abort();
+          } catch (error) {
+            /* ignore */
+          }
+        }
+        const controller = new AbortController();
+        notesRankAbort = controller;
+        notesRankBusy = true;
+        try {
+          const scoreMap = await loadPinHourScores(
+            symbols,
+            controller.signal,
+            (done, total) => {
+              const meta = document.getElementById("notesRankMeta");
+              if (meta) meta.textContent = `近2h/1h ${done}/${total}`;
+            },
+          );
+          if (controller.signal.aborted) return;
+          notesRankRows = buildNotesRankRows(symbols, scoreMap);
+          renderNotesRankTable();
+        } catch (error) {
+          if (error && error.name === "AbortError") return;
+          console.warn(error);
+          notesRankRows = buildNotesRankRows(symbols, new Map());
+          renderNotesRankTable();
+          showToast(error.message || "记一笔排序加载失败");
+        } finally {
+          if (notesRankAbort === controller) {
+            notesRankAbort = null;
+            notesRankBusy = false;
+          }
+        }
+      }
+
+      function setNotesRankSortKey(key) {
+        const next =
+          key === "change2h" || key === "change1h" || key === "gain"
+            ? key
+            : "gain";
+        notesRankSortKey = next;
+        renderNotesRankTable();
+      }
+
       function pinItemForSymbol(symbol) {
         const key = String(symbol || "")
           .trim()
@@ -9311,13 +9663,35 @@
       document.addEventListener("dblclick", (event) => {
         if (
           event.target.closest(
-            "button, a, input, select, textarea, label, .card-actions, summary, .mode-switch",
+            "button, a, input, select, textarea, label, .card-actions, summary, .mode-switch, .notes-rank-gate, .stop-loss-gate, .notify-float, .float-tabs, .app-chrome",
           )
         ) {
           return;
         }
-        setNotesView(!isNotesView());
+        void openNotesRankOverlay();
       });
+      const notesRankCloseBtn = document.getElementById("notesRankClose");
+      if (notesRankCloseBtn) {
+        notesRankCloseBtn.addEventListener("click", () => {
+          closeNotesRankOverlay();
+        });
+      }
+      const notesRankScrollEl = document.getElementById("notesRankScroll");
+      if (notesRankScrollEl) {
+        notesRankScrollEl.addEventListener("click", (event) => {
+          const sortBtn = event.target.closest("[data-notes-sort]");
+          if (sortBtn) {
+            setNotesRankSortKey(sortBtn.getAttribute("data-notes-sort"));
+            return;
+          }
+          const jumpBtn = event.target.closest(".notes-rank-sym[data-jump]");
+          if (jumpBtn) {
+            const symbol = jumpBtn.getAttribute("data-jump");
+            closeNotesRankOverlay();
+            jumpToNotifySymbol(symbol);
+          }
+        });
+      }
       applyNotesViewChrome();
       syncRangeSelect();
       document
@@ -9344,6 +9718,11 @@
           void forceSellAllStopLoss();
         });
       document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && isNotesRankOpen()) {
+          event.preventDefault();
+          closeNotesRankOverlay();
+          return;
+        }
         if (!document.body.classList.contains("is-stop-loss-locked")) return;
         if (event.key === "Escape") {
           event.preventDefault();
