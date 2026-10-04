@@ -681,11 +681,18 @@
         z-index: 110;
         display: flex;
         flex-direction: column;
-        background: var(--bg);
+        /* 半透明：背后 K 线仍可见 */
+        background: color-mix(in srgb, var(--bg) 58%, transparent);
         color: var(--label);
+        backdrop-filter: blur(7px) saturate(140%);
+        -webkit-backdrop-filter: blur(7px) saturate(140%);
+        pointer-events: none;
       }
       .notes-rank-gate[hidden] {
         display: none !important;
+      }
+      .notes-rank-gate > * {
+        pointer-events: auto;
       }
       .notes-rank-head {
         flex: 0 0 auto;
@@ -694,9 +701,9 @@
         gap: 10px;
         padding: 12px 12px 10px;
         border-bottom: 0.5px solid var(--separator);
-        background: var(--chrome-blur);
-        backdrop-filter: saturate(180%) blur(16px);
-        -webkit-backdrop-filter: saturate(180%) blur(16px);
+        background: color-mix(in srgb, var(--grouped) 78%, transparent);
+        backdrop-filter: saturate(180%) blur(12px);
+        -webkit-backdrop-filter: saturate(180%) blur(12px);
       }
       .notes-rank-head-text {
         flex: 1 1 auto;
@@ -795,7 +802,13 @@
         font-weight: 650;
       }
       .notes-rank-table tbody tr:active {
-        background: var(--fill);
+        background: color-mix(in srgb, var(--fill) 70%, transparent);
+      }
+      .notes-rank-table tbody tr.is-focus {
+        background: color-mix(in srgb, var(--accent) 22%, transparent);
+      }
+      .notes-rank-table tbody tr.is-focus .notes-rank-sym {
+        color: var(--label);
       }
       .notes-rank-sym {
         border: none;
@@ -2931,6 +2944,7 @@
       let notesRankAbort = null;
       let notesRankScoreMap = new Map();
       let notesRankScoresAt = 0;
+      let notesRankFocusSymbol = "";
       const NOTES_RANK_CACHE_MS = 3 * 60 * 1000;
       const MOM_NOTES_LOCAL_KEY = "kline-mom-notes-v1";
       const MOM_NOTES_MAX = 30;
@@ -6649,10 +6663,15 @@
           const cls = hourClass(value);
           return `<td class="${cls}">${escapeHtml(formatPercent(value))}</td>`;
         };
+        const focusKey = String(notesRankFocusSymbol || "").toUpperCase();
         const tableRows = rows
           .map((row) => {
+            const focused =
+              focusKey && String(row.symbol || "").toUpperCase() === focusKey
+                ? " is-focus"
+                : "";
             return [
-              `<tr data-symbol="${escapeHtml(row.symbol)}">`,
+              `<tr class="${focused.trim()}" data-symbol="${escapeHtml(row.symbol)}">`,
               `<td><button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button></td>`,
               pctCell(row.gain),
               pctCell(row.change2h),
@@ -6688,9 +6707,27 @@
           notesRankAbort = null;
         }
         notesRankBusy = false;
-        if (!document.body.classList.contains("is-stop-loss-locked")) {
-          document.body.style.overflow = "";
+        notesRankFocusSymbol = "";
+      }
+
+      function jumpFromNotesRank(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        notesRankFocusSymbol = key;
+        const scroll = document.getElementById("notesRankScroll");
+        if (scroll) {
+          scroll
+            .querySelectorAll("tr.is-focus")
+            .forEach((row) => row.classList.remove("is-focus"));
+          const row = scroll.querySelector(
+            `tr[data-symbol="${CSS.escape ? CSS.escape(key) : key}"]`,
+          );
+          if (row) row.classList.add("is-focus");
         }
+        // 浮窗保持打开，滚到背后 K 线以便透过半透明查看
+        jumpToNotifySymbol(key);
       }
 
       async function openNotesRankOverlay(options) {
@@ -6698,7 +6735,7 @@
         const gate = document.getElementById("notesRankGate");
         if (!gate) return;
         gate.hidden = false;
-        document.body.style.overflow = "hidden";
+        // 不锁 body 滚动，便于点名称后背后 K 线滚入视野
         const symbols = noteSymbolList();
         if (!symbols.length) {
           notesRankRows = [];
@@ -9945,9 +9982,7 @@
           }
           const jumpBtn = event.target.closest(".notes-rank-sym[data-jump]");
           if (jumpBtn) {
-            const symbol = jumpBtn.getAttribute("data-jump");
-            closeNotesRankOverlay();
-            jumpToNotifySymbol(symbol);
+            jumpFromNotesRank(jumpBtn.getAttribute("data-jump"));
           }
         });
       }
