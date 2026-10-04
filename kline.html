@@ -713,17 +713,29 @@
         color: var(--secondary);
         font-variant-numeric: tabular-nums;
       }
+      .notes-rank-refresh,
       .notes-rank-close {
         flex: 0 0 auto;
         border: none;
         background: var(--fill);
         color: var(--label);
-        width: 36px;
         height: 36px;
         border-radius: 10px;
-        font-size: 22px;
+        font-size: 13px;
+        font-weight: 600;
         line-height: 1;
         cursor: pointer;
+      }
+      .notes-rank-refresh {
+        padding: 0 12px;
+      }
+      .notes-rank-refresh:disabled {
+        opacity: 0.45;
+        cursor: wait;
+      }
+      .notes-rank-close {
+        width: 36px;
+        font-size: 22px;
       }
       .notes-rank-scroll {
         flex: 1 1 auto;
@@ -2108,24 +2120,51 @@
         line-height: 1;
         pointer-events: none;
       }
-      .card-actions {
-        position: absolute;
+      .card-actions-backdrop {
+        position: fixed;
         inset: 0;
-        z-index: 40;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: max(16px, env(safe-area-inset-top, 0px)) 16px
+          max(16px, env(safe-area-inset-bottom, 0px));
+        background: rgba(0, 0, 0, 0.48);
+        backdrop-filter: blur(5px);
+        -webkit-backdrop-filter: blur(5px);
+      }
+      .card-actions-backdrop[hidden] {
+        display: none !important;
+      }
+      .card-actions {
+        position: relative;
+        z-index: 1;
         display: flex;
         flex-direction: column;
-        justify-content: center;
         gap: 8px;
-        padding: 12px 14px;
-        background: color-mix(in srgb, var(--elevated) 96%, transparent);
-        border-radius: 12px;
+        width: min(340px, 100%);
+        max-height: min(80vh, 640px);
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 14px 14px 12px;
+        background: var(--elevated);
+        border: 0.5px solid var(--separator);
+        border-radius: 14px;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+      }
+      .card-actions-title {
+        margin: 0 0 2px;
+        text-align: center;
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--label);
       }
       .card-actions button {
         width: 100%;
         border: 0.5px solid var(--ios-separator);
         background: var(--ios-elevated);
         color: var(--ios-label);
-        padding: 10px 12px;
+        padding: 11px 12px;
         border-radius: 10px;
         font-size: 14px;
         cursor: pointer;
@@ -2314,8 +2353,16 @@
       <div class="notes-rank-head">
         <div class="notes-rank-head-text">
           <h2 id="notesRankTitle">记一笔排序</h2>
-          <p class="notes-rank-meta" id="notesRankMeta">相对记住点 · 近2h · 近1h</p>
+          <p class="notes-rank-meta" id="notesRankMeta">相对记住点 · 近2h · 近1h · 24h</p>
         </div>
+        <button
+          type="button"
+          class="notes-rank-refresh"
+          id="notesRankRefresh"
+          title="重新计算近2h/1h"
+        >
+          刷新
+        </button>
         <button
           type="button"
           class="notes-rank-close"
@@ -2882,6 +2929,9 @@
       let notesRankRows = [];
       let notesRankBusy = false;
       let notesRankAbort = null;
+      let notesRankScoreMap = new Map();
+      let notesRankScoresAt = 0;
+      const NOTES_RANK_CACHE_MS = 3 * 60 * 1000;
       const MOM_NOTES_LOCAL_KEY = "kline-mom-notes-v1";
       const MOM_NOTES_MAX = 30;
       const BREAK_HIGH_COOLDOWN_MS = 10 * 60 * 1000;
@@ -3700,6 +3750,37 @@
         );
       }
 
+      /** 清盯 / 触底退出时同步去掉该币全部记一笔。 */
+      async function removeMomNotesForSymbols(symbols, message) {
+        const keySet = new Set(
+          (symbols || [])
+            .map((symbol) => String(symbol || "").trim().toUpperCase())
+            .filter(Boolean),
+        );
+        if (!keySet.size) return false;
+        if (![...keySet].some((symbol) => hasMomNoteForSymbol(symbol))) {
+          return false;
+        }
+        const result = await WatchFavorites.patchMomNotes({
+          repo: CONFIG.GITHUB_REPO,
+          path: CONFIG.MOM_NOTES_PATH,
+          message: message || `Remove notes ${keySet.size}`,
+          mutate: (list) =>
+            list.filter((note) => {
+              const key = String(note && note.symbol || "")
+                .trim()
+                .toUpperCase();
+              return key && !keySet.has(key);
+            }),
+        });
+        momNoteItems = result.notes || [];
+        for (const symbol of keySet) {
+          notesRankScoreMap.delete(symbol);
+        }
+        applyNotesFilter();
+        return true;
+      }
+
       function notePeriodLowExitCandidate(symbol) {
         const key = String(symbol || "")
           .trim()
@@ -3741,22 +3822,10 @@
             pinItems = result.pins || [];
           }
           if (actionable.some((symbol) => hasMomNoteForSymbol(symbol))) {
-            const result = await WatchFavorites.patchMomNotes({
-              repo: CONFIG.GITHUB_REPO,
-              path: CONFIG.MOM_NOTES_PATH,
-              message: `Period-low exit notes ${actionable.length}`,
-              mutate: (list) => {
-                const next = list.filter((note) => {
-                  const key = String(note && note.symbol || "")
-                    .trim()
-                    .toUpperCase();
-                  return key && !keySet.has(key);
-                });
-                noteChanged = next.length !== list.length;
-                return next;
-              },
-            });
-            momNoteItems = result.notes || [];
+            noteChanged = await removeMomNotesForSymbols(
+              actionable,
+              `Period-low exit notes ${actionable.length}`,
+            );
           }
           if (!pinChanged && !noteChanged) {
             actionable.forEach((symbol) => periodLowExitQueued.delete(symbol));
@@ -6445,6 +6514,7 @@
         return (symbols || []).map((symbol) => {
           const note = latestMomNoteForSymbol(symbol);
           const score = scores.get(symbol) || {};
+          const change24h = Number(marketMap[symbol]?.change24h);
           return {
             symbol,
             label:
@@ -6454,6 +6524,7 @@
             gain: noteGainVsLatest(symbol),
             change2h: Number.isFinite(score.change2h) ? score.change2h : null,
             change1h: Number.isFinite(score.change1h) ? score.change1h : null,
+            change24h: Number.isFinite(change24h) ? change24h : null,
             noteAt: Number(note && note.at) || 0,
           };
         });
@@ -6472,7 +6543,66 @@
       function notesRankSortLabel(key) {
         if (key === "change2h") return "近2h";
         if (key === "change1h") return "近1h";
+        if (key === "change24h") return "24h";
         return "涨幅";
+      }
+
+      function syncNotesRankRefreshBtn() {
+        const btn = document.getElementById("notesRankRefresh");
+        if (!btn) return;
+        btn.disabled = notesRankBusy;
+        btn.textContent = notesRankBusy ? "…" : "刷新";
+      }
+
+      function notesRankCacheAgeMs() {
+        return notesRankScoresAt > 0 ? Date.now() - notesRankScoresAt : Infinity;
+      }
+
+      function notesRankSymbolsCovered(symbols) {
+        return (symbols || []).every((symbol) => notesRankScoreMap.has(symbol));
+      }
+
+      function notesRankCacheUsable(symbols) {
+        if (!notesRankScoreMap.size || !(notesRankScoresAt > 0)) return false;
+        if (notesRankCacheAgeMs() > NOTES_RANK_CACHE_MS) return false;
+        return notesRankSymbolsCovered(symbols);
+      }
+
+      function mergeNotesRankScores(scoreMap) {
+        for (const [symbol, score] of scoreMap || []) {
+          notesRankScoreMap.set(symbol, {
+            change1h: Number.isFinite(score.change1h) ? score.change1h : null,
+            change2h: Number.isFinite(score.change2h) ? score.change2h : null,
+          });
+        }
+        notesRankScoresAt = Date.now();
+      }
+
+      function absorbMomentumSnapshotIntoNotesRank(symbols) {
+        const snap = lastMomentumSnapshot;
+        if (!snap || !Array.isArray(snap.rows) || !snap.rows.length) return;
+        const want = new Set(symbols || []);
+        let added = 0;
+        for (const row of snap.rows) {
+          const symbol = String(row && row.symbol || "")
+            .trim()
+            .toUpperCase();
+          if (!symbol || !want.has(symbol)) continue;
+          if (
+            !Number.isFinite(row.change1h) &&
+            !Number.isFinite(row.change2h)
+          ) {
+            continue;
+          }
+          notesRankScoreMap.set(symbol, {
+            change1h: Number.isFinite(row.change1h) ? row.change1h : null,
+            change2h: Number.isFinite(row.change2h) ? row.change2h : null,
+          });
+          added += 1;
+        }
+        if (added && !(notesRankScoresAt > 0)) {
+          notesRankScoresAt = Number(snap.at) || Date.now();
+        }
       }
 
       function renderNotesRankTable(options) {
@@ -6480,14 +6610,27 @@
         const scroll = document.getElementById("notesRankScroll");
         if (!scroll) return;
         const loading = !!(options && options.loading);
+        const fromCache = !!(options && options.fromCache);
         const rows = sortNotesRankRows(notesRankRows, notesRankSortKey);
         if (meta) {
-          meta.textContent = loading
-            ? "正在拉取近2h/1h…"
-            : rows.length
-              ? `共 ${rows.length} 个 · 按${notesRankSortLabel(notesRankSortKey)}↓`
-              : "暂无记一笔";
+          if (loading) {
+            meta.textContent = "正在拉取近2h/1h…";
+          } else if (!rows.length) {
+            meta.textContent = "暂无记一笔";
+          } else {
+            const ageMin = Math.max(
+              0,
+              Math.round(notesRankCacheAgeMs() / 60000),
+            );
+            const cacheBit = fromCache
+              ? ageMin <= 0
+                ? " · 缓存刚算完"
+                : ` · 缓存${ageMin}分钟前`
+              : "";
+            meta.textContent = `共 ${rows.length} 个 · 按${notesRankSortLabel(notesRankSortKey)}↓${cacheBit}`;
+          }
         }
+        syncNotesRankRefreshBtn();
         if (loading) {
           scroll.innerHTML =
             '<div class="notes-rank-loading">加载中…</div>';
@@ -6514,6 +6657,7 @@
               pctCell(row.gain),
               pctCell(row.change2h),
               pctCell(row.change1h),
+              pctCell(row.change24h),
               `</tr>`,
             ].join("");
           })
@@ -6525,6 +6669,7 @@
           headCell("gain", "涨幅"),
           headCell("change2h", "2h"),
           headCell("change1h", "1h"),
+          headCell("change24h", "24h"),
           `</tr></thead>`,
           `<tbody>${tableRows}</tbody>`,
           `</table>`,
@@ -6548,18 +6693,38 @@
         }
       }
 
-      async function openNotesRankOverlay() {
+      async function openNotesRankOverlay(options) {
+        const force = !!(options && options.force);
         const gate = document.getElementById("notesRankGate");
         if (!gate) return;
         gate.hidden = false;
         document.body.style.overflow = "hidden";
         const symbols = noteSymbolList();
-        notesRankRows = buildNotesRankRows(symbols, new Map());
-        renderNotesRankTable({ loading: true });
         if (!symbols.length) {
+          notesRankRows = [];
           renderNotesRankTable();
           return;
         }
+
+        // 3 分钟内：2h/1h 用缓存；涨幅/24h 仍用当前内存现价重算（不拉 K 线）。
+        absorbMomentumSnapshotIntoNotesRank(symbols);
+        if (!force && notesRankCacheUsable(symbols)) {
+          notesRankRows = buildNotesRankRows(symbols, notesRankScoreMap);
+          renderNotesRankTable({ fromCache: true });
+          return;
+        }
+
+        const cacheExpired = notesRankCacheAgeMs() > NOTES_RANK_CACHE_MS;
+        const missing = force || cacheExpired
+          ? symbols.slice()
+          : symbols.filter((symbol) => !notesRankScoreMap.has(symbol));
+        notesRankRows = buildNotesRankRows(symbols, notesRankScoreMap);
+        if (!missing.length) {
+          renderNotesRankTable({ fromCache: true });
+          return;
+        }
+
+        renderNotesRankTable({ loading: true });
         if (notesRankAbort) {
           try {
             notesRankAbort.abort();
@@ -6570,35 +6735,48 @@
         const controller = new AbortController();
         notesRankAbort = controller;
         notesRankBusy = true;
+        syncNotesRankRefreshBtn();
         try {
+          // 过期 / 强制刷新：先拉最新现价与 24h，再算 2h/1h。
+          try {
+            await loadBinanceTicker();
+          } catch (error) {
+            console.warn("notes-rank ticker failed", error);
+          }
+          if (controller.signal.aborted) return;
           const scoreMap = await loadPinHourScores(
-            symbols,
+            missing,
             controller.signal,
             (done, total) => {
-              const meta = document.getElementById("notesRankMeta");
-              if (meta) meta.textContent = `近2h/1h ${done}/${total}`;
+              const el = document.getElementById("notesRankMeta");
+              if (el) el.textContent = `近2h/1h ${done}/${total}`;
             },
           );
           if (controller.signal.aborted) return;
-          notesRankRows = buildNotesRankRows(symbols, scoreMap);
+          mergeNotesRankScores(scoreMap);
+          notesRankRows = buildNotesRankRows(symbols, notesRankScoreMap);
           renderNotesRankTable();
         } catch (error) {
           if (error && error.name === "AbortError") return;
           console.warn(error);
-          notesRankRows = buildNotesRankRows(symbols, new Map());
-          renderNotesRankTable();
+          notesRankRows = buildNotesRankRows(symbols, notesRankScoreMap);
+          renderNotesRankTable({ fromCache: notesRankScoreMap.size > 0 });
           showToast(error.message || "记一笔排序加载失败");
         } finally {
           if (notesRankAbort === controller) {
             notesRankAbort = null;
             notesRankBusy = false;
+            syncNotesRankRefreshBtn();
           }
         }
       }
 
       function setNotesRankSortKey(key) {
         const next =
-          key === "change2h" || key === "change1h" || key === "gain"
+          key === "change2h" ||
+          key === "change1h" ||
+          key === "change24h" ||
+          key === "gain"
             ? key
             : "gain";
         notesRankSortKey = next;
@@ -7374,7 +7552,23 @@
       }
 
       function closeCardActions(force) {
-        document.querySelectorAll(".card-actions").forEach((el) => {
+        document.querySelectorAll(".card-actions-backdrop").forEach((backdrop) => {
+          const sheet = backdrop.querySelector(".card-actions");
+          if (!force && sheet && sheet.classList.contains("is-busy")) return;
+          const symbol = String(backdrop.dataset.symbol || "")
+            .trim()
+            .toUpperCase();
+          if (symbol) {
+            document
+              .querySelectorAll(
+                `.kline-card.is-actions-open[data-symbol="${symbol}"]`,
+              )
+              .forEach((host) => host.classList.remove("is-actions-open"));
+          }
+          backdrop.remove();
+        });
+        // 兼容旧版挂在卡片上的操作层
+        document.querySelectorAll(".kline-card > .card-actions").forEach((el) => {
           if (!force && el.classList.contains("is-busy")) return;
           const host = el.closest(".kline-card");
           if (host) host.classList.remove("is-actions-open");
@@ -7447,16 +7641,19 @@
           const item = pinItemBySymbol(symbol);
           return item ? WatchFavorites.isPinExpired(item) : false;
         })();
+        const label = String(symbol).replace(/USDT$/i, "");
+        const backdrop = document.createElement("div");
+        backdrop.className = "card-actions-backdrop";
+        backdrop.dataset.symbol = symbol;
+        backdrop.setAttribute("role", "presentation");
         const sheet = document.createElement("div");
         sheet.className = "card-actions";
+        sheet.setAttribute("role", "dialog");
+        sheet.setAttribute("aria-modal", "true");
+        sheet.setAttribute("aria-label", `${label} 操作`);
         sheet.innerHTML = [
+          `<div class="card-actions-title">${escapeHtml(label)}</div>`,
           `<button type="button" data-action="refresh">刷新</button>`,
-          canAddNote
-            ? `<button type="button" data-action="add-note">记一笔</button>`
-            : "",
-          expired
-            ? `<button type="button" data-action="renew">续盯（现价起算）</button>`
-            : "",
           `<button type="button" data-action="pin">${
             pinned
               ? expired
@@ -7464,14 +7661,20 @@
                 : "取消盯一下"
               : "盯一下"
           }</button>`,
+          expired
+            ? `<button type="button" data-action="renew">续盯（现价起算）</button>`
+            : "",
+          canAddNote
+            ? `<button type="button" data-action="add-note">记一笔</button>`
+            : "",
+          hasMomNoteForSymbol(symbol)
+            ? `<button type="button" data-action="remove-note" class="is-danger">去掉记一笔</button>`
+            : "",
           `<button type="button" data-action="buy">${held ? "更新买入价" : "购买"}</button>`,
           held
             ? `<button type="button" data-action="sell">卖出</button>`
             : "",
           `<button type="button" data-action="fav">${favored ? "取消收藏" : "收藏"}</button>`,
-          hasMomNoteForSymbol(symbol)
-            ? `<button type="button" data-action="remove-note" class="is-danger">去掉记一笔</button>`
-            : "",
           hasFireEgg
             ? `<button type="button" data-action="clear-egg-fire">取消礼花背景</button>`
             : "",
@@ -7482,6 +7685,11 @@
           `<button type="button" data-action="close" class="is-muted">关闭</button>`,
         ].join("");
         sheet.addEventListener("pointerdown", (event) => event.stopPropagation());
+        backdrop.addEventListener("pointerdown", (event) => {
+          if (event.target !== backdrop) return;
+          if (sheet.classList.contains("is-busy")) return;
+          closeCardActions(true);
+        });
         sheet.addEventListener("click", async (event) => {
           const btn = event.target.closest("button[data-action]");
           if (!btn || sheet.classList.contains("is-busy")) return;
@@ -7564,7 +7772,7 @@
               return;
             }
             // Successful actions usually re-render and remove the card sheet.
-            if (document.body.contains(sheet)) closeCardActions(true);
+            if (document.body.contains(backdrop)) closeCardActions(true);
           } catch (error) {
             console.error(error);
             clearCardActionsBusy(sheet);
@@ -7572,7 +7780,8 @@
           }
         });
         card.classList.add("is-actions-open");
-        card.appendChild(sheet);
+        backdrop.appendChild(sheet);
+        document.body.appendChild(backdrop);
       }
 
       function bindCardInteractions(root) {
@@ -7799,7 +8008,15 @@
           });
           pinItems = result.pins;
           selectedPinSymbols.clear();
-          showToast(`已取消盯住 ${symbols.length} 个`);
+          const notesCleared = await removeMomNotesForSymbols(
+            symbols,
+            `Unpin clear notes ${symbols.length}`,
+          );
+          showToast(
+            notesCleared
+              ? `已取消盯住 ${symbols.length} 个（含记一笔）`
+              : `已取消盯住 ${symbols.length} 个`,
+          );
           await renderKlines();
           setStatus(true, `已批量取消盯住 ${symbols.length} 个`);
         } catch (error) {
@@ -8694,10 +8911,19 @@
           });
           pinItems = result.pins;
           const added = result.meta && result.meta.added;
+          let notesCleared = false;
+          if (!added) {
+            notesCleared = await removeMomNotesForSymbols(
+              [symbol],
+              `Unpin clear notes ${symbol}`,
+            );
+          }
           showToast(
             added
               ? `${label} 已盯住 12h · ${formatPinPrice(price)}`
-              : `${label} 已取消盯一下`,
+              : notesCleared
+                ? `${label} 已取消盯一下（含记一笔）`
+                : `${label} 已取消盯一下`,
           );
           await renderKlines();
           setStatus(
@@ -8731,7 +8957,15 @@
             }),
           });
           pinItems = result.pins;
-          showToast(`${label} 已清除盯一下`);
+          const notesCleared = await removeMomNotesForSymbols(
+            [symbol],
+            `Unpin clear notes ${symbol}`,
+          );
+          showToast(
+            notesCleared
+              ? `${label} 已清除盯一下（含记一笔）`
+              : `${label} 已清除盯一下`,
+          );
           await renderKlines();
           setStatus(true, `${label} 已清除盯一下`);
         } catch (error) {
@@ -8779,7 +9013,16 @@
             }),
           });
           pinItems = result.pins;
-          showToast(`已清除 ${expired.length} 个过期盯一下`);
+          const expiredSymbols = expired.map((item) => item.symbol);
+          const notesCleared = await removeMomNotesForSymbols(
+            expiredSymbols,
+            `Clear expired pin notes ${expiredSymbols.length}`,
+          );
+          showToast(
+            notesCleared
+              ? `已清除 ${expired.length} 个过期盯一下（含记一笔）`
+              : `已清除 ${expired.length} 个过期盯一下`,
+          );
           await renderKlines();
           setStatus(true, `已清除 ${expired.length} 个过期盯一下`);
         } catch (error) {
@@ -9068,6 +9311,14 @@
             } catch (error) {
               console.warn("拉黑后移除盯一下失败", error);
             }
+          }
+          try {
+            await removeMomNotesForSymbols(
+              [symbol],
+              `Blacklist clear notes ${symbol}`,
+            );
+          } catch (error) {
+            console.warn("拉黑后移除记一笔失败", error);
           }
           if (positionSymbols().has(symbol)) {
             try {
@@ -9655,7 +9906,9 @@
         { passive: true },
       );
       document.addEventListener("pointerdown", (event) => {
-        if (event.target.closest(".card-actions")) return;
+        if (event.target.closest(".card-actions, .card-actions-backdrop")) {
+          return;
+        }
         const open = document.querySelector(".card-actions");
         if (open && open.classList.contains("is-busy")) return;
         if (open) closeCardActions();
@@ -9674,6 +9927,12 @@
       if (notesRankCloseBtn) {
         notesRankCloseBtn.addEventListener("click", () => {
           closeNotesRankOverlay();
+        });
+      }
+      const notesRankRefreshBtn = document.getElementById("notesRankRefresh");
+      if (notesRankRefreshBtn) {
+        notesRankRefreshBtn.addEventListener("click", () => {
+          void openNotesRankOverlay({ force: true });
         });
       }
       const notesRankScrollEl = document.getElementById("notesRankScroll");
@@ -9721,6 +9980,14 @@
         if (event.key === "Escape" && isNotesRankOpen()) {
           event.preventDefault();
           closeNotesRankOverlay();
+          return;
+        }
+        if (
+          event.key === "Escape" &&
+          document.querySelector(".card-actions-backdrop")
+        ) {
+          event.preventDefault();
+          closeCardActions(true);
           return;
         }
         if (!document.body.classList.contains("is-stop-loss-locked")) return;
