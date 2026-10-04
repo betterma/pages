@@ -27,7 +27,7 @@
   const PIN_TTL_MS = 12 * 60 * 60 * 1000;
   // 暂时关闭盯一下过期；改 true 可恢复 12h TTL。
   const PIN_EXPIRY_ENABLED = false;
-  const MOM_NOTES_MAX = 30;
+  const MOM_NOTES_MAX = 200;
   const ACTION_LOG_MAX = 80;
 
   const TOKEN_PART_A = "gh";

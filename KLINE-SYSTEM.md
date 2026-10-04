@@ -180,7 +180,7 @@
 
 ### 4.5 记一笔（Mom Notes）
 
-**文件：** `watch-mom-notes.json`，最多 **30** 条。
+**文件：** `watch-mom-notes.json`，最多 **200** 条。
 
 字段要点：`at`、`symbol`、`status`（爬升/横盘/衰减/其它）、`change2h`、`change1h`、`delta`、`price`。
 
@@ -479,7 +479,7 @@ resolve(stored, natural):
 | `BREAK_HIGH_COOLDOWN_MS` | `10min` | 破点高冷却 |
 | `NEW_AUTO_PIN_MS` | `12h` | 「新自动盯」区展示窗口 |
 | `AUTO_PIN_EDGE_COOLDOWN_MS` | `24h` | 同币回暖冷却 |
-| `MOM_NOTES_MAX` | `30` | 记一笔上限 |
+| `MOM_NOTES_MAX` | `200` | 记一笔上限 |
 | `ACTION_LOG_MAX` | `80` | 日志上限 |
 | `NOTIFY_POLL_MS` | `60s` | 企微状态轮询 |
 | `DATA_FOCUS_REFRESH_MIN_MS` | `3min` | 回前台刷新节流 |
