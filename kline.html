@@ -2877,6 +2877,8 @@
         DATA_FOCUS_REFRESH_MIN_MS: 3 * 60 * 1000,
         // OBS watch-data（history/观察池）内存缓存；对齐 monitor ≈15min 写入。
         OBS_CACHE_MS: 15 * 60 * 1000,
+        // GitHub 瘦身过旧则回落 OBS（避免停更文件被 prune 后窗口涨跌全判失败）。
+        WATCH_DATA_STALE_MS: 2 * 60 * 60 * 1000,
         // GitHub 盯/记/仓等共享状态：轻刷新跳过；重同步时才全拉。
         SHARED_STATE_CACHE_MS: 5 * 60 * 1000,
         // 近2h 五段轨迹（15m 回算）+ 爬升判定；可按真实案例调。
@@ -4795,8 +4797,39 @@
         pruneHistory();
       }
 
+      /** savedAt / 最新快照时间；用于判定 GitHub 热库是否已停更。 */
+      function watchDataStampMs(data) {
+        const saved = Number(data && data.savedAt) || 0;
+        let last = 0;
+        const hist = Array.isArray(data && data.history) ? data.history : [];
+        for (const snap of hist) {
+          const t = Number(snap && snap.timestamp) || 0;
+          if (t > last) last = t;
+        }
+        return Math.max(saved, last);
+      }
+
       /**
-       * 观察池快照：优先 GitHub 瘦身版（monitor 双写），失败再回落 OBS 完整版。
+       * GitHub 停更的旧全量文件会被 3 天 prune 清空，导致 hasWindowGain 全 false、
+       * 盯一下全部掉进「隐藏」。过旧或不含可用快照时拒绝，改走 OBS。
+       */
+      function isWatchDataUsable(data) {
+        if (!data) return false;
+        const hasShape =
+          Array.isArray(data.history) || Array.isArray(data.watchPool);
+        if (!hasShape) return false;
+        const stamp = watchDataStampMs(data);
+        if (!stamp) return false;
+        const staleMs =
+          Number(CONFIG.WATCH_DATA_STALE_MS) || 2 * 60 * 60 * 1000;
+        if (Date.now() - stamp > staleMs) return false;
+        const cutoff = Date.now() - CONFIG.HISTORY_DURATION;
+        const hist = Array.isArray(data.history) ? data.history : [];
+        return hist.some((snap) => Number(snap && snap.timestamp) >= cutoff);
+      }
+
+      /**
+       * 观察池快照：优先 GitHub 瘦身版（monitor 双写），失败/过旧再回落 OBS 完整版。
        */
       async function loadObsWatchData(options) {
         const force = !!(options && options.force);
@@ -4806,7 +4839,7 @@
           !force &&
           lastObsFetchedAt > 0 &&
           now - lastObsFetchedAt < cacheMs &&
-          (history.length > 0 || watchPool.size > 0)
+          history.length > 0
         ) {
           return { fromCache: true, source: "memory" };
         }
@@ -4817,18 +4850,25 @@
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.GITHUB_PATH,
           });
-          if (
-            file &&
-            file.data &&
-            (Array.isArray(file.data.history) ||
-              Array.isArray(file.data.watchPool))
-          ) {
+          if (file && file.data && isWatchDataUsable(file.data)) {
             applyWatchPoolData(file.data);
             return {
               fromCache: false,
               source: "github",
               slim: !!(file.data && file.data.slim),
             };
+          }
+          if (file && file.data) {
+            console.warn(
+              "GitHub watch-data stale/unusable, fallback OBS",
+              {
+                stamp: watchDataStampMs(file.data),
+                slim: !!(file.data && file.data.slim),
+                hist: Array.isArray(file.data.history)
+                  ? file.data.history.length
+                  : 0,
+              },
+            );
           }
         } catch (error) {
           console.warn("load watch-data via GitHub failed", error);

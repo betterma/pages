@@ -826,6 +826,8 @@
         WATCH_POOL_RANK: 30,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
         KLINE_MAX_LIMIT: 1000,
+        // GitHub 瘦身过旧则回落 OBS（避免停更文件被 prune 后窗口对比失效）。
+        WATCH_DATA_STALE_MS: 2 * 60 * 60 * 1000,
       };
       const DURATION_MS = {
         "15m": 15 * 60 * 1000,
@@ -935,6 +937,32 @@
         }
       }
 
+      function watchDataStampMs(data) {
+        const saved = Number(data && data.savedAt) || 0;
+        let last = 0;
+        const hist = Array.isArray(data && data.history) ? data.history : [];
+        for (const snap of hist) {
+          const t = Number(snap && snap.timestamp) || 0;
+          if (t > last) last = t;
+        }
+        return Math.max(saved, last);
+      }
+
+      function isWatchDataUsable(data) {
+        if (!data) return false;
+        const hasShape =
+          Array.isArray(data.history) || Array.isArray(data.watchPool);
+        if (!hasShape) return false;
+        const stamp = watchDataStampMs(data);
+        if (!stamp) return false;
+        const staleMs =
+          Number(CONFIG.WATCH_DATA_STALE_MS) || 2 * 60 * 60 * 1000;
+        if (Date.now() - stamp > staleMs) return false;
+        const cutoff = Date.now() - CONFIG.HISTORY_DURATION;
+        const hist = Array.isArray(data.history) ? data.history : [];
+        return hist.some((snap) => Number(snap && snap.timestamp) >= cutoff);
+      }
+
       async function loadGithubStorage() {
         setStep("github", "loading", "正在读取观察池 watch-data（GitHub 优先）");
         let data = null;
@@ -944,14 +972,13 @@
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.GITHUB_PATH,
           });
-          if (
-            file &&
-            file.data &&
-            (Array.isArray(file.data.history) ||
-              Array.isArray(file.data.watchPool))
-          ) {
+          if (file && file.data && isWatchDataUsable(file.data)) {
             data = file.data;
             source = "github";
+          } else if (file && file.data) {
+            console.warn("GitHub watch-data stale/unusable, fallback OBS", {
+              stamp: watchDataStampMs(file.data),
+            });
           }
         } catch (error) {
           console.warn("GitHub watch-data failed, fallback OBS", error);

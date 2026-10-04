@@ -25,3 +25,5 @@ GitHub 写入失败**不会**回滚 OBS；日志里会有 `GitHub slim write ski
 1. 等一次 monitor 跑完，确认 GitHub 上 `watch-data.json` 变小且含 `"source": "github-slim"`。
 2. 打开 kline「同步池」，状态应出现 `GitHub刚更新` / `GitHub N分钟前`。
 3. notify 无需改 OBS 环境变量；会自动先读 GitHub。
+
+若 GitHub 仍是旧全量（无 `github-slim`、或 `savedAt` 超过约 2 小时），页面 / notify 会**自动回落 OBS**，避免 3 天 prune 后窗口涨跌全判失败、盯一下全部掉进「隐藏」。

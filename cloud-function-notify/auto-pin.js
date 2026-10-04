@@ -118,16 +118,45 @@ function isEdgeCooling(pin, now) {
   return ts - at < cooldown;
 }
 
+function watchDataStampMs(data) {
+  const saved = Number(data && data.savedAt) || 0;
+  let last = 0;
+  const hist = Array.isArray(data && data.history) ? data.history : [];
+  for (const snap of hist) {
+    const t = Number(snap && snap.timestamp) || 0;
+    if (t > last) last = t;
+  }
+  return Math.max(saved, last);
+}
+
+/** Reject GitHub files that are too old / prune to empty (same rule as kline). */
+function isWatchDataUsable(data) {
+  if (!data) return false;
+  const hasShape =
+    Array.isArray(data.history) || Array.isArray(data.watchPool);
+  if (!hasShape) return false;
+  const stamp = watchDataStampMs(data);
+  if (!stamp) return false;
+  const staleMs = Number(process.env.WATCH_DATA_STALE_MS) || 2 * 60 * 60 * 1000;
+  if (Date.now() - stamp > staleMs) return false;
+  const historyMs = 3 * 24 * 60 * 60 * 1000;
+  const cutoff = Date.now() - historyMs;
+  const hist = Array.isArray(data.history) ? data.history : [];
+  return hist.some((snap) => Number(snap && snap.timestamp) >= cutoff);
+}
+
 async function fetchWatchData() {
-  // 优先 GitHub 瘦身版；失败再回落 OBS 完整版。
+  // 优先 GitHub 瘦身版；失败/过旧再回落 OBS 完整版。
   try {
     const file = await loadJson(CONFIG.DATA_PATH);
-    if (
-      file &&
-      file.data &&
-      (Array.isArray(file.data.history) || Array.isArray(file.data.watchPool))
-    ) {
+    if (file && file.data && isWatchDataUsable(file.data)) {
       return file.data;
+    }
+    if (file && file.data) {
+      console.warn(
+        'GitHub watch-data stale/unusable, fallback OBS',
+        JSON.stringify({ stamp: watchDataStampMs(file.data) }),
+      );
     }
   } catch (error) {
     console.warn(
