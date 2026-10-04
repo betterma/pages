@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>周月 K 线 · 只看</title>
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("kline-theme-v1");
+          if (t === "daylight" || t === "night" || t === "terminal") {
+            document.documentElement.setAttribute("data-theme", t);
+          } else {
+            document.documentElement.setAttribute("data-theme", "terminal");
+          }
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "terminal");
+        }
+      })();
+    </script>
+    <style>
+      * { box-sizing: border-box; }
+      :root,
+      html[data-theme="terminal"] {
+        --bg: #111214;
+        --grouped: #181a1e;
+        --elevated: #22252a;
+        --label: #f5f7fa;
+        --secondary: #9aa1ac;
+        --separator: #30343b;
+        --accent: #4c9aff;
+        --fill: #2a2d33;
+        --chrome-blur: rgba(17, 18, 20, 0.78);
+        --up: #35c98a;
+        --down: #ff5c64;
+        --ios-radius: 12px;
+        --chrome-top-h: 52px;
+        --ios-bg: var(--bg);
+        --ios-grouped: var(--grouped);
+        --ios-elevated: var(--elevated);
+        --ios-label: var(--label);
+        --ios-secondary: var(--secondary);
+        --ios-separator: var(--separator);
+      }
+      html[data-theme="daylight"] {
+        --bg: #f2f3f5;
+        --grouped: #e9eaed;
+        --elevated: #ffffff;
+        --label: #17181a;
+        --secondary: #6d727a;
+        --separator: #d5d8dd;
+        --accent: #007aff;
+        --fill: #e1e4e9;
+        --chrome-blur: rgba(242, 243, 245, 0.82);
+        --up: #16a66a;
+        --down: #e0444a;
+        --ios-bg: var(--bg);
+        --ios-grouped: var(--grouped);
+        --ios-elevated: var(--elevated);
+        --ios-label: var(--label);
+        --ios-secondary: var(--secondary);
+        --ios-separator: var(--separator);
+      }
+      html[data-theme="night"] {
+        --bg: #080a0d;
+        --grouped: #0e1217;
+        --elevated: #151a20;
+        --label: #ffffff;
+        --secondary: #8b96a3;
+        --separator: #252d36;
+        --accent: #19c7d8;
+        --fill: #182028;
+        --chrome-blur: rgba(8, 10, 13, 0.86);
+        --up: #20d990;
+        --down: #ff4652;
+        --ios-bg: var(--bg);
+        --ios-grouped: var(--grouped);
+        --ios-elevated: var(--elevated);
+        --ios-label: var(--label);
+        --ios-secondary: var(--secondary);
+        --ios-separator: var(--separator);
+      }
+      body {
+        margin: 0;
+        background: var(--ios-bg);
+        color: var(--ios-label);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei", sans-serif;
+        padding-top: calc(var(--chrome-top-h) + env(safe-area-inset-top, 0px));
+        padding-bottom: 24px;
+      }
+      .page {
+        width: min(1400px, calc(100% - 20px));
+        margin: 8px auto 24px;
+      }
+      .app-chrome {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 70;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: calc(var(--chrome-top-h) + env(safe-area-inset-top, 0px));
+        padding: env(safe-area-inset-top, 0px) 8px 0;
+        background: var(--chrome-blur);
+        backdrop-filter: saturate(180%) blur(20px);
+        -webkit-backdrop-filter: saturate(180%) blur(20px);
+        border-bottom: 0.5px solid var(--ios-separator);
+      }
+      .app-chrome-left { flex: 1; min-width: 0; }
+      .app-chrome-right {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: auto;
+      }
+      .mode-switch {
+        display: inline-flex;
+        border: 0.5px solid var(--ios-separator);
+        border-radius: 10px;
+        overflow: hidden;
+        background: var(--ios-elevated);
+      }
+      .mode-switch button {
+        border: 0;
+        background: transparent;
+        color: var(--ios-secondary);
+        font: inherit;
+        font-size: 13px;
+        padding: 7px 12px;
+        cursor: pointer;
+      }
+      .mode-switch button.is-active {
+        background: var(--fill);
+        color: var(--ios-label);
+        font-weight: 600;
+      }
+      .chrome-btn, .theme-switch button {
+        border: 0.5px solid var(--ios-separator);
+        background: var(--ios-elevated);
+        color: var(--ios-label);
+        font: inherit;
+        font-size: 13px;
+        padding: 7px 10px;
+        border-radius: 10px;
+        cursor: pointer;
+      }
+      .theme-switch { display: inline-flex; gap: 4px; }
+      .page-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+      h1 { margin: 0; font-size: 20px; }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--ios-secondary);
+        margin-bottom: 14px;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #888;
+        flex: 0 0 auto;
+      }
+      .dot.ok { background: var(--up); }
+      .dot.bad { background: var(--down); }
+      .section-title {
+        margin: 18px 0 6px;
+        font-size: 15px;
+      }
+      .meta {
+        font-size: 12px;
+        color: var(--ios-secondary);
+        margin-bottom: 8px;
+      }
+      .kline-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 10px;
+      }
+      .kline-card {
+        min-width: 0;
+        padding: 8px 10px 10px;
+        background: var(--ios-grouped);
+        border: 0.5px solid var(--ios-separator);
+        border-radius: var(--ios-radius);
+        color: var(--ios-secondary);
+        opacity: 0.86;
+      }
+      .kline-card.is-pin { border-color: #8a9490; }
+      .kline-card.is-pair {
+        border-width: 2px;
+        border-color: #5a6460;
+      }
+      .kline-card-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+        font-size: 13px;
+      }
+      .kline-card-head .symbol-copy {
+        color: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        border: none;
+        background: none;
+        padding: 0;
+        font: inherit;
+      }
+      .kline-card canvas {
+        display: block;
+        width: 100%;
+        height: 150px;
+        pointer-events: none;
+      }
+      .up { color: var(--up); }
+      .price-down { color: var(--down); }
+      .nav-home {
+        color: var(--ios-secondary);
+        font-size: 13px;
+        text-decoration: none;
+      }
+      .nav-home:hover { text-decoration: underline; }
+      .view-only {
+        font-size: 12px;
+        color: var(--ios-secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-chrome">
+      <div class="app-chrome-left">
+        <div class="mode-switch" role="group" aria-label="K 线窗口">
+          <button type="button" data-range="week" class="is-active">一周</button>
+          <button type="button" data-range="month">一月</button>
+        </div>
+      </div>
+      <div class="app-chrome-right">
+        <div class="theme-switch" role="group" aria-label="换肤">
+          <button type="button" data-theme="terminal" title="深色终端">终</button>
+          <button type="button" data-theme="daylight" title="浅色日间">日</button>
+          <button type="button" data-theme="night" title="高对比夜盘">夜</button>
+        </div>
+        <button id="refreshBtn" class="chrome-btn" type="button">刷新</button>
+      </div>
+    </div>
+    <div class="page">
+      <div class="page-header">
+        <h1>周月 K 线</h1>
+        <a class="nav-home" href="./index.html">总导航</a>
+      </div>
+      <div class="status">
+        <span id="statusDot" class="dot"></span>
+        <span id="statusText">等待启动...</span>
+        <span class="view-only">只看 · 与观察页同一批币 · 无盯/记/买卖</span>
+      </div>
+      <h2 class="section-title">盯一下</h2>
+      <div id="pinMeta" class="meta"></div>
+      <div id="pinGrid" class="kline-grid"></div>
+      <h2 class="section-title">窗口上涨</h2>
+      <div id="risingMeta" class="meta"></div>
+      <div id="risingGrid" class="kline-grid"></div>
+      <h2 class="section-title">我的收藏</h2>
+      <div id="favMeta" class="meta"></div>
+      <div id="favGrid" class="kline-grid"></div>
+      <h2 class="section-title">隐藏盯一下</h2>
+      <div id="hiddenMeta" class="meta"></div>
+      <div id="hiddenGrid" class="kline-grid"></div>
+    </div>
+    <script src="./watch-favorites.js"></script>
+    <script>
+      "use strict";
+
+      const CONFIG = {
+        HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000,
+        GITHUB_REPO: "betterma/pages",
+        GITHUB_PATH: "watch-data.json",
+        OBS_BASE: "https://mpctest.obs.cn-north-4.myhuaweicloud.com",
+        FAVORITES_PATH: "watch-favorites.json",
+        BLACKLIST_PATH: "watch-blacklist.json",
+        PINS_PATH: "watch-pins.json",
+        WATCH_POOL_RANK: 30,
+        WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
+        KLINE_MAX_LIMIT: 1000,
+        KLINE_INTERVAL: "4h",
+        CHART_INTERVAL: "4h",
+        KLINE_CARD_CONCURRENCY: 10,
+        WATCH_DATA_STALE_MS: 2 * 60 * 60 * 1000,
+      };
+      const DURATION_MS = {
+        "4h": 4 * 60 * 60 * 1000,
+        "1d": 24 * 60 * 60 * 1000,
+      };
+      const RANGE_VIEWS = {
+        week: { days: 7, label: "近1周 · 4h" },
+        month: { days: 30, label: "近1月 · 4h" },
+      };
+
+      const marketMap = {};
+      let history = [];
+      let watchPool = new Set();
+      let favoriteItems = [];
+      let blacklistItems = [];
+      let pinItems = [];
+      let rangeKey = "week";
+      let klineAbort = null;
+
+      function currentRange() {
+        return RANGE_VIEWS[rangeKey] || RANGE_VIEWS.week;
+      }
+
+      function klineLimit() {
+        const duration = DURATION_MS[CONFIG.CHART_INTERVAL];
+        const rangeMs = currentRange().days * 24 * 60 * 60 * 1000;
+        return Math.min(
+          CONFIG.KLINE_MAX_LIMIT,
+          Math.max(1, Math.ceil(rangeMs / duration)),
+        );
+      }
+
+      function syncRangeFromUrl() {
+        const params = new URLSearchParams(location.search);
+        const raw = String(params.get("range") || "").toLowerCase();
+        rangeKey = raw === "month" || raw === "30d" ? "month" : "week";
+        document.querySelectorAll("[data-range]").forEach((btn) => {
+          btn.classList.toggle("is-active", btn.dataset.range === rangeKey);
+        });
+      }
+
+      function setRange(next) {
+        rangeKey = next === "month" ? "month" : "week";
+        const url = new URL(location.href);
+        url.searchParams.set("range", rangeKey);
+        window.history.replaceState({}, "", url);
+        document.querySelectorAll("[data-range]").forEach((btn) => {
+          btn.classList.toggle("is-active", btn.dataset.range === rangeKey);
+        });
+      }
+
+      function setStatus(ok, text) {
+        const dot = document.getElementById("statusDot");
+        const el = document.getElementById("statusText");
+        if (dot) dot.className = "dot " + (ok ? "ok" : "bad");
+        if (el) el.textContent = text;
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function formatPercent(value) {
+        if (!Number.isFinite(value)) return "--";
+        const sign = value > 0 ? "+" : "";
+        return sign + value.toFixed(2) + "%";
+      }
+
+      function pctClass(value) {
+        if (!Number.isFinite(value) || value === 0) return "";
+        return value > 0 ? "up" : "price-down";
+      }
+
+      function blacklistSymbols() {
+        return WatchFavorites.blacklistToSymbolSet(blacklistItems);
+      }
+
+      function pinSymbols() {
+        return WatchFavorites.pinsToSymbolSet(pinItems);
+      }
+
+      function favoriteSymbols() {
+        return WatchFavorites.favoritesToSymbolSet(favoriteItems);
+      }
+
+      function ranking() {
+        const blocked = blacklistSymbols();
+        return Object.entries(marketMap)
+          .sort((a, b) => b[1].change24h - a[1].change24h)
+          .map(([symbol]) => symbol)
+          .filter((symbol) => !blocked.has(symbol));
+      }
+
+      function pruneHistory() {
+        const cutoff = Date.now() - CONFIG.HISTORY_DURATION;
+        history = history.filter((item) => item.timestamp >= cutoff);
+      }
+
+      function applyWatchPoolData(data) {
+        history = Array.isArray(data && data.history) ? data.history : [];
+        watchPool = new Set(
+          Array.isArray(data && data.watchPool) ? data.watchPool : [],
+        );
+        pruneHistory();
+      }
+
+      function watchDataStampMs(data) {
+        const saved = Number(data && data.savedAt) || 0;
+        let last = 0;
+        const hist = Array.isArray(data && data.history) ? data.history : [];
+        for (const snap of hist) {
+          const t = Number(snap && snap.timestamp) || 0;
+          if (t > last) last = t;
+        }
+        return Math.max(saved, last);
+      }
+
+      function isWatchDataUsable(data) {
+        if (!data) return false;
+        const hasShape =
+          Array.isArray(data.history) || Array.isArray(data.watchPool);
+        if (!hasShape) return false;
+        const stamp = watchDataStampMs(data);
+        if (!stamp) return false;
+        if (Date.now() - stamp > CONFIG.WATCH_DATA_STALE_MS) return false;
+        const cutoff = Date.now() - CONFIG.HISTORY_DURATION;
+        const hist = Array.isArray(data.history) ? data.history : [];
+        return hist.some((snap) => Number(snap && snap.timestamp) >= cutoff);
+      }
+
+      function getWindowStart(timestamp, duration) {
+        return Math.floor(timestamp / duration) * duration;
+      }
+
+      function selectEarliestWindowSnapshot(windowStart, duration) {
+        const windowEnd = windowStart + duration;
+        const strictCandidates = history.filter(
+          (snapshot) =>
+            snapshot.timestamp >= windowStart && snapshot.timestamp < windowEnd,
+        );
+        const candidates = strictCandidates.length
+          ? strictCandidates
+          : history.filter(
+              (snapshot) =>
+                snapshot.timestamp >= windowStart &&
+                snapshot.timestamp < windowEnd + CONFIG.WINDOW_TOLERANCE_MS,
+            );
+        if (!candidates.length) return null;
+        return candidates.reduce((earliest, item) =>
+          item.timestamp < earliest.timestamp ? item : earliest,
+        );
+      }
+
+      function comparison(interval) {
+        if (!history.length) return null;
+        const duration = DURATION_MS[interval];
+        if (!duration) return null;
+        const currentWindowStart = getWindowStart(Date.now(), duration);
+        return selectEarliestWindowSnapshot(currentWindowStart, duration);
+      }
+
+      function windowPriceChange(symbol, interval) {
+        const old = comparison(interval);
+        const oldPrice = old && old.prices && old.prices[symbol];
+        const currentPrice = marketMap[symbol] && marketMap[symbol].price;
+        if (
+          !Number.isFinite(oldPrice) ||
+          !Number.isFinite(currentPrice) ||
+          oldPrice === 0
+        ) {
+          return null;
+        }
+        return ((currentPrice - oldPrice) / oldPrice) * 100;
+      }
+
+      function hasWindowGain(symbol, interval) {
+        const change = windowPriceChange(symbol, interval);
+        return Number.isFinite(change) && change > 0;
+      }
+
+      function updateWatchPool() {
+        const list = ranking();
+        const blocked = blacklistSymbols();
+        if (!list.length) return;
+        for (const symbol of [...watchPool]) {
+          const rank = list.indexOf(symbol) + 1;
+          if (blocked.has(symbol) || !rank || rank > CONFIG.WATCH_POOL_RANK) {
+            watchPool.delete(symbol);
+          }
+        }
+        for (const symbol of list.slice(0, CONFIG.WATCH_POOL_RANK)) {
+          if (blocked.has(symbol)) continue;
+          if (hasWindowGain(symbol, "4h")) watchPool.add(symbol);
+        }
+      }
+
+      function getRisingZoneSymbols() {
+        const interval = CONFIG.KLINE_INTERVAL;
+        const blocked = blacklistSymbols();
+        const list = ranking();
+        const ranked = list.filter((symbol) => watchPool.has(symbol));
+        const unranked = [...watchPool].filter(
+          (symbol) =>
+            marketMap[symbol] &&
+            !list.includes(symbol) &&
+            !blocked.has(symbol),
+        );
+        return [...ranked, ...unranked].filter(
+          (symbol) => !blocked.has(symbol) && hasWindowGain(symbol, interval),
+        );
+      }
+
+      function getRisingSymbols() {
+        const pinned = pinSymbols();
+        return getRisingZoneSymbols().filter((symbol) => !pinned.has(symbol));
+      }
+
+      function getFavoriteRisingSymbols(risingSymbols) {
+        const rising = new Set(risingSymbols);
+        const blocked = blacklistSymbols();
+        const pinned = pinSymbols();
+        const interval = CONFIG.KLINE_INTERVAL;
+        const favSet = new Set(
+          favoriteItems
+            .map((item) => item.symbol)
+            .filter(
+              (symbol) =>
+                marketMap[symbol] &&
+                !rising.has(symbol) &&
+                !blocked.has(symbol) &&
+                !pinned.has(symbol) &&
+                hasWindowGain(symbol, interval),
+            ),
+        );
+        return ranking().filter((symbol) => favSet.has(symbol));
+      }
+
+      async function loadObsWatchData() {
+        try {
+          const file = await WatchFavorites.fetchJsonFile({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.GITHUB_PATH,
+          });
+          if (file && file.data && isWatchDataUsable(file.data)) {
+            applyWatchPoolData(file.data);
+            return;
+          }
+        } catch (error) {
+          console.warn("load watch-data via GitHub failed", error);
+        }
+        const response = await fetch(
+          CONFIG.OBS_BASE + "/" + CONFIG.GITHUB_PATH + "?t=" + Date.now(),
+          { cache: "no-store" },
+        );
+        if (!response.ok) throw new Error("读取观察池失败: " + response.status);
+        applyWatchPoolData(await response.json());
+      }
+
+      async function loadSharedFeatureState() {
+        try {
+          const favState = await WatchFavorites.loadFavoritesRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.FAVORITES_PATH,
+          });
+          favoriteItems = favState.favorites || [];
+        } catch (error) {
+          favoriteItems = [];
+        }
+        try {
+          const blackState = await WatchFavorites.loadBlacklistRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.BLACKLIST_PATH,
+          });
+          blacklistItems = blackState.blacklist || [];
+        } catch (error) {
+          blacklistItems = [];
+        }
+        try {
+          const pinState = await WatchFavorites.loadPinsRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.PINS_PATH,
+          });
+          pinItems = pinState.pins || [];
+        } catch (error) {
+          pinItems = [];
+        }
+      }
+
+      async function loadBinanceTicker() {
+        const endpoints = [
+          "https://data-api.binance.vision/api/v3/ticker/24hr",
+          "https://api.binance.com/api/v3/ticker/24hr",
+        ];
+        let lastError = null;
+        for (const url of endpoints) {
+          const response = await fetch(url, { cache: "no-store" });
+          if (!response.ok) {
+            lastError = new Error("行情 HTTP " + response.status);
+            continue;
+          }
+          const data = await response.json();
+          if (!Array.isArray(data) || !data.length) {
+            lastError = new Error("行情返回异常");
+            continue;
+          }
+          Object.keys(marketMap).forEach((key) => delete marketMap[key]);
+          data.forEach((ticker) => {
+            if (!ticker.symbol || !ticker.symbol.endsWith("USDT")) return;
+            const price = Number(ticker.lastPrice);
+            const change = Number(ticker.priceChangePercent);
+            if (Number.isFinite(price) && Number.isFinite(change)) {
+              marketMap[ticker.symbol] = { price, change24h: change };
+            }
+          });
+          return;
+        }
+        throw lastError || new Error("行情请求失败");
+      }
+
+      async function fetchKlines(symbol, signal) {
+        const limit = klineLimit();
+        const query =
+          "symbol=" +
+          encodeURIComponent(symbol) +
+          "&interval=" +
+          CONFIG.CHART_INTERVAL +
+          "&limit=" +
+          limit;
+        const endpoints = [
+          "https://data-api.binance.vision/api/v3/klines?" + query,
+          "https://api.binance.com/api/v3/klines?" + query,
+        ];
+        let lastError = null;
+        for (const url of endpoints) {
+          try {
+            const response = await fetch(url, { signal, cache: "no-store" });
+            if (!response.ok) {
+              lastError = new Error("K线 HTTP " + response.status);
+              continue;
+            }
+            const rows = await response.json();
+            if (!Array.isArray(rows) || !rows.length) {
+              lastError = new Error(symbol + " K线为空");
+              continue;
+            }
+            return rows.map((row) => ({
+              time: Number(row[0]),
+              open: Number(row[1]),
+              high: Number(row[2]),
+              low: Number(row[3]),
+              close: Number(row[4]),
+            }));
+          } catch (error) {
+            if (error.name === "AbortError") throw error;
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("K线请求失败");
+      }
+
+      function drawKline(canvas, candles) {
+        const rect = canvas.getBoundingClientRect();
+        const width = Math.max(1, Math.floor(rect.width));
+        const height = Math.max(1, Math.floor(rect.height));
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        const ctx = canvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+        if (!candles.length) return;
+        const pad = { top: 6, right: 4, bottom: 6, left: 4 };
+        const chartW = width - pad.left - pad.right;
+        const chartH = height - pad.top - pad.bottom;
+        const max = Math.max(...candles.map((item) => item.high));
+        const min = Math.min(...candles.map((item) => item.low));
+        const range = max - min || max * 0.01 || 1;
+        const slot = chartW / candles.length;
+        const bodyW = Math.max(1, slot * 0.62);
+        const yOf = (price) => pad.top + ((max - price) / range) * chartH;
+        candles.forEach((candle, index) => {
+          const x = pad.left + slot * index + slot / 2;
+          const up = candle.close >= candle.open;
+          ctx.strokeStyle = up ? "#8a9a96" : "#9a8e88";
+          ctx.fillStyle = up ? "#8a9a96" : "#9a8e88";
+          ctx.beginPath();
+          ctx.moveTo(x, yOf(candle.high));
+          ctx.lineTo(x, yOf(candle.low));
+          ctx.stroke();
+          const y1 = yOf(candle.open);
+          const y2 = yOf(candle.close);
+          const bodyH = Math.max(1, Math.abs(y2 - y1));
+          ctx.fillRect(x - bodyW / 2, Math.min(y1, y2), bodyW, bodyH);
+        });
+      }
+
+      function cardHtml(symbol, options) {
+        const label = symbol.replace(/USDT$/i, "");
+        const change24h = marketMap[symbol] && marketMap[symbol].change24h;
+        const cls = ["kline-card"];
+        if (options.isPin) cls.push("is-pin");
+        if (options.isPair) cls.push("is-pair");
+        const status = Number.isFinite(change24h)
+          ? '<span class="' +
+            pctClass(change24h) +
+            '">' +
+            escapeHtml(formatPercent(change24h)) +
+            "</span>"
+          : "--";
+        return (
+          '<div class="' +
+          cls.join(" ") +
+          '" data-symbol="' +
+          symbol +
+          '"><div class="kline-card-head"><button type="button" class="symbol-copy" data-name="' +
+          escapeHtml(label) +
+          '">' +
+          escapeHtml(label) +
+          "</button><span data-kline-status>" +
+          status +
+          "</span></div><canvas></canvas></div>"
+        );
+      }
+
+      async function mapPool(list, worker) {
+        const n = CONFIG.KLINE_CARD_CONCURRENCY;
+        let index = 0;
+        async function run() {
+          while (index < list.length) {
+            const current = index;
+            index += 1;
+            await worker(list[current], current);
+          }
+        }
+        await Promise.all(Array.from({ length: Math.min(n, list.length) }, run));
+      }
+
+      async function fillGrid(grid, symbols, options, signal) {
+        grid.innerHTML = symbols
+          .map((symbol) => cardHtml(symbol, options[symbol] || {}))
+          .join("");
+        await mapPool([...grid.querySelectorAll(".kline-card")], async (card) => {
+          const symbol = card.dataset.symbol;
+          const canvas = card.querySelector("canvas");
+          const status = card.querySelector("[data-kline-status]");
+          try {
+            const candles = await fetchKlines(symbol, signal);
+            drawKline(canvas, candles);
+          } catch (error) {
+            if (error.name === "AbortError") return;
+            if (status) status.textContent = "K线失败";
+          }
+        });
+      }
+
+      async function renderAll() {
+        if (klineAbort) klineAbort.abort();
+        klineAbort = new AbortController();
+        const signal = klineAbort.signal;
+        updateWatchPool();
+        const blocked = blacklistSymbols();
+        const interval = CONFIG.KLINE_INTERVAL;
+        const rising = getRisingSymbols();
+        const favRising = getFavoriteRisingSymbols(rising);
+        const favSet = favoriteSymbols();
+        const pairSet = new Set(rising.filter((symbol) => favSet.has(symbol)));
+        const pinCandidates = pinItems.filter(
+          (item) => item && item.symbol && !blocked.has(item.symbol),
+        );
+        const pinVisible = pinCandidates
+          .filter((item) => hasWindowGain(item.symbol, interval))
+          .map((item) => item.symbol);
+        const pinHidden = pinCandidates
+          .filter((item) => !hasWindowGain(item.symbol, interval))
+          .map((item) => item.symbol);
+        const pinOpts = {};
+        pinVisible.concat(pinHidden).forEach((symbol) => {
+          pinOpts[symbol] = { isPin: true };
+        });
+        const risingOpts = {};
+        rising.forEach((symbol) => {
+          risingOpts[symbol] = { isPair: pairSet.has(symbol) };
+        });
+
+        document.getElementById("pinMeta").textContent =
+          pinVisible.length + " · " + currentRange().label + " · 只看";
+        document.getElementById("risingMeta").textContent =
+          rising.length + " · 观察池窗口上涨";
+        document.getElementById("favMeta").textContent =
+          favRising.length + " · 收藏且窗口上涨";
+        document.getElementById("hiddenMeta").textContent =
+          pinHidden.length + " · 当前 4h 窗口未涨";
+
+        await fillGrid(
+          document.getElementById("pinGrid"),
+          pinVisible,
+          pinOpts,
+          signal,
+        );
+        await fillGrid(
+          document.getElementById("risingGrid"),
+          rising,
+          risingOpts,
+          signal,
+        );
+        await fillGrid(
+          document.getElementById("favGrid"),
+          favRising,
+          {},
+          signal,
+        );
+        await fillGrid(
+          document.getElementById("hiddenGrid"),
+          pinHidden,
+          pinOpts,
+          signal,
+        );
+      }
+
+      async function boot() {
+        setStatus(false, "加载观察池与行情…");
+        await Promise.all([
+          loadObsWatchData(),
+          loadSharedFeatureState(),
+          loadBinanceTicker(),
+        ]);
+        setStatus(true, currentRange().label + " · 只看");
+        await renderAll();
+        setStatus(true, currentRange().label + " · 已绘制");
+      }
+
+      document.querySelectorAll("[data-range]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          setRange(btn.dataset.range);
+          setStatus(true, currentRange().label + " · 重绘中");
+          void renderAll().then(() => {
+            setStatus(true, currentRange().label + " · 已绘制");
+          });
+        });
+      });
+      document.querySelectorAll("[data-theme]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const theme = btn.dataset.theme;
+          document.documentElement.setAttribute("data-theme", theme);
+          try {
+            localStorage.setItem("kline-theme-v1", theme);
+          } catch (error) {
+            /* ignore */
+          }
+        });
+      });
+      document.getElementById("refreshBtn").addEventListener("click", () => {
+        void boot();
+      });
+      document.addEventListener("click", (event) => {
+        const btn = event.target.closest(".symbol-copy");
+        if (!btn) return;
+        const name = btn.dataset.name || "";
+        if (!name) return;
+        navigator.clipboard.writeText(name).catch(() => {});
+      });
+
+      syncRangeFromUrl();
+      void boot().catch((error) => {
+        console.error(error);
+        setStatus(false, error.message || "加载失败");
+      });
+    </script>
+  </body>
+</html>
