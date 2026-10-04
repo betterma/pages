@@ -692,6 +692,7 @@
           updatedAt: Number(data.updatedAt) || null,
           okCount: Number(data.okCount) || 0,
           failCount: Number(data.failCount) || 0,
+          quotaExhausted: Boolean(data.quotaExhausted),
         };
       }
 
@@ -871,11 +872,14 @@
           const ageText =
             ageMin == null ? "缓存时间未知" : `缓存约 ${ageMin} 分钟前`;
           const barLabel = barMeta(activeBar).label;
+          const quotaText = cache.quotaExhausted
+            ? " · OKX 月额度用尽，K 线暂用旧缓存"
+            : "";
           setStatus(
             true,
             missing
-              ? `${ageText} · ${barLabel} · ${items.length - missing} 有K线 / ${missing} 待刷新`
-              : `${ageText} · ${barLabel} · ${items.length} 个自选`,
+              ? `${ageText} · ${barLabel} · ${items.length - missing} 有K线 / ${missing} 待刷新${quotaText}`
+              : `${ageText} · ${barLabel} · ${items.length} 个自选${quotaText}`,
           );
           if (!cache.updatedAt && !cache.map.size) {
             setStatus(

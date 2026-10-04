@@ -6602,7 +6602,7 @@
           const note = latestMomNoteForSymbol(symbol);
           const score = scores.get(symbol) || {};
           const change24h = Number(marketMap[symbol]?.change24h);
-          return {
+        return {
             symbol,
             label:
               (note && note.label) ||
@@ -9033,7 +9033,7 @@
               ? `${label} 已盯住 12h · ${formatPinPrice(price)}`
               : notesCleared
                 ? `${label} 已取消盯一下（含记一笔）`
-                : `${label} 已取消盯一下`,
+              : `${label} 已取消盯一下`,
           );
           await renderKlines();
           setStatus(
@@ -9537,7 +9537,7 @@
                 : "1/3 同步共享状态（观察池可用缓存）…",
             );
             watchMeta = (await loadGithubStorage({ force: forceObs })) || watchMeta;
-            updateNotifyFloatPanel();
+          updateNotifyFloatPanel();
           } else {
             setStatus(
               false,

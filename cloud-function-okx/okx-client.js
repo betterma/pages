@@ -142,6 +142,16 @@ function isRateLimitError(error) {
   );
 }
 
+/** 月免费额度用尽后 OKX 返回 HTTP 402 + x402 付费协议。 */
+function isQuotaExhaustedError(error) {
+  const text = String((error && error.message) || error || '');
+  return (
+    text.includes('HTTP 402') ||
+    text.includes('"x402Version"') ||
+    /\bx402\b/i.test(text)
+  );
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -155,6 +165,7 @@ async function withRetry(fn, options = {}) {
       return await fn();
     } catch (error) {
       lastError = error;
+      if (isQuotaExhaustedError(error)) throw error;
       if (!isRateLimitError(error) || attempt === retries) throw error;
       console.warn(
         `OKX 429, retry ${attempt + 1}/${retries} after ${delay}ms`,
@@ -195,6 +206,11 @@ async function fetchTokenBasicInfo(tokens) {
     body,
   });
 
+  if (response.status === 402 || (response.data && response.data.x402Version)) {
+    throw new Error(
+      `OKX basic-info HTTP 402: 月免费额度已用尽（x402）。打开 Onchain OS 看配额，或等下月 1 号重置。`,
+    );
+  }
   if (!response.ok) {
     throw new Error(
       `OKX basic-info HTTP ${response.status}: ${String(response.text || '').slice(0, 240)}`,
@@ -262,6 +278,11 @@ async function fetchCandles(params) {
       headers,
     });
 
+    if (response.status === 402 || (response.data && response.data.x402Version)) {
+      throw new Error(
+        `OKX candles HTTP 402: 月免费额度已用尽（x402）。打开 Onchain OS 看配额，或等下月 1 号重置。`,
+      );
+    }
     if (response.status === 429) {
       throw new Error(
         `OKX candles HTTP 429: ${String(response.text || '').slice(0, 240)}`,
@@ -312,4 +333,5 @@ module.exports = {
   shortLabel,
   isPlaceholderSymbol,
   isRateLimitError,
+  isQuotaExhaustedError,
 };

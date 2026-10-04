@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>密钥与 Token 续期指引</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg0: #070b12;
+      --bg1: #0c1422;
+      --ink: #e8eef7;
+      --muted: #8b9bb0;
+      --line: rgba(120, 180, 255, 0.14);
+      --card: rgba(14, 22, 36, 0.72);
+      --accent: #3de0c5;
+      --warn: #f0a35e;
+      --binance: #f0b90b;
+      --okx: #3de0c5;
+      --sol: #14f195;
+      --rh: #6ea8ff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      font-family: "PingFang SC", "Syne", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 90% 55% at 15% -5%, rgba(61, 224, 197, 0.14), transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      padding: 2rem 1.1rem 3.5rem;
+    }
+    .shell { max-width: 920px; margin: 0 auto; }
+    .top {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.7rem;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 1.2rem;
+    }
+    h1 {
+      font-family: Syne, sans-serif;
+      font-size: 1.7rem;
+      letter-spacing: -0.03em;
+    }
+    h1 em { font-style: normal; color: var(--accent); }
+    .nav a {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-decoration: none;
+      border: 1px solid var(--line);
+      padding: 0.4rem 0.7rem;
+      border-radius: 8px;
+    }
+    .lede {
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.6;
+      margin-bottom: 1.4rem;
+    }
+    .banner {
+      border: 1px solid rgba(240, 163, 94, 0.35);
+      background: rgba(240, 163, 94, 0.08);
+      color: #ffd9b0;
+      padding: 0.85rem 1rem;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      line-height: 1.55;
+      margin-bottom: 1.6rem;
+    }
+    h2 {
+      font-size: 1.05rem;
+      margin: 1.6rem 0 0.7rem;
+      padding-top: 0.4rem;
+      border-top: 1px solid var(--line);
+    }
+    h2:first-of-type { border-top: none; padding-top: 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+      margin: 0.6rem 0 1rem;
+      background: var(--card);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      padding: 0.65rem 0.75rem;
+      border-bottom: 1px solid var(--line);
+      line-height: 1.45;
+    }
+    th {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+      font-weight: 500;
+      background: rgba(0, 0, 0, 0.2);
+    }
+    tr:last-child td { border-bottom: none; }
+    code, .mono {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.76rem;
+      color: var(--accent);
+    }
+    a.ext { color: var(--rh); }
+    ol, ul { padding-left: 1.25rem; color: var(--muted); font-size: 0.88rem; line-height: 1.65; }
+    li { margin: 0.25rem 0; }
+    .tag {
+      display: inline-block;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.65rem;
+      padding: 0.12rem 0.4rem;
+      border-radius: 4px;
+      margin-right: 0.25rem;
+      border: 1px solid var(--line);
+      color: var(--muted);
+    }
+    .tag.need { color: var(--warn); border-color: rgba(240,163,94,0.4); }
+    .tag.none { color: var(--muted); }
+    .footer {
+      margin-top: 2rem;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="top">
+      <h1>密钥 <em>续期指引</em></h1>
+      <div class="nav">
+        <a href="./index.html">← 总导航</a>
+      </div>
+    </div>
+    <p class="lede">
+      本页只写「叫什么、用在哪、去哪申请、过期会怎样」。<strong>不要把真实 Key / Token 写进这个 HTML 或提交到仓库。</strong>
+      网页里的 GitHub Token 目前是拆开写在 JS 里的；云函数一律走环境变量。
+    </p>
+    <div class="banner">
+      过期最常见：GitHub PAT（网页盯一下写不进去 / 发现页 To Watch 失败 / 云函数 401）。
+      换新 Token 后要<strong>同时改前端几个文件 + 四个云函数环境变量</strong>，漏一个就会半边还能用、半边挂。
+    </div>
+
+    <h2>1. 总览（真正要申请的）</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>名称</th>
+          <th>过期</th>
+          <th>谁在用</th>
+          <th>去哪申请</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>GITHUB_TOKEN</code><br />GitHub PAT（classic 以 <code>ghp_</code> 开头）</td>
+          <td class="need">会过期（申请时自选 30/90/365 天或无期限）</td>
+          <td>几乎所有会写仓库 JSON 的页面 + 全部云函数</td>
+          <td><a class="ext" href="https://github.com/settings/tokens" target="_blank" rel="noopener">github.com/settings/tokens</a></td>
+        </tr>
+        <tr>
+          <td>Birdeye <code>X-API-KEY</code></td>
+          <td class="need">按套餐 / 控制台；免费档约 60 次/分</td>
+          <td>仅 Solana 发现 → 获取详情</td>
+          <td><a class="ext" href="https://docs.birdeye.so/" target="_blank" rel="noopener">docs.birdeye.so</a> → 注册拿 Key</td>
+        </tr>
+        <tr>
+          <td><code>PUSHPLUS_TOKEN</code></td>
+          <td class="need">微信解绑或重置后失效</td>
+          <td>notify 云函数（自动盯 / 回暖推微信）</td>
+          <td><a class="ext" href="https://www.pushplus.plus/push1.html" target="_blank" rel="noopener">pushplus.plus</a> → 一对一 token</td>
+        </tr>
+        <tr>
+          <td>企业微信 Webhook</td>
+          <td class="need">机器人被删 / 群解散即失效</td>
+          <td>notify（默认关；仅 <code>AUTO_PIN_WECOM=1</code> 时发）</td>
+          <td>企业微信群 → 群机器人 → 复制 Webhook</td>
+        </tr>
+        <tr>
+          <td>OKX 三件套<br /><code>OKX_API_KEY</code> / <code>SECRET</code> / <code>PASSPHRASE</code></td>
+          <td class="need">可在 OKX 后台吊销</td>
+          <td>OKX 自选 K 线云函数（拉蜡烛）</td>
+          <td>OKX 开放平台 / Web3 Onchain OS API Key</td>
+        </tr>
+        <tr>
+          <td>华为云 OBS<br /><code>OBS_ACCESS_KEY</code> / <code>OBS_SECRET_KEY</code></td>
+          <td class="need">IAM 密钥可轮换</td>
+          <td>monitor 写观察池；OKX 云函数写 K 线缓存</td>
+          <td>华为云控制台 → 我的凭证 → 访问密钥</td>
+        </tr>
+        <tr>
+          <td>币安 <code>BINANCE_API_KEY</code> / <code>SECRET</code></td>
+          <td class="need">可在币安后台删除</td>
+          <td>仅模拟交易切 <code>TRADE_MODE=live</code> 时</td>
+          <td><a class="ext" href="https://www.binance.com/en/my/settings/api-management" target="_blank" rel="noopener">币安 API 管理</a>（现货、关提现）</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>2. 不需要 Key 的接口</h2>
+    <table>
+      <thead>
+        <tr><th>接口</th><th>用在哪</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>币安公开 <code>ticker/24hr</code>、<code>klines</code></td>
+          <td>币安观察、冲榜、Range100、notify 动量、monitor 观察池</td>
+        </tr>
+        <tr>
+          <td>DexScreener 公开 API</td>
+          <td>Robinhood 发现 → 获取详情（<code>chain=robinhood</code>，批量最多 30）</td>
+        </tr>
+        <tr>
+          <td>GitHub Pages / raw 读公开文件</td>
+          <td>只读可以；写入必须 PAT</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>3. GitHub PAT（改一次要改齐）</h2>
+    <p class="lede" style="margin-bottom:0.5rem">仓库：<code>betterma/pages</code>。权限：能读写仓库文件即可（classic 勾选 <code>repo</code>；fine-grained 给 Contents Read and write）。</p>
+    <ol>
+      <li>打开 <a class="ext" href="https://github.com/settings/tokens" target="_blank" rel="noopener">Tokens</a> → Generate new token。</li>
+      <li>到期日自己记在日历上（GitHub 到期前会发邮件）。</li>
+      <li>新 token 填到下面「前端」和「云函数」两处，旧的在 GitHub 里 Revoke。</li>
+    </ol>
+    <p class="lede"><strong>前端（拆成两段字符串，避免整段出现在仓库检索里）：</strong></p>
+    <ul>
+      <li><code>watch-favorites.js</code> → 币安观察 <code>kline.html</code>、冲榜 <code>watch.html</code>、Range100</li>
+      <li><code>okx/favorites.js</code> → OKX 自选 K 线</li>
+      <li><code>trade-sim.js</code> → 模拟交易面板</li>
+      <li><code>getcoininfo.html</code> → Solana 获取详情（To Watch / To All 写 GitHub）</li>
+      <li><code>eth/getcoininfo.html</code> → Robinhood 获取详情</li>
+    </ul>
+    <p class="lede"><strong>云函数环境变量</strong>（名称都是 <code>GITHUB_TOKEN</code>，可用 <code>GH_TOKEN</code> 别名）：</p>
+    <ul>
+      <li><code>cloud-function-monitor</code> — 写瘦身 <code>watch-data.json</code></li>
+      <li><code>cloud-function-notify</code> — 钉、日志、企微文案、破点高</li>
+      <li><code>cloud-function-okx</code> — 读 <code>okx/favorites.json</code></li>
+      <li><code>cloud-function-trade</code> — 读写 <code>trade-bot-state.json</code></li>
+    </ul>
+    <p class="lede">过期表现：页面提示读取/写入 GitHub 失败、401；自动盯不更新；发现页 To Watch 报写入失败。</p>
+
+    <h2>4. 按模块对照</h2>
+    <table>
+      <thead>
+        <tr><th>模块</th><th>页面 / 函数</th><th>密钥</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="tag">币安</span>观察</td>
+          <td><code>kline.html</code></td>
+          <td>GitHub PAT（盯/记/仓/日志）。行情无 Key。</td>
+        </tr>
+        <tr>
+          <td><span class="tag">币安</span>冲榜 / Range100</td>
+          <td><code>watch.html</code> · <code>range100.html</code></td>
+          <td>同一套 GitHub PAT。行情无 Key。</td>
+        </tr>
+        <tr>
+          <td><span class="tag">币安</span>云 monitor</td>
+          <td><code>cloud-function-monitor</code></td>
+          <td>GitHub PAT + OBS AK/SK。币安 ticker 公开。</td>
+        </tr>
+        <tr>
+          <td><span class="tag">币安</span>云 notify</td>
+          <td><code>cloud-function-notify</code></td>
+          <td>GitHub PAT；默认还要 PushPlus；企微 Webhook 可选。</td>
+        </tr>
+        <tr>
+          <td><span class="tag">Solana</span>发现</td>
+          <td><code>solana/</code> 三页签</td>
+          <td>资源中心 / 对比：无 Key。获取详情：<strong>Birdeye + GitHub PAT</strong>。</td>
+        </tr>
+        <tr>
+          <td><span class="tag">Robinhood</span>发现</td>
+          <td><code>eth-index.html</code></td>
+          <td>资源中心 / 对比：无 Key。获取详情：DexScreener 无 Key + <strong>GitHub PAT</strong> 写 <code>eth/toWatch.json</code>。</td>
+        </tr>
+        <tr>
+          <td><span class="tag">OKX</span>自选</td>
+          <td><code>okx/kline.html</code> + <code>cloud-function-okx</code></td>
+          <td>页面写自选：GitHub PAT。拉 K 线：OKX 三件套 + OBS。</td>
+        </tr>
+        <tr>
+          <td><span class="tag">交易</span>模拟</td>
+          <td><code>trade.html</code> + <code>cloud-function-trade</code></td>
+          <td>GitHub PAT。实盘才要币安 API Key。</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>5. 各 Key 申请步骤（过期重做）</h2>
+
+    <p class="lede" style="margin-bottom:0.2rem"><strong>Birdeye（Solana 详情）</strong></p>
+    <ol>
+      <li>打开 <a class="ext" href="https://docs.birdeye.so/" target="_blank" rel="noopener">Birdeye API 文档</a>，按文档注册 / Dashboard 创建 Key。</li>
+      <li>只改 <code>getcoininfo.html</code> 里的 <code>API_KEY</code>（请求头 <code>X-API-KEY</code>），不要提交到公开讨论区。</li>
+      <li>免费档大约 60 rpm，页面已按约 1 秒一个地址节流。超限会大面积查询失败、表格标红。</li>
+    </ol>
+
+    <p class="lede" style="margin-bottom:0.2rem"><strong>PushPlus</strong></p>
+    <ol>
+      <li><a class="ext" href="https://www.pushplus.plus/" target="_blank" rel="noopener">pushplus.plus</a> 微信登录 → 一对一推送 → 复制 token。</li>
+      <li>只放 notify 云函数环境变量 <code>PUSHPLUS_TOKEN</code>，不要写进仓库。</li>
+      <li>暂时不用微信：设 <code>AUTO_PIN_PUSHPLUS=0</code>（否则 notify 会直接报缺 token）。</li>
+    </ol>
+
+    <p class="lede" style="margin-bottom:0.2rem"><strong>企业微信机器人</strong></p>
+    <ol>
+      <li>进目标群 → 群机器人 → 添加 → 复制 Webhook URL（含 <code>key=</code>）。</li>
+      <li>环境变量：<code>WECOM_WEBHOOK_PINS</code> / <code>WECOM_WEBHOOK_POSITIONS</code>，或旧的总开关 <code>WECOM_WEBHOOK_URL</code>。</li>
+      <li>当前产品默认盯一下/持仓/破点高<strong>只写网页</strong>；自动盯企微要显式 <code>AUTO_PIN_WECOM=1</code>。</li>
+    </ol>
+
+    <p class="lede" style="margin-bottom:0.2rem"><strong>OKX Onchain OS</strong></p>
+    <ol>
+      <li>在 OKX 开放平台创建 API Key，记下 Key、Secret、Passphrase 三样（Passphrase 只在创建时出现一次）。</li>
+      <li>填入 okx 云函数：<code>OKX_API_KEY</code>、<code>OKX_SECRET_KEY</code>、<code>OKX_PASSPHRASE</code>。</li>
+      <li>K 线走 <code>GET /api/v6/dex/market/candles</code>（Basic 月免费约 10 万次）。额度用尽是 <strong>HTTP 402 + x402</strong>（要按次付钱），不是 401。到期/额度满：自选页 K 线停更、沿用旧 OBS 缓存；下月 1 号额度重置，或到 Onchain OS 看配额/订阅。</li>
+    </ol>
+
+    <p class="lede" style="margin-bottom:0.2rem"><strong>华为云 OBS</strong></p>
+    <ol>
+      <li>华为云 → 统一身份认证 IAM → 访问密钥 → 新建 AK/SK。</li>
+      <li>monitor 与 okx 云函数都填：<code>OBS_ACCESS_KEY</code>（或 <code>OBS_AK</code>）、<code>OBS_SECRET_KEY</code>（或 <code>OBS_SK</code>）。</li>
+      <li>默认桶 <code>mpctest</code>，地域 <code>obs.cn-north-4.myhuaweicloud.com</code>。AK 不要带空格或「OBS」前缀。</li>
+      <li>过期表现：观察池 OBS 回落失败、OKX K 线缓存写不进去。</li>
+    </ol>
+
+    <h2>6. 换 GitHub Token 检查清单</h2>
+    <ol>
+      <li>前端 5 个文件里的拆分 Token 已替换并推送到 <code>main</code>（Pages 才能用新的）。</li>
+      <li>monitor / notify / okx / trade 四个函数环境变量已改，保存后各手动触发一次。</li>
+      <li>浏览器强刷：币安观察能同步钉；Solana / Robinhood 详情能 To Watch；OKX 能改自选。</li>
+      <li>GitHub 旧 PAT 已 Revoke。</li>
+    </ol>
+
+    <p class="footer">本页不含任何真实密钥。DexScreener、币安公开行情、资源中心里的第三方网站登录账号不在本系统密钥范围内。</p>
+  </div>
+</body>
+</html>

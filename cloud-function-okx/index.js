@@ -17,6 +17,7 @@ const {
   fetchTokenBasicInfo,
   isPlaceholderSymbol,
   isRateLimitError,
+  isQuotaExhaustedError,
 } = require('./okx-client');
 const { FAVORITES_PATH, loadJson, saveJson } = require('./github');
 const { putObjectJson, getObjectJson, obsConfig } = require('./obs-client');
@@ -121,6 +122,7 @@ async function fetchBarsForToken(token, previous) {
       byBar[bar] = row.candles;
       if (row.candles && row.candles.length) okBars += 1;
     } catch (error) {
+      if (isQuotaExhaustedError(error)) throw error;
       const prev =
         Array.isArray(prevBars[bar]) && prevBars[bar].length
           ? prevBars[bar]
@@ -152,17 +154,10 @@ async function syncCandlesCache() {
     `okx-candles favorites=${tokens.length} bars=${BARS.join(',')}`,
   );
 
-  let metaMap = new Map();
-  try {
-    metaMap = await fetchTokenBasicInfo(tokens);
-    console.log(`okx-candles basic-info hit=${metaMap.size}`);
-  } catch (error) {
-    console.warn(`basic-info failed: ${error.message}`);
-  }
-
+  let previous = null;
   let previousTokens = {};
   try {
-    const previous = await getObjectJson(OBS_CANDLES_KEY);
+    previous = await getObjectJson(OBS_CANDLES_KEY);
     if (previous && previous.tokens && typeof previous.tokens === 'object') {
       previousTokens = previous.tokens;
     }
@@ -170,13 +165,42 @@ async function syncCandlesCache() {
     console.warn(`load previous OBS cache failed: ${error.message}`);
   }
 
+  let metaMap = new Map();
+  try {
+    metaMap = await fetchTokenBasicInfo(tokens);
+    console.log(`okx-candles basic-info hit=${metaMap.size}`);
+  } catch (error) {
+    console.warn(`basic-info failed: ${error.message}`);
+    if (isQuotaExhaustedError(error) && previous && previous.tokens) {
+      console.warn('OKX quota exhausted on basic-info; keep previous OBS cache');
+      const kept = {
+        ...previous,
+        quotaExhausted: true,
+        quotaAt: Date.now(),
+      };
+      await putObjectJson(OBS_CANDLES_KEY, kept);
+      return {
+        obsKey: OBS_CANDLES_KEY,
+        publicUrl: `${obsConfig().publicBase}/${OBS_CANDLES_KEY}`,
+        skipped: true,
+        reason: 'quota-exhausted',
+        tokenCount: tokens.length,
+        okCount: previous.okCount || 0,
+        failCount: previous.failCount || 0,
+        updatedAt: previous.updatedAt,
+      };
+    }
+  }
+
   const results = {};
   let okCount = 0;
   let failCount = 0;
   let renamed = 0;
+  let quotaExhausted = false;
   const nextFavorites = [];
 
   for (let index = 0; index < tokens.length; index += 1) {
+    if (quotaExhausted) break;
     const token = tokens[index];
     const key = `${token.chainIndex}:${token.tokenContractAddress}`;
     const meta = metaMap.get(key);
@@ -229,6 +253,11 @@ async function syncCandlesCache() {
         console.warn(`candle reused ${reused} bars for ${key}`);
       }
     } catch (error) {
+      if (isQuotaExhaustedError(error)) {
+        quotaExhausted = true;
+        console.warn(`OKX quota exhausted at ${key}; stop remaining calls`);
+        break;
+      }
       failCount += 1;
       results[key] = {
         ok: false,
@@ -245,6 +274,35 @@ async function syncCandlesCache() {
     if (index + 1 < tokens.length) await sleep(TOKEN_GAP_MS);
   }
 
+  const pulledCount = Object.keys(results).length;
+  if (quotaExhausted && pulledCount === 0 && previous && previous.tokens) {
+    const kept = {
+      ...previous,
+      quotaExhausted: true,
+      quotaAt: Date.now(),
+    };
+    await putObjectJson(OBS_CANDLES_KEY, kept);
+    return {
+      obsKey: OBS_CANDLES_KEY,
+      publicUrl: `${obsConfig().publicBase}/${OBS_CANDLES_KEY}`,
+      skipped: true,
+      reason: 'quota-exhausted',
+      tokenCount: tokens.length,
+      okCount: previous.okCount || 0,
+      failCount: previous.failCount || 0,
+      updatedAt: previous.updatedAt,
+    };
+  }
+
+  if (quotaExhausted) {
+    tokens.forEach((token) => {
+      const key = `${token.chainIndex}:${token.tokenContractAddress}`;
+      if (results[key] || !previousTokens[key]) return;
+      results[key] = previousTokens[key];
+      if (previousTokens[key].ok) okCount += 1;
+    });
+  }
+
   const payload = {
     updatedAt: Date.now(),
     bars: BARS,
@@ -253,12 +311,14 @@ async function syncCandlesCache() {
     okCount,
     failCount,
     tokens: results,
+    quotaExhausted: quotaExhausted || undefined,
+    quotaAt: quotaExhausted ? Date.now() : undefined,
   };
 
   await putObjectJson(OBS_CANDLES_KEY, payload);
 
   let favoritesUpdated = false;
-  if (renamed > 0) {
+  if (renamed > 0 && !quotaExhausted) {
     try {
       await saveJson(
         FAVORITES_PATH,
@@ -282,6 +342,7 @@ async function syncCandlesCache() {
     failCount,
     renamed,
     favoritesUpdated,
+    quotaExhausted: Boolean(quotaExhausted),
     updatedAt: payload.updatedAt,
   };
 }
