@@ -1055,6 +1055,7 @@ async function main() {
 
 module.exports = {
   main,
+  handler: main,
   buildPinReport,
   buildPositionReport,
   listPinUpRows,

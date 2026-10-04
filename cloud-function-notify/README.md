@@ -21,7 +21,8 @@
 
 ## 部署
 
-1. 上传本目录，Handler：`index.handler`，Node.js 18+
+1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js`）。只更新 `index.js` 会出现 `main is not a function`。
+2. Handler：`index.handler`，Node.js 18+
 2. **超时建议 ≥ 60～120 秒**
 3. 定时触发器：`0 */5 * * * *`
 4. 环境变量：
