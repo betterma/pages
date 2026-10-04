@@ -263,7 +263,7 @@
       <div class="status">
         <span id="statusDot" class="dot"></span>
         <span id="statusText">等待启动...</span>
-        <span class="view-only">只看 · 与观察页同一批币 · 无盯/记/买卖</span>
+        <span class="view-only">只看 · 一根柱子 = 一周或一月 · 无盯/记/买卖</span>
       </div>
       <h2 class="section-title">盯一下</h2>
       <div id="pinMeta" class="meta"></div>
@@ -294,17 +294,15 @@
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
         KLINE_MAX_LIMIT: 1000,
         KLINE_INTERVAL: "4h",
-        CHART_INTERVAL: "4h",
         KLINE_CARD_CONCURRENCY: 10,
         WATCH_DATA_STALE_MS: 2 * 60 * 60 * 1000,
       };
       const DURATION_MS = {
         "4h": 4 * 60 * 60 * 1000,
-        "1d": 24 * 60 * 60 * 1000,
       };
       const RANGE_VIEWS = {
-        week: { days: 7, label: "近1周 · 4h" },
-        month: { days: 30, label: "近1月 · 4h" },
+        week: { interval: "1w", limit: 52, label: "周K · 一根一周" },
+        month: { interval: "1M", limit: 36, label: "月K · 一根一月" },
       };
 
       const marketMap = {};
@@ -321,12 +319,11 @@
       }
 
       function klineLimit() {
-        const duration = DURATION_MS[CONFIG.CHART_INTERVAL];
-        const rangeMs = currentRange().days * 24 * 60 * 60 * 1000;
-        return Math.min(
-          CONFIG.KLINE_MAX_LIMIT,
-          Math.max(1, Math.ceil(rangeMs / duration)),
-        );
+        return currentRange().limit;
+      }
+
+      function chartInterval() {
+        return currentRange().interval;
       }
 
       function syncRangeFromUrl() {
@@ -626,7 +623,7 @@
           "symbol=" +
           encodeURIComponent(symbol) +
           "&interval=" +
-          CONFIG.CHART_INTERVAL +
+          chartInterval() +
           "&limit=" +
           limit;
         const endpoints = [
