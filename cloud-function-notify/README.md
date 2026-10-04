@@ -10,6 +10,7 @@
 - `PUSHPLUS_TOKEN`：一对一 token，只放云函数环境变量，不要写入仓库。
 - `AUTO_PIN_PUSHPLUS`：默认 `1`；`0` 关闭微信推送（日志仍写）。
 - `AUTO_PIN_WECOM`：默认 `0`。需要同时发企微时设为 `1`，并保留 `WECOM_WEBHOOK_POSITIONS`。
+- 回暖只改来源/置顶时间，**不改盯住价**。
 
 网页刷新不再单独自动盯/回暖。
 

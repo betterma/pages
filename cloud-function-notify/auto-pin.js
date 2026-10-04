@@ -93,6 +93,25 @@ function addPin(list, symbol, pinPrice, source, now) {
   return next;
 }
 
+function markRewarm(list, symbol, now) {
+  const key = String(symbol || '')
+    .trim()
+    .toUpperCase();
+  if (!key) return normalizePinList(list);
+  const ts = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+  const current = findPin(list, symbol);
+  if (!current) return normalizePinList(list);
+  const next = normalizePinList(list).filter((item) => item.symbol !== key);
+  next.unshift({
+    ...current,
+    symbol: key,
+    pinnedAt: ts,
+    expiresAt: CONFIG.PIN_EXPIRY_ENABLED ? ts + CONFIG.PIN_TTL_MS : 0,
+    source: 'auto-rewarm',
+  });
+  return next;
+}
+
 function hasPin(list, symbol) {
   const key = String(symbol || '')
     .trim()
@@ -405,8 +424,7 @@ async function runAutoPin(options) {
       pins = addPin(pins, symbol, price, 'auto-cloud', now);
     }
     for (const symbol of rewarmed) {
-      const price = marketMap[symbol] && marketMap[symbol].price;
-      pins = addPin(pins, symbol, price, 'auto-rewarm', now);
+      pins = markRewarm(pins, symbol, now);
     }
     pinsChanged = true;
   }
