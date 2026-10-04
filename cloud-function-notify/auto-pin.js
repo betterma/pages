@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Server-side auto-pin / rewarm: edge into 窗口上涨
+ * Server-side auto-pin / rewarm / zone-drop: edges of 窗口上涨
  * (watch-pool ∩ window-up), including already-pinned coins.
  * Snapshot lives in watch-notify-state.json as risingZoneSnap.
  */
@@ -306,6 +306,7 @@ function emptyResult(pins, snap, seeded, events) {
     pinsChanged: false,
     newcomers: [],
     rewarmed: [],
+    dropped: [],
     risingSnap: snap,
     risingSnapSeeded: seeded,
     autoPinEvents: events,
@@ -318,6 +319,7 @@ function emptyResult(pins, snap, seeded, events) {
  *   pinsChanged: boolean,
  *   newcomers: string[],
  *   rewarmed: string[],
+ *   dropped: string[],
  *   risingSnap: string[],
  *   risingSnapSeeded: boolean,
  *   autoPinEvents: object[],
@@ -380,6 +382,7 @@ async function runAutoPin(options) {
   }
 
   const prevSet = new Set(prevSnap);
+  const zoneSet = new Set(zone);
   const edges = zone.filter((symbol) => !prevSet.has(symbol));
   // Always advance zone snap (even when cooldown skips writes), so flicker
   // does not keep re-firing the same edge every cycle.
@@ -390,6 +393,9 @@ async function runAutoPin(options) {
   );
   const rewarmed = rewarmCandidates.filter(
     (symbol) => !isEdgeCooling(findPin(pins, symbol), now),
+  );
+  const dropped = prevSnap.filter(
+    (symbol) => symbol && !zoneSet.has(symbol) && hasPin(pins, symbol),
   );
 
   let pinsChanged = false;
@@ -403,6 +409,8 @@ async function runAutoPin(options) {
       pins = addPin(pins, symbol, price, 'auto-rewarm', now);
     }
     pinsChanged = true;
+  }
+  if (newcomers.length || rewarmed.length || dropped.length) {
     const nextEvents = [];
     if (newcomers.length) {
       nextEvents.push({
@@ -420,15 +428,25 @@ async function runAutoPin(options) {
         kind: 'rewarm',
       });
     }
+    if (dropped.length) {
+      nextEvents.push({
+        at: now,
+        symbols: dropped.slice(),
+        source: 'zone-drop',
+        kind: 'zone-drop',
+      });
+    }
     events = [...nextEvents, ...events].slice(0, CONFIG.AUTO_PIN_EVENTS_MAX);
     console.log(
       'auto-pin zone edges',
       JSON.stringify({
         newcomers: newcomers.length,
         rewarmed: rewarmed.length,
+        dropped: dropped.length,
         skippedCooling: rewarmSkipped.length,
         newSymbols: newcomers,
         rewarmSymbols: rewarmed,
+        droppedSymbols: dropped,
         skippedSymbols: rewarmSkipped,
       }),
     );
@@ -444,6 +462,7 @@ async function runAutoPin(options) {
     pinsChanged,
     newcomers,
     rewarmed,
+    dropped,
     risingSnap: zone,
     risingSnapSeeded: true,
     autoPinEvents: events,

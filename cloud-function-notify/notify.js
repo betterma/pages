@@ -568,7 +568,7 @@ function normalizeActionLogEntry(item) {
 }
 
 /** Same batches as WeCom: webpage 日志 follows cloud edges, not page refresh. */
-async function appendAutoPinActionLog(now, newcomers, rewarmed) {
+async function appendAutoPinActionLog(now, newcomers, rewarmed, dropped) {
   const incoming = [];
   if (newcomers.length) {
     incoming.push({
@@ -582,6 +582,13 @@ async function appendAutoPinActionLog(now, newcomers, rewarmed) {
       at: now,
       kind: 'rewarm',
       symbols: rewarmed.map((symbol) => String(symbol).toUpperCase()),
+    });
+  }
+  if (dropped && dropped.length) {
+    incoming.push({
+      at: now,
+      kind: 'zone-drop',
+      symbols: dropped.map((symbol) => String(symbol).toUpperCase()),
     });
   }
   if (!incoming.length) return;
@@ -695,6 +702,7 @@ async function main() {
 
   let autoPinned = [];
   let autoRewarmed = [];
+  let autoDropped = [];
   try {
     const autoResult = await runAutoPin({
       pins,
@@ -709,6 +717,7 @@ async function main() {
     autoPinEvents = autoResult.autoPinEvents;
     autoPinned = autoResult.newcomers || [];
     autoRewarmed = autoResult.rewarmed || [];
+    autoDropped = autoResult.dropped || [];
     if (autoResult.pinsChanged) {
       const parts = [];
       if (autoPinned.length) parts.push(`new ${autoPinned.length}`);
@@ -803,7 +812,7 @@ async function main() {
   if (!pins.length && !positions.length && !momNotes.length) {
     // Still persist rising zone snap / events so seeding works with empty pins.
     try {
-      await appendAutoPinActionLog(now, autoPinned, autoRewarmed);
+      await appendAutoPinActionLog(now, autoPinned, autoRewarmed, autoDropped);
     } catch (error) {
       console.warn('auto-pin action log failed', error.message || error);
     }
@@ -838,6 +847,7 @@ async function main() {
       reason: 'empty',
       autoPinned,
       autoRewarmed,
+      autoDropped,
     };
   }
 
@@ -862,12 +872,14 @@ async function main() {
   const sent = [];
   const sendErrors = [];
 
-  if (autoPinned.length || autoRewarmed.length) {
+  if (autoPinned.length || autoRewarmed.length || autoDropped.length) {
     try {
-      await appendAutoPinActionLog(now, autoPinned, autoRewarmed);
+      await appendAutoPinActionLog(now, autoPinned, autoRewarmed, autoDropped);
     } catch (error) {
       console.warn('auto-pin action log failed', error.message || error);
     }
+  }
+  if (autoPinned.length || autoRewarmed.length) {
     try {
       const tag = await sendAutoPinAlert();
       if (tag) sent.push(tag);
@@ -997,7 +1009,8 @@ async function main() {
     sent.length ||
     sendErrors.length ||
     autoPinned.length ||
-    autoRewarmed.length
+    autoRewarmed.length ||
+    autoDropped.length
   ) {
     await saveJson(
       CONFIG.NOTIFY_STATE_PATH,
@@ -1033,6 +1046,7 @@ async function main() {
       dropsArmed: Object.keys(dropAlertsToSave).length,
       autoPinned,
       autoRewarmed,
+      autoDropped,
       sendErrors,
     }),
   );
@@ -1049,6 +1063,7 @@ async function main() {
     breakHighHits: breakHighHits.map((hit) => hit.symbol),
     autoPinned,
     autoRewarmed,
+    autoDropped,
     sendErrors,
   };
 }

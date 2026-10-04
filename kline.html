@@ -2967,7 +2967,7 @@
       let actionLogSaving = false;
       let actionLogCategory = "capture";
       const ACTION_LOG_CAT_KINDS = {
-        capture: new Set(["auto-pin", "rewarm"]),
+        capture: new Set(["auto-pin", "rewarm", "zone-drop"]),
         notes: new Set(["mom-note"]),
         other: new Set(["buy", "sell", "sell-stop", "period-low-exit"]),
       };
@@ -4354,7 +4354,7 @@
           Number.isFinite(Number(cooldownMs)) && Number(cooldownMs) > 0
             ? Number(cooldownMs)
             : 8 * 60 * 1000;
-        const edgeKinds = new Set(["auto-pin", "rewarm"]);
+        const edgeKinds = new Set(["auto-pin", "rewarm", "zone-drop"]);
         const chron = (Array.isArray(list) ? list : [])
           .slice()
           .sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0));
@@ -4569,6 +4569,7 @@
       function actionLogKindLabel(kind) {
         if (kind === "auto-pin") return "自动盯";
         if (kind === "rewarm") return "回暖";
+        if (kind === "zone-drop") return "掉出窗口";
         if (kind === "mom-note") return "记一下";
         if (kind === "buy") return "买";
         if (kind === "sell") return "卖";
@@ -5315,7 +5316,9 @@
           const kind =
             eventKind === "rewarm" || source === "auto-rewarm"
               ? "rewarm"
-              : "auto-pin";
+              : eventKind === "zone-drop" || source === "zone-drop"
+                ? "zone-drop"
+                : "auto-pin";
           const entry = {
             at: at || Date.now(),
             kind,
