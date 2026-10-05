@@ -3221,15 +3221,24 @@
       let positionSaving = false;
       let klineViewKey = "3d-4h";
       let notesViewMode = false;
+      let jijiViewMode = false;
       try {
-        notesViewMode =
-          new URLSearchParams(window.location.search).get("view") === "notes";
+        const viewParam = new URLSearchParams(window.location.search).get(
+          "view",
+        );
+        notesViewMode = viewParam === "notes";
+        jijiViewMode = viewParam === "jiji";
       } catch (error) {
         notesViewMode = false;
+        jijiViewMode = false;
       }
 
       function isNotesView() {
         return !!notesViewMode;
+      }
+
+      function isJijiView() {
+        return !!jijiViewMode;
       }
 
       function syncModeSwitchUi() {
