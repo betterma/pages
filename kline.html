@@ -753,19 +753,6 @@
       .notes-rank-table thead th:first-child {
         text-align: left;
       }
-      .notes-rank-table thead th.notes-rank-spark-h,
-      .notes-rank-table tbody td.notes-rank-spark-c {
-        width: 72px;
-        padding-left: 4px;
-        padding-right: 6px;
-        text-align: left;
-      }
-      .notes-rank-spark {
-        display: block;
-        width: 68px;
-        height: 22px;
-        pointer-events: none;
-      }
       .notes-rank-table th button {
         display: block;
         width: 100%;
@@ -2952,7 +2939,6 @@
       let notesRankScoreMap = new Map();
       let notesRankScoresAt = 0;
       let notesRankFocusSymbol = "";
-      const notesRankSparkCache = new Map();
       const NOTES_RANK_CACHE_MS = 3 * 60 * 1000;
       const MOM_NOTES_LOCAL_KEY = "kline-mom-notes-v1";
       const MOM_NOTES_MAX = 200;
@@ -6747,7 +6733,6 @@
             return [
               `<tr class="${focused.trim()}" data-symbol="${escapeHtml(row.symbol)}">`,
               `<td><button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button></td>`,
-              `<td class="notes-rank-spark-c"><canvas class="notes-rank-spark" data-spark="${escapeHtml(row.symbol)}" width="68" height="22"></canvas></td>`,
               pctCell(row.gain),
               pctCell(row.change2h),
               pctCell(row.change1h),
@@ -6760,7 +6745,6 @@
           `<table class="notes-rank-table">`,
           `<thead><tr>`,
           `<th>币种</th>`,
-          `<th class="notes-rank-spark-h">K线</th>`,
           headCell("gain", "涨幅"),
           headCell("change2h", "2h"),
           headCell("change1h", "1h"),
@@ -6769,93 +6753,6 @@
           `<tbody>${tableRows}</tbody>`,
           `</table>`,
         ].join("");
-        void paintNotesRankSparks();
-      }
-
-      function drawNotesRankSpark(canvas, candles) {
-        if (!canvas || !canvas.getContext) return;
-        const width = 68;
-        const height = 22;
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.round(width * dpr);
-        canvas.height = Math.round(height * dpr);
-        canvas.style.width = width + "px";
-        canvas.style.height = height + "px";
-        const ctx = canvas.getContext("2d");
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.clearRect(0, 0, width, height);
-        const closes = (candles || [])
-          .map((item) => Number(item && item.close))
-          .filter((value) => Number.isFinite(value) && value > 0);
-        if (closes.length < 2) return;
-        const min = Math.min.apply(null, closes);
-        const max = Math.max.apply(null, closes);
-        const span = max - min || max * 0.01 || 1;
-        const padY = 2;
-        const innerH = height - padY * 2;
-        const last = closes[closes.length - 1];
-        const first = closes[0];
-        const up = last >= first;
-        ctx.strokeStyle = up ? "var(--up, #35c98a)" : "var(--down, #ff5c64)";
-        try {
-          const styles = getComputedStyle(document.documentElement);
-          ctx.strokeStyle =
-            (up
-              ? styles.getPropertyValue("--up")
-              : styles.getPropertyValue("--down")
-            ).trim() || ctx.strokeStyle;
-        } catch (error) {
-          /* keep fallback */
-        }
-        ctx.lineWidth = 1.25;
-        ctx.lineJoin = "round";
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        closes.forEach((price, index) => {
-          const x = (index / (closes.length - 1)) * (width - 2) + 1;
-          const y = padY + (1 - (price - min) / span) * innerH;
-          if (index === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        });
-        ctx.stroke();
-      }
-
-      async function paintNotesRankSparks() {
-        const canvases = [
-          ...document.querySelectorAll("canvas.notes-rank-spark[data-spark]"),
-        ];
-        if (!canvases.length) return;
-        const interval = chartInterval();
-        const limit = Math.min(24, klineLimit(interval) || 24);
-        const signal = notesRankAbort && notesRankAbort.signal;
-        const conc = Math.min(
-          8,
-          Number(CONFIG.NOTES_MOMENTUM_FETCH_CONCURRENCY) || 8,
-        );
-        let index = 0;
-        async function worker() {
-          while (index < canvases.length) {
-            const canvas = canvases[index];
-            index += 1;
-            const symbol = String(canvas.dataset.spark || "")
-              .trim()
-              .toUpperCase();
-            if (!symbol) continue;
-            try {
-              let candles = notesRankSparkCache.get(symbol);
-              if (!Array.isArray(candles) || !candles.length) {
-                candles = await fetchKlines(symbol, interval, signal, limit);
-                notesRankSparkCache.set(symbol, candles);
-              }
-              drawNotesRankSpark(canvas, candles);
-            } catch (error) {
-              if (error && error.name === "AbortError") return;
-            }
-          }
-        }
-        await Promise.all(
-          Array.from({ length: Math.min(conc, canvases.length) }, worker),
-        );
       }
 
       function closeNotesRankOverlay() {
