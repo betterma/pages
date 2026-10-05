@@ -53,6 +53,8 @@ const CONFIG = {
   NOTIFY_STATE_PATH: process.env.NOTIFY_STATE_PATH || 'watch-notify-state.json',
   ACTION_LOG_PATH: process.env.ACTION_LOG_PATH || 'watch-action-log.json',
   ACTION_LOG_MAX: Number(process.env.ACTION_LOG_MAX || 80),
+  MOM_NOTES_PATH: process.env.MOM_NOTES_PATH || 'watch-mom-notes.json',
+  MOM_NOTES_MAX: Number(process.env.MOM_NOTES_MAX || 200),
   WECOM_WEBHOOK_PINS: WEBHOOKS.pinsUrl,
   WECOM_WEBHOOK_POSITIONS: WEBHOOKS.positionsUrl,
   DROP_THRESHOLD: Number(process.env.DROP_THRESHOLD || 0.05),
@@ -567,8 +569,86 @@ function normalizeActionLogEntry(item) {
   return entry;
 }
 
+function pinPriceOf(pins, symbol) {
+  const key = String(symbol || '')
+    .trim()
+    .toUpperCase();
+  const row = (pins || []).find(
+    (item) => item && String(item.symbol || '').toUpperCase() === key,
+  );
+  const price = Number(row && row.pinPrice);
+  return Number.isFinite(price) && price > 0 ? price : null;
+}
+
+function buildAutoPinMomNote(symbol, now, pins) {
+  const key = String(symbol || '')
+    .trim()
+    .toUpperCase();
+  if (!key) return null;
+  return {
+    id: `${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    at: now,
+    symbol: key,
+    label: labelOf(key),
+    status: 'auto-pin',
+    statusLabel: '自动盯',
+    change2h: null,
+    change1h: null,
+    delta: null,
+    price: pinPriceOf(pins, key),
+  };
+}
+
+async function saveAutoPinMomNotes(now, newcomers, pins) {
+  const symbols = (newcomers || [])
+    .map((symbol) => String(symbol || '').trim().toUpperCase())
+    .filter(Boolean);
+  if (!symbols.length) return [];
+  const added = symbols
+    .map((symbol) => buildAutoPinMomNote(symbol, now, pins))
+    .filter(Boolean);
+  if (!added.length) return [];
+  const drop = new Set(symbols);
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const file = await loadJson(CONFIG.MOM_NOTES_PATH);
+    const prev = Array.isArray(file.data && file.data.notes)
+      ? file.data.notes
+      : [];
+    const kept = prev.filter((note) => {
+      const key = String(note && note.symbol || '')
+        .trim()
+        .toUpperCase();
+      return key && !drop.has(key);
+    });
+    const notes = [...added, ...kept].slice(0, CONFIG.MOM_NOTES_MAX);
+    try {
+      await saveJson(
+        CONFIG.MOM_NOTES_PATH,
+        {
+          notes,
+          notesUpdatedAt: now,
+          updatedAt: Date.now(),
+        },
+        file.sha,
+        `Auto-pin mom notes ${added.length}`,
+      );
+      return added;
+    } catch (error) {
+      lastError = error;
+      const message = error && error.message ? error.message : String(error);
+      if (!/409|conflict|sha/i.test(message)) break;
+    }
+  }
+  console.warn(
+    'save auto-pin mom notes failed',
+    lastError && lastError.message ? lastError.message : lastError,
+  );
+  return [];
+}
+
 /** Same batches as WeCom: webpage 日志 follows cloud edges, not page refresh. */
-async function appendAutoPinActionLog(now, newcomers, dropped) {
+async function appendAutoPinActionLog(now, newcomers, dropped, momNotes) {
   const incoming = [];
   if (newcomers.length) {
     incoming.push({
@@ -576,6 +656,17 @@ async function appendAutoPinActionLog(now, newcomers, dropped) {
       kind: 'auto-pin',
       symbols: newcomers.map((symbol) => String(symbol).toUpperCase()),
     });
+  }
+  for (const note of momNotes || []) {
+    if (!note || !note.symbol) continue;
+    const entry = {
+      at: Number(note.at) || now,
+      kind: 'mom-note',
+      symbols: [String(note.symbol).toUpperCase()],
+    };
+    const price = Number(note.price);
+    if (Number.isFinite(price) && price > 0) entry.price = price;
+    incoming.push(entry);
   }
   if (dropped && dropped.length) {
     incoming.push({
@@ -727,6 +818,19 @@ async function main() {
     console.warn('auto-pin failed', error.message || error);
   }
 
+  let autoPinMomNotes = [];
+  if (autoPinned.length) {
+    try {
+      autoPinMomNotes = await saveAutoPinMomNotes(now, autoPinned, pins);
+    } catch (error) {
+      console.warn(
+        'auto-pin mom notes failed',
+        error && error.message ? error.message : error,
+      );
+      autoPinMomNotes = [];
+    }
+  }
+
   function buildAutoPinAlert() {
     const lines = [];
     const titleBits = [];
@@ -785,7 +889,12 @@ async function main() {
   if (!pins.length && !positions.length && !momNotes.length) {
     // Still persist rising zone snap / events so seeding works with empty pins.
     try {
-      await appendAutoPinActionLog(now, autoPinned, autoDropped);
+      await appendAutoPinActionLog(
+        now,
+        autoPinned,
+        autoDropped,
+        autoPinMomNotes,
+      );
     } catch (error) {
       console.warn('auto-pin action log failed', error.message || error);
     }
@@ -846,7 +955,12 @@ async function main() {
 
   if (autoPinned.length || autoDropped.length) {
     try {
-      await appendAutoPinActionLog(now, autoPinned, autoDropped);
+      await appendAutoPinActionLog(
+        now,
+        autoPinned,
+        autoDropped,
+        autoPinMomNotes,
+      );
     } catch (error) {
       console.warn('auto-pin action log failed', error.message || error);
     }
