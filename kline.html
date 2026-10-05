@@ -2410,7 +2410,7 @@
       <div class="notes-rank-head">
         <div class="notes-rank-head-text">
           <h2 id="notesRankTitle">记一笔排序</h2>
-          <p class="notes-rank-meta" id="notesRankMeta">相对记住点 · 近2h · 近1h · 24h</p>
+          <p class="notes-rank-meta" id="notesRankMeta">有记相对记住点 · 无记相对盯住价 · 近2h · 近1h · 24h</p>
         </div>
         <button
           type="button"
@@ -2993,7 +2993,25 @@
       let momNoteItems = [];
       let momNotesSaving = false;
       let momNotesExpanded = true;
-      let notesRankSortKey = "gain";
+      const NOTES_RANK_SORT_KEY = "kline-notes-rank-sort-v1";
+      const NOTES_RANK_SORT_DEFAULT = "change24h";
+      function normalizeNotesRankSortKey(key) {
+        return key === "change2h" ||
+          key === "change1h" ||
+          key === "change24h" ||
+          key === "noteAt" ||
+          key === "gain"
+          ? key
+          : NOTES_RANK_SORT_DEFAULT;
+      }
+      let notesRankSortKey = NOTES_RANK_SORT_DEFAULT;
+      try {
+        notesRankSortKey = normalizeNotesRankSortKey(
+          localStorage.getItem(NOTES_RANK_SORT_KEY),
+        );
+      } catch (error) {
+        notesRankSortKey = NOTES_RANK_SORT_DEFAULT;
+      }
       let notesRankRows = [];
       let notesRankBusy = false;
       let notesRankAbort = null;
@@ -3452,6 +3470,24 @@
           seen.add(symbol);
           list.push(symbol);
         }
+        return list;
+      }
+
+      /** 记一笔 ∪ 盯住（未拉黑）。只盯没记的也进双击排行。 */
+      function notesRankSymbolList() {
+        const blocked = blacklistSymbols();
+        const seen = new Set();
+        const list = [];
+        const add = (raw) => {
+          const symbol = String(raw || "")
+            .trim()
+            .toUpperCase();
+          if (!symbol || seen.has(symbol) || blocked.has(symbol)) return;
+          seen.add(symbol);
+          list.push(symbol);
+        };
+        for (const note of momNoteItems || []) add(note && note.symbol);
+        for (const pin of pinItems || []) add(pin && pin.symbol);
         return list;
       }
 
@@ -6646,34 +6682,45 @@
         return ((current - notePrice) / notePrice) * 100;
       }
 
+      function notesRankGain(symbol) {
+        if (latestMomNoteForSymbol(symbol)) return noteGainVsLatest(symbol);
+        const pin = pinItemBySymbol(symbol);
+        return pin ? pinChangePercent(pin) : null;
+      }
+
       function buildNotesRankRows(symbols, scoreMap) {
         const scores = scoreMap || new Map();
         return (symbols || []).map((symbol) => {
           const note = latestMomNoteForSymbol(symbol);
+          const pin = pinItemBySymbol(symbol);
           const score = scores.get(symbol) || {};
           const change24h = Number(marketMap[symbol]?.change24h);
+          const noteAt = Number(note && note.at) || 0;
+          const pinAt = Number(pin && pin.pinnedAt) || 0;
         return {
             symbol,
             label:
               (note && note.label) ||
               String(symbol || "").replace(/USDT$/i, "") ||
               symbol,
-            gain: noteGainVsLatest(symbol),
+            gain: notesRankGain(symbol),
             change2h: Number.isFinite(score.change2h) ? score.change2h : null,
             change1h: Number.isFinite(score.change1h) ? score.change1h : null,
             change24h: Number.isFinite(change24h) ? change24h : null,
-            noteAt: Number(note && note.at) || 0,
+            noteAt,
+            nameAt: noteAt || pinAt,
           };
         });
       }
 
       function sortNotesRankRows(rows, key) {
-        const sortKey = key || notesRankSortKey || "gain";
+        const requested = key || notesRankSortKey || NOTES_RANK_SORT_DEFAULT;
+        const sortKey = requested === "noteAt" ? "nameAt" : requested;
         return (rows || []).slice().sort((a, b) => {
           const va = Number.isFinite(a[sortKey]) ? a[sortKey] : -Infinity;
           const vb = Number.isFinite(b[sortKey]) ? b[sortKey] : -Infinity;
           if (vb !== va) return vb - va;
-          return (Number(b.noteAt) || 0) - (Number(a.noteAt) || 0);
+          return (Number(b.nameAt) || 0) - (Number(a.nameAt) || 0);
         });
       }
 
@@ -6688,7 +6735,7 @@
       }
 
       function notesRankMetricText(row, key) {
-        if (key === "noteAt") return notesRankAgeLabel(row && row.noteAt);
+        if (key === "noteAt") return notesRankAgeLabel(row && row.nameAt);
         return formatPercent(row && row[key]);
       }
 
@@ -6774,7 +6821,7 @@
           if (loading) {
             meta.textContent = "正在拉取近2h/1h…";
           } else if (!rows.length) {
-            meta.textContent = "暂无记一笔";
+            meta.textContent = "暂无记一笔或盯住";
           } else {
             const ageMin = Math.max(
               0,
@@ -6798,7 +6845,7 @@
         if (!rows.length) {
           abortNotesRankKlines();
           scroll.innerHTML =
-            '<div class="notes-rank-empty">暂无记一笔币种</div>';
+            '<div class="notes-rank-empty">暂无记一笔或盯住币种</div>';
           return;
         }
         const headCell = (key, label) => {
@@ -6810,7 +6857,7 @@
           return `<td class="${cls}">${escapeHtml(formatPercent(value))}</td>`;
         };
         const focusKey = String(notesRankFocusSymbol || "").toUpperCase();
-        const sortKey = notesRankSortKey || "gain";
+        const sortKey = notesRankSortKey || NOTES_RANK_SORT_DEFAULT;
         const klineCards = rows
           .slice(0, NOTES_RANK_KLINE_TOP)
           .map((row, index) => {
@@ -6983,7 +7030,7 @@
         if (!gate) return;
         gate.hidden = false;
         // 不锁 body 滚动，便于点名称后背后 K 线滚入视野
-        const symbols = noteSymbolList();
+        const symbols = notesRankSymbolList();
         if (!symbols.length) {
           notesRankRows = [];
           renderNotesRankTable();
@@ -7056,15 +7103,13 @@
       }
 
       function setNotesRankSortKey(key) {
-        const next =
-          key === "change2h" ||
-          key === "change1h" ||
-          key === "change24h" ||
-          key === "noteAt" ||
-          key === "gain"
-            ? key
-            : "gain";
+        const next = normalizeNotesRankSortKey(key);
         notesRankSortKey = next;
+        try {
+          localStorage.setItem(NOTES_RANK_SORT_KEY, next);
+        } catch (error) {
+          /* ignore */
+        }
         renderNotesRankTable();
       }
 
