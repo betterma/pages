@@ -676,6 +676,27 @@
       .notes-rank-gate > * {
         pointer-events: auto;
       }
+      /* 记记：全屏独立页，不依赖背后 kline 卡片 */
+      body.is-jiji-view .page,
+      body.is-jiji-view .app-chrome,
+      body.is-jiji-view .float-tabs,
+      body.is-jiji-view .notify-float,
+      body.is-jiji-view .momentum-float,
+      body.is-jiji-view #hiddenPinDrawer,
+      body.is-jiji-view #hiddenPinTab,
+      body.is-jiji-view #pinBatchBar,
+      body.is-jiji-view .top-progress {
+        display: none !important;
+      }
+      body.is-jiji-view .notes-rank-gate {
+        pointer-events: auto;
+        background: var(--bg);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+      }
+      body.is-jiji-view .notes-rank-gate[hidden] {
+        display: flex !important;
+      }
       .notes-rank-head {
         flex: 0 0 auto;
         display: flex;
@@ -703,6 +724,7 @@
         font-variant-numeric: tabular-nums;
       }
       .notes-rank-refresh,
+      .notes-rank-view,
       .notes-rank-close {
         flex: 0 0 auto;
         border: none;
@@ -715,22 +737,37 @@
         line-height: 1;
         cursor: pointer;
       }
-      .notes-rank-refresh {
+      .notes-rank-refresh,
+      .notes-rank-view {
         padding: 0 12px;
       }
       .notes-rank-refresh:disabled {
         opacity: 0.45;
         cursor: wait;
       }
+      .notes-rank-view.is-on {
+        color: var(--accent);
+      }
       .notes-rank-close {
         width: 36px;
         font-size: 22px;
+      }
+      .notes-rank-close.notes-rank-home {
+        width: auto;
+        padding: 0 12px;
+        font-size: 13px;
       }
       .notes-rank-scroll {
         flex: 1 1 auto;
         min-height: 0;
         overflow: auto;
         -webkit-overflow-scrolling: touch;
+      }
+      .notes-rank-scroll:not(.is-kline-view) .notes-rank-klines {
+        display: none;
+      }
+      .notes-rank-scroll.is-kline-view .notes-rank-table {
+        display: none;
       }
       .notes-rank-table {
         width: 100%;
@@ -2432,9 +2469,17 @@
         </div>
         <button
           type="button"
+          class="notes-rank-view"
+          id="notesRankViewBtn"
+          title="列表与 K 线互斥显示"
+        >
+          切换K线
+        </button>
+        <button
+          type="button"
           class="notes-rank-refresh"
           id="notesRankRefresh"
-          title="重新计算近2h/1h"
+          title="重新拉取近2h/1h 和 K 线"
         >
           刷新
         </button>
@@ -3070,11 +3115,19 @@
       const notesRankSortBoot = readNotesRankSortState();
       let notesRankSortKeys = notesRankSortBoot.keys;
       let notesRankLastKey = notesRankSortBoot.last;
+      const NOTES_RANK_VIEW_KEY = "kline-notes-rank-view-v1";
+      let notesRankKlineView = false;
+      try {
+        notesRankKlineView = localStorage.getItem(NOTES_RANK_VIEW_KEY) === "kline";
+      } catch (error) {
+        notesRankKlineView = false;
+      }
       let notesRankRows = [];
       let notesRankBusy = false;
       let notesRankAbort = null;
       let notesRankScoreMap = new Map();
       let notesRankScoresAt = 0;
+      let notesRankLoadedAt = 0;
       let notesRankFocusSymbol = "";
       let notesRankKlineAbort = null;
       const NOTES_RANK_KLINE_TOP = 10;
@@ -3211,12 +3264,34 @@
 
       function applyPageChrome() {
         const notes = isNotesView();
+        const jiji = isJijiView();
         document.body.classList.toggle("is-notes-view", notes);
-        document.title = notes ? "观察池 K 线 · 记一笔" : "观察池 K 线";
+        document.body.classList.toggle("is-jiji-view", jiji);
+        if (jiji) {
+          document.title = "记记";
+        } else {
+          document.title = notes ? "观察池 K 线 · 记一笔" : "观察池 K 线";
+        }
         const h1 = document.querySelector(".page-header h1");
         if (h1) h1.textContent = notes ? "币安观察 · 记一笔" : "币安观察";
         const pinTitle = document.getElementById("pinSectionTitle");
         if (pinTitle) pinTitle.textContent = "盯一下";
+        const rankTitle = document.getElementById("notesRankTitle");
+        if (rankTitle) rankTitle.textContent = jiji ? "记记" : "记一笔排序";
+        const closeBtn = document.getElementById("notesRankClose");
+        if (closeBtn) {
+          if (jiji) {
+            closeBtn.textContent = "首页";
+            closeBtn.title = "回总导航";
+            closeBtn.setAttribute("aria-label", "回总导航");
+            closeBtn.classList.add("notes-rank-home");
+          } else {
+            closeBtn.textContent = "×";
+            closeBtn.title = "关闭";
+            closeBtn.setAttribute("aria-label", "关闭记一笔排序");
+            closeBtn.classList.remove("notes-rank-home");
+          }
+        }
         syncModeSwitchUi();
       }
 
@@ -6863,8 +6938,96 @@
         btn.textContent = notesRankBusy ? "…" : "刷新";
       }
 
+      function persistNotesRankView() {
+        try {
+          localStorage.setItem(
+            NOTES_RANK_VIEW_KEY,
+            notesRankKlineView ? "kline" : "list",
+          );
+        } catch (error) {
+          /* ignore */
+        }
+      }
+
+      function syncNotesRankViewUi() {
+        const scroll = document.getElementById("notesRankScroll");
+        if (scroll) {
+          scroll.classList.toggle("is-kline-view", !!notesRankKlineView);
+        }
+        const btn = document.getElementById("notesRankViewBtn");
+        if (btn) {
+          btn.textContent = notesRankKlineView ? "切换列表" : "切换K线";
+          btn.classList.toggle("is-on", !!notesRankKlineView);
+          btn.title = notesRankKlineView ? "回到列表" : "只看并集 K 线";
+        }
+      }
+
+      function toggleNotesRankView() {
+        notesRankKlineView = !notesRankKlineView;
+        persistNotesRankView();
+        syncNotesRankViewUi();
+        const scroll = document.getElementById("notesRankScroll");
+        if (scroll) scroll.scrollTop = 0;
+        if (notesRankKlineView) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              void paintNotesRankKlines();
+            });
+          });
+        }
+      }
+
+      function notesRankDataAgeText() {
+        const at = notesRankLoadedAt || notesRankScoresAt;
+        if (!(at > 0)) return "";
+        const d = new Date(at);
+        const pad = (n) => String(n).padStart(2, "0");
+        const clock = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        const sec = Math.max(0, Math.round((Date.now() - at) / 1000));
+        const ago =
+          sec < 60 ? `${sec}秒前` : `${Math.max(1, Math.round(sec / 60))}分钟前`;
+        return ` · ${clock}（${ago}）`;
+      }
+
+      function notesRankDomIsReady() {
+        const scroll = document.getElementById("notesRankScroll");
+        if (!scroll) return false;
+        if (scroll.querySelector(".notes-rank-table")) return true;
+        if (scroll.querySelector(".notes-rank-empty")) return true;
+        return false;
+      }
+
+      function syncNotesRankMeta(options) {
+        const meta = document.getElementById("notesRankMeta");
+        if (!meta) return;
+        const loading = !!(options && options.loading);
+        const fromCache = !!(options && options.fromCache);
+        const rows = sortNotesRankRows(notesRankRows);
+        const activeKeys = notesRankActiveKeys();
+        const primaryKey = notesRankPrimaryKey();
+        const unionRows = rows.filter((row) => (row.hitCount || 0) > 0);
+        if (loading) {
+          meta.textContent = "正在拉取近2h/1h…";
+          return;
+        }
+        if (!rows.length) {
+          meta.textContent = "暂无记一笔或盯住";
+          return;
+        }
+        const sortBit = activeKeys
+          .map((key) => notesRankSortLabel(key))
+          .join("+");
+        const klineBit =
+          activeKeys.length > 1
+            ? ` · K线并集${unionRows.length}`
+            : ` · 前${unionRows.length}K线`;
+        const staleBit = fromCache ? " · 未重新请求" : "";
+        meta.textContent = `共 ${rows.length} 个 · ${sortBit} · 优先${notesRankSortLabel(primaryKey)}↓${klineBit}${notesRankDataAgeText()}${staleBit}`;
+      }
+
       function notesRankCacheAgeMs() {
-        return notesRankScoresAt > 0 ? Date.now() - notesRankScoresAt : Infinity;
+        const at = notesRankLoadedAt || notesRankScoresAt;
+        return at > 0 ? Date.now() - at : Infinity;
       }
 
       function notesRankSymbolsCovered(symbols) {
@@ -6885,6 +7048,7 @@
           });
         }
         notesRankScoresAt = Date.now();
+        notesRankLoadedAt = notesRankScoresAt;
       }
 
       function absorbMomentumSnapshotIntoNotesRank(symbols) {
@@ -6915,7 +7079,6 @@
       }
 
       function renderNotesRankTable(options) {
-        const meta = document.getElementById("notesRankMeta");
         const scroll = document.getElementById("notesRankScroll");
         if (!scroll) return;
         const loading = !!(options && options.loading);
@@ -6924,31 +7087,7 @@
         const activeKeys = notesRankActiveKeys();
         const primaryKey = notesRankPrimaryKey();
         const unionRows = rows.filter((row) => (row.hitCount || 0) > 0);
-        if (meta) {
-          if (loading) {
-            meta.textContent = "正在拉取近2h/1h…";
-          } else if (!rows.length) {
-            meta.textContent = "暂无记一笔或盯住";
-          } else {
-            const ageMin = Math.max(
-              0,
-              Math.round(notesRankCacheAgeMs() / 60000),
-            );
-            const cacheBit = fromCache
-              ? ageMin <= 0
-                ? " · 缓存刚算完"
-                : ` · 缓存${ageMin}分钟前`
-              : "";
-            const sortBit = activeKeys
-              .map((key) => notesRankSortLabel(key))
-              .join("+");
-            const klineBit =
-              activeKeys.length > 1
-                ? ` · K线并集${unionRows.length}`
-                : ` · 前${unionRows.length}K线`;
-            meta.textContent = `共 ${rows.length} 个 · ${sortBit} · 优先${notesRankSortLabel(primaryKey)}↓${klineBit}${cacheBit}`;
-          }
-        }
+        syncNotesRankMeta(options);
         syncNotesRankRefreshBtn();
         if (loading) {
           abortNotesRankKlines();
@@ -7034,11 +7173,14 @@
           `<tbody>${tableRows}</tbody>`,
           `</table>`,
         ].join("");
-        requestAnimationFrame(() => {
+        syncNotesRankViewUi();
+        if (notesRankKlineView) {
           requestAnimationFrame(() => {
-            void paintNotesRankKlines();
+            requestAnimationFrame(() => {
+              void paintNotesRankKlines();
+            });
           });
-        });
+        }
       }
 
       function abortNotesRankKlines() {
@@ -7106,19 +7248,36 @@
       }
 
       function closeNotesRankOverlay() {
+        if (isJijiView()) {
+          window.location.href = "./index.html";
+          return;
+        }
         const gate = document.getElementById("notesRankGate");
         if (gate) gate.hidden = true;
-        if (notesRankAbort) {
-          try {
-            notesRankAbort.abort();
-          } catch (error) {
-            /* ignore */
-          }
-          notesRankAbort = null;
+      }
+
+      async function reloadNotesRankSharedState() {
+        try {
+          const [pinState, noteState, blackState] = await Promise.all([
+            WatchFavorites.loadPinsRaw({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.PINS_PATH,
+            }),
+            WatchFavorites.loadMomNotesRaw({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.MOM_NOTES_PATH,
+            }),
+            WatchFavorites.loadBlacklistRaw({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.BLACKLIST_PATH,
+            }),
+          ]);
+          pinItems = pinState.pins || [];
+          momNoteItems = noteState.notes || [];
+          blacklistItems = blackState.blacklist || [];
+        } catch (error) {
+          console.warn("notes-rank shared reload failed", error);
         }
-        abortNotesRankKlines();
-        notesRankBusy = false;
-        notesRankFocusSymbol = "";
       }
 
       function jumpFromNotesRank(symbol) {
@@ -7141,8 +7300,8 @@
           );
           if (card) card.classList.add("is-focus");
         }
-        // 浮窗保持打开，滚到背后 K 线以便透过半透明查看
-        jumpToNotifySymbol(key);
+        // 记记独立页没有背后卡片；kline 浮窗保持打开并滚到背后 K 线
+        if (!isJijiView()) jumpToNotifySymbol(key);
       }
 
       async function openNotesRankOverlay(options) {
@@ -7150,6 +7309,24 @@
         const gate = document.getElementById("notesRankGate");
         if (!gate) return;
         gate.hidden = false;
+        if (!force) {
+          if (notesRankBusy) {
+            syncNotesRankMeta({ loading: true });
+            syncNotesRankRefreshBtn();
+            syncNotesRankViewUi();
+            return;
+          }
+          if (notesRankDomIsReady()) {
+            syncNotesRankMeta({ fromCache: true });
+            syncNotesRankRefreshBtn();
+            syncNotesRankViewUi();
+            return;
+          }
+        }
+        if (force) {
+          syncNotesRankMeta({ loading: true });
+          await reloadNotesRankSharedState();
+        }
         // 不锁 body 滚动，便于点名称后背后 K 线滚入视野
         const symbols = notesRankSymbolList();
         if (!symbols.length) {
@@ -7158,10 +7335,14 @@
           return;
         }
 
-        // 3 分钟内：2h/1h 用缓存；涨幅/24h 仍用当前内存现价重算（不拉 K 线）。
         absorbMomentumSnapshotIntoNotesRank(symbols);
+        if (!force && notesRankCacheUsable(symbols) && notesRankDomIsReady()) {
+          syncNotesRankMeta({ fromCache: true });
+          return;
+        }
         if (!force && notesRankCacheUsable(symbols)) {
           notesRankRows = buildNotesRankRows(symbols, notesRankScoreMap);
+          if (!notesRankLoadedAt) notesRankLoadedAt = notesRankScoresAt || Date.now();
           renderNotesRankTable({ fromCache: true });
           return;
         }
@@ -7172,6 +7353,7 @@
           : symbols.filter((symbol) => !notesRankScoreMap.has(symbol));
         notesRankRows = buildNotesRankRows(symbols, notesRankScoreMap);
         if (!missing.length) {
+          if (!notesRankLoadedAt) notesRankLoadedAt = notesRankScoresAt || Date.now();
           renderNotesRankTable({ fromCache: true });
           return;
         }
@@ -9862,74 +10044,89 @@
           await loadBinanceTicker();
           syncStopLossGate();
 
-          setStatus(
-            false,
-            mode === "full" ? "3/3 加载K线…" : "更新 K 线…",
-          );
-          updateWatchPool();
-          await renderKlines({
-            onProgress: (done, total) => {
-              const label =
-                total > 0
-                  ? `${mode === "full" ? "3/3 " : ""}加载K线 ${done}/${total}`
-                  : `${mode === "full" ? "3/3 " : ""}加载K线…`;
-              setStatus(false, label);
-              if (total > 0) setTopProgressValue(done / total, label);
-            },
-          });
-          syncStopLossGate();
-          if (mode === "light") {
-            setStatus(false, "同步动态 / 企微 / 日志…");
-            await refreshFloatTabsLight();
+          if (isJijiView()) {
+            setStatus(false, "打开记记…");
+            updateWatchPool();
+            syncStopLossGate();
+            await openNotesRankOverlay({ force: true });
+            setStatus(
+              true,
+              `记记 · 盯 ${pinItems.length} · 记 ${(momNoteItems || []).length}`,
+            );
+          } else {
+            setStatus(
+              false,
+              mode === "full" ? "3/3 加载K线…" : "更新 K 线…",
+            );
+            updateWatchPool();
+            await renderKlines({
+              onProgress: (done, total) => {
+                const label =
+                  total > 0
+                    ? `${mode === "full" ? "3/3 " : ""}加载K线 ${done}/${total}`
+                    : `${mode === "full" ? "3/3 " : ""}加载K线…`;
+                setStatus(false, label);
+                if (total > 0) setTopProgressValue(done / total, label);
+              },
+            });
+            syncStopLossGate();
+            if (mode === "light") {
+              setStatus(false, "同步动态 / 企微 / 日志…");
+              await refreshFloatTabsLight();
+            }
           }
-          const rising = getRisingSymbols().length;
-          const now = Date.now();
-          updateDataAsOf(now);
-          const poolAge =
-            lastObsFetchedAt > 0
-              ? Math.max(0, Math.round((now - lastObsFetchedAt) / 60000))
-              : null;
-          const modeTag = mode === "full" ? "全量同步" : "轻刷新";
-          const source =
-            mode === "full" && watchMeta && watchMeta.source
-              ? watchMeta.source
-              : "";
-          const sourceLabel =
-            source === "github"
-              ? "GitHub"
-              : source === "obs"
-                ? "OBS"
-                : source === "memory"
-                  ? "缓存"
-                  : "观察池";
-          const poolTag =
-            poolAge == null
-              ? ""
-              : poolAge === 0
-                ? ` · ${sourceLabel}刚更新`
-                : ` · ${sourceLabel}${poolAge}分钟前`;
-          setStatus(
-            true,
-            `${modeTag}${poolTag} · 上涨 ${rising} · 盯 ${pinItems.length} · 持仓 ${positionItems.length} · 收藏 ${favoriteItems.length}`,
-          );
+          if (!isJijiView()) {
+            const rising = getRisingSymbols().length;
+            const now = Date.now();
+            updateDataAsOf(now);
+            const poolAge =
+              lastObsFetchedAt > 0
+                ? Math.max(0, Math.round((now - lastObsFetchedAt) / 60000))
+                : null;
+            const modeTag = mode === "full" ? "全量同步" : "轻刷新";
+            const source =
+              mode === "full" && watchMeta && watchMeta.source
+                ? watchMeta.source
+                : "";
+            const sourceLabel =
+              source === "github"
+                ? "GitHub"
+                : source === "obs"
+                  ? "OBS"
+                  : source === "memory"
+                    ? "缓存"
+                    : "观察池";
+            const poolTag =
+              poolAge == null
+                ? ""
+                : poolAge === 0
+                  ? ` · ${sourceLabel}刚更新`
+                  : ` · ${sourceLabel}${poolAge}分钟前`;
+            setStatus(
+              true,
+              `${modeTag}${poolTag} · 上涨 ${rising} · 盯 ${pinItems.length} · 持仓 ${positionItems.length} · 收藏 ${favoriteItems.length}`,
+            );
+          }
         } catch (error) {
           console.error(error);
           setStatus(false, error.message || "刷新失败");
-          document.getElementById("risingMeta").textContent = "";
-          document.getElementById("pinMeta").textContent = "";
-          document.getElementById("favMeta").textContent = "";
-          const pinMom = document.getElementById("pinMomentumMeta");
-          if (pinMom) {
-            pinMom.hidden = true;
-            pinMom.innerHTML = "";
+          if (!isJijiView()) {
+            document.getElementById("risingMeta").textContent = "";
+            document.getElementById("pinMeta").textContent = "";
+            document.getElementById("favMeta").textContent = "";
+            const pinMom = document.getElementById("pinMomentumMeta");
+            if (pinMom) {
+              pinMom.hidden = true;
+              pinMom.innerHTML = "";
+            }
+            document.getElementById("risingGrid").innerHTML =
+              `<div class="empty">${error.message || "加载失败"}</div>`;
+            document.getElementById("pinGrid").innerHTML = "";
+            document.getElementById("favGrid").innerHTML = "";
+            document.getElementById("hiddenPinGrid").innerHTML = "";
+            updateHiddenPinTab(0);
+            setHiddenPinDrawerOpen(false);
           }
-          document.getElementById("risingGrid").innerHTML =
-            `<div class="empty">${error.message || "加载失败"}</div>`;
-          document.getElementById("pinGrid").innerHTML = "";
-          document.getElementById("favGrid").innerHTML = "";
-          document.getElementById("hiddenPinGrid").innerHTML = "";
-          updateHiddenPinTab(0);
-          setHiddenPinDrawerOpen(false);
         } finally {
           setTopProgress(false);
           loading = false;
@@ -10362,6 +10559,12 @@
           closeNotesRankOverlay();
         });
       }
+      const notesRankViewBtn = document.getElementById("notesRankViewBtn");
+      if (notesRankViewBtn) {
+        notesRankViewBtn.addEventListener("click", () => {
+          toggleNotesRankView();
+        });
+      }
       const notesRankRefreshBtn = document.getElementById("notesRankRefresh");
       if (notesRankRefreshBtn) {
         notesRankRefreshBtn.addEventListener("click", () => {
@@ -10410,6 +10613,7 @@
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && isNotesRankOpen()) {
           event.preventDefault();
+          if (isJijiView()) return;
           closeNotesRankOverlay();
           return;
         }
