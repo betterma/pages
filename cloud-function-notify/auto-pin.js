@@ -1,9 +1,9 @@
 'use strict';
 
 /**
- * Server-side auto-pin / rewarm / zone-drop: edges of 窗口上涨
- * (watch-pool ∩ window-up), including already-pinned coins.
- * Snapshot lives in watch-notify-state.json as risingZoneSnap.
+ * Server-side auto-pin / zone-drop: edges of 窗口上涨
+ * (watch-pool ∩ window-up). Already-pinned coins are left alone
+ * (no rewarm). Snapshot lives in watch-notify-state.json as risingZoneSnap.
  */
 
 const {
@@ -29,11 +29,6 @@ const CONFIG = {
     String(process.env.PIN_EXPIRY_ENABLED || ''),
   ),
   AUTO_PIN_EVENTS_MAX: Number(process.env.AUTO_PIN_EVENTS_MAX || 40),
-  // Same-symbol edge cooldown: skip rewarm / re-pin while recent.
-  // Default 24h — kills flicker re-pins within a full day.
-  EDGE_COOLDOWN_MS: Number(
-    process.env.AUTO_PIN_EDGE_COOLDOWN_MS || 24 * 60 * 60 * 1000,
-  ),
   ENABLED:
     String(process.env.AUTO_PIN_ENABLED === undefined ? '1' : process.env.AUTO_PIN_ENABLED) !==
     '0',
@@ -93,48 +88,11 @@ function addPin(list, symbol, pinPrice, source, now) {
   return next;
 }
 
-function markRewarm(list, symbol, now) {
-  const key = String(symbol || '')
-    .trim()
-    .toUpperCase();
-  if (!key) return normalizePinList(list);
-  const ts = Number.isFinite(Number(now)) ? Number(now) : Date.now();
-  const current = findPin(list, symbol);
-  if (!current) return normalizePinList(list);
-  const next = normalizePinList(list).filter((item) => item.symbol !== key);
-  next.unshift({
-    ...current,
-    symbol: key,
-    pinnedAt: ts,
-    expiresAt: CONFIG.PIN_EXPIRY_ENABLED ? ts + CONFIG.PIN_TTL_MS : 0,
-    source: 'auto-rewarm',
-  });
-  return next;
-}
-
 function hasPin(list, symbol) {
   const key = String(symbol || '')
     .trim()
     .toUpperCase();
   return normalizePinList(list).some((item) => item.symbol === key);
-}
-
-function findPin(list, symbol) {
-  const key = String(symbol || '')
-    .trim()
-    .toUpperCase();
-  return normalizePinList(list).find((item) => item.symbol === key) || null;
-}
-
-/** True if this pin was written too recently to accept another edge update. */
-function isEdgeCooling(pin, now) {
-  if (!pin) return false;
-  const cooldown = Number(CONFIG.EDGE_COOLDOWN_MS) || 0;
-  if (cooldown <= 0) return false;
-  const at = Number(pin.pinnedAt) || 0;
-  if (at <= 0) return false;
-  const ts = Number.isFinite(Number(now)) ? Number(now) : Date.now();
-  return ts - at < cooldown;
 }
 
 function watchDataStampMs(data) {
@@ -324,7 +282,6 @@ function emptyResult(pins, snap, seeded, events) {
     pins,
     pinsChanged: false,
     newcomers: [],
-    rewarmed: [],
     dropped: [],
     risingSnap: snap,
     risingSnapSeeded: seeded,
@@ -337,7 +294,6 @@ function emptyResult(pins, snap, seeded, events) {
  *   pins: object[],
  *   pinsChanged: boolean,
  *   newcomers: string[],
- *   rewarmed: string[],
  *   dropped: string[],
  *   risingSnap: string[],
  *   risingSnapSeeded: boolean,
@@ -348,7 +304,7 @@ async function runAutoPin(options) {
   const opts = options || {};
   const now = Number(opts.now) || Date.now();
   let pins = normalizePinList(opts.pins);
-  // Zone snap (v2) includes pinned; first deploy re-seeds without mass rewarm.
+  // Zone snap (v2) includes pinned; first deploy re-seeds without mass pin.
   const prevSnap = Array.isArray(opts.risingZoneSnap)
     ? opts.risingZoneSnap.map(String)
     : [];
@@ -403,32 +359,22 @@ async function runAutoPin(options) {
   const prevSet = new Set(prevSnap);
   const zoneSet = new Set(zone);
   const edges = zone.filter((symbol) => !prevSet.has(symbol));
-  // Always advance zone snap (even when cooldown skips writes), so flicker
-  // does not keep re-firing the same edge every cycle.
+  // Already pinned → ignore (no rewarm). Only unpinned edge-ins become new pins.
+  // Always advance zone snap so flicker does not re-fire the same edge.
   const newcomers = edges.filter((symbol) => !hasPin(pins, symbol));
-  const rewarmCandidates = edges.filter((symbol) => hasPin(pins, symbol));
-  const rewarmSkipped = rewarmCandidates.filter((symbol) =>
-    isEdgeCooling(findPin(pins, symbol), now),
-  );
-  const rewarmed = rewarmCandidates.filter(
-    (symbol) => !isEdgeCooling(findPin(pins, symbol), now),
-  );
   const dropped = prevSnap.filter(
     (symbol) => symbol && !zoneSet.has(symbol) && hasPin(pins, symbol),
   );
 
   let pinsChanged = false;
-  if (newcomers.length || rewarmed.length) {
+  if (newcomers.length) {
     for (const symbol of newcomers) {
       const price = marketMap[symbol] && marketMap[symbol].price;
       pins = addPin(pins, symbol, price, 'auto-cloud', now);
     }
-    for (const symbol of rewarmed) {
-      pins = markRewarm(pins, symbol, now);
-    }
     pinsChanged = true;
   }
-  if (newcomers.length || rewarmed.length || dropped.length) {
+  if (newcomers.length || dropped.length) {
     const nextEvents = [];
     if (newcomers.length) {
       nextEvents.push({
@@ -436,14 +382,6 @@ async function runAutoPin(options) {
         symbols: newcomers.slice(),
         source: 'auto-cloud',
         kind: 'new',
-      });
-    }
-    if (rewarmed.length) {
-      nextEvents.push({
-        at: now,
-        symbols: rewarmed.slice(),
-        source: 'auto-rewarm',
-        kind: 'rewarm',
       });
     }
     if (dropped.length) {
@@ -459,19 +397,10 @@ async function runAutoPin(options) {
       'auto-pin zone edges',
       JSON.stringify({
         newcomers: newcomers.length,
-        rewarmed: rewarmed.length,
         dropped: dropped.length,
-        skippedCooling: rewarmSkipped.length,
         newSymbols: newcomers,
-        rewarmSymbols: rewarmed,
         droppedSymbols: dropped,
-        skippedSymbols: rewarmSkipped,
       }),
-    );
-  } else if (rewarmSkipped.length) {
-    console.log(
-      'auto-pin zone edges cooled',
-      JSON.stringify({ skippedCooling: rewarmSkipped.length, skippedSymbols: rewarmSkipped }),
     );
   }
 
@@ -479,7 +408,6 @@ async function runAutoPin(options) {
     pins,
     pinsChanged,
     newcomers,
-    rewarmed,
     dropped,
     risingSnap: zone,
     risingSnapSeeded: true,

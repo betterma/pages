@@ -76,7 +76,7 @@ const CONFIG = {
   // Parallel symbol fetches for 5m/15m momentum (each symbol = 2 kline calls).
   MOMENTUM_CONCURRENCY: Number(process.env.MOMENTUM_CONCURRENCY || 5),
   PUSHPLUS_TOKEN: String(process.env.PUSHPLUS_TOKEN || '').trim(),
-  // 新盯/回暖默认走微信 PushPlus；企微仅当显式打开。
+  // 新自动盯默认走微信 PushPlus；企微仅当显式打开。
   AUTO_PIN_PUSHPLUS:
     String(process.env.AUTO_PIN_PUSHPLUS === undefined ? '1' : process.env.AUTO_PIN_PUSHPLUS) !==
     '0',
@@ -568,20 +568,13 @@ function normalizeActionLogEntry(item) {
 }
 
 /** Same batches as WeCom: webpage 日志 follows cloud edges, not page refresh. */
-async function appendAutoPinActionLog(now, newcomers, rewarmed, dropped) {
+async function appendAutoPinActionLog(now, newcomers, dropped) {
   const incoming = [];
   if (newcomers.length) {
     incoming.push({
       at: now,
       kind: 'auto-pin',
       symbols: newcomers.map((symbol) => String(symbol).toUpperCase()),
-    });
-  }
-  if (rewarmed.length) {
-    incoming.push({
-      at: now,
-      kind: 'rewarm',
-      symbols: rewarmed.map((symbol) => String(symbol).toUpperCase()),
     });
   }
   if (dropped && dropped.length) {
@@ -634,7 +627,7 @@ async function appendAutoPinActionLog(now, newcomers, rewarmed, dropped) {
 
 async function main() {
   if (CONFIG.AUTO_PIN_PUSHPLUS && !CONFIG.PUSHPLUS_TOKEN) {
-    throw new Error('Missing PUSHPLUS_TOKEN for auto-pin/rewarm WeChat push');
+    throw new Error('Missing PUSHPLUS_TOKEN for auto-pin WeChat push');
   }
   if (CONFIG.AUTO_PIN_WECOM && !CONFIG.WECOM_WEBHOOK_POSITIONS) {
     throw new Error(
@@ -701,7 +694,6 @@ async function main() {
     : [];
 
   let autoPinned = [];
-  let autoRewarmed = [];
   let autoDropped = [];
   try {
     const autoResult = await runAutoPin({
@@ -716,16 +708,12 @@ async function main() {
     risingZoneSnapSeeded = autoResult.risingSnapSeeded;
     autoPinEvents = autoResult.autoPinEvents;
     autoPinned = autoResult.newcomers || [];
-    autoRewarmed = autoResult.rewarmed || [];
     autoDropped = autoResult.dropped || [];
     if (autoResult.pinsChanged) {
-      const parts = [];
-      if (autoPinned.length) parts.push(`new ${autoPinned.length}`);
-      if (autoRewarmed.length) parts.push(`rewarm ${autoRewarmed.length}`);
       const saved = await savePinsFile(
         pinsFile,
         pins,
-        `Auto-pin zone edge: ${parts.join(', ') || 'update'}`,
+        `Auto-pin zone edge: new ${autoPinned.length}`,
       );
       pins = saved.pins;
       // Refresh sha for later state writes only — pins file sha not reused below.
@@ -757,27 +745,12 @@ async function main() {
           .join(' ')}`,
       );
     }
-    if (autoRewarmed.length) {
-      const names = autoRewarmed
-        .slice(0, 12)
-        .map((symbol) => labelOf(symbol))
-        .join(' · ');
-      const more =
-        autoRewarmed.length > 12 ? ` …+${autoRewarmed.length - 12}` : '';
-      lines.push(`【回暖】${autoRewarmed.length}\n${names}${more}`);
-      titleBits.push(
-        `回暖 ${autoRewarmed
-          .slice(0, 6)
-          .map((symbol) => labelOf(symbol))
-          .join(' ')}`,
-      );
-    }
     if (!lines.length) return null;
     const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
     return {
       title: titleBits.join(' · ') || `边沿 ${time}`,
       content: `【边沿提醒】${time}\n${lines.join('\n')}\n（网页「日志 / 置顶」可看）`,
-      tag: `auto-pin:${autoPinned.length}+rewarm:${autoRewarmed.length}`,
+      tag: `auto-pin:${autoPinned.length}`,
     };
   }
 
@@ -812,7 +785,7 @@ async function main() {
   if (!pins.length && !positions.length && !momNotes.length) {
     // Still persist rising zone snap / events so seeding works with empty pins.
     try {
-      await appendAutoPinActionLog(now, autoPinned, autoRewarmed, autoDropped);
+      await appendAutoPinActionLog(now, autoPinned, autoDropped);
     } catch (error) {
       console.warn('auto-pin action log failed', error.message || error);
     }
@@ -846,7 +819,6 @@ async function main() {
       skipped: true,
       reason: 'empty',
       autoPinned,
-      autoRewarmed,
       autoDropped,
     };
   }
@@ -872,14 +844,14 @@ async function main() {
   const sent = [];
   const sendErrors = [];
 
-  if (autoPinned.length || autoRewarmed.length || autoDropped.length) {
+  if (autoPinned.length || autoDropped.length) {
     try {
-      await appendAutoPinActionLog(now, autoPinned, autoRewarmed, autoDropped);
+      await appendAutoPinActionLog(now, autoPinned, autoDropped);
     } catch (error) {
       console.warn('auto-pin action log failed', error.message || error);
     }
   }
-  if (autoPinned.length || autoRewarmed.length) {
+  if (autoPinned.length) {
     try {
       const tag = await sendAutoPinAlert();
       if (tag) sent.push(tag);
@@ -890,7 +862,7 @@ async function main() {
     }
   }
 
-  // 持仓：只写网页 lastPositionNotify，不再发企微（持仓群改发自动盯/回暖）。
+  // 持仓：只写网页 lastPositionNotify，不再发企微（持仓群改发自动盯）。
   if (positionText) {
     sent.push('positions-page');
   }
@@ -1009,7 +981,6 @@ async function main() {
     sent.length ||
     sendErrors.length ||
     autoPinned.length ||
-    autoRewarmed.length ||
     autoDropped.length
   ) {
     await saveJson(
@@ -1045,7 +1016,6 @@ async function main() {
       breakHighHits: breakHighHits.map((hit) => hit.symbol),
       dropsArmed: Object.keys(dropAlertsToSave).length,
       autoPinned,
-      autoRewarmed,
       autoDropped,
       sendErrors,
     }),
@@ -1062,7 +1032,6 @@ async function main() {
     breakHighSkipped,
     breakHighHits: breakHighHits.map((hit) => hit.symbol),
     autoPinned,
-    autoRewarmed,
     autoDropped,
     sendErrors,
   };

@@ -524,12 +524,6 @@
         opacity: 1;
         filter: grayscale(0.05);
       }
-      .recent-auto-pin .kline-card.is-rewarm {
-        border-color: color-mix(in srgb, var(--up) 45%, transparent);
-        background: var(--pin-zone-card);
-        opacity: 0.95;
-        filter: grayscale(0.05);
-      }
       .recent-auto-pin .kline-card .symbol-copy {
         color: var(--pin-zone-label);
       }
@@ -590,18 +584,6 @@
         background: var(--ios-elevated);
         color: var(--ios-label);
         box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.2);
-      }
-      .rewarm-mark {
-        position: absolute;
-        top: 6px;
-        right: 8px;
-        color: #6a7a52;
-        font-size: 11px;
-        line-height: 1;
-        pointer-events: none;
-      }
-      .kline-card.is-rewarm .pin-mark {
-        display: none;
       }
       .mode-progress {
         position: fixed;
@@ -1475,10 +1457,11 @@
         border-radius: 8px;
         background: transparent;
         color: var(--ios-secondary);
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 600;
-        padding: 7px 6px;
+        padding: 7px 4px;
         cursor: pointer;
+        white-space: nowrap;
       }
       .action-log-cats button.is-active {
         background: var(--ios-fill);
@@ -2592,7 +2575,7 @@
       </div>
       <div id="recentAutoPinSection" class="recent-auto-pin" hidden>
         <div class="recent-auto-pin-head">
-          <span id="recentAutoPinMeta">新自动盯 / 回暖 · 近12小时 · 窗口上涨</span>
+          <span id="recentAutoPinMeta">新自动盯 · 近12小时 · 窗口上涨</span>
           <button
             type="button"
             id="recentAutoPinToggle"
@@ -2748,6 +2731,14 @@
         </button>
         <button
           type="button"
+          data-log-cat="drop"
+          role="tab"
+          aria-selected="false"
+        >
+          掉出窗口
+        </button>
+        <button
+          type="button"
           data-log-cat="notes"
           role="tab"
           aria-selected="false"
@@ -2772,7 +2763,7 @@
         class="notify-float-tab"
         id="actionLogTab"
         data-float="log"
-        title="捕捉 / 记一下 / 买卖等其他"
+        title="捕捉 / 掉出窗口 / 记一下 / 买卖等其他"
       >
         日志
       </button>
@@ -2967,7 +2958,8 @@
       let actionLogSaving = false;
       let actionLogCategory = "capture";
       const ACTION_LOG_CAT_KINDS = {
-        capture: new Set(["auto-pin", "rewarm", "zone-drop"]),
+        capture: new Set(["auto-pin", "rewarm"]),
+        drop: new Set(["zone-drop"]),
         notes: new Set(["mom-note"]),
         other: new Set(["buy", "sell", "sell-stop", "period-low-exit"]),
       };
@@ -2982,8 +2974,6 @@
       const PIN_SORT_KEY = "kline-pin-sort-v1";
       const AUTO_PIN_EVENTS_SEEN_KEY = "kline-auto-pin-events-seen-v1";
       const NEW_AUTO_PIN_MS = 12 * 60 * 60 * 1000;
-      // Same-symbol edge cooldown (page ↔ cloud). Skip rewarm / re-pin.
-      const AUTO_PIN_EDGE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
       let cardEggState = WatchFavorites.emptyCardEggs
         ? WatchFavorites.emptyCardEggs()
         : {
@@ -4345,9 +4335,9 @@
       }
 
       /**
-       * Collapse same-cycle auto-pin / rewarm rows (page+cloud race).
-       * Do not use the 24h pin cooldown here — that hid WeCom-visible hits.
+       * Collapse same-cycle auto-pin / zone-drop rows (page+cloud race).
        * Exact duplicates (any kind, same at/kind/symbols/price) are dropped.
+       * Historical `rewarm` rows still compact under the same window.
        */
       function compactActionLogEntries(list, cooldownMs) {
         const cooldown =
@@ -4568,7 +4558,7 @@
 
       function actionLogKindLabel(kind) {
         if (kind === "auto-pin") return "自动盯";
-        if (kind === "rewarm") return "回暖";
+        if (kind === "rewarm") return "回暖(旧)";
         if (kind === "zone-drop") return "掉出窗口";
         if (kind === "mom-note") return "记一下";
         if (kind === "buy") return "买";
@@ -4581,13 +4571,17 @@
       function actionLogCategoryForKind(kind) {
         const k = String(kind || "");
         if (ACTION_LOG_CAT_KINDS.capture.has(k)) return "capture";
+        if (ACTION_LOG_CAT_KINDS.drop.has(k)) return "drop";
         if (ACTION_LOG_CAT_KINDS.notes.has(k)) return "notes";
         return "other";
       }
 
       function setActionLogCategory(cat) {
         const next =
-          cat === "notes" || cat === "other" || cat === "capture"
+          cat === "notes" ||
+          cat === "other" ||
+          cat === "capture" ||
+          cat === "drop"
             ? cat
             : "capture";
         actionLogCategory = next;
@@ -4611,10 +4605,12 @@
         if (!list.length) {
           const emptyHint =
             actionLogCategory === "capture"
-              ? "暂无捕捉 · 自动盯 / 回暖"
-              : actionLogCategory === "notes"
-                ? "暂无记一下"
-                : "暂无 · 买 / 卖 / 止损 / 触底退出";
+              ? "暂无捕捉 · 自动盯"
+              : actionLogCategory === "drop"
+                ? "暂无掉出窗口"
+                : actionLogCategory === "notes"
+                  ? "暂无记一下"
+                  : "暂无 · 买 / 卖 / 止损 / 触底退出";
           body.innerHTML = `<div class="action-log-empty">${emptyHint}</div>`;
           return;
         }
@@ -4738,19 +4734,9 @@
         openFloatPanel(name);
       }
 
-      function isPinEdgeCooling(item, now) {
-        if (!item) return false;
-        const cooldown = Number(AUTO_PIN_EDGE_COOLDOWN_MS) || 0;
-        if (cooldown <= 0) return false;
-        const at = Number(item.pinnedAt) || 0;
-        if (at <= 0) return false;
-        const ts = Number.isFinite(Number(now)) ? Number(now) : Date.now();
-        return ts - at < cooldown;
-      }
-
       /**
-       * 边沿只由云函数写（钉 + 日志 + 企微同一批）。
-       * 网页只跟着更新本地 snap，避免刷新时多记一截、企微对不上。
+       * 边沿只由云函数写（钉 + 日志）。
+       * 网页只跟着更新本地 snap，避免刷新时多记一截。
        */
       async function autoPinNewRising(zoneSymbols) {
         const current = (zoneSymbols || []).filter(Boolean);
@@ -4760,7 +4746,7 @@
         } catch (error) {
           /* ignore */
         }
-        return { newcomers: [], rewarmed: [] };
+        return { newcomers: [] };
       }
 
       function getFavoriteRisingSymbols(risingSymbols) {
@@ -5031,6 +5017,7 @@
       function listRecentAutoPins(interval) {
         const now = Date.now();
         const blocked = blacklistSymbols();
+        // auto-rewarm 仅兼容旧数据进置顶；新逻辑不再产生回暖。
         const sources = new Set(["auto-rising", "auto-cloud", "auto-rewarm"]);
         const iv = interval || CONFIG.KLINE_INTERVAL;
         const list = pinItems
@@ -5071,10 +5058,6 @@
           list.sort((a, b) => (a.pinnedAt || 0) - (b.pinnedAt || 0));
         }
         return list;
-      }
-
-      function isRewarmPinItem(item) {
-        return item && String(item.source || "") === "auto-rewarm";
       }
 
       function isRecentTimeSortMode(mode) {
@@ -5313,12 +5296,12 @@
           if (!symbols.length) continue;
           const source = String(event.source || "");
           const eventKind = String(event.kind || "");
+          // 回暖已废弃：旧云端事件不再写入日志。
+          if (eventKind === "rewarm" || source === "auto-rewarm") continue;
           const kind =
-            eventKind === "rewarm" || source === "auto-rewarm"
-              ? "rewarm"
-              : eventKind === "zone-drop" || source === "zone-drop"
-                ? "zone-drop"
-                : "auto-pin";
+            eventKind === "zone-drop" || source === "zone-drop"
+              ? "zone-drop"
+              : "auto-pin";
           const entry = {
             at: at || Date.now(),
             kind,
@@ -7606,7 +7589,6 @@
         const pairClass = options.isPair ? " is-pair" : "";
         const pinClass = options.isPin ? " is-pin" : "";
         const noteClass = options.isNote ? " is-note" : "";
-        const rewarmClass = options.isRewarm ? " is-rewarm" : "";
         const selectClass =
           options.selectMode && options.isPinSection ? " is-select-mode" : "";
         const selectedClass =
@@ -7624,9 +7606,7 @@
         const marks = [];
         if (options.showMark) marks.push('<span class="fav-mark">★</span>');
         // Notes view: only show 盯 when there is a real pin row.
-        if (options.isRewarm) {
-          marks.push('<span class="rewarm-mark">回暖</span>');
-        } else if (options.isPin && (options.pinItem || !options.isNote)) {
+        if (options.isPin && (options.pinItem || !options.isNote)) {
           marks.push(
             `<span class="pin-mark">${
               WatchFavorites.PIN_EXPIRY_ENABLED && options.isExpired
@@ -7662,7 +7642,7 @@
           ? "kline-card-head is-pin-head"
           : "kline-card-head";
         const statusClass = options.pinItem ? ' class="pin-stats"' : "";
-        return `<div class="kline-card${favClass}${pairClass}${pinClass}${noteClass}${rewarmClass}${eggFireClass}${eggNewClass}${selectClass}${selectedClass}${posClass}${expiredClass}" id="card-${options.section}-${symbol}" data-symbol="${symbol}" data-section="${options.section}"><div class="${headClass}"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status${statusClass}>${statusText}</span></div>${marks.join("")}${checkHtml}<canvas></canvas></div>`;
+        return `<div class="kline-card${favClass}${pairClass}${pinClass}${noteClass}${eggFireClass}${eggNewClass}${selectClass}${selectedClass}${posClass}${expiredClass}" id="card-${options.section}-${symbol}" data-symbol="${symbol}" data-section="${options.section}"><div class="${headClass}"><button type="button" class="symbol-copy" data-name="${label}" title="点击复制">${label}</button><span data-kline-status${statusClass}>${statusText}</span></div>${marks.join("")}${checkHtml}<canvas></canvas></div>`;
       }
 
       function closeCardActions(force) {
@@ -8368,13 +8348,6 @@
                   isPin: isPinSection || pinSymbols().has(symbol),
                   isNote: hasMomNoteForSymbol(symbol),
                   isPinSection,
-                  isRewarm:
-                    isPinSection &&
-                    isRewarmPinItem(pinItem) &&
-                    (section === "pin-recent" ||
-                      ((Number(pinItem.pinnedAt) || 0) > 0 &&
-                        Date.now() - (Number(pinItem.pinnedAt) || 0) <=
-                          NEW_AUTO_PIN_MS)),
                   selectMode: pinSelectMode && isPinSection,
                   isSelected: selectedPinSymbols.has(symbol),
                   hasPosition: positionSymbols().has(symbol),
@@ -8392,7 +8365,7 @@
                   : section === "pin-hidden"
                     ? "当前没有隐藏的盯一下（窗口回落）"
                     : section === "pin-recent"
-                      ? "暂无新自动盯 / 回暖"
+                      ? "暂无新自动盯"
                     : "暂无窗口上涨的收藏"
             }</div>`;
 
@@ -8684,29 +8657,7 @@
         periodLowExitQueued.clear();
 
         const risingZone = getRisingZoneSymbols();
-        const edgeResult = await autoPinNewRising(risingZone);
-        const autoPinned = edgeResult.newcomers || [];
-        const autoRewarmed = edgeResult.rewarmed || [];
-        if (autoPinned.length || autoRewarmed.length) {
-          const parts = [];
-          if (autoPinned.length) {
-            parts.push(
-              `自动盯 ${autoPinned.length}：${autoPinned
-                .slice(0, 3)
-                .map((s) => s.replace(/USDT$/i, ""))
-                .join(" · ")}${autoPinned.length > 3 ? "…" : ""}`,
-            );
-          }
-          if (autoRewarmed.length) {
-            parts.push(
-              `回暖 ${autoRewarmed.length}：${autoRewarmed
-                .slice(0, 3)
-                .map((s) => s.replace(/USDT$/i, ""))
-                .join(" · ")}${autoRewarmed.length > 3 ? "…" : ""}`,
-            );
-          }
-          showToast(parts.join(" · "));
-        }
+        await autoPinNewRising(risingZone);
         const rising = getRisingSymbols();
         const favRising = getFavoriteRisingSymbols(rising);
         const pairSet = buildPairSet(rising);
@@ -8906,14 +8857,7 @@
             syncRecentAutoSortUi();
             syncRecentAutoCollapseUi();
             if (recentMeta) {
-              const rewarmCount = recentAutoItems.filter((item) =>
-                isRewarmPinItem(item),
-              ).length;
-              const newCount = recentAutoList.length - rewarmCount;
-              const bits = [];
-              if (newCount > 0) bits.push(`新自动盯 ${newCount}`);
-              if (rewarmCount > 0) bits.push(`回暖 ${rewarmCount}`);
-              recentMeta.textContent = `${bits.join(" · ") || "边沿"} · 近12小时 · 窗口上涨`;
+              recentMeta.textContent = `新自动盯 ${recentAutoList.length} · 近12小时 · 窗口上涨`;
             }
             await fillGrid(
               recentGrid,
