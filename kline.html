@@ -783,6 +783,28 @@
         text-align: left;
         font-weight: 650;
       }
+      .notes-rank-table tbody tr.has-kline td {
+        padding: 8px 10px 4px;
+        border-bottom: none;
+      }
+      .notes-rank-table tbody tr.notes-rank-kline-row td {
+        padding: 0 8px 8px;
+        text-align: left;
+        font-weight: 400;
+        border-bottom: 0.5px solid var(--separator);
+      }
+      .notes-rank-kline {
+        display: block;
+        width: 100%;
+        height: 56px;
+        border-radius: 8px;
+        background: var(--elevated);
+      }
+      @media (min-height: 780px) {
+        .notes-rank-kline {
+          height: 68px;
+        }
+      }
       .notes-rank-table tbody tr:active {
         background: color-mix(in srgb, var(--fill) 70%, transparent);
       }
@@ -2939,6 +2961,8 @@
       let notesRankScoreMap = new Map();
       let notesRankScoresAt = 0;
       let notesRankFocusSymbol = "";
+      let notesRankKlineAbort = null;
+      const NOTES_RANK_KLINE_TOP = 10;
       const NOTES_RANK_CACHE_MS = 3 * 60 * 1000;
       const MOM_NOTES_LOCAL_KEY = "kline-mom-notes-v1";
       const MOM_NOTES_MAX = 200;
@@ -6615,6 +6639,7 @@
       }
 
       function notesRankSortLabel(key) {
+        if (key === "noteAt") return "记时";
         if (key === "change2h") return "近2h";
         if (key === "change1h") return "近1h";
         if (key === "change24h") return "24h";
@@ -6706,11 +6731,13 @@
         }
         syncNotesRankRefreshBtn();
         if (loading) {
+          abortNotesRankKlines();
           scroll.innerHTML =
             '<div class="notes-rank-loading">加载中…</div>';
           return;
         }
         if (!rows.length) {
+          abortNotesRankKlines();
           scroll.innerHTML =
             '<div class="notes-rank-empty">暂无记一笔币种</div>';
           return;
@@ -6725,26 +6752,41 @@
         };
         const focusKey = String(notesRankFocusSymbol || "").toUpperCase();
         const tableRows = rows
-          .map((row) => {
+          .map((row, index) => {
             const focused =
               focusKey && String(row.symbol || "").toUpperCase() === focusKey
                 ? " is-focus"
                 : "";
-            return [
-              `<tr class="${focused.trim()}" data-symbol="${escapeHtml(row.symbol)}">`,
+            const showKline = index < NOTES_RANK_KLINE_TOP;
+            const statsClass = [
+              focused.trim(),
+              showKline ? "has-kline" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            const stats = [
+              `<tr class="${statsClass}" data-symbol="${escapeHtml(row.symbol)}">`,
               `<td><button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button></td>`,
               pctCell(row.gain),
               pctCell(row.change2h),
               pctCell(row.change1h),
               pctCell(row.change24h),
               `</tr>`,
-            ].join("");
+            ];
+            if (showKline) {
+              stats.push(
+                `<tr class="notes-rank-kline-row${focused}" data-kline-for="${escapeHtml(row.symbol)}">`,
+                `<td colspan="5"><canvas class="notes-rank-kline" data-kline="${escapeHtml(row.symbol)}"></canvas></td>`,
+                `</tr>`,
+              );
+            }
+            return stats.join("");
           })
           .join("");
         scroll.innerHTML = [
           `<table class="notes-rank-table">`,
           `<thead><tr>`,
-          `<th>币种</th>`,
+          headCell("noteAt", "名称"),
           headCell("gain", "涨幅"),
           headCell("change2h", "2h"),
           headCell("change1h", "1h"),
@@ -6753,6 +6795,75 @@
           `<tbody>${tableRows}</tbody>`,
           `</table>`,
         ].join("");
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            void paintNotesRankKlines();
+          });
+        });
+      }
+
+      function abortNotesRankKlines() {
+        if (notesRankKlineAbort) {
+          try {
+            notesRankKlineAbort.abort();
+          } catch (error) {
+            /* ignore */
+          }
+          notesRankKlineAbort = null;
+        }
+      }
+
+      async function paintNotesRankKlines() {
+        abortNotesRankKlines();
+        const canvases = [
+          ...document.querySelectorAll(
+            "#notesRankScroll canvas.notes-rank-kline",
+          ),
+        ];
+        if (!canvases.length) return;
+        const controller = new AbortController();
+        notesRankKlineAbort = controller;
+        const interval = chartInterval();
+        const runOne = async (canvas) => {
+          const symbol = String(canvas.getAttribute("data-kline") || "")
+            .trim()
+            .toUpperCase();
+          if (!symbol) return;
+          try {
+            const candles = await fetchKlines(
+              symbol,
+              interval,
+              controller.signal,
+            );
+            if (notesRankKlineAbort !== controller) return;
+            const pin = pinItemBySymbol(symbol);
+            drawKline(
+              canvas,
+              candles,
+              pin ? pin.pinPrice : null,
+              pin ? pin.pinnedAt : null,
+              notesMarksForSymbol(symbol),
+            );
+          } catch (error) {
+            if (error && error.name === "AbortError") return;
+          }
+        };
+        const concurrency = 6;
+        let cursor = 0;
+        const workers = Array.from(
+          { length: Math.min(concurrency, canvases.length) },
+          async () => {
+            while (cursor < canvases.length) {
+              const index = cursor;
+              cursor += 1;
+              await runOne(canvases[index]);
+            }
+          },
+        );
+        await Promise.all(workers);
+        if (notesRankKlineAbort === controller) {
+          notesRankKlineAbort = null;
+        }
       }
 
       function closeNotesRankOverlay() {
@@ -6766,6 +6877,7 @@
           }
           notesRankAbort = null;
         }
+        abortNotesRankKlines();
         notesRankBusy = false;
         notesRankFocusSymbol = "";
       }
@@ -6784,7 +6896,16 @@
           const row = scroll.querySelector(
             `tr[data-symbol="${CSS.escape ? CSS.escape(key) : key}"]`,
           );
-          if (row) row.classList.add("is-focus");
+          if (row) {
+            row.classList.add("is-focus");
+            const klineRow = row.nextElementSibling;
+            if (
+              klineRow &&
+              klineRow.classList.contains("notes-rank-kline-row")
+            ) {
+              klineRow.classList.add("is-focus");
+            }
+          }
         }
         // 浮窗保持打开，滚到背后 K 线以便透过半透明查看
         jumpToNotifySymbol(key);
@@ -6873,6 +6994,7 @@
           key === "change2h" ||
           key === "change1h" ||
           key === "change24h" ||
+          key === "noteAt" ||
           key === "gain"
             ? key
             : "gain";
