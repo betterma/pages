@@ -769,7 +769,11 @@
       .notes-rank-table th.is-active {
         color: var(--accent);
       }
-      .notes-rank-table th.is-active button::after {
+      .notes-rank-table th.is-active:not(.is-last) button::after {
+        content: " ·";
+        font-weight: 700;
+      }
+      .notes-rank-table th.is-last button::after {
         content: " ↓";
         font-weight: 700;
       }
@@ -865,6 +869,20 @@
         text-decoration: underline;
         text-decoration-style: dotted;
         text-underline-offset: 2px;
+      }
+      .notes-rank-hit {
+        display: inline-block;
+        margin-left: 6px;
+        min-width: 14px;
+        padding: 0 4px;
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--accent) 18%, transparent);
+        color: var(--accent);
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 16px;
+        text-align: center;
+        vertical-align: middle;
       }
       .notes-rank-empty,
       .notes-rank-loading {
@@ -3004,14 +3022,54 @@
           ? key
           : NOTES_RANK_SORT_DEFAULT;
       }
-      let notesRankSortKey = NOTES_RANK_SORT_DEFAULT;
-      try {
-        notesRankSortKey = normalizeNotesRankSortKey(
-          localStorage.getItem(NOTES_RANK_SORT_KEY),
-        );
-      } catch (error) {
-        notesRankSortKey = NOTES_RANK_SORT_DEFAULT;
+      function uniqueNotesRankSortKeys(keys) {
+        const seen = new Set();
+        const list = [];
+        for (const raw of keys || []) {
+          const key = normalizeNotesRankSortKey(raw);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          list.push(key);
+        }
+        return list.length ? list : [NOTES_RANK_SORT_DEFAULT];
       }
+      function readNotesRankSortState() {
+        let keys = [NOTES_RANK_SORT_DEFAULT];
+        let last = NOTES_RANK_SORT_DEFAULT;
+        try {
+          const raw = localStorage.getItem(NOTES_RANK_SORT_KEY);
+          if (!raw) return { keys, last };
+          if (String(raw).trim().startsWith("{")) {
+            const parsed = JSON.parse(raw);
+            keys = uniqueNotesRankSortKeys(parsed && parsed.keys);
+            last = normalizeNotesRankSortKey(parsed && parsed.last);
+            if (!keys.includes(last)) last = keys[keys.length - 1];
+          } else {
+            last = normalizeNotesRankSortKey(raw);
+            keys = [last];
+          }
+        } catch (error) {
+          keys = [NOTES_RANK_SORT_DEFAULT];
+          last = NOTES_RANK_SORT_DEFAULT;
+        }
+        return { keys, last };
+      }
+      function persistNotesRankSortState() {
+        try {
+          localStorage.setItem(
+            NOTES_RANK_SORT_KEY,
+            JSON.stringify({
+              keys: notesRankSortKeys,
+              last: notesRankLastKey,
+            }),
+          );
+        } catch (error) {
+          /* ignore */
+        }
+      }
+      const notesRankSortBoot = readNotesRankSortState();
+      let notesRankSortKeys = notesRankSortBoot.keys;
+      let notesRankLastKey = notesRankSortBoot.last;
       let notesRankRows = [];
       let notesRankBusy = false;
       let notesRankAbort = null;
@@ -6713,14 +6771,60 @@
         });
       }
 
-      function sortNotesRankRows(rows, key) {
-        const requested = key || notesRankSortKey || NOTES_RANK_SORT_DEFAULT;
-        const sortKey = requested === "noteAt" ? "nameAt" : requested;
-        return (rows || []).slice().sort((a, b) => {
-          const va = Number.isFinite(a[sortKey]) ? a[sortKey] : -Infinity;
-          const vb = Number.isFinite(b[sortKey]) ? b[sortKey] : -Infinity;
-          if (vb !== va) return vb - va;
-          return (Number(b.nameAt) || 0) - (Number(a.nameAt) || 0);
+      function notesRankValueField(key) {
+        return key === "noteAt" ? "nameAt" : key;
+      }
+
+      function compareNotesRankByKey(a, b, key) {
+        const field = notesRankValueField(key);
+        const va = Number.isFinite(a[field]) ? a[field] : -Infinity;
+        const vb = Number.isFinite(b[field]) ? b[field] : -Infinity;
+        if (vb !== va) return vb - va;
+        return (Number(b.nameAt) || 0) - (Number(a.nameAt) || 0);
+      }
+
+      function notesRankTopSymbolSet(rows, key, limit) {
+        const field = notesRankValueField(key);
+        const ranked = (rows || [])
+          .slice()
+          .filter((row) => Number.isFinite(row[field]))
+          .sort((a, b) => compareNotesRankByKey(a, b, key));
+        const set = new Set();
+        for (const row of ranked) {
+          if (set.size >= limit) break;
+          set.add(row.symbol);
+        }
+        return set;
+      }
+
+      function notesRankActiveKeys() {
+        return uniqueNotesRankSortKeys(notesRankSortKeys);
+      }
+
+      function notesRankPrimaryKey() {
+        const keys = notesRankActiveKeys();
+        const last = normalizeNotesRankSortKey(notesRankLastKey);
+        return keys.includes(last) ? last : keys[keys.length - 1];
+      }
+
+      function sortNotesRankRows(rows) {
+        const source = rows || [];
+        const keys = notesRankActiveKeys();
+        const primary = notesRankPrimaryKey();
+        const topSets = keys.map((key) =>
+          notesRankTopSymbolSet(source, key, NOTES_RANK_KLINE_TOP),
+        );
+        const decorated = source.map((row) => {
+          let hitCount = 0;
+          for (const set of topSets) {
+            if (set.has(row.symbol)) hitCount += 1;
+          }
+          return { ...row, hitCount };
+        });
+        return decorated.sort((a, b) => {
+          const hit = (Number(b.hitCount) || 0) - (Number(a.hitCount) || 0);
+          if (hit) return hit;
+          return compareNotesRankByKey(a, b, primary);
         });
       }
 
@@ -6816,7 +6920,10 @@
         if (!scroll) return;
         const loading = !!(options && options.loading);
         const fromCache = !!(options && options.fromCache);
-        const rows = sortNotesRankRows(notesRankRows, notesRankSortKey);
+        const rows = sortNotesRankRows(notesRankRows);
+        const activeKeys = notesRankActiveKeys();
+        const primaryKey = notesRankPrimaryKey();
+        const unionRows = rows.filter((row) => (row.hitCount || 0) > 0);
         if (meta) {
           if (loading) {
             meta.textContent = "正在拉取近2h/1h…";
@@ -6832,7 +6939,14 @@
                 ? " · 缓存刚算完"
                 : ` · 缓存${ageMin}分钟前`
               : "";
-            meta.textContent = `共 ${rows.length} 个 · 按${notesRankSortLabel(notesRankSortKey)}↓${cacheBit}`;
+            const sortBit = activeKeys
+              .map((key) => notesRankSortLabel(key))
+              .join("+");
+            const klineBit =
+              activeKeys.length > 1
+                ? ` · K线并集${unionRows.length}`
+                : ` · 前${unionRows.length}K线`;
+            meta.textContent = `共 ${rows.length} 个 · ${sortBit} · 优先${notesRankSortLabel(primaryKey)}↓${klineBit}${cacheBit}`;
           }
         }
         syncNotesRankRefreshBtn();
@@ -6849,17 +6963,19 @@
           return;
         }
         const headCell = (key, label) => {
-          const active = notesRankSortKey === key ? "is-active" : "";
-          return `<th class="${active}" data-notes-sort="${key}"><button type="button">${escapeHtml(label)}</button></th>`;
+          const on = activeKeys.includes(key);
+          const last = on && key === primaryKey;
+          const cls = [on ? "is-active" : "", last ? "is-last" : ""]
+            .filter(Boolean)
+            .join(" ");
+          return `<th class="${cls}" data-notes-sort="${key}"><button type="button">${escapeHtml(label)}</button></th>`;
         };
         const pctCell = (value) => {
           const cls = hourClass(value);
           return `<td class="${cls}">${escapeHtml(formatPercent(value))}</td>`;
         };
         const focusKey = String(notesRankFocusSymbol || "").toUpperCase();
-        const sortKey = notesRankSortKey || NOTES_RANK_SORT_DEFAULT;
-        const klineCards = rows
-          .slice(0, NOTES_RANK_KLINE_TOP)
+        const klineCards = unionRows
           .map((row, index) => {
             const focused =
               focusKey && String(row.symbol || "").toUpperCase() === focusKey
@@ -6870,7 +6986,7 @@
               `<div class="notes-rank-kcard-head">`,
               `<span class="notes-rank-kcard-rank">${index + 1}</span>`,
               `<button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button>`,
-              `<span class="${notesRankMetricClass(row, sortKey)}">${escapeHtml(notesRankMetricText(row, sortKey))}</span>`,
+              `<span class="${notesRankMetricClass(row, primaryKey)}">${escapeHtml(notesRankMetricText(row, primaryKey))}</span>`,
               `</div>`,
               `<canvas class="notes-rank-kline" data-kline="${escapeHtml(row.symbol)}"></canvas>`,
               `<div class="notes-rank-kcard-stats">`,
@@ -6883,15 +6999,20 @@
             ].join("");
           })
           .join("");
+        const multi = activeKeys.length > 1;
         const tableRows = rows
           .map((row) => {
             const focused =
               focusKey && String(row.symbol || "").toUpperCase() === focusKey
                 ? " is-focus"
                 : "";
+            const hitMark =
+              multi && row.hitCount > 0
+                ? `<span class="notes-rank-hit">${row.hitCount}</span>`
+                : "";
             return [
               `<tr class="${focused.trim()}" data-symbol="${escapeHtml(row.symbol)}">`,
-              `<td><button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button></td>`,
+              `<td><button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button>${hitMark}</td>`,
               pctCell(row.gain),
               pctCell(row.change2h),
               pctCell(row.change1h),
@@ -7104,12 +7225,20 @@
 
       function setNotesRankSortKey(key) {
         const next = normalizeNotesRankSortKey(key);
-        notesRankSortKey = next;
-        try {
-          localStorage.setItem(NOTES_RANK_SORT_KEY, next);
-        } catch (error) {
-          /* ignore */
+        const keys = notesRankActiveKeys();
+        const on = keys.includes(next);
+        if (on) {
+          if (notesRankPrimaryKey() !== next) {
+            notesRankLastKey = next;
+          } else if (keys.length > 1) {
+            notesRankSortKeys = keys.filter((item) => item !== next);
+            notesRankLastKey = notesRankSortKeys[notesRankSortKeys.length - 1];
+          }
+        } else {
+          notesRankSortKeys = [...keys, next];
+          notesRankLastKey = next;
         }
+        persistNotesRankSortState();
         renderNotesRankTable();
       }
 
