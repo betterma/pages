@@ -783,27 +783,66 @@
         text-align: left;
         font-weight: 650;
       }
-      .notes-rank-table tbody tr.has-kline td {
-        padding: 8px 10px 4px;
-        border-bottom: none;
+      .notes-rank-klines {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        padding: 10px 10px 8px;
+        max-width: 560px;
       }
-      .notes-rank-table tbody tr.notes-rank-kline-row td {
-        padding: 0 8px 8px;
+      .notes-rank-kcard {
+        min-width: 0;
+        padding: 8px 8px 6px;
+        border: 0.5px solid var(--separator);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--elevated) 88%, transparent);
+        cursor: pointer;
+      }
+      .notes-rank-kcard.is-focus {
+        border-color: color-mix(in srgb, var(--accent) 55%, var(--separator));
+        background: color-mix(in srgb, var(--accent) 16%, transparent);
+      }
+      .notes-rank-kcard-head {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        margin-bottom: 4px;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .notes-rank-kcard-rank {
+        flex: 0 0 auto;
+        color: var(--secondary);
+        font-weight: 700;
+      }
+      .notes-rank-kcard-head .notes-rank-sym {
+        flex: 1 1 auto;
+        min-width: 0;
         text-align: left;
-        font-weight: 400;
-        border-bottom: 0.5px solid var(--separator);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .notes-rank-kcard-metric {
+        flex: 0 0 auto;
+        font-weight: 650;
       }
       .notes-rank-kline {
         display: block;
         width: 100%;
-        height: 56px;
-        border-radius: 8px;
-        background: var(--elevated);
+        height: 112px;
+        pointer-events: none;
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--elevated) 70%, transparent);
       }
-      @media (min-height: 780px) {
-        .notes-rank-kline {
-          height: 68px;
-        }
+      .notes-rank-kcard-stats {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2px 6px;
+        margin-top: 4px;
+        font-size: 10px;
+        color: var(--secondary);
+        font-variant-numeric: tabular-nums;
       }
       .notes-rank-table tbody tr:active {
         background: color-mix(in srgb, var(--fill) 70%, transparent);
@@ -6638,6 +6677,26 @@
         });
       }
 
+      function notesRankAgeLabel(at) {
+        const ts = Number(at) || 0;
+        if (!ts) return "—";
+        const min = Math.max(0, Math.round((Date.now() - ts) / 60000));
+        if (min < 60) return `${min}分前`;
+        const hours = Math.round(min / 60);
+        if (hours < 48) return `${hours}小时前`;
+        return `${Math.round(hours / 24)}天前`;
+      }
+
+      function notesRankMetricText(row, key) {
+        if (key === "noteAt") return notesRankAgeLabel(row && row.noteAt);
+        return formatPercent(row && row[key]);
+      }
+
+      function notesRankMetricClass(row, key) {
+        if (key === "noteAt") return "notes-rank-kcard-metric";
+        return `notes-rank-kcard-metric ${hourClass(row && row[key])}`;
+      }
+
       function notesRankSortLabel(key) {
         if (key === "noteAt") return "记时";
         if (key === "change2h") return "近2h";
@@ -6751,39 +6810,51 @@
           return `<td class="${cls}">${escapeHtml(formatPercent(value))}</td>`;
         };
         const focusKey = String(notesRankFocusSymbol || "").toUpperCase();
-        const tableRows = rows
+        const sortKey = notesRankSortKey || "gain";
+        const klineCards = rows
+          .slice(0, NOTES_RANK_KLINE_TOP)
           .map((row, index) => {
             const focused =
               focusKey && String(row.symbol || "").toUpperCase() === focusKey
                 ? " is-focus"
                 : "";
-            const showKline = index < NOTES_RANK_KLINE_TOP;
-            const statsClass = [
-              focused.trim(),
-              showKline ? "has-kline" : "",
-            ]
-              .filter(Boolean)
-              .join(" ");
-            const stats = [
-              `<tr class="${statsClass}" data-symbol="${escapeHtml(row.symbol)}">`,
+            return [
+              `<article class="notes-rank-kcard${focused}" data-jump="${escapeHtml(row.symbol)}">`,
+              `<div class="notes-rank-kcard-head">`,
+              `<span class="notes-rank-kcard-rank">${index + 1}</span>`,
+              `<button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button>`,
+              `<span class="${notesRankMetricClass(row, sortKey)}">${escapeHtml(notesRankMetricText(row, sortKey))}</span>`,
+              `</div>`,
+              `<canvas class="notes-rank-kline" data-kline="${escapeHtml(row.symbol)}"></canvas>`,
+              `<div class="notes-rank-kcard-stats">`,
+              `<span class="${hourClass(row.gain)}">${escapeHtml(formatPercent(row.gain))}</span>`,
+              `<span class="${hourClass(row.change2h)}">2h ${escapeHtml(formatPercent(row.change2h))}</span>`,
+              `<span class="${hourClass(row.change1h)}">1h ${escapeHtml(formatPercent(row.change1h))}</span>`,
+              `<span class="${hourClass(row.change24h)}">24h ${escapeHtml(formatPercent(row.change24h))}</span>`,
+              `</div>`,
+              `</article>`,
+            ].join("");
+          })
+          .join("");
+        const tableRows = rows
+          .map((row) => {
+            const focused =
+              focusKey && String(row.symbol || "").toUpperCase() === focusKey
+                ? " is-focus"
+                : "";
+            return [
+              `<tr class="${focused.trim()}" data-symbol="${escapeHtml(row.symbol)}">`,
               `<td><button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button></td>`,
               pctCell(row.gain),
               pctCell(row.change2h),
               pctCell(row.change1h),
               pctCell(row.change24h),
               `</tr>`,
-            ];
-            if (showKline) {
-              stats.push(
-                `<tr class="notes-rank-kline-row${focused}" data-kline-for="${escapeHtml(row.symbol)}">`,
-                `<td colspan="5"><canvas class="notes-rank-kline" data-kline="${escapeHtml(row.symbol)}"></canvas></td>`,
-                `</tr>`,
-              );
-            }
-            return stats.join("");
+            ].join("");
           })
           .join("");
         scroll.innerHTML = [
+          `<div class="notes-rank-klines">${klineCards}</div>`,
           `<table class="notes-rank-table">`,
           `<thead><tr>`,
           headCell("noteAt", "名称"),
@@ -6891,21 +6962,16 @@
         const scroll = document.getElementById("notesRankScroll");
         if (scroll) {
           scroll
-            .querySelectorAll("tr.is-focus")
+            .querySelectorAll("tr.is-focus, .notes-rank-kcard.is-focus")
             .forEach((row) => row.classList.remove("is-focus"));
           const row = scroll.querySelector(
             `tr[data-symbol="${CSS.escape ? CSS.escape(key) : key}"]`,
           );
-          if (row) {
-            row.classList.add("is-focus");
-            const klineRow = row.nextElementSibling;
-            if (
-              klineRow &&
-              klineRow.classList.contains("notes-rank-kline-row")
-            ) {
-              klineRow.classList.add("is-focus");
-            }
-          }
+          if (row) row.classList.add("is-focus");
+          const card = scroll.querySelector(
+            `.notes-rank-kcard[data-jump="${CSS.escape ? CSS.escape(key) : key}"]`,
+          );
+          if (card) card.classList.add("is-focus");
         }
         // 浮窗保持打开，滚到背后 K 线以便透过半透明查看
         jumpToNotifySymbol(key);
@@ -10136,7 +10202,7 @@
             setNotesRankSortKey(sortBtn.getAttribute("data-notes-sort"));
             return;
           }
-          const jumpBtn = event.target.closest(".notes-rank-sym[data-jump]");
+          const jumpBtn = event.target.closest("[data-jump]");
           if (jumpBtn) {
             jumpFromNotesRank(jumpBtn.getAttribute("data-jump"));
           }
