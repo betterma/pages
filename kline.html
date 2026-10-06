@@ -1417,7 +1417,7 @@
         position: absolute;
         top: 0;
         left: 0;
-        width: min(360px, 92vw);
+        width: min(980px, 96vw);
         height: 100%;
         background: var(--grouped);
         border-right: 0.5px solid var(--separator);
@@ -1495,26 +1495,41 @@
       .nail-body {
         flex: 1;
         overflow: auto;
-        padding: 8px 0 16px;
+        padding: 10px 12px 16px;
       }
-      .nail-item {
-        display: flex;
-        align-items: flex-start;
+      .nail-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
-        padding: 10px 14px;
-        border-bottom: 0.5px solid var(--separator);
       }
-      .nail-item-main {
-        flex: 1;
+      .nail-kcard {
         min-width: 0;
+        padding: 8px 8px 6px;
+        border: 0.5px solid var(--separator);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--elevated) 88%, transparent);
+        cursor: pointer;
+      }
+      .nail-kcard-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
       }
       .nail-name {
+        flex: 1 1 auto;
+        min-width: 0;
         border: none;
         background: none;
         padding: 0;
         color: var(--accent);
         font: inherit;
+        font-size: 13px;
         font-weight: 700;
+        text-align: left;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         cursor: pointer;
         text-decoration: underline;
         text-decoration-style: dotted;
@@ -1522,20 +1537,28 @@
       }
       .nail-note {
         margin: 4px 0 0;
-        font-size: 12px;
+        font-size: 11px;
         color: var(--secondary);
         word-break: break-word;
       }
       .nail-exit-tag {
         display: inline-block;
-        margin-left: 6px;
+        margin-left: 4px;
         padding: 1px 6px;
         border-radius: 6px;
         background: color-mix(in srgb, var(--down) 22%, transparent);
         color: var(--down);
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 700;
         vertical-align: middle;
+      }
+      .nail-kline {
+        display: block;
+        width: 100%;
+        height: 112px;
+        pointer-events: none;
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--elevated) 70%, transparent);
       }
       .nail-empty {
         padding: 28px 16px;
@@ -1544,9 +1567,19 @@
         font-size: 13px;
       }
       .nail-del {
-        height: 28px;
+        flex: 0 0 auto;
+        height: 26px;
+        padding: 0 8px;
         font-size: 12px;
         color: var(--down);
+      }
+      @media (max-width: 720px) {
+        .nail-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .nail-kline {
+          height: 96px;
+        }
       }
       .hint {
         color: #9aa3a0;
@@ -3275,6 +3308,7 @@
       let pinItems = [];
       let nailItems = [];
       let nailSaving = false;
+      let nailKlineAbort = null;
       let positionItems = [];
       let lastPinPrices = {};
       let lastPinNotify = null;
@@ -9253,7 +9287,16 @@
         drawer.setAttribute("aria-hidden", open ? "false" : "true");
         if (tab) tab.setAttribute("aria-expanded", open ? "true" : "false");
         syncBodyScrollLock();
-        if (open) renderNailDrawer();
+        if (open) {
+          renderNailDrawer();
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              void paintNailKlines();
+            });
+          });
+        } else {
+          abortNailKlines();
+        }
       }
 
       function setNailFormOpen(open) {
@@ -9295,29 +9338,101 @@
         }
         if (!listEl) return;
         if (!n) {
+          abortNailKlines();
           listEl.innerHTML = '<div class="nail-empty">还没有钉子</div>';
           return;
         }
-        listEl.innerHTML = items
+        listEl.innerHTML = `<div class="nail-grid">${items
           .map((item) => {
             const exited = Number(item.exitedAt) > 0;
             const note = String(item.note || "").trim();
             const tag = exited
               ? '<span class="nail-exit-tag">退出</span>'
               : "";
+            const label = escapeHtml(item.label || item.symbol);
+            const symbol = escapeHtml(item.symbol);
             return [
-              `<div class="nail-item" data-symbol="${escapeHtml(item.symbol)}">`,
-              `<div class="nail-item-main">`,
-              `<button type="button" class="nail-name" data-nail-jump="${escapeHtml(item.symbol)}">${escapeHtml(item.label || item.symbol)}${tag}</button>`,
-              note
-                ? `<p class="nail-note">${escapeHtml(note)}</p>`
-                : "",
+              `<article class="nail-kcard" data-nail-jump="${symbol}">`,
+              `<div class="nail-kcard-head">`,
+              `<button type="button" class="nail-name" data-nail-jump="${symbol}" title="跳到 K 线">${label}${tag}</button>`,
+              `<button type="button" class="nail-del" data-nail-del="${symbol}">删除</button>`,
               `</div>`,
-              `<button type="button" class="nail-del" data-nail-del="${escapeHtml(item.symbol)}">删除</button>`,
-              `</div>`,
+              `<canvas class="nail-kline" data-kline="${symbol}"></canvas>`,
+              note ? `<p class="nail-note">${escapeHtml(note)}</p>` : "",
+              `</article>`,
             ].join("");
           })
-          .join("");
+          .join("")}</div>`;
+        if (isNailDrawerOpen()) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              void paintNailKlines();
+            });
+          });
+        }
+      }
+
+      function abortNailKlines() {
+        if (nailKlineAbort) {
+          try {
+            nailKlineAbort.abort();
+          } catch (error) {
+            /* ignore */
+          }
+          nailKlineAbort = null;
+        }
+      }
+
+      async function paintNailKlines() {
+        abortNailKlines();
+        if (!isNailDrawerOpen()) return;
+        const canvases = [
+          ...document.querySelectorAll("#nailList canvas.nail-kline"),
+        ];
+        if (!canvases.length) return;
+        const controller = new AbortController();
+        nailKlineAbort = controller;
+        const interval = chartInterval();
+        const runOne = async (canvas) => {
+          const symbol = String(canvas.getAttribute("data-kline") || "")
+            .trim()
+            .toUpperCase();
+          if (!symbol) return;
+          try {
+            const candles = await fetchKlines(
+              symbol,
+              interval,
+              controller.signal,
+            );
+            if (nailKlineAbort !== controller) return;
+            const pin = pinItemBySymbol(symbol);
+            drawKline(
+              canvas,
+              candles,
+              pin ? pin.pinPrice : null,
+              pin ? pin.pinnedAt : null,
+              notesMarksForSymbol(symbol),
+            );
+          } catch (error) {
+            if (error && error.name === "AbortError") return;
+          }
+        };
+        const concurrency = 6;
+        let cursor = 0;
+        const workers = Array.from(
+          { length: Math.min(concurrency, canvases.length) },
+          async () => {
+            while (cursor < canvases.length) {
+              const index = cursor;
+              cursor += 1;
+              await runOne(canvases[index]);
+            }
+          },
+        );
+        await Promise.all(workers);
+        if (nailKlineAbort === controller) {
+          nailKlineAbort = null;
+        }
       }
 
       async function persistNails(mutate, message) {
@@ -10916,14 +11031,16 @@
             setNailDrawerOpen(false);
             return;
           }
+          const delBtn = event.target.closest("[data-nail-del]");
+          if (delBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            void deleteNail(delBtn.getAttribute("data-nail-del"));
+            return;
+          }
           const jumpBtn = event.target.closest("[data-nail-jump]");
           if (jumpBtn) {
             jumpNailToSymbol(jumpBtn.getAttribute("data-nail-jump"));
-            return;
-          }
-          const delBtn = event.target.closest("[data-nail-del]");
-          if (delBtn) {
-            void deleteNail(delBtn.getAttribute("data-nail-del"));
           }
         });
       }
