@@ -23,12 +23,14 @@
   const ACTION_LOG_PATH = "watch-action-log.json";
   const CARD_EGGS_PATH = "watch-card-eggs.json";
   const BREAK_HIGH_PATH = "watch-break-high.json";
+  const NAILS_PATH = "watch-nails.json";
   const LEGACY_DATA_PATH = "watch-data.json";
   const PIN_TTL_MS = 12 * 60 * 60 * 1000;
   // 暂时关闭盯一下过期；改 true 可恢复 12h TTL。
   const PIN_EXPIRY_ENABLED = false;
   const MOM_NOTES_MAX = 200;
   const ACTION_LOG_MAX = 80;
+  const NAILS_MAX = 80;
 
   const TOKEN_PART_A = "gh";
   const TOKEN_PART_B = "p_Xrmz1DjzLfbjyiXZqFyJGd9O8aWFIq4D9758";
@@ -878,6 +880,187 @@
     throw lastError || new Error("保存记一笔失败");
   }
 
+  function nailSymbolKey(raw) {
+    let key = String(raw || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "");
+    if (!key) return "";
+    if (!/USDT$/.test(key)) key += "USDT";
+    return key;
+  }
+
+  function normalizeNail(item) {
+    if (!item || typeof item !== "object") return null;
+    const symbol = nailSymbolKey(item.symbol || item.label || item.name);
+    if (!symbol) return null;
+    const at = Number(item.at);
+    const exitedAt = Number(item.exitedAt);
+    const note = String(item.note || item.remark || "").trim();
+    return {
+      id: item.id ? String(item.id) : `${Date.now().toString(36)}`,
+      at: Number.isFinite(at) ? at : Date.now(),
+      symbol,
+      label: item.label
+        ? String(item.label).trim()
+        : symbol.replace(/USDT$/i, ""),
+      note,
+      exitedAt: Number.isFinite(exitedAt) && exitedAt > 0 ? exitedAt : 0,
+    };
+  }
+
+  function normalizeNails(raw) {
+    if (!Array.isArray(raw)) return [];
+    const seen = new Set();
+    return raw
+      .map(normalizeNail)
+      .filter((item) => {
+        if (!item || seen.has(item.symbol)) return false;
+        seen.add(item.symbol);
+        return true;
+      })
+      .sort((a, b) => b.at - a.at)
+      .slice(0, NAILS_MAX);
+  }
+
+  function serializeNails(list) {
+    return normalizeNails(list).map((item) => ({
+      id: item.id,
+      at: item.at,
+      symbol: item.symbol,
+      label: item.label,
+      note: item.note,
+      exitedAt: item.exitedAt || 0,
+    }));
+  }
+
+  function upsertNail(list, symbol, note) {
+    const key = nailSymbolKey(symbol);
+    if (!key) return normalizeNails(list);
+    const next = normalizeNails(list).filter((item) => item.symbol !== key);
+    next.unshift({
+      id: `${Date.now().toString(36)}`,
+      at: Date.now(),
+      symbol: key,
+      label: key.replace(/USDT$/i, ""),
+      note: String(note || "").trim(),
+      exitedAt: 0,
+    });
+    return next.slice(0, NAILS_MAX);
+  }
+
+  function removeNail(list, symbol) {
+    const key = nailSymbolKey(symbol);
+    return normalizeNails(list).filter((item) => item.symbol !== key);
+  }
+
+  function markNailsExited(list, symbols) {
+    const keys = new Set(
+      (symbols || []).map((symbol) => nailSymbolKey(symbol)).filter(Boolean),
+    );
+    if (!keys.size) return normalizeNails(list);
+    const now = Date.now();
+    return normalizeNails(list).map((item) =>
+      keys.has(item.symbol) ? { ...item, exitedAt: now } : item,
+    );
+  }
+
+  async function loadNailsRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || NAILS_PATH;
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          nails: normalizeNails(current.data.nails),
+          nailsUpdatedAt: Number.isFinite(Number(current.data.nailsUpdatedAt))
+            ? Number(current.data.nailsUpdatedAt)
+            : null,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadNails via API failed, trying raw", error);
+    }
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          nails: normalizeNails(data.nails),
+          nailsUpdatedAt: Number.isFinite(Number(data.nailsUpdatedAt))
+            ? Number(data.nailsUpdatedAt)
+            : null,
+          source: "raw-commit",
+        };
+      }
+    } catch (error) {
+      console.warn("loadNails via commit-raw failed", error);
+    }
+    return { nails: [], nailsUpdatedAt: null, source: "empty" };
+  }
+
+  async function patchNails(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || NAILS_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = current.data || { nails: [], nailsUpdatedAt: null };
+        const nails = normalizeNails(base.nails);
+        let nextList = nails;
+        if (typeof options.mutate === "function") {
+          const result = options.mutate(nails.slice());
+          nextList = Array.isArray(result)
+            ? result
+            : result && result.list
+              ? result.list
+              : nails;
+        }
+        const nextNails = serializeNails(nextList).slice(0, NAILS_MAX);
+        const nextData = {
+          nails: nextNails,
+          nailsUpdatedAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update nails",
+        });
+        return {
+          nails: nextNails,
+          nailsUpdatedAt: nextData.nailsUpdatedAt,
+        };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存钉子失败");
+  }
+
   function normalizeActionLogEntry(item) {
     if (!item || typeof item !== "object") return null;
     const kind = String(item.kind || "").trim();
@@ -1688,6 +1871,16 @@
     normalizeBreakHigh,
     loadBreakHighRaw,
     patchBreakHigh,
+    NAILS_PATH,
+    NAILS_MAX,
+    nailSymbolKey,
+    normalizeNails,
+    serializeNails,
+    upsertNail,
+    removeNail,
+    markNailsExited,
+    loadNailsRaw,
+    patchNails,
     normalizePositions,
     serializePositions,
     positionsToSymbolSet,
