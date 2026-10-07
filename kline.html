@@ -1466,6 +1466,10 @@
         font-weight: 600;
         cursor: pointer;
       }
+      .nail-head-actions button:disabled {
+        opacity: 0.45;
+        cursor: wait;
+      }
       .nail-form {
         padding: 10px 14px;
         border-bottom: 0.5px solid var(--separator);
@@ -2960,6 +2964,9 @@
             <p id="nailMeta">复制名称后新增 · 点名称跳到 K 线</p>
           </div>
           <div class="nail-head-actions">
+            <button type="button" id="nailRefreshBtn" title="重新拉取钉子列表和 K 线">
+              刷新
+            </button>
             <button type="button" id="nailAddBtn">新增</button>
             <button type="button" data-close-nails>关闭</button>
           </div>
@@ -9383,6 +9390,44 @@
         }
       }
 
+      function syncNailRefreshBtn(busy) {
+        const btn = document.getElementById("nailRefreshBtn");
+        if (!btn) return;
+        btn.disabled = !!busy;
+        btn.textContent = busy ? "…" : "刷新";
+      }
+
+      async function refreshNailDrawer() {
+        if (nailSaving) {
+          showToast("钉子保存中…");
+          return;
+        }
+        syncNailRefreshBtn(true);
+        const meta = document.getElementById("nailMeta");
+        if (meta) meta.textContent = "正在刷新钉子…";
+        try {
+          try {
+            await loadBinanceTicker();
+          } catch (error) {
+            console.warn("nail ticker refresh failed", error);
+          }
+          const nailState = await WatchFavorites.loadNailsRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.NAILS_PATH,
+          });
+          nailItems = nailState.nails || [];
+          renderNailDrawer();
+          await paintNailKlines();
+          showToast("钉子已刷新");
+        } catch (error) {
+          console.warn(error);
+          renderNailDrawer();
+          showToast(error.message || "钉子刷新失败");
+        } finally {
+          syncNailRefreshBtn(false);
+        }
+      }
+
       async function paintNailKlines() {
         abortNailKlines();
         if (!isNailDrawerOpen()) return;
@@ -11042,6 +11087,12 @@
           if (jumpBtn) {
             jumpNailToSymbol(jumpBtn.getAttribute("data-nail-jump"));
           }
+        });
+      }
+      const nailRefreshBtn = document.getElementById("nailRefreshBtn");
+      if (nailRefreshBtn) {
+        nailRefreshBtn.addEventListener("click", () => {
+          void refreshNailDrawer();
         });
       }
       const nailAddBtn = document.getElementById("nailAddBtn");
