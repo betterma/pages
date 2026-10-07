@@ -1427,6 +1427,7 @@
         display: flex;
         flex-direction: column;
         color: var(--label);
+        overflow: hidden;
       }
       .nail-drawer.is-open .nail-panel {
         transform: translateX(0);
@@ -1506,19 +1507,66 @@
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
       }
+      .nail-saving {
+        position: absolute;
+        inset: 0;
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: color-mix(in srgb, var(--bg) 62%, transparent);
+        color: var(--label);
+        font-size: 14px;
+        font-weight: 650;
+        backdrop-filter: blur(2px);
+      }
+      .nail-saving[hidden] {
+        display: none !important;
+      }
       .nail-kcard {
         min-width: 0;
         padding: 8px 8px 6px;
         border: 0.5px solid var(--separator);
         border-radius: 10px;
         background: color-mix(in srgb, var(--elevated) 88%, transparent);
-        cursor: pointer;
+        cursor: grab;
+        touch-action: none;
+        user-select: none;
+      }
+      .nail-kcard.is-pinned {
+        border-color: color-mix(in srgb, var(--accent) 55%, var(--separator));
+        background: color-mix(in srgb, var(--accent) 12%, var(--elevated));
+      }
+      .nail-kcard.is-dragging {
+        opacity: 0.45;
+        cursor: grabbing;
+      }
+      .nail-kcard.is-drop-target {
+        outline: 2px dashed var(--accent);
+        outline-offset: 1px;
       }
       .nail-kcard-head {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 4px;
         margin-bottom: 4px;
+      }
+      .nail-pin {
+        flex: 0 0 auto;
+        border: none;
+        background: var(--fill);
+        color: var(--secondary);
+        height: 26px;
+        min-width: 26px;
+        padding: 0 6px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .nail-pin.is-on {
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 18%, transparent);
       }
       .nail-name {
         flex: 1 1 auto;
@@ -1584,6 +1632,153 @@
         .nail-kline {
           height: 96px;
         }
+      }
+      .boot-init-gate {
+        position: fixed;
+        inset: 0;
+        z-index: 200;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: color-mix(in srgb, var(--bg) 72%, transparent);
+        backdrop-filter: blur(8px) saturate(140%);
+        -webkit-backdrop-filter: blur(8px) saturate(140%);
+      }
+      .boot-init-gate[hidden] {
+        display: none !important;
+      }
+      .boot-init-panel {
+        width: min(460px, 100%);
+        max-height: min(78vh, 620px);
+        display: flex;
+        flex-direction: column;
+        padding: 16px 14px 12px;
+        border-radius: 12px;
+        border: 0.5px solid var(--separator);
+        background: color-mix(in srgb, var(--grouped) 92%, #000);
+        color: var(--label);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      .boot-init-panel h2 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      .boot-init-step {
+        margin: 6px 0 10px;
+        font-size: 12px;
+        color: var(--secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      .boot-init-bar {
+        height: 3px;
+        border-radius: 999px;
+        background: var(--fill);
+        overflow: hidden;
+        margin-bottom: 10px;
+        flex: 0 0 auto;
+      }
+      .boot-init-bar > span {
+        display: block;
+        height: 100%;
+        width: 0%;
+        background: var(--accent);
+        transition: width 0.2s ease;
+      }
+      .boot-init-list {
+        list-style: none;
+        margin: 0;
+        padding: 8px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        border-top: 0.5px solid var(--separator);
+        border-bottom: 0.5px solid var(--separator);
+        -webkit-overflow-scrolling: touch;
+      }
+      .boot-init-list li {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 4px;
+        font-size: 12px;
+        line-height: 1.35;
+        font-variant-numeric: tabular-nums;
+        border-left: 2px solid transparent;
+      }
+      .boot-init-list li + li {
+        border-top: 0.5px dashed color-mix(in srgb, var(--separator) 70%, transparent);
+      }
+      .boot-init-list .boot-mark {
+        width: 14px;
+        height: 14px;
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .boot-init-list .boot-spin {
+        width: 12px;
+        height: 12px;
+        border: 1.5px solid color-mix(in srgb, var(--accent) 35%, transparent);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: boot-spin 0.7s linear infinite;
+      }
+      @keyframes boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .boot-init-list li.is-done {
+        color: color-mix(in srgb, var(--label) 72%, var(--secondary));
+      }
+      .boot-init-list li.is-done .boot-mark {
+        color: var(--up);
+      }
+      .boot-init-list li.is-fail {
+        color: var(--down);
+        border-left-color: var(--down);
+      }
+      .boot-init-list li.is-fail .boot-mark {
+        color: var(--down);
+      }
+      .boot-init-list li.is-running {
+        color: var(--label);
+        background: color-mix(in srgb, var(--accent) 10%, transparent);
+        border-left-color: var(--accent);
+        font-weight: 650;
+      }
+      .boot-init-list li.is-pending {
+        color: var(--secondary);
+        opacity: 0.85;
+      }
+      .boot-init-list .boot-label {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .boot-init-list .boot-tag {
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        opacity: 0.9;
+      }
+      .boot-init-summary {
+        margin: 10px 0 0;
+        font-size: 11px;
+        color: var(--secondary);
+        font-variant-numeric: tabular-nums;
       }
       .hint {
         color: #9aa3a0;
@@ -2649,6 +2844,22 @@
       <div class="mode-progress-label" id="modeProgressLabel">正在切换…</div>
     </div>
     <div
+      id="bootInitGate"
+      class="boot-init-gate"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="bootInitTitle"
+    >
+      <div class="boot-init-panel">
+        <h2 id="bootInitTitle">系统初始化</h2>
+        <p class="boot-init-step" id="bootInitStep">准备中…</p>
+        <div class="boot-init-bar"><span id="bootInitBar"></span></div>
+        <ul class="boot-init-list" id="bootInitList"></ul>
+        <p class="boot-init-summary" id="bootInitSummary">已完成 0 · 进行中 0 · 剩余 0</p>
+      </div>
+    </div>
+    <div
       id="stopLossGate"
       class="stop-loss-gate"
       hidden
@@ -2961,7 +3172,7 @@
         <div class="nail-head">
           <div>
             <h3>钉子抽屉</h3>
-            <p id="nailMeta">复制名称后新增 · 点名称跳到 K 线</p>
+            <p id="nailMeta">复制名称后新增 · 置顶 / 长按拖动排序</p>
           </div>
           <div class="nail-head-actions">
             <button type="button" id="nailRefreshBtn" title="重新拉取钉子列表和 K 线">
@@ -2990,6 +3201,7 @@
           </div>
         </form>
         <div class="nail-body" id="nailList"></div>
+        <div class="nail-saving" id="nailSaving" hidden>保存中…</div>
       </aside>
     </div>
 
@@ -3617,6 +3829,182 @@
 
       let modeProgressTimer = null;
       let modeProgressValue = 0;
+      const bootInitState = {
+        active: false,
+        step: "",
+        tasks: [],
+        seq: 0,
+      };
+
+      function bootInitPipelineTasks() {
+        const tasks = bootInitState.tasks || [];
+        const rank = (status) => {
+          if (status === "done" || status === "fail") return 0;
+          if (status === "running") return 1;
+          return 2;
+        };
+        return tasks
+          .slice()
+          .sort((a, b) => {
+            const ra = rank(a.status);
+            const rb = rank(b.status);
+            if (ra !== rb) return ra - rb;
+            if (ra === 0) {
+              return (a.finishedAt || 0) - (b.finishedAt || 0);
+            }
+            if (ra === 1) {
+              return (a.startedAt || 0) - (b.startedAt || 0);
+            }
+            return (a.seq || 0) - (b.seq || 0);
+          });
+      }
+
+      function renderBootInitUi() {
+        const gate = document.getElementById("bootInitGate");
+        const stepEl = document.getElementById("bootInitStep");
+        const bar = document.getElementById("bootInitBar");
+        const list = document.getElementById("bootInitList");
+        const summary = document.getElementById("bootInitSummary");
+        if (!gate) return;
+        if (!bootInitState.active) {
+          gate.hidden = true;
+          return;
+        }
+        gate.hidden = false;
+        const tasks = bootInitState.tasks || [];
+        const done = tasks.filter((t) => t.status === "done").length;
+        const running = tasks.filter((t) => t.status === "running").length;
+        const fail = tasks.filter((t) => t.status === "fail").length;
+        const pending = tasks.filter((t) => t.status === "pending").length;
+        const finished = done + fail;
+        const total = tasks.length || 1;
+        if (stepEl) stepEl.textContent = bootInitState.step || "初始化中…";
+        if (bar) {
+          bar.style.width = `${Math.round((finished / total) * 100)}%`;
+        }
+        if (list) {
+          const rows = bootInitPipelineTasks();
+          list.innerHTML = rows
+            .map((task) => {
+              const cls =
+                task.status === "running"
+                  ? "is-running"
+                  : task.status === "done"
+                    ? "is-done"
+                    : task.status === "fail"
+                      ? "is-fail"
+                      : "is-pending";
+              const mark =
+                task.status === "running"
+                  ? '<span class="boot-spin" aria-hidden="true"></span>'
+                  : task.status === "done"
+                    ? '<span class="boot-mark">✓</span>'
+                    : task.status === "fail"
+                      ? '<span class="boot-mark">×</span>'
+                      : '<span class="boot-mark">·</span>';
+              const tag =
+                task.status === "running"
+                  ? "RUNNING"
+                  : task.status === "done"
+                    ? "OK"
+                    : task.status === "fail"
+                      ? "FAIL"
+                      : "WAIT";
+              return [
+                `<li class="${cls}">`,
+                mark,
+                `<span class="boot-label">${escapeHtml(task.label)}</span>`,
+                `<span class="boot-tag">${tag}</span>`,
+                `</li>`,
+              ].join("");
+            })
+            .join("");
+          const runningEl = list.querySelector("li.is-running");
+          if (runningEl && typeof runningEl.scrollIntoView === "function") {
+            runningEl.scrollIntoView({ block: "nearest" });
+          }
+        }
+        if (summary) {
+          summary.textContent = `pipeline ${finished}/${total} · running ${running} · wait ${pending}${fail ? ` · fail ${fail}` : ""}`;
+        }
+      }
+
+      function bootInitBegin(stepLabel, tasks) {
+        bootInitState.active = true;
+        bootInitState.step = stepLabel || "系统初始化";
+        bootInitState.seq = 0;
+        bootInitState.tasks = (tasks || []).map((task) => ({
+          id: task.id,
+          label: task.label,
+          status: "pending",
+          seq: (bootInitState.seq += 1),
+          startedAt: 0,
+          finishedAt: 0,
+        }));
+        renderBootInitUi();
+      }
+
+      function bootInitSetStep(stepLabel) {
+        if (!bootInitState.active) return;
+        bootInitState.step = stepLabel || bootInitState.step;
+        renderBootInitUi();
+      }
+
+      function bootInitAddTasks(tasks) {
+        if (!bootInitState.active) return;
+        for (const task of tasks || []) {
+          if (bootInitState.tasks.some((row) => row.id === task.id)) continue;
+          bootInitState.tasks.push({
+            id: task.id,
+            label: task.label,
+            status: "pending",
+            seq: (bootInitState.seq += 1),
+            startedAt: 0,
+            finishedAt: 0,
+          });
+        }
+        renderBootInitUi();
+      }
+
+      function bootInitMark(id, status) {
+        if (!bootInitState.active) return;
+        const task = bootInitState.tasks.find((row) => row.id === id);
+        if (!task) return;
+        task.status = status;
+        if (status === "running") {
+          task.startedAt = Date.now();
+        }
+        if (status === "done" || status === "fail") {
+          task.finishedAt = Date.now();
+        }
+        renderBootInitUi();
+      }
+
+      function bootInitEnd() {
+        if (!bootInitState.active) return;
+        bootInitState.active = false;
+        bootInitState.tasks = [];
+        bootInitState.step = "";
+        const gate = document.getElementById("bootInitGate");
+        if (gate) gate.hidden = true;
+      }
+
+      async function bootTrack(id, label, fn) {
+        if (bootInitState.active && id) {
+          if (!bootInitState.tasks.some((row) => row.id === id)) {
+            bootInitAddTasks([{ id, label: label || id }]);
+          }
+          bootInitMark(id, "running");
+        }
+        try {
+          const result = await fn();
+          if (bootInitState.active && id) bootInitMark(id, "done");
+          return result;
+        } catch (error) {
+          if (bootInitState.active && id) bootInitMark(id, "fail");
+          throw error;
+        }
+      }
 
       function setTopProgress(on, options) {
         const opts = options || {};
@@ -5413,17 +5801,35 @@
         ) {
           return { fromCache: true };
         }
-        try {
+        if (bootInitState.active) {
+          bootInitAddTasks([
+            { id: "fav", label: "收藏 watch-favorites" },
+            { id: "black", label: "拉黑 watch-blacklist" },
+            { id: "pins", label: "盯一下 watch-pins" },
+            { id: "nails", label: "钉子 watch-nails" },
+            { id: "pos", label: "持仓 watch-positions" },
+            { id: "notes", label: "记一笔 watch-mom-notes" },
+            { id: "notify", label: "通知状态 watch-notify-state" },
+            { id: "log", label: "捕捉日志 watch-action-log" },
+            { id: "eggs", label: "彩蛋 watch-card-eggs" },
+            { id: "break", label: "破点高 watch-break-high" },
+          ]);
+        }
+        const soft = async (id, label, fn) => {
+          try {
+            await bootTrack(id, label, fn);
+          } catch (error) {
+            console.warn(error);
+          }
+        };
+        await soft("fav", "收藏", async () => {
           const favState = await WatchFavorites.loadFavoritesRaw({
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.FAVORITES_PATH,
           });
           favoriteItems = favState.favorites;
-        } catch (error) {
-          console.warn(error);
-          favoriteItems = [];
-        }
-        try {
+        });
+        await soft("black", "拉黑", async () => {
           const blackState = await WatchFavorites.loadBlacklistRaw({
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.BLACKLIST_PATH,
@@ -5433,43 +5839,36 @@
           for (const symbol of [...watchPool]) {
             if (blocked.has(symbol)) watchPool.delete(symbol);
           }
-        } catch (error) {
-          console.warn(error);
-          blacklistItems = [];
-        }
-        try {
+        });
+        await soft("pins", "盯一下", async () => {
           const pinState = await WatchFavorites.loadPinsRaw({
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.PINS_PATH,
           });
           pinItems = pinState.pins;
-        } catch (error) {
-          console.warn(error);
-          pinItems = [];
-        }
+        });
         try {
-          const nailState = await WatchFavorites.loadNailsRaw({
-            repo: CONFIG.GITHUB_REPO,
-            path: CONFIG.NAILS_PATH,
+          await bootTrack("nails", "钉子", async () => {
+            const nailState = await WatchFavorites.loadNailsRaw({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.NAILS_PATH,
+            });
+            nailItems = nailState.nails || [];
+            renderNailDrawer();
           });
-          nailItems = nailState.nails || [];
-          renderNailDrawer();
         } catch (error) {
           console.warn(error);
           nailItems = [];
           renderNailDrawer();
         }
-        try {
+        await soft("pos", "持仓", async () => {
           const posState = await WatchFavorites.loadPositionsRaw({
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.POSITIONS_PATH,
           });
           positionItems = posState.positions;
-        } catch (error) {
-          console.warn(error);
-          positionItems = [];
-        }
-        try {
+        });
+        await soft("notes", "记一笔", async () => {
           const noteState = await WatchFavorites.loadMomNotesRaw({
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.MOM_NOTES_PATH,
@@ -5484,37 +5883,40 @@
               /* ignore */
             }
           }
-        } catch (error) {
-          console.warn(error);
-          momNoteItems = [];
-        }
+        });
         try {
-          const notifyState = await loadNotifyState();
-          lastPinPrices = notifyState.lastPinPrices || {};
-          lastPinNotify = notifyState.lastPinNotify || null;
-          lastPositionNotify = notifyState.lastPositionNotify || null;
-          await loadSharedActionLog();
-          await migrateMomNotesIntoActionLog();
-          await loadSharedCardEggs();
-          await loadSharedBreakHigh();
-          mergeCloudAutoPinEvents(notifyState.autoPinEvents || []);
+          await bootTrack("notify", "通知状态", async () => {
+            const notifyState = await loadNotifyState();
+            lastPinPrices = notifyState.lastPinPrices || {};
+            lastPinNotify = notifyState.lastPinNotify || null;
+            lastPositionNotify = notifyState.lastPositionNotify || null;
+            mergeCloudAutoPinEvents(notifyState.autoPinEvents || []);
+          });
         } catch (error) {
           console.warn(error);
           lastPinPrices = {};
           lastPinNotify = null;
           lastPositionNotify = null;
+        }
+        await soft("log", "捕捉日志", async () => {
           await loadSharedActionLog();
           await migrateMomNotesIntoActionLog();
+        });
+        await soft("eggs", "彩蛋", async () => {
           await loadSharedCardEggs();
+        });
+        await soft("break", "破点高", async () => {
           await loadSharedBreakHigh();
-        }
+        });
         lastSharedStateAt = Date.now();
         return { fromCache: false };
       }
 
       async function loadGithubStorage(options) {
         const opts = options || {};
-        const watchMeta = await loadObsWatchData(opts);
+        const watchMeta = await bootTrack("watch", "观察池 watch-data", () =>
+          loadObsWatchData(opts),
+        );
         await loadSharedFeatureState(opts);
         pruneHistory();
         return watchMeta || { fromCache: false };
@@ -9340,8 +9742,8 @@
         if (badge) badge.textContent = String(n);
         if (meta) {
           meta.textContent = n
-            ? `${n} 个钉子 · 点名称跳到 K 线`
-            : "复制名称后新增 · 点名称跳到 K 线";
+            ? `${n} 个钉子 · 置顶 / 长按拖动排序`
+            : "复制名称后新增 · 置顶 / 长按拖动排序";
         }
         if (!listEl) return;
         if (!n) {
@@ -9352,6 +9754,7 @@
         listEl.innerHTML = `<div class="nail-grid">${items
           .map((item) => {
             const exited = Number(item.exitedAt) > 0;
+            const pinned = !!item.pinned;
             const note = String(item.note || "").trim();
             const tag = exited
               ? '<span class="nail-exit-tag">退出</span>'
@@ -9359,8 +9762,9 @@
             const label = escapeHtml(item.label || item.symbol);
             const symbol = escapeHtml(item.symbol);
             return [
-              `<article class="nail-kcard" data-nail-jump="${symbol}">`,
+              `<article class="nail-kcard${pinned ? " is-pinned" : ""}" data-nail-symbol="${symbol}" data-nail-jump="${symbol}">`,
               `<div class="nail-kcard-head">`,
+              `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "取消置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
               `<button type="button" class="nail-name" data-nail-jump="${symbol}" title="跳到 K 线">${label}${tag}</button>`,
               `<button type="button" class="nail-del" data-nail-del="${symbol}">删除</button>`,
               `</div>`,
@@ -9370,6 +9774,7 @@
             ].join("");
           })
           .join("")}</div>`;
+        bindNailDrag(listEl);
         if (isNailDrawerOpen()) {
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
@@ -9480,12 +9885,24 @@
         }
       }
 
-      async function persistNails(mutate, message) {
+      function setNailSavingUi(on, text) {
+        const el = document.getElementById("nailSaving");
+        if (!el) return;
+        el.hidden = !on;
+        if (on) el.textContent = text || "保存中…";
+        syncNailRefreshBtn(on || nailSaving);
+        const addBtn = document.getElementById("nailAddBtn");
+        if (addBtn) addBtn.disabled = !!on;
+      }
+
+      async function persistNails(mutate, message, options) {
         if (nailSaving) {
           showToast("钉子保存中…");
-          return;
+          return null;
         }
         nailSaving = true;
+        const quiet = !!(options && options.quiet);
+        setNailSavingUi(true, (options && options.loadingText) || "保存中…");
         try {
           const result = await WatchFavorites.patchNails({
             repo: CONFIG.GITHUB_REPO,
@@ -9495,9 +9912,170 @@
           });
           nailItems = result.nails || [];
           renderNailDrawer();
+          return result;
         } finally {
           nailSaving = false;
+          setNailSavingUi(false);
         }
+      }
+
+      async function toggleNailPinned(symbol) {
+        const key = WatchFavorites.nailSymbolKey
+          ? WatchFavorites.nailSymbolKey(symbol)
+          : String(symbol || "").toUpperCase();
+        if (!key) return;
+        const current = (nailItems || []).find(
+          (item) => String(item.symbol || "").toUpperCase() === key,
+        );
+        const nextPinned = !(current && current.pinned);
+        try {
+          await persistNails(
+            (list) => WatchFavorites.setNailPinned(list, key, nextPinned),
+            `${nextPinned ? "Pin" : "Unpin"} nail ${key.replace(/USDT$/i, "")}`,
+            { loadingText: nextPinned ? "置顶中…" : "取消置顶…" },
+          );
+          showToast(
+            nextPinned
+              ? `${key.replace(/USDT$/i, "")} 已置顶`
+              : `${key.replace(/USDT$/i, "")} 已取消置顶`,
+          );
+        } catch (error) {
+          console.warn(error);
+          showToast(error.message || "置顶失败");
+        }
+      }
+
+      async function persistNailOrder(fromSymbol, toSymbol) {
+        const fromKey = WatchFavorites.nailSymbolKey
+          ? WatchFavorites.nailSymbolKey(fromSymbol)
+          : String(fromSymbol || "").toUpperCase();
+        const toKey = WatchFavorites.nailSymbolKey
+          ? WatchFavorites.nailSymbolKey(toSymbol)
+          : String(toSymbol || "").toUpperCase();
+        if (!fromKey || !toKey || fromKey === toKey) return;
+        try {
+          await persistNails(
+            (list) => WatchFavorites.reorderNails(list, fromKey, toKey),
+            `Reorder nails ${fromKey.replace(/USDT$/i, "")}`,
+            { loadingText: "排序保存中…" },
+          );
+        } catch (error) {
+          console.warn(error);
+          renderNailDrawer();
+          showToast(error.message || "排序保存失败");
+        }
+      }
+
+      function bindNailDrag(root) {
+        const listEl = root || document.getElementById("nailList");
+        if (!listEl || listEl.dataset.nailDragBound === "1") return;
+        listEl.dataset.nailDragBound = "1";
+        const longMs = 420;
+        let pressTimer = 0;
+        let dragging = null;
+        let startX = 0;
+        let startY = 0;
+        let moved = false;
+        let suppressClick = false;
+
+        const clearPress = () => {
+          if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = 0;
+          }
+        };
+
+        const endDrag = (commit) => {
+          clearPress();
+          if (!dragging) return;
+          const from = dragging.from;
+          const to = dragging.to;
+          listEl
+            .querySelectorAll(".nail-kcard.is-dragging, .nail-kcard.is-drop-target")
+            .forEach((el) =>
+              el.classList.remove("is-dragging", "is-drop-target"),
+            );
+          dragging = null;
+          if (commit && from && to && from !== to) {
+            suppressClick = true;
+            void persistNailOrder(from, to);
+          }
+        };
+
+        listEl.addEventListener(
+          "pointerdown",
+          (event) => {
+            if (nailSaving) return;
+            if (event.target.closest("button")) return;
+            const card = event.target.closest(".nail-kcard[data-nail-symbol]");
+            if (!card) return;
+            const symbol = card.getAttribute("data-nail-symbol");
+            if (!symbol) return;
+            startX = event.clientX;
+            startY = event.clientY;
+            moved = false;
+            clearPress();
+            pressTimer = window.setTimeout(() => {
+              pressTimer = 0;
+              dragging = { from: symbol, to: symbol };
+              card.classList.add("is-dragging");
+              try {
+                card.setPointerCapture(event.pointerId);
+              } catch (error) {
+                /* ignore */
+              }
+            }, longMs);
+          },
+          { passive: true },
+        );
+
+        listEl.addEventListener(
+          "pointermove",
+          (event) => {
+            if (!dragging && pressTimer) {
+              const dx = event.clientX - startX;
+              const dy = event.clientY - startY;
+              if (dx * dx + dy * dy > 36) clearPress();
+              return;
+            }
+            if (!dragging) return;
+            moved = true;
+            const el = document.elementFromPoint(event.clientX, event.clientY);
+            const over = el && el.closest
+              ? el.closest("#nailList .nail-kcard[data-nail-symbol]")
+              : null;
+            listEl
+              .querySelectorAll(".nail-kcard.is-drop-target")
+              .forEach((node) => node.classList.remove("is-drop-target"));
+            if (over) {
+              const to = over.getAttribute("data-nail-symbol");
+              dragging.to = to;
+              if (to && to !== dragging.from) over.classList.add("is-drop-target");
+            }
+          },
+          { passive: true },
+        );
+
+        const finish = (event) => {
+          if (dragging) {
+            if (event && event.cancelable) event.preventDefault();
+            endDrag(moved || dragging.to !== dragging.from);
+            return;
+          }
+          clearPress();
+        };
+        listEl.addEventListener("pointerup", finish);
+        listEl.addEventListener("pointercancel", () => endDrag(false));
+        listEl.addEventListener(
+          "click",
+          (event) => {
+            if (!suppressClick) return;
+            event.preventDefault();
+            event.stopPropagation();
+            suppressClick = false;
+          },
+          true,
+        );
       }
 
       async function saveNailFromForm() {
@@ -10693,6 +11271,12 @@
           overlay: false,
           label: progressLabel,
         });
+        const showBootInit = reason === "boot";
+        if (showBootInit) {
+          bootInitBegin("1/3 读取观察池（GitHub 优先）+ 共享状态", [
+            { id: "watch", label: "观察池 watch-data" },
+          ]);
+        }
         try {
           let watchMeta = { fromCache: true, source: "memory" };
           if (mode === "full") {
@@ -10702,6 +11286,11 @@
                 ? "1/3 读取观察池（GitHub 优先）+ 共享状态…"
                 : "1/3 同步共享状态（观察池可用缓存）…",
             );
+            bootInitSetStep(
+              forceObs
+                ? "1/3 读取观察池（GitHub 优先）+ 共享状态"
+                : "1/3 同步共享状态（观察池可用缓存）",
+            );
             watchMeta = (await loadGithubStorage({ force: forceObs })) || watchMeta;
           updateNotifyFloatPanel();
           } else {
@@ -10709,20 +11298,27 @@
               false,
               "轻刷新 · 跳过观察池 · 更新行情/K线 + 动态/企微/日志…",
             );
+            bootInitSetStep("轻刷新 · 行情 / K 线 / 浮窗");
           }
 
           setStatus(
             false,
             mode === "full" ? "2/3 拉取行情…" : "拉取行情与 K 线…",
           );
-          await loadBinanceTicker();
+          bootInitSetStep(
+            mode === "full" ? "2/3 拉取币安行情 ticker" : "拉取币安行情 ticker",
+          );
+          await bootTrack("ticker", "币安 24h ticker", () => loadBinanceTicker());
           syncStopLossGate();
 
           if (isJijiView()) {
             setStatus(false, "打开记记…");
+            bootInitSetStep("打开记记排行");
             updateWatchPool();
             syncStopLossGate();
-            await openNotesRankOverlay({ force: true });
+            await bootTrack("jiji", "记记排行 2h/1h + K线", () =>
+              openNotesRankOverlay({ force: true }),
+            );
             setStatus(
               true,
               `记记 · 盯 ${pinItems.length} · 记 ${(momNoteItems || []).length}`,
@@ -10732,21 +11328,36 @@
               false,
               mode === "full" ? "3/3 加载K线…" : "更新 K 线…",
             );
+            bootInitSetStep(
+              mode === "full" ? "3/3 加载卡片 K 线" : "更新卡片 K 线",
+            );
             updateWatchPool();
-            await renderKlines({
-              onProgress: (done, total) => {
-                const label =
-                  total > 0
-                    ? `${mode === "full" ? "3/3 " : ""}加载K线 ${done}/${total}`
-                    : `${mode === "full" ? "3/3 " : ""}加载K线…`;
-                setStatus(false, label);
-                if (total > 0) setTopProgressValue(done / total, label);
-              },
-            });
+            await bootTrack("klines", "卡片 K 线批量拉取", () =>
+              renderKlines({
+                onProgress: (done, total) => {
+                  const label =
+                    total > 0
+                      ? `${mode === "full" ? "3/3 " : ""}加载K线 ${done}/${total}`
+                      : `${mode === "full" ? "3/3 " : ""}加载K线…`;
+                  setStatus(false, label);
+                  if (total > 0) setTopProgressValue(done / total, label);
+                  if (bootInitState.active) {
+                    bootInitSetStep(
+                      total > 0
+                        ? `3/3 加载卡片 K 线 ${done}/${total}`
+                        : "3/3 加载卡片 K 线",
+                    );
+                  }
+                },
+              }),
+            );
             syncStopLossGate();
             if (mode === "light") {
               setStatus(false, "同步动态 / 企微 / 日志…");
-              await refreshFloatTabsLight();
+              bootInitSetStep("同步动态 / 企微 / 日志");
+              await bootTrack("floats", "动态浮窗轻刷新", () =>
+                refreshFloatTabsLight(),
+              );
             }
           }
           if (!isJijiView()) {
@@ -10802,6 +11413,12 @@
             setHiddenPinDrawerOpen(false);
           }
         } finally {
+          if (showBootInit) {
+            bootInitSetStep("初始化完成");
+            window.setTimeout(() => bootInitEnd(), 420);
+          } else {
+            bootInitEnd();
+          }
           setTopProgress(false);
           loading = false;
           btn.disabled = false;
@@ -11081,6 +11698,13 @@
             event.preventDefault();
             event.stopPropagation();
             void deleteNail(delBtn.getAttribute("data-nail-del"));
+            return;
+          }
+          const pinBtn = event.target.closest("[data-nail-pin]");
+          if (pinBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            void toggleNailPinned(pinBtn.getAttribute("data-nail-pin"));
             return;
           }
           const jumpBtn = event.target.closest("[data-nail-jump]");

@@ -890,12 +890,14 @@
     return key;
   }
 
-  function normalizeNail(item) {
+  function normalizeNail(item, index) {
     if (!item || typeof item !== "object") return null;
     const symbol = nailSymbolKey(item.symbol || item.label || item.name);
     if (!symbol) return null;
     const at = Number(item.at);
     const exitedAt = Number(item.exitedAt);
+    const pinnedAt = Number(item.pinnedAt);
+    const order = Number(item.order);
     const note = String(item.note || item.remark || "").trim();
     return {
       id: item.id ? String(item.id) : `${Date.now().toString(36)}`,
@@ -906,52 +908,116 @@
         : symbol.replace(/USDT$/i, ""),
       note,
       exitedAt: Number.isFinite(exitedAt) && exitedAt > 0 ? exitedAt : 0,
+      pinned: !!item.pinned,
+      pinnedAt: Number.isFinite(pinnedAt) && pinnedAt > 0 ? pinnedAt : 0,
+      order: Number.isFinite(order) ? order : Number.isFinite(index) ? index : 0,
     };
+  }
+
+  function reindexNails(list) {
+    return (Array.isArray(list) ? list : [])
+      .slice(0, NAILS_MAX)
+      .map((item, order) => ({ ...item, order }));
   }
 
   function normalizeNails(raw) {
     if (!Array.isArray(raw)) return [];
     const seen = new Set();
-    return raw
-      .map(normalizeNail)
-      .filter((item) => {
-        if (!item || seen.has(item.symbol)) return false;
-        seen.add(item.symbol);
-        return true;
-      })
-      .sort((a, b) => b.at - a.at)
-      .slice(0, NAILS_MAX);
+    const list = [];
+    raw.forEach((item, index) => {
+      const nail = normalizeNail(item, index);
+      if (!nail || seen.has(nail.symbol)) return;
+      seen.add(nail.symbol);
+      list.push(nail);
+    });
+    list.sort((a, b) => {
+      const ap = a.pinned ? 0 : 1;
+      const bp = b.pinned ? 0 : 1;
+      if (ap !== bp) return ap - bp;
+      if (a.order !== b.order) return a.order - b.order;
+      if ((b.pinnedAt || 0) !== (a.pinnedAt || 0)) {
+        return (b.pinnedAt || 0) - (a.pinnedAt || 0);
+      }
+      return (b.at || 0) - (a.at || 0);
+    });
+    return reindexNails(list);
   }
 
   function serializeNails(list) {
-    return normalizeNails(list).map((item) => ({
+    return normalizeNails(list).map((item, order) => ({
       id: item.id,
       at: item.at,
       symbol: item.symbol,
       label: item.label,
       note: item.note,
       exitedAt: item.exitedAt || 0,
+      pinned: !!item.pinned,
+      pinnedAt: item.pinnedAt || 0,
+      order,
     }));
   }
 
   function upsertNail(list, symbol, note) {
     const key = nailSymbolKey(symbol);
     if (!key) return normalizeNails(list);
-    const next = normalizeNails(list).filter((item) => item.symbol !== key);
+    const prev = normalizeNails(list);
+    const existing = prev.find((item) => item.symbol === key) || null;
+    const next = prev.filter((item) => item.symbol !== key);
     next.unshift({
-      id: `${Date.now().toString(36)}`,
+      id: (existing && existing.id) || `${Date.now().toString(36)}`,
       at: Date.now(),
       symbol: key,
       label: key.replace(/USDT$/i, ""),
       note: String(note || "").trim(),
       exitedAt: 0,
+      pinned: !!(existing && existing.pinned),
+      pinnedAt: (existing && existing.pinnedAt) || 0,
+      order: 0,
     });
-    return next.slice(0, NAILS_MAX);
+    return reindexNails(next);
   }
 
   function removeNail(list, symbol) {
     const key = nailSymbolKey(symbol);
-    return normalizeNails(list).filter((item) => item.symbol !== key);
+    return reindexNails(
+      normalizeNails(list).filter((item) => item.symbol !== key),
+    );
+  }
+
+  function setNailPinned(list, symbol, pinned) {
+    const key = nailSymbolKey(symbol);
+    if (!key) return normalizeNails(list);
+    const want = !!pinned;
+    let next = normalizeNails(list);
+    const item = next.find((row) => row.symbol === key);
+    if (!item) return next;
+    next = next.filter((row) => row.symbol !== key);
+    const updated = {
+      ...item,
+      pinned: want,
+      pinnedAt: want ? Date.now() : 0,
+    };
+    if (want) {
+      next.unshift(updated);
+    } else {
+      const firstUnpinned = next.findIndex((row) => !row.pinned);
+      if (firstUnpinned < 0) next.push(updated);
+      else next.splice(firstUnpinned, 0, updated);
+    }
+    return reindexNails(next);
+  }
+
+  function reorderNails(list, fromSymbol, toSymbol) {
+    const fromKey = nailSymbolKey(fromSymbol);
+    const toKey = nailSymbolKey(toSymbol);
+    if (!fromKey || !toKey || fromKey === toKey) return normalizeNails(list);
+    const next = normalizeNails(list);
+    const from = next.findIndex((item) => item.symbol === fromKey);
+    const to = next.findIndex((item) => item.symbol === toKey);
+    if (from < 0 || to < 0) return next;
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    return reindexNails(next);
   }
 
   function markNailsExited(list, symbols) {
@@ -1878,6 +1944,8 @@
     serializeNails,
     upsertNail,
     removeNail,
+    setNailPinned,
+    reorderNails,
     markNailsExited,
     loadNailsRaw,
     patchNails,
