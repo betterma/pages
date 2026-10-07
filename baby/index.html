@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>葫芦宝成长记录手册</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./baby.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand-block">
+          <div class="brand-row">
+            <svg
+              class="gourd-badge"
+              viewBox="0 0 64 80"
+              aria-hidden="true"
+            >
+              <ellipse cx="32" cy="22" rx="16" ry="14" fill="#7ec8b4" />
+              <ellipse cx="32" cy="52" rx="22" ry="20" fill="#ff9a74" />
+              <path
+                d="M32 8c2 4 2 8 0 12"
+                stroke="#3d8f78"
+                stroke-width="3"
+                fill="none"
+                stroke-linecap="round"
+              />
+              <circle cx="26" cy="20" r="2.2" fill="#fff8" />
+              <circle cx="38" cy="48" r="2.5" fill="#fff6" />
+            </svg>
+            <div>
+              <h1 class="brand" id="brandName">葫芦宝</h1>
+              <div class="tagline">成长小手册 · 慢慢长大</div>
+            </div>
+          </div>
+          <p class="age-line" id="ageLine">加载中…</p>
+        </div>
+        <div class="top-actions">
+          <button type="button" class="icon-btn" id="btnSettings" title="设置">
+            设置
+          </button>
+        </div>
+      </header>
+
+      <section class="panel active" id="panelOverview">
+        <div class="hero-chart">
+          <div class="chart-tabs" role="tablist">
+            <button type="button" class="chart-tab active" data-metric="weight">
+              体重
+            </button>
+            <button type="button" class="chart-tab" data-metric="height">
+              身长
+            </button>
+            <button type="button" class="chart-tab" data-metric="head">
+              头围
+            </button>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="growthChart" width="800" height="360"></canvas>
+          </div>
+          <div class="chart-meta">
+            <div class="legend">
+              <span class="who">WHO P3–P97</span>
+              <span class="p50">P50</span>
+              <span class="baby">葫芦实测</span>
+            </div>
+            <div id="chartHint">对照 WHO 儿童生长标准</div>
+          </div>
+        </div>
+
+        <div class="section-head">
+          <h2>月龄记录</h2>
+          <button type="button" class="ghost-btn" id="btnNewMonth">
+            写本月总结
+          </button>
+        </div>
+        <div class="month-grid" id="monthGrid"></div>
+        <p class="foot-hint">点开月龄卡片，就能写下这一月的小故事</p>
+      </section>
+
+      <section class="panel" id="panelMonth">
+        <div class="detail-head">
+          <button type="button" class="ghost-btn" id="btnBackOverview">
+            返回
+          </button>
+          <h1 id="monthTitle">1 月龄</h1>
+        </div>
+
+        <div class="block">
+          <h3>成长指标 <span class="chip">可填</span></h3>
+          <div class="metrics-grid">
+            <div class="field">
+              <label for="ageLabel">年龄区间</label>
+              <input id="ageLabel" type="text" placeholder="如 31-60天" />
+            </div>
+            <div class="field">
+              <label for="sleepHours">睡眠日均 (h)</label>
+              <input id="sleepHours" type="number" step="0.1" min="0" />
+            </div>
+            <div class="field">
+              <label for="weightStartKg">体重起 (kg)</label>
+              <input id="weightStartKg" type="number" step="0.01" min="0" />
+            </div>
+            <div class="field">
+              <label for="weightEndKg">体重止 (kg)</label>
+              <input id="weightEndKg" type="number" step="0.01" min="0" />
+            </div>
+            <div class="field">
+              <label for="heightStartCm">身长起 (cm)</label>
+              <input id="heightStartCm" type="number" step="0.1" min="0" />
+            </div>
+            <div class="field">
+              <label for="heightEndCm">身长止 (cm)</label>
+              <input id="heightEndCm" type="number" step="0.1" min="0" />
+            </div>
+            <div class="field">
+              <label for="headCm">头围 (cm)</label>
+              <input id="headCm" type="number" step="0.1" min="0" />
+            </div>
+            <div class="field">
+              <label for="milkNote">奶量备注</label>
+              <input id="milkNote" type="text" placeholder="可写未知" />
+            </div>
+          </div>
+        </div>
+
+        <div class="block">
+          <h3>成长里程碑 <span class="chip">打勾</span></h3>
+          <div class="milestone-list" id="milestoneList"></div>
+          <div class="add-row">
+            <input id="milestoneInput" type="text" placeholder="新增里程碑…" />
+            <button type="button" class="ghost-btn" id="btnAddMilestone">
+              添加
+            </button>
+          </div>
+        </div>
+
+        <div class="block">
+          <h3>妈妈便签 · 尿屁观察 <span class="chip">自由写</span></h3>
+          <div class="field full">
+            <textarea id="noteDiaper" placeholder="便便、尿量、胀气…"></textarea>
+          </div>
+        </div>
+        <div class="block">
+          <h3>妈妈便签 · 日常护理</h3>
+          <div class="field full">
+            <textarea id="noteCare" placeholder="黄疸、洗澡、疫苗…"></textarea>
+          </div>
+        </div>
+        <div class="block">
+          <h3>妈妈便签 · 一日生活 · 吃玩睡</h3>
+          <div class="field full">
+            <textarea
+              id="noteDaily"
+              placeholder="作息、清醒时刻、哄睡…"
+            ></textarea>
+          </div>
+        </div>
+        <div class="block">
+          <h3>妈妈便签 · 其他</h3>
+          <div class="field full">
+            <textarea id="noteExtra" placeholder="想记的都写这里"></textarea>
+          </div>
+        </div>
+
+        <div class="save-bar">
+          <button type="button" class="ghost-btn" id="btnDiscardMonth">
+            放弃修改
+          </button>
+          <button type="button" class="primary-btn" id="btnSaveMonth">
+            保存本月
+          </button>
+        </div>
+      </section>
+
+      <section class="panel" id="panelSettings">
+        <div class="detail-head">
+          <button type="button" class="ghost-btn" id="btnBackFromSettings">
+            返回
+          </button>
+          <h1>设置</h1>
+        </div>
+        <div class="block">
+          <h3>宝宝档案</h3>
+          <div class="metrics-grid">
+            <div class="field">
+              <label for="profileName">昵称</label>
+              <input id="profileName" type="text" />
+            </div>
+            <div class="field">
+              <label for="profileSex">性别</label>
+              <select id="profileSex">
+                <option value="male">男宝</option>
+                <option value="female">女宝</option>
+              </select>
+            </div>
+            <div class="field full">
+              <label for="profileBirth">生日</label>
+              <input id="profileBirth" type="date" />
+            </div>
+          </div>
+          <p class="age-line" style="margin-top: 12px">
+            生日与性别用于计算天数，并选择对应的 WHO 百分位参考带。
+          </p>
+        </div>
+        <div class="save-bar">
+          <button type="button" class="primary-btn" id="btnSaveProfile">
+            保存档案
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="./who-lms.js"></script>
+    <script src="./baby-store.js"></script>
+    <script src="./baby-app.js"></script>
+  </body>
+</html>
