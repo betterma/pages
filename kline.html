@@ -1414,23 +1414,25 @@
         opacity: 1;
       }
       .nail-panel {
+        /* 用 left 滑入，避免 iOS 在 transform 祖先下 overflow 无法触摸滚动 */
+        --nail-panel-w: min(980px, 96vw);
         position: absolute;
         top: 0;
-        left: 0;
-        width: min(980px, 96vw);
+        left: calc(-1 * var(--nail-panel-w) - 8px);
+        width: var(--nail-panel-w);
         height: 100%;
         background: var(--grouped);
         border-right: 0.5px solid var(--separator);
         box-shadow: 12px 0 36px rgba(0, 0, 0, 0.45);
-        transform: translateX(-104%);
-        transition: transform 0.22s ease;
+        transform: none;
+        transition: left 0.22s ease;
         display: flex;
         flex-direction: column;
         color: var(--label);
         overflow: hidden;
       }
       .nail-drawer.is-open .nail-panel {
-        transform: translateX(0);
+        left: 0;
       }
       .nail-head {
         display: flex;
@@ -1498,8 +1500,13 @@
         flex: 1;
       }
       .nail-body {
-        flex: 1;
-        overflow: auto;
+        flex: 1 1 0%;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: scroll;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
         padding: 10px 12px 16px;
       }
       .nail-grid {
@@ -1530,7 +1537,7 @@
         border-radius: 10px;
         background: color-mix(in srgb, var(--elevated) 88%, transparent);
         cursor: grab;
-        touch-action: none;
+        /* 不锁 touch-action，点在卡片上才能带动列表滚；仅 .is-dragging 时锁 */
         user-select: none;
       }
       .nail-kcard.is-pinned {
@@ -1540,6 +1547,7 @@
       .nail-kcard.is-dragging {
         opacity: 0.45;
         cursor: grabbing;
+        touch-action: none;
       }
       .nail-kcard.is-drop-target {
         outline: 2px dashed var(--accent);
@@ -10094,19 +10102,23 @@
         const listEl = root || document.getElementById("nailList");
         if (!listEl || listEl.dataset.nailDragBound === "1") return;
         listEl.dataset.nailDragBound = "1";
-        const longMs = 420;
+        const longMs = 480;
+        // 手指一滑动就取消长按，优先保证列表滚动
+        const cancelSlop = 8;
         let pressTimer = 0;
         let dragging = null;
         let startX = 0;
         let startY = 0;
         let moved = false;
         let suppressClick = false;
+        let pressCard = null;
 
         const clearPress = () => {
           if (pressTimer) {
             clearTimeout(pressTimer);
             pressTimer = 0;
           }
+          pressCard = null;
         };
 
         const endDrag = (commit) => {
@@ -10127,9 +10139,19 @@
         };
 
         listEl.addEventListener(
+          "scroll",
+          () => {
+            if (pressTimer) clearPress();
+          },
+          { passive: true },
+        );
+
+        listEl.addEventListener(
           "pointerdown",
           (event) => {
             if (nailSaving) return;
+            // 只认鼠标左键 / 触屏主触点；避免滚轮键等
+            if (event.pointerType === "mouse" && event.button !== 0) return;
             if (event.target.closest("button")) return;
             const card = event.target.closest(".nail-kcard[data-nail-symbol]");
             if (!card) return;
@@ -10139,12 +10161,16 @@
             startY = event.clientY;
             moved = false;
             clearPress();
+            pressCard = card;
             pressTimer = window.setTimeout(() => {
+              const target = pressCard;
               pressTimer = 0;
+              pressCard = null;
+              if (!target) return;
               dragging = { from: symbol, to: symbol };
-              card.classList.add("is-dragging");
+              target.classList.add("is-dragging");
               try {
-                card.setPointerCapture(event.pointerId);
+                target.setPointerCapture(event.pointerId);
               } catch (error) {
                 /* ignore */
               }
@@ -10159,7 +10185,7 @@
             if (!dragging && pressTimer) {
               const dx = event.clientX - startX;
               const dy = event.clientY - startY;
-              if (dx * dx + dy * dy > 36) clearPress();
+              if (dx * dx + dy * dy > cancelSlop * cancelSlop) clearPress();
               return;
             }
             if (!dragging) return;
