@@ -1716,6 +1716,37 @@
       .boot-init-list li + li {
         border-top: 0.5px dashed color-mix(in srgb, var(--separator) 70%, transparent);
       }
+      .boot-init-list li.boot-wave {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: 6px;
+        padding: 6px 4px 4px;
+        border-left: none;
+        border-top: none;
+        color: var(--secondary);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        opacity: 0.95;
+      }
+      .boot-init-list li.boot-wave:first-child {
+        margin-top: 0;
+      }
+      .boot-init-list li.boot-wave .boot-wave-meta {
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        text-transform: none;
+        opacity: 0.85;
+      }
+      .boot-init-list li.boot-wave.is-active {
+        color: var(--accent);
+      }
+      .boot-init-list li.boot-wave.is-done {
+        color: color-mix(in srgb, var(--up) 70%, var(--secondary));
+      }
       .boot-init-list .boot-mark {
         width: 14px;
         height: 14px;
@@ -2852,11 +2883,11 @@
       aria-labelledby="bootInitTitle"
     >
       <div class="boot-init-panel">
-        <h2 id="bootInitTitle">系统初始化</h2>
+        <h2 id="bootInitTitle">并行初始化</h2>
         <p class="boot-init-step" id="bootInitStep">准备中…</p>
         <div class="boot-init-bar"><span id="bootInitBar"></span></div>
         <ul class="boot-init-list" id="bootInitList"></ul>
-        <p class="boot-init-summary" id="bootInitSummary">已完成 0 · 进行中 0 · 剩余 0</p>
+        <p class="boot-init-summary" id="bootInitSummary">jobs 0/0 · run 0 · wait 0</p>
       </div>
     </div>
     <div
@@ -3836,14 +3867,28 @@
         seq: 0,
       };
 
-      function bootInitPipelineTasks() {
-        const tasks = bootInitState.tasks || [];
+      const BOOT_INIT_WAVE1_TASKS = [
+        { id: "watch", label: "观察池 watch-data", wave: 1 },
+        { id: "ticker", label: "币安 24h ticker", wave: 1 },
+        { id: "fav", label: "收藏 watch-favorites", wave: 1 },
+        { id: "black", label: "拉黑 watch-blacklist", wave: 1 },
+        { id: "pins", label: "盯一下 watch-pins", wave: 1 },
+        { id: "nails", label: "钉子 watch-nails", wave: 1 },
+        { id: "pos", label: "持仓 watch-positions", wave: 1 },
+        { id: "notes", label: "记一笔 watch-mom-notes", wave: 1 },
+        { id: "notify", label: "通知状态 watch-notify-state", wave: 1 },
+        { id: "log", label: "捕捉日志 watch-action-log", wave: 1 },
+        { id: "eggs", label: "彩蛋 watch-card-eggs", wave: 1 },
+        { id: "break", label: "破点高 watch-break-high", wave: 1 },
+      ];
+
+      function bootInitSortTasks(tasks) {
         const rank = (status) => {
           if (status === "done" || status === "fail") return 0;
           if (status === "running") return 1;
           return 2;
         };
-        return tasks
+        return (tasks || [])
           .slice()
           .sort((a, b) => {
             const ra = rank(a.status);
@@ -3857,6 +3902,80 @@
             }
             return (a.seq || 0) - (b.seq || 0);
           });
+      }
+
+      function bootInitWaveGroups() {
+        const map = new Map();
+        for (const task of bootInitState.tasks || []) {
+          const wave = Number(task.wave) || 1;
+          if (!map.has(wave)) map.set(wave, []);
+          map.get(wave).push(task);
+        }
+        const waveMeta = {
+          1: { title: "WAVE 1 · parallel fetch", hint: "并行" },
+          2: { title: "WAVE 2 · charts", hint: "依赖波次1" },
+        };
+        return [...map.entries()]
+          .sort((a, b) => a[0] - b[0])
+          .map(([wave, tasks]) => {
+            const meta = waveMeta[wave] || {
+              title: "WAVE " + wave,
+              hint: "",
+            };
+            const done = tasks.filter((t) => t.status === "done").length;
+            const fail = tasks.filter((t) => t.status === "fail").length;
+            const running = tasks.filter((t) => t.status === "running").length;
+            const finished = done + fail;
+            const total = tasks.length;
+            let state = "pending";
+            if (running > 0 || (finished > 0 && finished < total)) {
+              state = "active";
+            }
+            if (total > 0 && finished >= total) state = "done";
+            return {
+              wave,
+              title: meta.title,
+              hint: meta.hint,
+              state,
+              done: finished,
+              total,
+              tasks: bootInitSortTasks(tasks),
+            };
+          });
+      }
+
+      function bootInitTaskRowHtml(task) {
+        const cls =
+          task.status === "running"
+            ? "is-running"
+            : task.status === "done"
+              ? "is-done"
+              : task.status === "fail"
+                ? "is-fail"
+                : "is-pending";
+        const mark =
+          task.status === "running"
+            ? '<span class="boot-spin" aria-hidden="true"></span>'
+            : task.status === "done"
+              ? '<span class="boot-mark">✓</span>'
+              : task.status === "fail"
+                ? '<span class="boot-mark">×</span>'
+                : '<span class="boot-mark">·</span>';
+        const tag =
+          task.status === "running"
+            ? "RUN"
+            : task.status === "done"
+              ? "OK"
+              : task.status === "fail"
+                ? "FAIL"
+                : "WAIT";
+        return [
+          '<li class="' + cls + '">',
+          mark,
+          '<span class="boot-label">' + escapeHtml(task.label) + "</span>",
+          '<span class="boot-tag">' + tag + "</span>",
+          "</li>",
+        ].join("");
       }
 
       function renderBootInitUi() {
@@ -3878,45 +3997,32 @@
         const pending = tasks.filter((t) => t.status === "pending").length;
         const finished = done + fail;
         const total = tasks.length || 1;
-        if (stepEl) stepEl.textContent = bootInitState.step || "初始化中…";
+        if (stepEl) stepEl.textContent = bootInitState.step || "并行初始化中…";
         if (bar) {
-          bar.style.width = `${Math.round((finished / total) * 100)}%`;
+          bar.style.width = Math.round((finished / total) * 100) + "%";
         }
         if (list) {
-          const rows = bootInitPipelineTasks();
-          list.innerHTML = rows
-            .map((task) => {
-              const cls =
-                task.status === "running"
-                  ? "is-running"
-                  : task.status === "done"
-                    ? "is-done"
-                    : task.status === "fail"
-                      ? "is-fail"
-                      : "is-pending";
-              const mark =
-                task.status === "running"
-                  ? '<span class="boot-spin" aria-hidden="true"></span>'
-                  : task.status === "done"
-                    ? '<span class="boot-mark">✓</span>'
-                    : task.status === "fail"
-                      ? '<span class="boot-mark">×</span>'
-                      : '<span class="boot-mark">·</span>';
-              const tag =
-                task.status === "running"
-                  ? "RUNNING"
-                  : task.status === "done"
-                    ? "OK"
-                    : task.status === "fail"
-                      ? "FAIL"
-                      : "WAIT";
-              return [
-                `<li class="${cls}">`,
-                mark,
-                `<span class="boot-label">${escapeHtml(task.label)}</span>`,
-                `<span class="boot-tag">${tag}</span>`,
-                `</li>`,
+          const groups = bootInitWaveGroups();
+          list.innerHTML = groups
+            .map((group) => {
+              const waveCls =
+                group.state === "active"
+                  ? "boot-wave is-active"
+                  : group.state === "done"
+                    ? "boot-wave is-done"
+                    : "boot-wave";
+              const head = [
+                '<li class="' + waveCls + '">',
+                "<span>" + escapeHtml(group.title) + "</span>",
+                '<span class="boot-wave-meta">' +
+                  group.done +
+                  "/" +
+                  group.total +
+                  (group.hint ? " · " + escapeHtml(group.hint) : "") +
+                  "</span>",
+                "</li>",
               ].join("");
+              return head + group.tasks.map(bootInitTaskRowHtml).join("");
             })
             .join("");
           const runningEl = list.querySelector("li.is-running");
@@ -3925,17 +4031,27 @@
           }
         }
         if (summary) {
-          summary.textContent = `pipeline ${finished}/${total} · running ${running} · wait ${pending}${fail ? ` · fail ${fail}` : ""}`;
+          summary.textContent =
+            "jobs " +
+            finished +
+            "/" +
+            total +
+            " · run " +
+            running +
+            " · wait " +
+            pending +
+            (fail ? " · fail " + fail : "");
         }
       }
 
       function bootInitBegin(stepLabel, tasks) {
         bootInitState.active = true;
-        bootInitState.step = stepLabel || "系统初始化";
+        bootInitState.step = stepLabel || "并行初始化";
         bootInitState.seq = 0;
         bootInitState.tasks = (tasks || []).map((task) => ({
           id: task.id,
           label: task.label,
+          wave: Number(task.wave) || 1,
           status: "pending",
           seq: (bootInitState.seq += 1),
           startedAt: 0,
@@ -3956,7 +4072,8 @@
           if (bootInitState.tasks.some((row) => row.id === task.id)) continue;
           bootInitState.tasks.push({
             id: task.id,
-            label: task.label,
+            label: task.label || task.id,
+            wave: Number(task.wave) || 1,
             status: "pending",
             seq: (bootInitState.seq += 1),
             startedAt: 0,
@@ -5790,6 +5907,13 @@
         return { fromCache: false, source: "obs" };
       }
 
+      function applyBlacklistToWatchPool() {
+        const blocked = blacklistSymbols();
+        for (const symbol of [...watchPool]) {
+          if (blocked.has(symbol)) watchPool.delete(symbol);
+        }
+      }
+
       async function loadSharedFeatureState(options) {
         const force = !!(options && options.force);
         const now = Date.now();
@@ -5799,21 +5923,14 @@
           lastSharedStateAt > 0 &&
           now - lastSharedStateAt < cacheMs
         ) {
+          if (bootInitState.active) {
+            for (const task of BOOT_INIT_WAVE1_TASKS) {
+              if (task.id === "watch" || task.id === "ticker") continue;
+              const row = bootInitState.tasks.find((t) => t.id === task.id);
+              if (row && row.status === "pending") bootInitMark(task.id, "done");
+            }
+          }
           return { fromCache: true };
-        }
-        if (bootInitState.active) {
-          bootInitAddTasks([
-            { id: "fav", label: "收藏 watch-favorites" },
-            { id: "black", label: "拉黑 watch-blacklist" },
-            { id: "pins", label: "盯一下 watch-pins" },
-            { id: "nails", label: "钉子 watch-nails" },
-            { id: "pos", label: "持仓 watch-positions" },
-            { id: "notes", label: "记一笔 watch-mom-notes" },
-            { id: "notify", label: "通知状态 watch-notify-state" },
-            { id: "log", label: "捕捉日志 watch-action-log" },
-            { id: "eggs", label: "彩蛋 watch-card-eggs" },
-            { id: "break", label: "破点高 watch-break-high" },
-          ]);
         }
         const soft = async (id, label, fn) => {
           try {
@@ -5822,102 +5939,109 @@
             console.warn(error);
           }
         };
-        await soft("fav", "收藏", async () => {
-          const favState = await WatchFavorites.loadFavoritesRaw({
-            repo: CONFIG.GITHUB_REPO,
-            path: CONFIG.FAVORITES_PATH,
-          });
-          favoriteItems = favState.favorites;
-        });
-        await soft("black", "拉黑", async () => {
-          const blackState = await WatchFavorites.loadBlacklistRaw({
-            repo: CONFIG.GITHUB_REPO,
-            path: CONFIG.BLACKLIST_PATH,
-          });
-          blacklistItems = blackState.blacklist;
-          const blocked = blacklistSymbols();
-          for (const symbol of [...watchPool]) {
-            if (blocked.has(symbol)) watchPool.delete(symbol);
-          }
-        });
-        await soft("pins", "盯一下", async () => {
-          const pinState = await WatchFavorites.loadPinsRaw({
-            repo: CONFIG.GITHUB_REPO,
-            path: CONFIG.PINS_PATH,
-          });
-          pinItems = pinState.pins;
-        });
-        try {
-          await bootTrack("nails", "钉子", async () => {
-            const nailState = await WatchFavorites.loadNailsRaw({
+        // 各 watch-*.json 彼此独立，并行拉以压掉串行 RTT。
+        // log 里的记一笔迁移依赖 momNoteItems，等 notes+log 都完成后单独跑。
+        await Promise.all([
+          soft("fav", "收藏", async () => {
+            const favState = await WatchFavorites.loadFavoritesRaw({
               repo: CONFIG.GITHUB_REPO,
-              path: CONFIG.NAILS_PATH,
+              path: CONFIG.FAVORITES_PATH,
             });
-            nailItems = nailState.nails || [];
-            renderNailDrawer();
-          });
-        } catch (error) {
-          console.warn(error);
-          nailItems = [];
-          renderNailDrawer();
-        }
-        await soft("pos", "持仓", async () => {
-          const posState = await WatchFavorites.loadPositionsRaw({
-            repo: CONFIG.GITHUB_REPO,
-            path: CONFIG.POSITIONS_PATH,
-          });
-          positionItems = posState.positions;
-        });
-        await soft("notes", "记一笔", async () => {
-          const noteState = await WatchFavorites.loadMomNotesRaw({
-            repo: CONFIG.GITHUB_REPO,
-            path: CONFIG.MOM_NOTES_PATH,
-          });
-          momNoteItems = noteState.notes || [];
-          if (!momNoteItems.length) {
-            momNoteItems = await migrateLocalMomNotesIfNeeded();
-          } else {
+            favoriteItems = favState.favorites;
+          }),
+          soft("black", "拉黑", async () => {
+            const blackState = await WatchFavorites.loadBlacklistRaw({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.BLACKLIST_PATH,
+            });
+            blacklistItems = blackState.blacklist;
+            applyBlacklistToWatchPool();
+          }),
+          soft("pins", "盯一下", async () => {
+            const pinState = await WatchFavorites.loadPinsRaw({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.PINS_PATH,
+            });
+            pinItems = pinState.pins;
+          }),
+          soft("nails", "钉子", async () => {
             try {
-              localStorage.removeItem(MOM_NOTES_LOCAL_KEY);
+              const nailState = await WatchFavorites.loadNailsRaw({
+                repo: CONFIG.GITHUB_REPO,
+                path: CONFIG.NAILS_PATH,
+              });
+              nailItems = nailState.nails || [];
             } catch (error) {
-              /* ignore */
+              console.warn(error);
+              nailItems = [];
             }
-          }
-        });
+            renderNailDrawer();
+          }),
+          soft("pos", "持仓", async () => {
+            const posState = await WatchFavorites.loadPositionsRaw({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.POSITIONS_PATH,
+            });
+            positionItems = posState.positions;
+          }),
+          soft("notes", "记一笔", async () => {
+            const noteState = await WatchFavorites.loadMomNotesRaw({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.MOM_NOTES_PATH,
+            });
+            momNoteItems = noteState.notes || [];
+            if (!momNoteItems.length) {
+              momNoteItems = await migrateLocalMomNotesIfNeeded();
+            } else {
+              try {
+                localStorage.removeItem(MOM_NOTES_LOCAL_KEY);
+              } catch (error) {
+                /* ignore */
+              }
+            }
+          }),
+          soft("notify", "通知状态", async () => {
+            try {
+              const notifyState = await loadNotifyState();
+              lastPinPrices = notifyState.lastPinPrices || {};
+              lastPinNotify = notifyState.lastPinNotify || null;
+              lastPositionNotify = notifyState.lastPositionNotify || null;
+              mergeCloudAutoPinEvents(notifyState.autoPinEvents || []);
+            } catch (error) {
+              console.warn(error);
+              lastPinPrices = {};
+              lastPinNotify = null;
+              lastPositionNotify = null;
+            }
+          }),
+          soft("log", "捕捉日志", async () => {
+            await loadSharedActionLog();
+          }),
+          soft("eggs", "彩蛋", async () => {
+            await loadSharedCardEggs();
+          }),
+          soft("break", "破点高", async () => {
+            await loadSharedBreakHigh();
+          }),
+        ]);
         try {
-          await bootTrack("notify", "通知状态", async () => {
-            const notifyState = await loadNotifyState();
-            lastPinPrices = notifyState.lastPinPrices || {};
-            lastPinNotify = notifyState.lastPinNotify || null;
-            lastPositionNotify = notifyState.lastPositionNotify || null;
-            mergeCloudAutoPinEvents(notifyState.autoPinEvents || []);
-          });
+          await migrateMomNotesIntoActionLog();
         } catch (error) {
           console.warn(error);
-          lastPinPrices = {};
-          lastPinNotify = null;
-          lastPositionNotify = null;
         }
-        await soft("log", "捕捉日志", async () => {
-          await loadSharedActionLog();
-          await migrateMomNotesIntoActionLog();
-        });
-        await soft("eggs", "彩蛋", async () => {
-          await loadSharedCardEggs();
-        });
-        await soft("break", "破点高", async () => {
-          await loadSharedBreakHigh();
-        });
+        applyBlacklistToWatchPool();
         lastSharedStateAt = Date.now();
         return { fromCache: false };
       }
 
       async function loadGithubStorage(options) {
         const opts = options || {};
-        const watchMeta = await bootTrack("watch", "观察池 watch-data", () =>
-          loadObsWatchData(opts),
-        );
-        await loadSharedFeatureState(opts);
+        // 观察池与共享态并行；两边都齐后再按黑名单裁剪 + prune。
+        const [watchMeta] = await Promise.all([
+          bootTrack("watch", "观察池 watch-data", () => loadObsWatchData(opts)),
+          loadSharedFeatureState(opts),
+        ]);
+        applyBlacklistToWatchPool();
         pruneHistory();
         return watchMeta || { fromCache: false };
       }
@@ -11273,8 +11397,24 @@
         });
         const showBootInit = reason === "boot";
         if (showBootInit) {
-          bootInitBegin("1/3 读取观察池（GitHub 优先）+ 共享状态", [
-            { id: "watch", label: "观察池 watch-data" },
+          const wave2 = isJijiView()
+            ? [
+                {
+                  id: "jiji",
+                  label: "记记排行 2h/1h + K线",
+                  wave: 2,
+                },
+              ]
+            : [
+                {
+                  id: "klines",
+                  label: "卡片 K 线批量拉取",
+                  wave: 2,
+                },
+              ];
+          bootInitBegin("WAVE 1 · 观察池 / 共享态 / 行情 并行", [
+            ...BOOT_INIT_WAVE1_TASKS,
+            ...wave2,
           ]);
         }
         try {
@@ -11283,37 +11423,37 @@
             setStatus(
               false,
               forceObs
-                ? "1/3 读取观察池（GitHub 优先）+ 共享状态…"
-                : "1/3 同步共享状态（观察池可用缓存）…",
+                ? "WAVE 1 · 观察池 / 共享态 / 行情 并行…"
+                : "WAVE 1 · 共享态 / 行情 并行（观察池可用缓存）…",
             );
             bootInitSetStep(
               forceObs
-                ? "1/3 读取观察池（GitHub 优先）+ 共享状态"
-                : "1/3 同步共享状态（观察池可用缓存）",
+                ? "WAVE 1 · 观察池 / 共享态 / 行情 并行"
+                : "WAVE 1 · 共享态 / 行情 并行（观察池可用缓存）",
             );
-            watchMeta = (await loadGithubStorage({ force: forceObs })) || watchMeta;
-          updateNotifyFloatPanel();
+            // GitHub/OBS 与币安 ticker 无依赖，并行重叠 RTT。
+            const storagePromise = loadGithubStorage({ force: forceObs });
+            const tickerPromise = bootTrack("ticker", "币安 24h ticker", () =>
+              loadBinanceTicker(),
+            );
+            watchMeta = (await storagePromise) || watchMeta;
+            updateNotifyFloatPanel();
+            await tickerPromise;
           } else {
             setStatus(
               false,
               "轻刷新 · 跳过观察池 · 更新行情/K线 + 动态/企微/日志…",
             );
             bootInitSetStep("轻刷新 · 行情 / K 线 / 浮窗");
+            await bootTrack("ticker", "币安 24h ticker", () =>
+              loadBinanceTicker(),
+            );
           }
-
-          setStatus(
-            false,
-            mode === "full" ? "2/3 拉取行情…" : "拉取行情与 K 线…",
-          );
-          bootInitSetStep(
-            mode === "full" ? "2/3 拉取币安行情 ticker" : "拉取币安行情 ticker",
-          );
-          await bootTrack("ticker", "币安 24h ticker", () => loadBinanceTicker());
           syncStopLossGate();
 
           if (isJijiView()) {
             setStatus(false, "打开记记…");
-            bootInitSetStep("打开记记排行");
+            bootInitSetStep("WAVE 2 · 记记排行");
             updateWatchPool();
             syncStopLossGate();
             await bootTrack("jiji", "记记排行 2h/1h + K线", () =>
@@ -11326,10 +11466,10 @@
           } else {
             setStatus(
               false,
-              mode === "full" ? "3/3 加载K线…" : "更新 K 线…",
+              mode === "full" ? "WAVE 2 · 加载K线…" : "更新 K 线…",
             );
             bootInitSetStep(
-              mode === "full" ? "3/3 加载卡片 K 线" : "更新卡片 K 线",
+              mode === "full" ? "WAVE 2 · 卡片 K 线" : "更新卡片 K 线",
             );
             updateWatchPool();
             await bootTrack("klines", "卡片 K 线批量拉取", () =>
@@ -11337,15 +11477,15 @@
                 onProgress: (done, total) => {
                   const label =
                     total > 0
-                      ? `${mode === "full" ? "3/3 " : ""}加载K线 ${done}/${total}`
-                      : `${mode === "full" ? "3/3 " : ""}加载K线…`;
+                      ? `${mode === "full" ? "WAVE 2 · " : ""}加载K线 ${done}/${total}`
+                      : `${mode === "full" ? "WAVE 2 · " : ""}加载K线…`;
                   setStatus(false, label);
                   if (total > 0) setTopProgressValue(done / total, label);
                   if (bootInitState.active) {
                     bootInitSetStep(
                       total > 0
-                        ? `3/3 加载卡片 K 线 ${done}/${total}`
-                        : "3/3 加载卡片 K 线",
+                        ? `WAVE 2 · 卡片 K 线 ${done}/${total}`
+                        : "WAVE 2 · 卡片 K 线",
                     );
                   }
                 },
