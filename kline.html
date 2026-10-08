@@ -1595,6 +1595,29 @@
         text-decoration-style: dotted;
         text-underline-offset: 2px;
       }
+      .nail-price {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 6px;
+        margin: 0 0 4px;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        color: var(--secondary);
+      }
+      .nail-price .nail-px {
+        font-weight: 700;
+        color: var(--label);
+      }
+      .nail-price .nail-chg {
+        font-weight: 650;
+      }
+      .nail-price.is-up .nail-chg {
+        color: var(--up, #2f8f6e);
+      }
+      .nail-price.is-down .nail-chg {
+        color: var(--down, #c44);
+      }
       .nail-note {
         margin: 4px 0 0;
         font-size: 11px;
@@ -2143,7 +2166,9 @@
         display: flex;
         gap: 2px;
         padding: 8px 10px 0;
-        background: transparent;
+        background: color-mix(in srgb, var(--grouped) 28%, transparent);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
       }
       .action-log-cats button {
         flex: 1 1 0;
@@ -2158,7 +2183,7 @@
         white-space: nowrap;
       }
       .action-log-cats button.is-active {
-        background: var(--ios-fill);
+        background: color-mix(in srgb, var(--ios-fill) 70%, transparent);
         color: var(--ios-label);
       }
       .action-log-body {
@@ -2287,14 +2312,18 @@
         margin: 0 auto;
         display: flex;
         flex-direction: column;
-        border: 0.5px solid var(--ios-separator);
+        border: 0.5px solid color-mix(in srgb, var(--ios-separator) 70%, transparent);
         border-bottom: none;
         border-radius: 14px 14px 0 0;
-        background: color-mix(in srgb, var(--elevated) 96%, transparent);
+        /* 毛玻璃：半透明底 + 强模糊，透出背后 K 线 */
+        background: color-mix(in srgb, var(--elevated) 52%, transparent);
         color: var(--ios-label);
-        backdrop-filter: saturate(180%) blur(20px);
-        -webkit-backdrop-filter: saturate(180%) blur(20px);
-        box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.28);
+        backdrop-filter: saturate(180%) blur(22px);
+        -webkit-backdrop-filter: saturate(180%) blur(22px);
+        box-shadow:
+          0 -12px 40px rgba(0, 0, 0, 0.22),
+          inset 0 1px 0 color-mix(in srgb, #fff 18%, transparent);
+        overflow: hidden;
       }
       .notify-float[hidden] {
         display: none !important;
@@ -2307,9 +2336,11 @@
         align-items: center;
         gap: 8px;
         padding: 10px 12px;
-        border-bottom: 0.5px solid var(--ios-separator);
+        border-bottom: 0.5px solid color-mix(in srgb, var(--ios-separator) 65%, transparent);
         flex-shrink: 0;
-        background: color-mix(in srgb, var(--grouped) 90%, transparent);
+        background: color-mix(in srgb, var(--grouped) 38%, transparent);
+        backdrop-filter: saturate(160%) blur(10px);
+        -webkit-backdrop-filter: saturate(160%) blur(10px);
         border-radius: 14px 14px 0 0;
         color: var(--ios-label);
       }
@@ -2398,7 +2429,9 @@
         margin: -2px 0 8px;
         padding: 2px 0 6px;
         letter-spacing: 0.04em;
-        background: color-mix(in srgb, var(--elevated) 96%, transparent);
+        background: color-mix(in srgb, var(--elevated) 42%, transparent);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
       }
       .notify-col-empty {
         color: var(--ios-secondary);
@@ -10516,6 +10549,61 @@
         })();
       }
 
+      function nailPriceRowHtml(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const price = Number(marketMap[key]?.price);
+        const change = Number(marketMap[key]?.change24h);
+        const px = Number.isFinite(price) ? formatPinPrice(price) : "--";
+        const ch = Number.isFinite(change) ? formatPercent(change) : "";
+        const cls =
+          Number.isFinite(change) && change !== 0
+            ? change > 0
+              ? "is-up"
+              : "is-down"
+            : "";
+        return [
+          `<div class="nail-price${cls ? ` ${cls}` : ""}" data-nail-price="${escapeHtml(key)}">`,
+          `<span class="nail-px">${escapeHtml(px)}</span>`,
+          ch ? `<span class="nail-chg">${escapeHtml(ch)}</span>` : "",
+          `</div>`,
+        ].join("");
+      }
+
+      function syncNailPriceRows() {
+        document
+          .querySelectorAll("#nailList [data-nail-price]")
+          .forEach((el) => {
+            const key = String(el.getAttribute("data-nail-price") || "")
+              .trim()
+              .toUpperCase();
+            if (!key) return;
+            const price = Number(marketMap[key]?.price);
+            const change = Number(marketMap[key]?.change24h);
+            const pxEl = el.querySelector(".nail-px");
+            let chEl = el.querySelector(".nail-chg");
+            if (pxEl) {
+              pxEl.textContent = Number.isFinite(price)
+                ? formatPinPrice(price)
+                : "--";
+            }
+            el.classList.remove("is-up", "is-down");
+            if (Number.isFinite(change) && change !== 0) {
+              el.classList.add(change > 0 ? "is-up" : "is-down");
+              const text = formatPercent(change);
+              if (!chEl) {
+                chEl = document.createElement("span");
+                chEl.className = "nail-chg";
+                el.appendChild(chEl);
+              }
+              chEl.textContent = text;
+            } else if (chEl) {
+              chEl.remove();
+            }
+          });
+      }
+
       function renderNailDrawer() {
         const listEl = document.getElementById("nailList");
         const tab = document.getElementById("nailTab");
@@ -10553,6 +10641,7 @@
               `<button type="button" class="nail-name" data-nail-jump="${symbol}" title="跳到 K 线">${label}${tag}</button>`,
               `<button type="button" class="nail-del" data-nail-del="${symbol}">删除</button>`,
               `</div>`,
+              nailPriceRowHtml(item.symbol),
               `<canvas class="nail-kline" data-kline="${symbol}"></canvas>`,
               note ? `<p class="nail-note">${escapeHtml(note)}</p>` : "",
               `</article>`,
@@ -10607,6 +10696,7 @@
           });
           nailItems = nailState.nails || [];
           renderNailDrawer();
+          syncNailPriceRows();
           await paintNailKlines();
           showToast("钉子已刷新");
         } catch (error) {
@@ -10621,6 +10711,7 @@
       async function paintNailKlines() {
         abortNailKlines();
         if (!isNailDrawerOpen()) return;
+        syncNailPriceRows();
         const canvases = [
           ...document.querySelectorAll("#nailList canvas.nail-kline"),
         ];
