@@ -52,9 +52,14 @@ const CONFIG = {
   POSITIONS_PATH: process.env.POSITIONS_PATH || 'watch-positions.json',
   NOTIFY_STATE_PATH: process.env.NOTIFY_STATE_PATH || 'watch-notify-state.json',
   ACTION_LOG_PATH: process.env.ACTION_LOG_PATH || 'watch-action-log.json',
-  ACTION_LOG_MAX: Number(process.env.ACTION_LOG_MAX || 80),
+  ACTION_LOG_MAX: Number(process.env.ACTION_LOG_MAX || 120),
   MOM_NOTES_PATH: process.env.MOM_NOTES_PATH || 'watch-mom-notes.json',
   MOM_NOTES_MAX: Number(process.env.MOM_NOTES_MAX || 200),
+  PRICE_ALERTS_PATH: process.env.PRICE_ALERTS_PATH || 'watch-price-alerts.json',
+  PRICE_ALERT_SEND_MAX: Number(process.env.PRICE_ALERT_SEND_MAX || 10),
+  PRICE_ALERT_SEND_GAP_MS: Number(
+    process.env.PRICE_ALERT_SEND_GAP_MS || 60 * 1000,
+  ),
   WECOM_WEBHOOK_PINS: WEBHOOKS.pinsUrl,
   WECOM_WEBHOOK_POSITIONS: WEBHOOKS.positionsUrl,
   DROP_THRESHOLD: Number(process.env.DROP_THRESHOLD || 0.05),
@@ -716,6 +721,135 @@ async function appendAutoPinActionLog(now, newcomers, dropped, momNotes) {
   );
 }
 
+function normalizePriceAlerts(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const symbol = String(item.symbol || '')
+      .trim()
+      .toUpperCase();
+    const target = Number(item.target);
+    if (!symbol || !Number.isFinite(target) || target <= 0) continue;
+    const direction = item.direction === 'below' ? 'below' : 'above';
+    const sentCount = Math.max(0, Math.floor(Number(item.sentCount) || 0));
+    out.push({
+      id:
+        String(item.id || '').trim() ||
+        `${symbol}-${direction}-${Math.round(target * 1e8)}`,
+      symbol,
+      target,
+      direction,
+      createdAt: Number(item.createdAt) || 0,
+      hitAt: Number(item.hitAt) > 0 ? Number(item.hitAt) : null,
+      sentCount,
+      lastSentAt: Number(item.lastSentAt) > 0 ? Number(item.lastSentAt) : 0,
+      active: item.active === false ? false : sentCount < CONFIG.PRICE_ALERT_SEND_MAX,
+    });
+  }
+  return out;
+}
+
+function priceAlertHit(alert, price) {
+  if (!alert || !Number.isFinite(price)) return false;
+  if (alert.direction === 'below') return price <= alert.target;
+  return price >= alert.target;
+}
+
+async function processPriceAlerts(now) {
+  const file = await loadJson(CONFIG.PRICE_ALERTS_PATH);
+  const alerts = normalizePriceAlerts(
+    file && file.data && Array.isArray(file.data.alerts) ? file.data.alerts : [],
+  );
+  const active = alerts.filter((item) => item.active);
+  if (!active.length) return { sent: 0, hit: 0, checked: 0 };
+
+  const symbols = [...new Set(active.map((item) => item.symbol))];
+  const tickers = await fetchBinanceTickers(symbols);
+  let changed = false;
+  let sent = 0;
+  let hit = 0;
+
+  for (const alert of alerts) {
+    if (!alert.active) continue;
+    const row = tickers[alert.symbol];
+    const price = row && Number(row.price);
+    if (!Number.isFinite(price)) continue;
+    if (!alert.hitAt && priceAlertHit(alert, price)) {
+      alert.hitAt = now;
+      changed = true;
+      hit += 1;
+    }
+    if (!alert.hitAt) continue;
+    if (alert.sentCount >= CONFIG.PRICE_ALERT_SEND_MAX) {
+      alert.active = false;
+      changed = true;
+      continue;
+    }
+    if (now - (alert.lastSentAt || 0) < CONFIG.PRICE_ALERT_SEND_GAP_MS) continue;
+
+    const n = alert.sentCount + 1;
+    const dirLabel = alert.direction === 'below' ? '跌破' : '达到';
+    const title = `价格预警 ${labelOf(alert.symbol)} (${n}/${CONFIG.PRICE_ALERT_SEND_MAX})`;
+    const content = [
+      `${labelOf(alert.symbol)} ${dirLabel} ${formatPrice(alert.target)}`,
+      `现价 ${formatPrice(price)}`,
+      `预警 ${n}/${CONFIG.PRICE_ALERT_SEND_MAX} · 间隔约 1 分钟`,
+    ].join('\n');
+
+    try {
+      if (CONFIG.PUSHPLUS_TOKEN) {
+        await sendPushPlus({
+          token: CONFIG.PUSHPLUS_TOKEN,
+          title,
+          content,
+        });
+      } else if (CONFIG.WECOM_WEBHOOK_POSITIONS) {
+        await sendWecomText(content, CONFIG.WECOM_WEBHOOK_POSITIONS);
+      } else {
+        console.warn('price alert skip send: no PUSHPLUS_TOKEN / WeCom webhook');
+        break;
+      }
+      alert.sentCount = n;
+      alert.lastSentAt = now;
+      if (alert.sentCount >= CONFIG.PRICE_ALERT_SEND_MAX) alert.active = false;
+      changed = true;
+      sent += 1;
+    } catch (error) {
+      console.warn(
+        'price alert send failed',
+        alert.symbol,
+        error && error.message ? error.message : error,
+      );
+    }
+  }
+
+  if (changed) {
+    await saveJson(
+      CONFIG.PRICE_ALERTS_PATH,
+      {
+        alerts: alerts.map((item) => ({
+          id: item.id,
+          symbol: item.symbol,
+          target: item.target,
+          direction: item.direction,
+          createdAt: item.createdAt,
+          hitAt: item.hitAt,
+          sentCount: item.sentCount,
+          lastSentAt: item.lastSentAt,
+          active: !!item.active,
+        })),
+        alertsUpdatedAt: now,
+        updatedAt: now,
+      },
+      file.sha,
+      `Price alerts sent ${sent}`,
+    );
+  }
+
+  return { sent, hit, checked: active.length };
+}
+
 async function main() {
   if (CONFIG.AUTO_PIN_PUSHPLUS && !CONFIG.PUSHPLUS_TOKEN) {
     throw new Error('Missing PUSHPLUS_TOKEN for auto-pin WeChat push');
@@ -783,6 +917,19 @@ async function main() {
   let autoPinEvents = Array.isArray(stateData.autoPinEvents)
     ? stateData.autoPinEvents
     : [];
+
+  let priceAlertStats = { sent: 0, hit: 0, checked: 0 };
+  try {
+    priceAlertStats = await processPriceAlerts(now);
+    if (priceAlertStats.sent || priceAlertStats.hit) {
+      console.log('price alerts', JSON.stringify(priceAlertStats));
+    }
+  } catch (error) {
+    console.warn(
+      'price alerts failed',
+      error && error.message ? error.message : error,
+    );
+  }
 
   let autoPinned = [];
   let autoDropped = [];

@@ -24,13 +24,17 @@
   const CARD_EGGS_PATH = "watch-card-eggs.json";
   const BREAK_HIGH_PATH = "watch-break-high.json";
   const NAILS_PATH = "watch-nails.json";
+  const PRICE_ALERTS_PATH = "watch-price-alerts.json";
   const LEGACY_DATA_PATH = "watch-data.json";
   const PIN_TTL_MS = 12 * 60 * 60 * 1000;
   // 暂时关闭盯一下过期；改 true 可恢复 12h TTL。
   const PIN_EXPIRY_ENABLED = false;
   const MOM_NOTES_MAX = 200;
-  const ACTION_LOG_MAX = 80;
+  const ACTION_LOG_MAX = 120;
   const NAILS_MAX = 80;
+  const PRICE_ALERTS_MAX = 40;
+  const PRICE_ALERT_SEND_MAX = 10;
+  const PRICE_ALERT_SEND_GAP_MS = 60 * 1000;
 
   const TOKEN_PART_A = "gh";
   const TOKEN_PART_B = "p_Xrmz1DjzLfbjyiXZqFyJGd9O8aWFIq4D9758";
@@ -1145,7 +1149,7 @@
     return entry;
   }
 
-  function actionLogEntryKey(entry) {
+  function actionLogIdentityKey(entry) {
     if (!entry) return "";
     const symbols = (Array.isArray(entry.symbols) ? entry.symbols : [])
       .map((symbol) => String(symbol || "").trim().toUpperCase())
@@ -1153,11 +1157,32 @@
       .sort()
       .join(",");
     if (!symbols) return "";
+    return `${Number(entry.at) || 0}|${String(entry.kind || "").trim()}|${symbols}`;
+  }
+
+  function actionLogEntryKey(entry) {
+    if (!entry) return "";
+    const base = actionLogIdentityKey(entry);
+    if (!base) return "";
     const price =
       Number.isFinite(entry.price) && entry.price > 0
         ? String(entry.price)
         : "";
-    return `${Number(entry.at) || 0}|${String(entry.kind || "").trim()}|${symbols}|${price}`;
+    return `${base}|${price}`;
+  }
+
+  function updateActionLogEntryPrice(list, identityKey, price) {
+    const key = String(identityKey || "");
+    const nextPrice = Number(price);
+    if (!key || !Number.isFinite(nextPrice) || nextPrice <= 0) {
+      return normalizeActionLog(list);
+    }
+    return normalizeActionLog(
+      (list || []).map((entry) => {
+        if (actionLogIdentityKey(entry) !== key) return entry;
+        return { ...entry, price: nextPrice };
+      }),
+    );
   }
 
   function normalizeActionLog(raw) {
@@ -1873,6 +1898,208 @@
     throw lastError || new Error("保存持仓失败");
   }
 
+  function normalizePriceAlertItem(item) {
+    if (!item || typeof item !== "object") return null;
+    const symbol = String(item.symbol || "")
+      .trim()
+      .toUpperCase();
+    const target = Number(item.target);
+    if (!symbol || !Number.isFinite(target) || target <= 0) return null;
+    const direction =
+      item.direction === "below" || item.direction === "above"
+        ? item.direction
+        : "above";
+    const id =
+      String(item.id || "").trim() ||
+      `${symbol}-${direction}-${Math.round(target * 1e8)}-${Number(item.createdAt) || 0}`;
+    const sentCount = Math.max(0, Math.floor(Number(item.sentCount) || 0));
+    return {
+      id,
+      symbol,
+      target,
+      direction,
+      createdAt: Number.isFinite(Number(item.createdAt))
+        ? Number(item.createdAt)
+        : Date.now(),
+      hitAt:
+        Number.isFinite(Number(item.hitAt)) && Number(item.hitAt) > 0
+          ? Number(item.hitAt)
+          : null,
+      sentCount,
+      lastSentAt:
+        Number.isFinite(Number(item.lastSentAt)) && Number(item.lastSentAt) > 0
+          ? Number(item.lastSentAt)
+          : 0,
+      active: item.active === false ? false : sentCount < PRICE_ALERT_SEND_MAX,
+    };
+  }
+
+  function normalizePriceAlerts(raw) {
+    if (!Array.isArray(raw)) return [];
+    const map = new Map();
+    for (const item of raw) {
+      const normalized = normalizePriceAlertItem(item);
+      if (!normalized) continue;
+      map.set(normalized.id, normalized);
+    }
+    return [...map.values()]
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+      .slice(0, PRICE_ALERTS_MAX);
+  }
+
+  function serializePriceAlerts(list) {
+    return normalizePriceAlerts(list).map((item) => ({
+      id: item.id,
+      symbol: item.symbol,
+      target: item.target,
+      direction: item.direction,
+      createdAt: item.createdAt,
+      hitAt: item.hitAt,
+      sentCount: item.sentCount,
+      lastSentAt: item.lastSentAt,
+      active: !!item.active,
+    }));
+  }
+
+  function upsertPriceAlert(list, symbol, target, direction, sourcePrice) {
+    const key = String(symbol || "")
+      .trim()
+      .toUpperCase();
+    const price = Number(target);
+    if (!key || !Number.isFinite(price) || price <= 0) {
+      return normalizePriceAlerts(list);
+    }
+    let dir = direction === "below" || direction === "above" ? direction : "";
+    const spot = Number(sourcePrice);
+    if (!dir) {
+      dir = Number.isFinite(spot) && spot > price ? "below" : "above";
+    }
+    const now = Date.now();
+    const next = normalizePriceAlerts(list).filter(
+      (item) => !(item.symbol === key && item.active),
+    );
+    next.unshift({
+      id: `${key}-${dir}-${Math.round(price * 1e8)}-${now}`,
+      symbol: key,
+      target: price,
+      direction: dir,
+      createdAt: now,
+      hitAt: null,
+      sentCount: 0,
+      lastSentAt: 0,
+      active: true,
+    });
+    return normalizePriceAlerts(next);
+  }
+
+  function removePriceAlert(list, idOrSymbol) {
+    const key = String(idOrSymbol || "").trim();
+    if (!key) return normalizePriceAlerts(list);
+    const upper = key.toUpperCase();
+    return normalizePriceAlerts(list).filter(
+      (item) => item.id !== key && item.symbol !== upper,
+    );
+  }
+
+  async function loadPriceAlertsRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || PRICE_ALERTS_PATH;
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          alerts: normalizePriceAlerts(current.data.alerts),
+          alertsUpdatedAt: Number.isFinite(Number(current.data.alertsUpdatedAt))
+            ? Number(current.data.alertsUpdatedAt)
+            : null,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadPriceAlerts via API failed, trying raw", error);
+    }
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          alerts: normalizePriceAlerts(data.alerts),
+          alertsUpdatedAt: Number.isFinite(Number(data.alertsUpdatedAt))
+            ? Number(data.alertsUpdatedAt)
+            : null,
+          source: "raw-commit",
+        };
+      }
+    } catch (error) {
+      console.warn("loadPriceAlerts via commit-raw failed", error);
+    }
+    return { alerts: [], alertsUpdatedAt: null, source: "empty" };
+  }
+
+  async function patchPriceAlerts(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || PRICE_ALERTS_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = current.data || { alerts: [], alertsUpdatedAt: null };
+        const alerts = normalizePriceAlerts(base.alerts);
+        let nextList = alerts;
+        if (typeof options.mutate === "function") {
+          const result = options.mutate(alerts.slice());
+          nextList = Array.isArray(result)
+            ? result
+            : result && result.list
+              ? result.list
+              : alerts;
+        }
+        const nextAlerts = serializePriceAlerts(nextList).slice(
+          0,
+          PRICE_ALERTS_MAX,
+        );
+        const nextData = {
+          alerts: nextAlerts,
+          alertsUpdatedAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update price alerts",
+        });
+        return {
+          alerts: nextAlerts,
+          alertsUpdatedAt: nextData.alertsUpdatedAt,
+        };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存价格预警失败");
+  }
+
   return {
     DEFAULT_REPO,
     FAVORITES_PATH,
@@ -1957,8 +2184,21 @@
     removePosition,
     loadPositionsRaw,
     patchPositions,
+    PRICE_ALERTS_PATH,
+    PRICE_ALERTS_MAX,
+    PRICE_ALERT_SEND_MAX,
+    PRICE_ALERT_SEND_GAP_MS,
+    normalizePriceAlerts,
+    serializePriceAlerts,
+    upsertPriceAlert,
+    removePriceAlert,
+    loadPriceAlertsRaw,
+    patchPriceAlerts,
+    actionLogIdentityKey,
+    updateActionLogEntryPrice,
     fetchJsonFile,
     getMainCommitSha,
     fetchRawJsonByCommit,
   };
 });
+

@@ -1867,6 +1867,99 @@
         opacity: 1;
         filter: none;
       }
+      .kline-card.is-focus {
+        z-index: 20;
+        opacity: 1;
+        filter: none;
+        outline: 2px solid var(--accent, #2f8f6e);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #2f8f6e) 35%, transparent);
+      }
+      .card-focus-bar {
+        position: fixed;
+        left: 50%;
+        bottom: calc(var(--float-dock-h, 48px) + 10px);
+        transform: translateX(-50%);
+        z-index: 86;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        max-width: calc(100vw - 24px);
+        padding: 6px 8px;
+        border-radius: 10px;
+        border: 0.5px solid var(--separator, rgba(200, 208, 204, 0.85));
+        background: color-mix(in srgb, var(--elevated, #fbfcfa) 94%, transparent);
+        color: var(--label, #5a6a68);
+        box-shadow: 0 6px 18px rgba(40, 50, 48, 0.14);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+      }
+      .card-focus-bar[hidden] {
+        display: none !important;
+      }
+      .card-focus-bar .card-focus-label {
+        min-width: 0;
+        max-width: 7em;
+        padding: 0 4px;
+        font-size: 13px;
+        font-weight: 700;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .card-focus-bar button {
+        flex: 0 0 auto;
+        border: none;
+        background: var(--fill, rgba(90, 106, 104, 0.1));
+        color: inherit;
+        height: 32px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .card-focus-bar button.is-primary {
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 18%, transparent);
+        color: var(--accent, #2f8f6e);
+      }
+      .action-log-row.is-pnl {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 4px 8px;
+        align-items: start;
+      }
+      .action-log-pnl-meta {
+        grid-column: 1 / -1;
+        font-size: 11px;
+        color: var(--secondary);
+      }
+      .action-log-pnl-meta button,
+      .action-log-row button.action-log-edit {
+        border: none;
+        background: var(--fill, rgba(90, 106, 104, 0.12));
+        color: var(--label);
+        border-radius: 6px;
+        padding: 2px 6px;
+        font-size: 11px;
+        cursor: pointer;
+        margin-left: 4px;
+      }
+      .action-log-pnl .is-up {
+        color: var(--up, #2f8f6e);
+        font-weight: 700;
+      }
+      .action-log-pnl .is-down {
+        color: var(--down, #c44);
+        font-weight: 700;
+      }
+      .action-log-section {
+        margin: 8px 0 4px;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--secondary);
+        letter-spacing: 0.04em;
+      }
       .kline-card.is-favorite {
         border-color: #c5cec6;
       }
@@ -3394,8 +3487,25 @@
         >
           买卖等其他
         </button>
+        <button
+          type="button"
+          data-log-cat="record"
+          role="tab"
+          aria-selected="false"
+        >
+          战绩
+        </button>
       </div>
       <div class="action-log-body" id="actionLogBody"></div>
+    </div>
+
+    <div id="cardFocusBar" class="card-focus-bar" hidden>
+      <span class="card-focus-label" id="cardFocusLabel">—</span>
+      <button type="button" data-focus-action="note">记一笔</button>
+      <button type="button" data-focus-action="refresh">刷新</button>
+      <button type="button" class="is-primary" data-focus-action="more">
+        更多
+      </button>
     </div>
 
     <div class="float-tabs" role="tablist" aria-label="浮窗">
@@ -3487,6 +3597,7 @@
         BREAK_HIGH_PATH: "watch-break-high.json",
         NAILS_PATH: "watch-nails.json",
         POSITIONS_PATH: "watch-positions.json",
+        PRICE_ALERTS_PATH: "watch-price-alerts.json",
         WATCH_POOL_RANK: 30,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
         KLINE_MAX_LIMIT: 1000,
@@ -3666,7 +3777,10 @@
       const RISING_SNAP_KEY = "kline-rising-zone-snap-v1";
       const RISING_SNAP_SEEDED_KEY = "kline-rising-zone-snap-seeded-v1";
       const ACTION_LOG_KEY = "kline-action-log-v1";
-      const ACTION_LOG_MAX = 80;
+      const ACTION_LOG_MAX =
+        Number(WatchFavorites.ACTION_LOG_MAX) > 0
+          ? Number(WatchFavorites.ACTION_LOG_MAX)
+          : 120;
       let actionLogEntries = [];
       let actionLogSaving = false;
       let actionLogCategory = "capture";
@@ -3676,6 +3790,9 @@
         notes: new Set(["mom-note"]),
         other: new Set(["buy", "sell", "sell-stop", "period-low-exit"]),
       };
+      let priceAlertItems = [];
+      let priceAlertSaving = false;
+      let focusActionSymbol = null;
       const RECENT_AUTO_COLLAPSE_KEY = "kline-recent-auto-collapsed-v1";
       let recentAutoPinCollapsed = false;
       try {
@@ -3888,6 +4005,7 @@
         { id: "log", label: "捕捉日志 watch-action-log", wave: 1 },
         { id: "eggs", label: "彩蛋 watch-card-eggs", wave: 1 },
         { id: "break", label: "破点高 watch-break-high", wave: 1 },
+        { id: "alerts", label: "价格预警 watch-price-alerts", wave: 1 },
       ];
 
       function bootInitSortTasks(tasks) {
@@ -5613,7 +5731,8 @@
           cat === "notes" ||
           cat === "other" ||
           cat === "capture" ||
-          cat === "drop"
+          cat === "drop" ||
+          cat === "record"
             ? cat
             : "capture";
         actionLogCategory = next;
@@ -5628,9 +5747,158 @@
         renderActionLogBody();
       }
 
+      function actionLogIdentityOf(entry) {
+        if (typeof WatchFavorites.actionLogIdentityKey === "function") {
+          return WatchFavorites.actionLogIdentityKey(entry);
+        }
+        const symbols = (Array.isArray(entry.symbols) ? entry.symbols : [])
+          .map((symbol) => String(symbol || "").trim().toUpperCase())
+          .filter(Boolean)
+          .sort()
+          .join(",");
+        return `${Number(entry.at) || 0}|${String(entry.kind || "").trim()}|${symbols}`;
+      }
+
+      function buildTradeRecords(entries) {
+        const buys = {};
+        const closed = [];
+        const open = [];
+        const sorted = (entries || [])
+          .slice()
+          .filter(
+            (entry) =>
+              entry &&
+              (entry.kind === "buy" ||
+                entry.kind === "sell" ||
+                entry.kind === "sell-stop"),
+          )
+          .sort((a, b) => (a.at || 0) - (b.at || 0));
+        for (const entry of sorted) {
+          const symbol = String((entry.symbols && entry.symbols[0]) || "")
+            .trim()
+            .toUpperCase();
+          if (!symbol) continue;
+          if (entry.kind === "buy") {
+            if (!buys[symbol]) buys[symbol] = [];
+            buys[symbol].push(entry);
+            continue;
+          }
+          const queue = buys[symbol] || [];
+          const buy = queue.shift();
+          if (!buy) continue;
+          closed.push({
+            symbol,
+            buy,
+            sell: entry,
+            buyPrice: Number(buy.price),
+            sellPrice: Number(entry.price),
+            buyAt: buy.at,
+            sellAt: entry.at,
+          });
+        }
+        for (const [symbol, queue] of Object.entries(buys)) {
+          for (const buy of queue) {
+            open.push({
+              symbol,
+              buy,
+              buyPrice: Number(buy.price),
+              buyAt: buy.at,
+            });
+          }
+        }
+        const withPnl = closed.map((row) => {
+          const buyPrice = row.buyPrice;
+          const sellPrice = row.sellPrice;
+          const has =
+            Number.isFinite(buyPrice) &&
+            buyPrice > 0 &&
+            Number.isFinite(sellPrice) &&
+            sellPrice > 0;
+          const pnlPct = has ? ((sellPrice - buyPrice) / buyPrice) * 100 : null;
+          const pnlAbs = has ? sellPrice - buyPrice : null;
+          return { ...row, pnlPct, pnlAbs, hasPnl: has };
+        });
+        return { closed: withPnl, open };
+      }
+
+      function renderRecordRankBody() {
+        const body = document.getElementById("actionLogBody");
+        if (!body) return;
+        const { closed, open } = buildTradeRecords(readActionLog());
+        const profits = closed
+          .filter((row) => row.hasPnl && row.pnlPct >= 0)
+          .sort((a, b) => b.pnlPct - a.pnlPct);
+        const losses = closed
+          .filter((row) => row.hasPnl && row.pnlPct < 0)
+          .sort((a, b) => a.pnlPct - b.pnlPct);
+        const incomplete = [
+          ...closed.filter((row) => !row.hasPnl),
+          ...open,
+        ];
+        if (!profits.length && !losses.length && !incomplete.length) {
+          body.innerHTML =
+            '<div class="action-log-empty">暂无战绩 · 买/卖需带价格。离场币可在本页改价或补记卖出</div>';
+          return;
+        }
+        const rowHtml = (row, rank, mode) => {
+          const label = row.symbol.replace(/USDT$/i, "");
+          const buyId = escapeHtml(actionLogIdentityOf(row.buy));
+          const sellId = row.sell
+            ? escapeHtml(actionLogIdentityOf(row.sell))
+            : "";
+          const pnlCls =
+            mode === "profit" ? "is-up" : mode === "loss" ? "is-down" : "";
+          const pnlText = row.hasPnl
+            ? `${row.pnlPct >= 0 ? "+" : ""}${row.pnlPct.toFixed(2)}%`
+            : "缺价格";
+          const buyPx = Number.isFinite(row.buyPrice)
+            ? formatPinPrice(row.buyPrice)
+            : "—";
+          const sellPx = Number.isFinite(row.sellPrice)
+            ? formatPinPrice(row.sellPrice)
+            : row.sell
+              ? "—"
+              : "未卖";
+          return [
+            `<div class="action-log-row is-pnl action-log-pnl">`,
+            `<span class="action-log-time">#${rank}</span>`,
+            `<span><a href="#card" class="notify-coin" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(label)}</a> <span class="${pnlCls}">${pnlText}</span></span>`,
+            `<span class="action-log-kind">${mode === "open" ? "持仓中" : "已平"}</span>`,
+            `<div class="action-log-pnl-meta">`,
+            `买 ${escapeHtml(buyPx)}`,
+            `<button type="button" class="action-log-edit" data-edit-log-price="${buyId}">改买价</button>`,
+            ` · 卖 ${escapeHtml(sellPx)}`,
+            row.sell
+              ? `<button type="button" class="action-log-edit" data-edit-log-price="${sellId}">改卖价</button>`
+              : `<button type="button" class="action-log-edit" data-record-sell="${escapeHtml(row.symbol)}">补记卖出</button>`,
+            `</div></div>`,
+          ].join("");
+        };
+        const parts = [];
+        if (profits.length) {
+          parts.push('<div class="action-log-section">盈利榜</div>');
+          profits.forEach((row, i) => parts.push(rowHtml(row, i + 1, "profit")));
+        }
+        if (losses.length) {
+          parts.push('<div class="action-log-section">亏损榜</div>');
+          losses.forEach((row, i) => parts.push(rowHtml(row, i + 1, "loss")));
+        }
+        if (incomplete.length) {
+          parts.push('<div class="action-log-section">未完成 / 缺价（可改价或补记卖出）</div>');
+          incomplete.forEach((row, i) =>
+            parts.push(rowHtml(row, i + 1, row.sell ? "miss" : "open")),
+          );
+        }
+        body.innerHTML = parts.join("");
+      }
+
       function renderActionLogBody() {
         const body = document.getElementById("actionLogBody");
         if (!body) return;
+        if (actionLogCategory === "record") {
+          renderRecordRankBody();
+          return;
+        }
         const list = readActionLog().filter(
           (entry) => actionLogCategoryForKind(entry.kind) === actionLogCategory,
         );
@@ -5649,6 +5917,7 @@
         body.innerHTML = list
           .map((entry) => {
             const kind = actionLogKindLabel(entry.kind);
+            const id = escapeHtml(actionLogIdentityOf(entry));
             const names = (entry.symbols || [])
               .map((symbol) => {
                 const key = String(symbol || "")
@@ -5658,14 +5927,126 @@
                 return `<a href="#card" class="notify-coin" data-jump="${escapeHtml(key)}">${escapeHtml(label)}</a>`;
               })
               .join(" ");
+            const canPrice =
+              entry.kind === "buy" ||
+              entry.kind === "sell" ||
+              entry.kind === "sell-stop" ||
+              entry.kind === "mom-note";
             const price =
-              (entry.kind === "buy" || entry.kind === "mom-note") &&
-              Number.isFinite(entry.price)
+              canPrice && Number.isFinite(entry.price)
                 ? ` ${escapeHtml(formatPinPrice(entry.price))}`
                 : "";
-            return `<div class="action-log-row"><span class="action-log-time">${formatActionLogTime(entry.at)}</span><span class="action-log-kind">${escapeHtml(kind)}</span>${names}${price}</div>`;
+            const edit =
+              entry.kind === "buy" ||
+              entry.kind === "sell" ||
+              entry.kind === "sell-stop"
+                ? `<button type="button" class="action-log-edit" data-edit-log-price="${id}">改价</button>`
+                : "";
+            return `<div class="action-log-row"><span class="action-log-time">${formatActionLogTime(entry.at)}</span><span class="action-log-kind">${escapeHtml(kind)}</span>${names}${price}${edit}</div>`;
           })
           .join("");
+      }
+
+      async function editActionLogPrice(identityKey) {
+        const key = String(identityKey || "");
+        if (!key) return;
+        const entry = readActionLog().find(
+          (item) => actionLogIdentityOf(item) === key,
+        );
+        if (!entry) {
+          showToast("找不到该记录");
+          return;
+        }
+        const label = String((entry.symbols && entry.symbols[0]) || "").replace(
+          /USDT$/i,
+          "",
+        );
+        const input = window.prompt(
+          `修改 ${label} ${actionLogKindLabel(entry.kind)} 价格`,
+          Number.isFinite(entry.price) ? String(entry.price) : "",
+        );
+        if (input == null) return;
+        const price = Number(String(input).trim());
+        if (!Number.isFinite(price) || price <= 0) {
+          window.alert("价格无效");
+          return;
+        }
+        const nextList =
+          typeof WatchFavorites.updateActionLogEntryPrice === "function"
+            ? WatchFavorites.updateActionLogEntryPrice(
+                readActionLog(),
+                key,
+                price,
+              )
+            : readActionLog().map((item) =>
+                actionLogIdentityOf(item) === key
+                  ? { ...item, price }
+                  : item,
+              );
+        await persistActionLog(nextList, `Edit ${entry.kind} price ${label}`, {
+          replace: true,
+        });
+        if (
+          entry.kind === "buy" &&
+          WatchFavorites.hasPosition(positionItems, entry.symbols[0])
+        ) {
+          try {
+            const result = await WatchFavorites.patchPositions({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.POSITIONS_PATH,
+              message: `Sync buy price ${entry.symbols[0]}`,
+              mutate: (list) => ({
+                list: WatchFavorites.upsertPosition(
+                  list,
+                  entry.symbols[0],
+                  price,
+                  "price-edit",
+                ),
+                added: false,
+              }),
+            });
+            positionItems = result.positions;
+            syncStopLossGate();
+          } catch (error) {
+            console.warn("sync position buy price failed", error);
+          }
+        }
+        showToast("价格已更新");
+        renderActionLogBody();
+      }
+
+      async function recordSellFromLog(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        const label = key.replace(/USDT$/i, "");
+        const current = Number(marketMap[key]?.price);
+        const input = window.prompt(
+          `补记 ${label} 卖出价（页面无持仓也可；会写卖出日志${
+            WatchFavorites.hasPosition(positionItems, key)
+              ? "并清除持仓"
+              : ""
+          }）`,
+          Number.isFinite(current) ? String(current) : "",
+        );
+        if (input == null) return;
+        const sellPrice = Number(String(input).trim());
+        if (!Number.isFinite(sellPrice) || sellPrice <= 0) {
+          window.alert("卖出价无效");
+          return;
+        }
+        if (WatchFavorites.hasPosition(positionItems, key)) {
+          await sellPositionForSymbol(key, {
+            skipConfirm: true,
+            sellPrice,
+            skipRender: true,
+          });
+        } else {
+          appendActionLog("sell", [key], { price: sellPrice });
+          showToast(`${label} 已补记卖出 ${formatPinPrice(sellPrice)}`);
+        }
+        renderActionLogBody();
       }
 
       function setActionLogOpen(open) {
@@ -6030,6 +6411,9 @@
           }),
           soft("break", "破点高", async () => {
             await loadSharedBreakHigh();
+          }),
+          soft("alerts", "价格预警", async () => {
+            await loadSharedPriceAlerts();
           }),
         ]);
         try {
@@ -7574,6 +7958,98 @@
           breakHighState = WatchFavorites.emptyBreakHigh();
         }
         return breakHighState;
+      }
+
+      async function loadSharedPriceAlerts() {
+        try {
+          if (typeof WatchFavorites.loadPriceAlertsRaw !== "function") {
+            priceAlertItems = [];
+            return priceAlertItems;
+          }
+          const state = await WatchFavorites.loadPriceAlertsRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.PRICE_ALERTS_PATH,
+          });
+          priceAlertItems = state.alerts || [];
+        } catch (error) {
+          console.warn("load price alerts failed", error);
+          priceAlertItems = [];
+        }
+        return priceAlertItems;
+      }
+
+      async function persistPriceAlerts(mutate, message) {
+        if (priceAlertSaving) return priceAlertItems;
+        priceAlertSaving = true;
+        try {
+          const result = await WatchFavorites.patchPriceAlerts({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.PRICE_ALERTS_PATH,
+            message: message || "Update price alerts",
+            mutate,
+          });
+          priceAlertItems = result.alerts || [];
+          return priceAlertItems;
+        } finally {
+          priceAlertSaving = false;
+        }
+      }
+
+      function activePriceAlertForSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        return (priceAlertItems || []).find(
+          (item) => item && item.active && item.symbol === key,
+        );
+      }
+
+      async function setPriceAlertForSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return false;
+        const label = key.replace(/USDT$/i, "");
+        const current = Number(marketMap[key]?.price);
+        const existing = activePriceAlertForSymbol(key);
+        const input = window.prompt(
+          `设置 ${label} 预警价（达到后约每分钟微信提醒，共 10 次）\n现价 ${
+            Number.isFinite(current) ? formatPinPrice(current) : "--"
+          }${existing ? `\n当前预警 ${formatPinPrice(existing.target)}` : ""}`,
+          existing
+            ? String(existing.target)
+            : Number.isFinite(current)
+              ? String(current)
+              : "",
+        );
+        if (input == null) return false;
+        const target = Number(String(input).trim());
+        if (!Number.isFinite(target) || target <= 0) {
+          window.alert("预警价无效");
+          return false;
+        }
+        await persistPriceAlerts(
+          (list) =>
+            WatchFavorites.upsertPriceAlert(list, key, target, "", current),
+          `Price alert ${key} ${target}`,
+        );
+        const dir =
+          Number.isFinite(current) && current > target ? "跌破" : "达到";
+        showToast(`${label} 预警已设：${dir} ${formatPinPrice(target)}`);
+        return true;
+      }
+
+      async function clearPriceAlertForSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return false;
+        await persistPriceAlerts(
+          (list) => WatchFavorites.removePriceAlert(list, key),
+          `Clear price alert ${key}`,
+        );
+        showToast(`${key.replace(/USDT$/i, "")} 预警已取消`);
+        return true;
       }
 
       async function persistBreakHighState(message) {
@@ -9151,6 +9627,12 @@
           held
             ? `<button type="button" data-action="sell">卖出</button>`
             : "",
+          (() => {
+            const alert = activePriceAlertForSymbol(symbol);
+            return alert
+              ? `<button type="button" data-action="alert-clear">取消预警（${escapeHtml(formatPinPrice(alert.target))}）</button>`
+              : `<button type="button" data-action="alert">预警（价格达到 n）</button>`;
+          })(),
           `<button type="button" data-action="fav">${favored ? "取消收藏" : "收藏"}</button>`,
           hasFireEgg
             ? `<button type="button" data-action="clear-egg-fire">取消礼花背景</button>`
@@ -9215,11 +9697,17 @@
             pin: pinned ? (expired ? "清除中" : "取消中") : "盯住中",
             buy: "保存中",
             sell: "卖出中",
+            alert: "设置中",
+            "alert-clear": "取消中",
             fav: favored ? "取消中" : "收藏中",
             "remove-note": "去掉中",
             blacklist: "拉黑中",
           };
-          const needsConfirm = action === "buy" || action === "sell" || action === "blacklist";
+          const needsConfirm =
+            action === "buy" ||
+            action === "sell" ||
+            action === "blacklist" ||
+            action === "alert";
           const markBusy = () =>
             setCardActionsBusy(sheet, btn, busyLabels[action] || "处理中");
           if (!needsConfirm) markBusy();
@@ -9237,6 +9725,11 @@
               done = await buyPositionForSymbol(symbol, { onSaving: markBusy });
             } else if (action === "sell") {
               done = await sellPositionForSymbol(symbol, { onSaving: markBusy });
+            } else if (action === "alert") {
+              done = await setPriceAlertForSymbol(symbol);
+              if (done) markBusy();
+            } else if (action === "alert-clear") {
+              done = await clearPriceAlertForSymbol(symbol);
             } else if (action === "fav") {
               await toggleFavoriteForSymbol(symbol);
             } else if (action === "remove-note") {
@@ -9279,8 +9772,9 @@
           });
         });
         root.querySelectorAll(".kline-card").forEach((card) => {
-          bindLongPress(card);
+          bindCardFocusSelect(card);
         });
+        applyFocusActionChrome();
       }
 
       function isPinCardSection(section) {
@@ -9368,9 +9862,11 @@
         }
         pinSelectMode = next;
         if (!pinSelectMode) selectedPinSymbols.clear();
+        if (pinSelectMode) setFocusActionSymbol(null);
         closeCardActions(true);
         applyPinSelectChrome();
         updatePinSelectUi();
+        applyFocusActionChrome();
       }
 
       function applyPinSelectChrome() {
@@ -9647,22 +10143,86 @@
         }
       }
 
-      function bindLongPress(card) {
-        let timer = null;
-        let triggered = false;
+      function applyFocusActionChrome() {
+        const key = focusActionSymbol
+          ? String(focusActionSymbol).trim().toUpperCase()
+          : "";
+        document.querySelectorAll(".kline-card.is-focus").forEach((card) => {
+          card.classList.remove("is-focus");
+        });
+        if (key) {
+          document
+            .querySelectorAll(`.kline-card[data-symbol="${key}"]`)
+            .forEach((card) => card.classList.add("is-focus"));
+        }
+        const bar = document.getElementById("cardFocusBar");
+        const labelEl = document.getElementById("cardFocusLabel");
+        if (!bar) return;
+        if (!key || pinSelectMode) {
+          bar.hidden = true;
+          return;
+        }
+        bar.hidden = false;
+        if (labelEl) labelEl.textContent = key.replace(/USDT$/i, "");
+      }
 
-        const clear = () => {
-          if (timer) {
-            clearTimeout(timer);
-            timer = null;
-          }
-          card.classList.remove("is-pressed");
-        };
+      function setFocusActionSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        focusActionSymbol = key || null;
+        applyFocusActionChrome();
+      }
 
-        const start = (event) => {
+      function toggleFocusActionSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        if (focusActionSymbol === key) setFocusActionSymbol(null);
+        else setFocusActionSymbol(key);
+      }
+
+      function focusCardEl(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return null;
+        return (
+          document.querySelector(`.kline-card.is-focus[data-symbol="${key}"]`) ||
+          document.querySelector(`.kline-card[data-symbol="${key}"]`)
+        );
+      }
+
+      function bindCardFocusSelect(card) {
+        if (!card || card.dataset.focusBound === "1") return;
+        card.dataset.focusBound = "1";
+        let startX = 0;
+        let startY = 0;
+        let moved = false;
+        card.addEventListener(
+          "pointerdown",
+          (event) => {
+            if (event.pointerType === "mouse" && event.button !== 0) return;
+            startX = event.clientX;
+            startY = event.clientY;
+            moved = false;
+          },
+          { passive: true },
+        );
+        card.addEventListener(
+          "pointermove",
+          (event) => {
+            const dx = event.clientX - startX;
+            const dy = event.clientY - startY;
+            if (dx * dx + dy * dy > 64) moved = true;
+          },
+          { passive: true },
+        );
+        card.addEventListener("click", (event) => {
           if (
             event.target.closest(
-              ".symbol-copy, .card-actions, .mom-badge, .price-up-last-mark, .pin-check",
+              ".symbol-copy, .card-actions, .mom-badge, .price-up-last-mark, .pin-check, button, a, input",
             )
           ) {
             return;
@@ -9670,35 +10230,59 @@
           if (pinSelectMode && isPinCardSection(card.dataset.section)) {
             return;
           }
-          if (event.pointerType === "mouse" && event.button !== 0) return;
-          triggered = false;
-          card.classList.add("is-pressed");
-          timer = setTimeout(() => {
-            triggered = true;
-            clear();
-            if (navigator.vibrate) navigator.vibrate(20);
-            openCardActions(card);
-          }, CONFIG.LONG_PRESS_MS);
-        };
-
-        card.addEventListener("pointerdown", start);
-        card.addEventListener("pointerup", clear);
-        card.addEventListener("pointerleave", clear);
-        card.addEventListener("pointercancel", clear);
+          // 滑动滚列表时不切换选框
+          if (moved) return;
+          event.preventDefault();
+          toggleFocusActionSymbol(card.dataset.symbol);
+        });
         card.addEventListener("contextmenu", (event) => {
           event.preventDefault();
         });
-        card.addEventListener(
-          "click",
-          (event) => {
-            if (triggered) {
-              event.preventDefault();
-              event.stopPropagation();
-              triggered = false;
-            }
-          },
-          true,
-        );
+      }
+
+      async function runFocusBarAction(action) {
+        const symbol = focusActionSymbol;
+        if (!symbol) return;
+        const card = focusCardEl(symbol);
+        if (action === "more") {
+          if (!card) {
+            showToast("当前列表找不到该币卡片");
+            return;
+          }
+          openCardActions(card);
+          return;
+        }
+        if (action === "refresh") {
+          if (!card) {
+            showToast("当前列表找不到该币卡片");
+            return;
+          }
+          try {
+            await refreshSingleKlineCard(card);
+            const price = marketMap[symbol]?.price;
+            showToast(
+              Number.isFinite(price)
+                ? `${symbol.replace(/USDT$/i, "")} 已刷新 · ${formatPinPrice(price)}`
+                : `${symbol.replace(/USDT$/i, "")} 已刷新`,
+            );
+          } catch (error) {
+            console.error(error);
+            showToast(error.message || "刷新失败");
+          }
+          return;
+        }
+        if (action === "note") {
+          if (!pinSymbols().has(symbol)) {
+            showToast("记一笔需要先盯一下");
+            return;
+          }
+          try {
+            await addMomNoteFromRow(momentumRowForSymbol(symbol));
+          } catch (error) {
+            console.error(error);
+            showToast(error.message || "记一笔失败");
+          }
+        }
       }
 
       async function fillGrid(
@@ -11206,9 +11790,27 @@
         if (!WatchFavorites.hasPosition(positionItems, symbol)) return false;
         const label = symbol.replace("USDT", "");
         const forceStop = !!(options && options.forceStopLoss);
+        const current = Number(marketMap[symbol]?.price);
+        let sellPrice = Number(options && options.sellPrice);
         if (!(options && options.skipConfirm)) {
           if (!window.confirm(`确认卖出并停止观测 ${label} 持仓？`)) {
             return false;
+          }
+        }
+        if (!(Number.isFinite(sellPrice) && sellPrice > 0)) {
+          if (forceStop && Number.isFinite(current) && current > 0) {
+            sellPrice = current;
+          } else {
+            const input = window.prompt(
+              `输入 ${label} 卖出价（用于战绩盈亏）`,
+              Number.isFinite(current) ? String(current) : "",
+            );
+            if (input == null) return false;
+            sellPrice = Number(String(input).trim());
+            if (!Number.isFinite(sellPrice) || sellPrice <= 0) {
+              window.alert("卖出价无效");
+              return false;
+            }
           }
         }
         if (options && typeof options.onSaving === "function") options.onSaving();
@@ -11232,11 +11834,13 @@
             }),
           });
           positionItems = result.positions;
-          appendActionLog(forceStop ? "sell-stop" : "sell", [symbol]);
+          appendActionLog(forceStop ? "sell-stop" : "sell", [symbol], {
+            price: sellPrice,
+          });
           showToast(
             forceStop
-              ? `${label} 已强制止损卖出`
-              : `${label} 已卖出，停止持仓观测`,
+              ? `${label} 已强制止损卖出 · ${formatPinPrice(sellPrice)}`
+              : `${label} 已卖出 ${formatPinPrice(sellPrice)}，停止持仓观测`,
           );
           if (!(options && options.skipRender)) {
           await renderKlines();
@@ -11930,11 +12534,33 @@
       document
         .getElementById("actionLogBody")
         .addEventListener("click", (event) => {
+          const editBtn = event.target.closest("[data-edit-log-price]");
+          if (editBtn) {
+            event.preventDefault();
+            void editActionLogPrice(
+              editBtn.getAttribute("data-edit-log-price"),
+            );
+            return;
+          }
+          const sellBtn = event.target.closest("[data-record-sell]");
+          if (sellBtn) {
+            event.preventDefault();
+            void recordSellFromLog(sellBtn.getAttribute("data-record-sell"));
+            return;
+          }
           const link = event.target.closest(".notify-coin");
           if (!link) return;
           event.preventDefault();
           jumpToNotifySymbol(link.dataset.jump);
-      });
+        });
+      const cardFocusBar = document.getElementById("cardFocusBar");
+      if (cardFocusBar) {
+        cardFocusBar.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-focus-action]");
+          if (!btn) return;
+          void runFocusBarAction(btn.getAttribute("data-focus-action"));
+        });
+      }
       // 兜底：任意浮层/列表里的币名跳转（避免个别容器漏绑）
       document.addEventListener("click", (event) => {
         const link = event.target.closest("a.notify-coin[data-jump]");
@@ -11947,6 +12573,7 @@
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
           closeCardActions();
+          setFocusActionSymbol(null);
           setHiddenPinDrawerOpen(false);
           setNailDrawerOpen(false);
           setMaintPanelOpen(false);
