@@ -1876,6 +1876,7 @@
         box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #2f8f6e) 35%, transparent);
       }
       .card-focus-bar {
+        --card-focus-bar-h: 52px;
         position: fixed;
         left: 50%;
         bottom: calc(var(--float-dock-h, 48px) + 10px);
@@ -1883,45 +1884,76 @@
         z-index: 86;
         display: flex;
         align-items: center;
-        gap: 6px;
-        max-width: calc(100vw - 24px);
-        padding: 6px 8px;
-        border-radius: 10px;
+        gap: 8px;
+        width: min(560px, calc(100vw - 16px));
+        max-width: calc(100vw - 16px);
+        min-height: var(--card-focus-bar-h);
+        padding: 8px 10px;
+        border-radius: 12px;
         border: 0.5px solid var(--separator, rgba(200, 208, 204, 0.85));
         background: color-mix(in srgb, var(--elevated, #fbfcfa) 94%, transparent);
         color: var(--label, #5a6a68);
         box-shadow: 0 6px 18px rgba(40, 50, 48, 0.14);
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
+        box-sizing: border-box;
       }
       .card-focus-bar[hidden] {
         display: none !important;
       }
+      .card-focus-bar.is-busy {
+        pointer-events: none;
+      }
       .card-focus-bar .card-focus-label {
-        min-width: 0;
-        max-width: 7em;
-        padding: 0 4px;
-        font-size: 13px;
+        flex: 0 1 auto;
+        min-width: 3.5em;
+        max-width: 8em;
+        padding: 0 6px;
+        font-size: 14px;
         font-weight: 700;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
       .card-focus-bar button {
-        flex: 0 0 auto;
+        flex: 1 1 0;
         border: none;
         background: var(--fill, rgba(90, 106, 104, 0.1));
         color: inherit;
-        height: 32px;
-        padding: 0 10px;
-        border-radius: 8px;
-        font-size: 13px;
+        height: 36px;
+        padding: 0 12px;
+        border-radius: 9px;
+        font-size: 14px;
         font-weight: 650;
         cursor: pointer;
+        white-space: nowrap;
       }
       .card-focus-bar button.is-primary {
         background: color-mix(in srgb, var(--accent, #2f8f6e) 18%, transparent);
         color: var(--accent, #2f8f6e);
+      }
+      .card-focus-bar button.is-loading {
+        opacity: 0.9;
+        position: relative;
+        color: #5a6a68;
+      }
+      .card-focus-bar button.is-loading::after {
+        content: "";
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        margin-left: 8px;
+        border: 2px solid #c9d0d0;
+        border-top-color: #5a6a68;
+        border-radius: 50%;
+        vertical-align: -1px;
+        animation: card-action-spin 0.7s linear infinite;
+      }
+      .card-focus-bar button:disabled {
+        opacity: 0.5;
+      }
+      body.has-card-focus .toast {
+        bottom: calc(var(--float-dock-h, 48px) + 90px);
       }
       .action-log-row.is-pnl {
         display: grid;
@@ -2920,14 +2952,15 @@
       .toast {
         position: fixed;
         left: 50%;
-        bottom: calc(var(--float-dock-h, 48px) + 14px);
+        /* 默认抬高，避免被底栏挡住；有选框操作条时再由 body.has-card-focus 抬更高 */
+        bottom: calc(var(--float-dock-h, 48px) + 64px);
         transform: translateX(-50%);
         background: rgba(40, 50, 58, 0.92);
         color: #f7f8f6;
         padding: 8px 14px;
         border-radius: 8px;
         font-size: 13px;
-        z-index: 85;
+        z-index: 95;
         pointer-events: none;
         max-width: min(90vw, 420px);
         text-align: center;
@@ -10160,10 +10193,36 @@
         if (!bar) return;
         if (!key || pinSelectMode) {
           bar.hidden = true;
+          document.body.classList.remove("has-card-focus");
           return;
         }
         bar.hidden = false;
+        document.body.classList.add("has-card-focus");
         if (labelEl) labelEl.textContent = key.replace(/USDT$/i, "");
+      }
+
+      function setFocusBarBusy(on, activeBtn, busyLabel) {
+        const bar = document.getElementById("cardFocusBar");
+        if (!bar) return;
+        bar.classList.toggle("is-busy", !!on);
+        bar.querySelectorAll("button[data-focus-action]").forEach((btn) => {
+          btn.disabled = !!on;
+          if (!on) {
+            if (btn.classList.contains("is-loading")) {
+              btn.classList.remove("is-loading");
+              if (btn.dataset.labelBefore) {
+                btn.textContent = btn.dataset.labelBefore;
+                delete btn.dataset.labelBefore;
+              }
+            }
+            return;
+          }
+          if (activeBtn && btn === activeBtn) {
+            btn.classList.add("is-loading");
+            btn.dataset.labelBefore = btn.textContent;
+            btn.textContent = busyLabel || "处理中";
+          }
+        });
       }
 
       function setFocusActionSymbol(symbol) {
@@ -10243,7 +10302,11 @@
       async function runFocusBarAction(action) {
         const symbol = focusActionSymbol;
         if (!symbol) return;
+        const bar = document.getElementById("cardFocusBar");
+        if (bar && bar.classList.contains("is-busy")) return;
         const card = focusCardEl(symbol);
+        const activeBtn =
+          bar && bar.querySelector('[data-focus-action="' + action + '"]');
         if (action === "more") {
           if (!card) {
             showToast("当前列表找不到该币卡片");
@@ -10257,6 +10320,7 @@
             showToast("当前列表找不到该币卡片");
             return;
           }
+          setFocusBarBusy(true, activeBtn, "刷新中");
           try {
             await refreshSingleKlineCard(card);
             const price = marketMap[symbol]?.price;
@@ -10268,6 +10332,8 @@
           } catch (error) {
             console.error(error);
             showToast(error.message || "刷新失败");
+          } finally {
+            setFocusBarBusy(false);
           }
           return;
         }
@@ -10276,11 +10342,14 @@
             showToast("记一笔需要先盯一下");
             return;
           }
+          setFocusBarBusy(true, activeBtn, "记录中");
           try {
             await addMomNoteFromRow(momentumRowForSymbol(symbol));
           } catch (error) {
             console.error(error);
             showToast(error.message || "记一笔失败");
+          } finally {
+            setFocusBarBusy(false);
           }
         }
       }
