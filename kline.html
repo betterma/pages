@@ -832,6 +832,7 @@
         max-width: 560px;
       }
       .notes-rank-kcard {
+        position: relative;
         min-width: 0;
         padding: 8px 8px 6px;
         border: 0.5px solid var(--separator);
@@ -872,9 +873,13 @@
         display: block;
         width: 100%;
         height: 112px;
-        pointer-events: none;
+        pointer-events: auto;
+        touch-action: pan-y;
         border-radius: 6px;
         background: color-mix(in srgb, var(--elevated) 70%, transparent);
+      }
+      .notes-rank-kline.is-crosshair {
+        touch-action: none;
       }
       .notes-rank-kcard-stats {
         display: grid;
@@ -1531,6 +1536,7 @@
         display: none !important;
       }
       .nail-kcard {
+        position: relative;
         min-width: 0;
         padding: 8px 8px 6px;
         border: 0.5px solid var(--separator);
@@ -1639,9 +1645,13 @@
         display: block;
         width: 100%;
         height: 112px;
-        pointer-events: none;
+        pointer-events: auto;
+        touch-action: pan-y;
         border-radius: 6px;
         background: color-mix(in srgb, var(--elevated) 70%, transparent);
+      }
+      .nail-kline.is-crosshair {
+        touch-action: none;
       }
       .nail-empty {
         padding: 28px 16px;
@@ -2956,7 +2966,90 @@
         display: block;
         width: 100%;
         height: 150px;
+        pointer-events: auto;
+        /* 默认可竖滑列表；进入十字线后再锁 */
+        touch-action: pan-y;
+      }
+      .kline-card canvas.is-crosshair {
+        touch-action: none;
+      }
+      .kline-crosshair {
+        position: absolute;
+        left: 0;
+        top: 0;
+        z-index: 6;
         pointer-events: none;
+        overflow: hidden;
+      }
+      .kline-crosshair[hidden] {
+        display: none !important;
+      }
+      .kline-crosshair-v,
+      .kline-crosshair-h {
+        position: absolute;
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 75%, #fff);
+        opacity: 0.85;
+      }
+      .kline-crosshair-v {
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        transform: translateX(-0.5px);
+      }
+      .kline-crosshair-h {
+        left: 0;
+        right: 0;
+        height: 1px;
+        transform: translateY(-0.5px);
+      }
+      .kline-crosshair-dot {
+        position: absolute;
+        width: 7px;
+        height: 7px;
+        margin: -3.5px 0 0 -3.5px;
+        border-radius: 50%;
+        background: var(--accent, #2f8f6e);
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+      }
+      .kline-crosshair-price,
+      .kline-crosshair-time {
+        position: absolute;
+        z-index: 1;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: rgba(40, 50, 48, 0.88);
+        color: #f4f7f5;
+        font-size: 11px;
+        font-weight: 650;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        line-height: 1.35;
+      }
+      .kline-crosshair-price {
+        right: 2px;
+        transform: translateY(-50%);
+      }
+      .kline-crosshair-time {
+        bottom: 2px;
+        transform: translateX(-50%);
+      }
+      .kline-crosshair-tip {
+        position: absolute;
+        left: 4px;
+        top: 4px;
+        z-index: 1;
+        max-width: calc(100% - 8px);
+        padding: 3px 6px;
+        border-radius: 4px;
+        background: rgba(40, 50, 48, 0.88);
+        color: #f4f7f5;
+        font-size: 10px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.35;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .up {
         color: var(--up);
@@ -9408,6 +9501,209 @@
           ctx.stroke();
           ctx.restore();
         });
+
+        // 供长按十字线反查坐标
+        canvas.__klineMeta = {
+          candles,
+          pad,
+          min,
+          max,
+          range,
+          slot,
+          chartW,
+          chartH,
+          width,
+          height,
+        };
+        bindKlineCrosshair(canvas);
+      }
+
+      function formatCrosshairTime(ms) {
+        const date = new Date(Number(ms) || 0);
+        if (!Number.isFinite(date.getTime())) return "--";
+        const mo = String(date.getMonth() + 1).padStart(2, "0");
+        const d = String(date.getDate()).padStart(2, "0");
+        const hh = String(date.getHours()).padStart(2, "0");
+        const mm = String(date.getMinutes()).padStart(2, "0");
+        return `${mo}-${d} ${hh}:${mm}`;
+      }
+
+      function ensureKlineCrosshairLayer(canvas) {
+        const parent = canvas.parentElement;
+        if (!parent) return null;
+        if (getComputedStyle(parent).position === "static") {
+          parent.style.position = "relative";
+        }
+        let layer = parent.querySelector(":scope > .kline-crosshair");
+        if (!layer) {
+          layer = document.createElement("div");
+          layer.className = "kline-crosshair";
+          layer.hidden = true;
+          layer.innerHTML = [
+            '<div class="kline-crosshair-v"></div>',
+            '<div class="kline-crosshair-h"></div>',
+            '<div class="kline-crosshair-dot"></div>',
+            '<div class="kline-crosshair-price"></div>',
+            '<div class="kline-crosshair-time"></div>',
+            '<div class="kline-crosshair-tip"></div>',
+          ].join("");
+          canvas.insertAdjacentElement("afterend", layer);
+        }
+        const rect = canvas.getBoundingClientRect();
+        const prect = parent.getBoundingClientRect();
+        layer.style.left = `${Math.round(rect.left - prect.left)}px`;
+        layer.style.top = `${Math.round(rect.top - prect.top)}px`;
+        layer.style.width = `${Math.round(rect.width)}px`;
+        layer.style.height = `${Math.round(rect.height)}px`;
+        return layer;
+      }
+
+      function hideKlineCrosshair(canvas) {
+        const parent = canvas && canvas.parentElement;
+        const layer = parent && parent.querySelector(":scope > .kline-crosshair");
+        if (layer) layer.hidden = true;
+        if (canvas) canvas.classList.remove("is-crosshair");
+      }
+
+      function updateKlineCrosshair(canvas, clientX, clientY) {
+        const meta = canvas && canvas.__klineMeta;
+        if (!meta || !meta.candles || !meta.candles.length) return;
+        const layer = ensureKlineCrosshairLayer(canvas);
+        if (!layer) return;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = meta.width / Math.max(1, rect.width);
+        const scaleY = meta.height / Math.max(1, rect.height);
+        let x = (clientX - rect.left) * scaleX;
+        let y = (clientY - rect.top) * scaleY;
+        x = Math.max(meta.pad.left, Math.min(meta.pad.left + meta.chartW, x));
+        y = Math.max(meta.pad.top, Math.min(meta.pad.top + meta.chartH, y));
+
+        const idx = Math.max(
+          0,
+          Math.min(
+            meta.candles.length - 1,
+            Math.floor((x - meta.pad.left) / meta.slot),
+          ),
+        );
+        const candle = meta.candles[idx];
+        const snapX = meta.pad.left + meta.slot * idx + meta.slot / 2;
+        const price = meta.max - ((y - meta.pad.top) / meta.chartH) * meta.range;
+        const displayX = (snapX / scaleX);
+        const displayY = y / scaleY;
+
+        layer.hidden = false;
+        canvas.classList.add("is-crosshair");
+        const v = layer.querySelector(".kline-crosshair-v");
+        const h = layer.querySelector(".kline-crosshair-h");
+        const dot = layer.querySelector(".kline-crosshair-dot");
+        const priceEl = layer.querySelector(".kline-crosshair-price");
+        const timeEl = layer.querySelector(".kline-crosshair-time");
+        const tip = layer.querySelector(".kline-crosshair-tip");
+        if (v) v.style.left = `${displayX}px`;
+        if (h) h.style.top = `${displayY}px`;
+        if (dot) {
+          dot.style.left = `${displayX}px`;
+          dot.style.top = `${displayY}px`;
+        }
+        if (priceEl) {
+          priceEl.textContent = formatPinPrice(price);
+          priceEl.style.top = `${displayY}px`;
+        }
+        if (timeEl) {
+          timeEl.textContent = formatCrosshairTime(candle.time);
+          let tx = displayX;
+          const half = 40;
+          const w = rect.width;
+          if (tx < half) tx = half;
+          if (tx > w - half) tx = w - half;
+          timeEl.style.left = `${tx}px`;
+        }
+        if (tip && candle) {
+          tip.textContent = [
+            formatCrosshairTime(candle.time),
+            `O ${formatPinPrice(candle.open)}`,
+            `H ${formatPinPrice(candle.high)}`,
+            `L ${formatPinPrice(candle.low)}`,
+            `C ${formatPinPrice(candle.close)}`,
+          ].join(" · ");
+        }
+      }
+
+      function bindKlineCrosshair(canvas) {
+        if (!canvas || canvas.dataset.crosshairBound === "1") return;
+        canvas.dataset.crosshairBound = "1";
+        const longMs = 420;
+        let pressTimer = 0;
+        let active = false;
+        let startX = 0;
+        let startY = 0;
+        let pointerId = null;
+
+        const clearPress = () => {
+          if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = 0;
+          }
+        };
+
+        const end = () => {
+          clearPress();
+          if (!active) return;
+          active = false;
+          pointerId = null;
+          hideKlineCrosshair(canvas);
+          // 松手后短暂抑制卡片选框 click
+          window.__klineCrosshairSuppressClick = true;
+          window.setTimeout(() => {
+            window.__klineCrosshairSuppressClick = false;
+          }, 280);
+        };
+
+        canvas.addEventListener(
+          "pointerdown",
+          (event) => {
+            if (event.pointerType === "mouse" && event.button !== 0) return;
+            if (!canvas.__klineMeta) return;
+            startX = event.clientX;
+            startY = event.clientY;
+            clearPress();
+            pressTimer = window.setTimeout(() => {
+              pressTimer = 0;
+              active = true;
+              pointerId = event.pointerId;
+              try {
+                canvas.setPointerCapture(event.pointerId);
+              } catch (error) {
+                /* ignore */
+              }
+              if (navigator.vibrate) navigator.vibrate(12);
+              updateKlineCrosshair(canvas, event.clientX, event.clientY);
+            }, longMs);
+          },
+          { passive: true },
+        );
+
+        canvas.addEventListener(
+          "pointermove",
+          (event) => {
+            if (!active && pressTimer) {
+              const dx = event.clientX - startX;
+              const dy = event.clientY - startY;
+              if (dx * dx + dy * dy > 64) clearPress();
+              return;
+            }
+            if (!active) return;
+            if (pointerId != null && event.pointerId !== pointerId) return;
+            updateKlineCrosshair(canvas, event.clientX, event.clientY);
+          },
+          { passive: true },
+        );
+
+        canvas.addEventListener("pointerup", end);
+        canvas.addEventListener("pointercancel", end);
+        canvas.addEventListener("lostpointercapture", () => {
+          if (active) end();
+        });
       }
 
       async function renderKlineCard(card, symbol, interval, signal, pinItem) {
@@ -10319,6 +10615,14 @@
           ) {
             return;
           }
+          // 长按十字线读价时不切换选框
+          if (
+            window.__klineCrosshairSuppressClick ||
+            (event.target.closest("canvas") &&
+              event.target.classList.contains("is-crosshair"))
+          ) {
+            return;
+          }
           if (pinSelectMode && isPinCardSection(card.dataset.section)) {
             return;
           }
@@ -10896,7 +11200,8 @@
             if (nailSaving) return;
             // 只认鼠标左键 / 触屏主触点；避免滚轮键等
             if (event.pointerType === "mouse" && event.button !== 0) return;
-            if (event.target.closest("button")) return;
+            // 按钮 / K 线 canvas（长按读价）不进入拖排序
+            if (event.target.closest("button, canvas")) return;
             const card = event.target.closest(".nail-kcard[data-nail-symbol]");
             if (!card) return;
             const symbol = card.getAttribute("data-nail-symbol");
