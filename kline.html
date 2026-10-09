@@ -869,6 +869,29 @@
         flex: 0 0 auto;
         font-weight: 650;
       }
+      .notes-rank-zoom {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: none;
+        border-radius: 6px;
+        background: var(--fill);
+        color: var(--secondary);
+        cursor: pointer;
+        line-height: 0;
+      }
+      .notes-rank-zoom:active {
+        color: var(--accent);
+      }
+      .notes-rank-zoom svg {
+        width: 12px;
+        height: 12px;
+        display: block;
+      }
       .notes-rank-kline {
         display: block;
         width: 100%;
@@ -1279,31 +1302,45 @@
         top: 42%;
         right: 0;
         z-index: 40;
-        writing-mode: vertical-rl;
-        text-orientation: mixed;
-        letter-spacing: 0.12em;
-        border: 1px solid #c9d0d0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        width: 22px;
+        min-height: 36px;
+        padding: 6px 2px 6px 4px;
+        border: 0.5px solid #c9d0d0;
         border-right: 0;
         border-radius: 8px 0 0 8px;
-        background: #eef2ef;
-        color: #3d4a48;
-        padding: 14px 8px;
-        font-size: 13px;
+        background: color-mix(in srgb, #eef2ef 82%, transparent);
+        color: #6a7774;
         cursor: pointer;
-        box-shadow: -2px 2px 10px rgba(40, 50, 48, 0.08);
+        box-shadow: none;
       }
       .hidden-pin-tab:hover {
         background: #e4ebe6;
+        color: #3d4a48;
       }
       .hidden-pin-tab[data-count="0"] {
-        opacity: 0.55;
+        opacity: 0.4;
+      }
+      .hidden-pin-tab svg {
+        width: 13px;
+        height: 13px;
+        display: block;
       }
       .hidden-pin-tab .tab-count {
-        display: inline-block;
-        margin-top: 8px;
-        writing-mode: horizontal-tb;
-        font-size: 12px;
+        display: block;
+        min-width: 0;
+        font-size: 9px;
+        line-height: 1;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
         color: #5a6a68;
+      }
+      .hidden-pin-tab[data-count="0"] .tab-count {
+        display: none;
       }
       .hidden-pin-drawer {
         position: fixed;
@@ -1372,28 +1409,45 @@
         top: 42%;
         left: 0;
         z-index: 121;
-        writing-mode: vertical-rl;
-        text-orientation: mixed;
-        letter-spacing: 0.12em;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        width: 22px;
+        min-height: 36px;
+        padding: 6px 4px 6px 2px;
         border: 0.5px solid var(--separator);
         border-left: 0;
         border-radius: 0 8px 8px 0;
-        background: var(--elevated);
-        color: var(--label);
-        padding: 14px 8px;
-        font-size: 13px;
+        background: color-mix(in srgb, var(--elevated) 82%, transparent);
+        color: var(--secondary);
         cursor: pointer;
-        box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.18);
+        box-shadow: none;
       }
       .nail-tab:hover {
         background: var(--fill);
+        color: var(--label);
+      }
+      .nail-tab[data-count="0"] {
+        opacity: 0.4;
+      }
+      .nail-tab svg {
+        width: 13px;
+        height: 13px;
+        display: block;
       }
       .nail-tab .tab-count {
-        display: inline-block;
-        margin-top: 8px;
-        writing-mode: horizontal-tb;
-        font-size: 12px;
+        display: block;
+        min-width: 0;
+        font-size: 9px;
+        line-height: 1;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
         color: var(--secondary);
+      }
+      .nail-tab[data-count="0"] .tab-count {
+        display: none;
       }
       .nail-drawer {
         position: fixed;
@@ -1577,6 +1631,30 @@
       .nail-pin.is-on {
         color: var(--accent);
         background: color-mix(in srgb, var(--accent) 18%, transparent);
+      }
+      .nail-zoom {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        min-width: 22px;
+        padding: 0;
+        border: none;
+        border-radius: 6px;
+        background: var(--fill);
+        color: var(--secondary);
+        cursor: pointer;
+        line-height: 0;
+      }
+      .nail-zoom:active {
+        color: var(--accent);
+      }
+      .nail-zoom svg {
+        width: 12px;
+        height: 12px;
+        display: block;
       }
       .nail-name {
         flex: 1 1 auto;
@@ -3035,6 +3113,41 @@
         color: var(--secondary);
         flex: 0 0 auto;
       }
+      /* 竖屏手机：整页旋转成横屏画布，K 线更宽 */
+      @media (orientation: portrait) and (max-width: 900px) {
+        .kline-zoom-gate.is-landscape-layout {
+          padding: 0;
+          overflow: hidden;
+        }
+        .kline-zoom-gate.is-landscape-layout .kline-zoom-panel {
+          position: absolute;
+          top: 0;
+          left: 100%;
+          width: 100vh;
+          height: 100vw;
+          border-radius: 0;
+          border: none;
+          transform: rotate(90deg);
+          transform-origin: top left;
+          padding: max(8px, env(safe-area-inset-left, 0px))
+            max(10px, env(safe-area-inset-top, 0px))
+            max(8px, env(safe-area-inset-right, 0px))
+            max(10px, env(safe-area-inset-bottom, 0px));
+          box-sizing: border-box;
+        }
+        @supports (height: 100dvh) {
+          .kline-zoom-gate.is-landscape-layout .kline-zoom-panel {
+            width: 100dvh;
+            height: 100dvw;
+          }
+        }
+        .kline-zoom-gate.is-landscape-layout .kline-zoom-head {
+          padding: 8px 10px 6px;
+        }
+        .kline-zoom-gate.is-landscape-layout .kline-zoom-hint {
+          margin: 6px 10px 8px;
+        }
+      }
       .kline-crosshair {
         position: absolute;
         left: 0;
@@ -3515,9 +3628,16 @@
       id="nailTab"
       class="nail-tab"
       data-count="0"
-      title="钉子抽屉：钉住想持续观察的币"
+      title="钉子抽屉"
+      aria-label="钉子抽屉"
     >
-      钉子抽屉<span class="tab-count" id="nailTabCount">0</span>
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M8.8 1.4 14.6 7.2l-1.1 1.1-1.3-1.3-2.2 6.2-.9.9-2.5-2.5-2.8 2.8-.8-.8 2.8-2.8-2.5-2.5.9-.9 6.2-2.2-1.3-1.3 1.1-1.1z"
+        />
+      </svg>
+      <span class="tab-count" id="nailTabCount">0</span>
     </button>
     <div id="nailDrawer" class="nail-drawer" aria-hidden="true">
       <div class="nail-mask" data-close-nails></div>
@@ -3563,9 +3683,16 @@
       id="hiddenPinTab"
       class="hidden-pin-tab"
       data-count="0"
-      title="查看当前窗口未涨、已从盯一下区隐藏的币"
+      title="隐藏盯一下"
+      aria-label="隐藏盯一下"
     >
-      隐藏盯一下<span class="tab-count" id="hiddenPinTabCount">0</span>
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M2.1 2.1 1 3.2l2.3 2.3C2 6.4 1.2 7.6 1 8c.6 1.2 3.4 5 7 5 1.3 0 2.5-.4 3.6-1l2.2 2.2 1.1-1.1L2.1 2.1zM8 11.5A3.5 3.5 0 0 1 5.1 7.3l1.1 1.1A2.2 2.2 0 0 0 8 10.2c.3 0 .6-.1.8-.2l1.1 1.1A3.5 3.5 0 0 1 8 11.5zm7-3.5c-.2.4-.8 1.3-1.8 2.2l-1-1c.7-.6 1.3-1.2 1.6-1.7C12.4 6.3 10.4 4.5 8 4.5c-.5 0-1 .1-1.5.2L5.4 3.6C6.2 3.2 7.1 3 8 3c3.6 0 6.4 3.8 7 5z"
+        />
+      </svg>
+      <span class="tab-count" id="hiddenPinTabCount">0</span>
     </button>
     <div id="hiddenPinDrawer" class="hidden-pin-drawer" aria-hidden="true">
       <div class="hidden-pin-mask" data-close-hidden-pins></div>
@@ -8694,7 +8821,7 @@
               `<span class="notes-rank-kcard-rank">${index + 1}</span>`,
               `<button type="button" class="notes-rank-sym" data-copy="${escapeHtml(row.label)}" data-jump="${escapeHtml(row.symbol)}" title="点击复制">${escapeHtml(row.label)}</button>`,
               `<span class="${notesRankMetricClass(row, primaryKey)}">${escapeHtml(notesRankMetricText(row, primaryKey))}</span>`,
-              `<button type="button" class="notes-rank-kcard-metric" data-kline-zoom="${escapeHtml(row.symbol)}">放大</button>`,
+              `<button type="button" class="notes-rank-zoom" data-kline-zoom="${escapeHtml(row.symbol)}" title="放大 K 线" aria-label="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button>`,
               `</div>`,
               `<canvas class="notes-rank-kline" data-kline="${escapeHtml(row.symbol)}"></canvas>`,
               `<div class="notes-rank-kcard-stats">`,
@@ -9714,10 +9841,55 @@
 
       let klineZoomSymbol = null;
       let klineZoomBound = false;
+      let klineZoomLockedOrientation = false;
+
+      const KLINE_ZOOM_ICON_SVG =
+        '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M2 2h4v1.5H3.5V6H2V2zm8 0h4v4h-1.5V3.5H10V2zM2 10h1.5v2.5H6V14H2v-4zm8 2.5H13.5V10H15v4h-4v-1.5z"/></svg>';
 
       function isKlineZoomOpen() {
         const gate = document.getElementById("klineZoomGate");
         return !!(gate && !gate.hidden);
+      }
+
+      function syncKlineZoomLandscapeClass() {
+        const gate = document.getElementById("klineZoomGate");
+        if (!gate || gate.hidden) return;
+        const portrait =
+          window.matchMedia &&
+          window.matchMedia("(orientation: portrait)").matches;
+        const narrow = window.innerWidth <= 900;
+        gate.classList.toggle("is-landscape-layout", !!(portrait && narrow));
+      }
+
+      async function lockKlineZoomLandscape() {
+        klineZoomLockedOrientation = false;
+        try {
+          const orientation = screen.orientation;
+          if (
+            orientation &&
+            typeof orientation.lock === "function" &&
+            window.matchMedia("(orientation: portrait)").matches
+          ) {
+            await orientation.lock("landscape");
+            klineZoomLockedOrientation = true;
+          }
+        } catch (error) {
+          /* iOS / 无权限时走 CSS 横屏布局 */
+        }
+        syncKlineZoomLandscapeClass();
+      }
+
+      function unlockKlineZoomLandscape() {
+        if (klineZoomLockedOrientation) {
+          try {
+            screen.orientation?.unlock?.();
+          } catch (error) {
+            /* ignore */
+          }
+          klineZoomLockedOrientation = false;
+        }
+        const gate = document.getElementById("klineZoomGate");
+        if (gate) gate.classList.remove("is-landscape-layout");
       }
 
       function closeKlineZoom() {
@@ -9726,6 +9898,7 @@
         if (gate) gate.hidden = true;
         hideKlineCrosshair(canvas);
         klineZoomSymbol = null;
+        unlockKlineZoomLandscape();
         document.body.classList.remove("is-kline-zoom");
         syncBodyScrollLock();
       }
@@ -9814,10 +9987,12 @@
         gate.hidden = false;
         document.body.classList.add("is-kline-zoom");
         syncBodyScrollLock();
+        await lockKlineZoomLandscape();
         bindKlineZoomPointer();
         try {
           await paintKlineZoom(key);
           window.requestAnimationFrame(() => {
+            syncKlineZoomLandscapeClass();
             if (klineZoomSymbol === key) void paintKlineZoom(key);
           });
         } catch (error) {
@@ -11067,7 +11242,7 @@
               `<div class="nail-kcard-head">`,
               `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "取消置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
               `<button type="button" class="nail-name" data-nail-jump="${symbol}" title="跳到 K 线">${label}${tag}</button>`,
-              `<button type="button" class="nail-pin" data-kline-zoom="${symbol}" title="放大 K 线">放</button>`,
+              `<button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线" aria-label="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button>`,
               `<button type="button" class="nail-del" data-nail-del="${symbol}">删除</button>`,
               `</div>`,
               nailPriceRowHtml(item.symbol),
@@ -13164,7 +13339,15 @@
       }
       window.addEventListener("resize", () => {
         if (!isKlineZoomOpen() || !klineZoomSymbol) return;
+        syncKlineZoomLandscapeClass();
         void paintKlineZoom(klineZoomSymbol);
+      });
+      window.addEventListener("orientationchange", () => {
+        if (!isKlineZoomOpen() || !klineZoomSymbol) return;
+        window.setTimeout(() => {
+          syncKlineZoomLandscapeClass();
+          void paintKlineZoom(klineZoomSymbol);
+        }, 120);
       });
       // 兜底：任意浮层/列表里的币名跳转（避免个别容器漏绑）
       document.addEventListener("click", (event) => {
