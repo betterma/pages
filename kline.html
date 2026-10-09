@@ -873,13 +873,9 @@
         display: block;
         width: 100%;
         height: 112px;
-        pointer-events: auto;
-        touch-action: pan-y;
+        pointer-events: none;
         border-radius: 6px;
         background: color-mix(in srgb, var(--elevated) 70%, transparent);
-      }
-      .notes-rank-kline.is-crosshair {
-        touch-action: none;
       }
       .notes-rank-kcard-stats {
         display: grid;
@@ -1645,13 +1641,9 @@
         display: block;
         width: 100%;
         height: 112px;
-        pointer-events: auto;
-        touch-action: pan-y;
+        pointer-events: none;
         border-radius: 6px;
         background: color-mix(in srgb, var(--elevated) 70%, transparent);
-      }
-      .nail-kline.is-crosshair {
-        touch-action: none;
       }
       .nail-empty {
         padding: 28px 16px;
@@ -2966,12 +2958,82 @@
         display: block;
         width: 100%;
         height: 150px;
-        pointer-events: auto;
-        /* 默认可竖滑列表；进入十字线后再锁 */
-        touch-action: pan-y;
+        pointer-events: none;
       }
-      .kline-card canvas.is-crosshair {
+      .kline-zoom-gate {
+        position: fixed;
+        inset: 0;
+        z-index: 180;
+        display: flex;
+        flex-direction: column;
+        background: color-mix(in srgb, var(--bg) 78%, transparent);
+        backdrop-filter: blur(10px) saturate(140%);
+        -webkit-backdrop-filter: blur(10px) saturate(140%);
+        padding: max(10px, env(safe-area-inset-top, 0px)) 10px
+          max(12px, env(safe-area-inset-bottom, 0px));
+      }
+      .kline-zoom-gate[hidden] {
+        display: none !important;
+      }
+      .kline-zoom-panel {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        border: 0.5px solid var(--separator);
+        border-radius: 14px;
+        background: color-mix(in srgb, var(--elevated) 92%, transparent);
+        overflow: hidden;
+      }
+      .kline-zoom-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 12px 8px;
+        flex: 0 0 auto;
+      }
+      .kline-zoom-head h2 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .kline-zoom-head p {
+        margin: 4px 0 0;
+        font-size: 12px;
+        color: var(--secondary);
+      }
+      .kline-zoom-head button {
+        border: none;
+        background: var(--fill, rgba(90, 106, 104, 0.12));
+        color: var(--label);
+        height: 32px;
+        padding: 0 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 650;
+        cursor: pointer;
+        flex: 0 0 auto;
+      }
+      .kline-zoom-chart {
+        position: relative;
+        flex: 1 1 auto;
+        min-height: 220px;
+        margin: 0 8px;
         touch-action: none;
+      }
+      .kline-zoom-chart canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        pointer-events: auto;
+        touch-action: none;
+      }
+      .kline-zoom-hint {
+        margin: 8px 12px 12px;
+        font-size: 12px;
+        color: var(--secondary);
+        flex: 0 0 auto;
       }
       .kline-crosshair {
         position: absolute;
@@ -3015,11 +3077,11 @@
       .kline-crosshair-time {
         position: absolute;
         z-index: 1;
-        padding: 2px 6px;
+        padding: 3px 8px;
         border-radius: 4px;
         background: rgba(40, 50, 48, 0.88);
         color: #f4f7f5;
-        font-size: 11px;
+        font-size: 13px;
         font-weight: 650;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
@@ -3035,18 +3097,18 @@
       }
       .kline-crosshair-tip {
         position: absolute;
-        left: 4px;
-        top: 4px;
+        left: 6px;
+        top: 6px;
         z-index: 1;
-        max-width: calc(100% - 8px);
-        padding: 3px 6px;
-        border-radius: 4px;
+        max-width: calc(100% - 12px);
+        padding: 5px 8px;
+        border-radius: 6px;
         background: rgba(40, 50, 48, 0.88);
         color: #f4f7f5;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 600;
         font-variant-numeric: tabular-nums;
-        line-height: 1.35;
+        line-height: 1.4;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -3661,10 +3723,42 @@
     <div id="cardFocusBar" class="card-focus-bar" hidden>
       <span class="card-focus-label" id="cardFocusLabel">—</span>
       <button type="button" data-focus-action="note">记一笔</button>
+      <button type="button" data-focus-action="zoom">放大</button>
       <button type="button" data-focus-action="refresh">刷新</button>
       <button type="button" class="is-primary" data-focus-action="more">
         更多
       </button>
+    </div>
+
+    <div
+      id="klineZoomGate"
+      class="kline-zoom-gate"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="klineZoomTitle"
+    >
+      <div class="kline-zoom-panel">
+        <div class="kline-zoom-head">
+          <div>
+            <h2 id="klineZoomTitle">K 线</h2>
+            <p id="klineZoomMeta">按住滑动查看价格</p>
+          </div>
+          <button type="button" id="klineZoomClose">关闭</button>
+        </div>
+        <div class="kline-zoom-chart" id="klineZoomChart">
+          <canvas id="klineZoomCanvas"></canvas>
+          <div class="kline-crosshair" id="klineZoomCrosshair" hidden>
+            <div class="kline-crosshair-v"></div>
+            <div class="kline-crosshair-h"></div>
+            <div class="kline-crosshair-dot"></div>
+            <div class="kline-crosshair-price"></div>
+            <div class="kline-crosshair-time"></div>
+            <div class="kline-crosshair-tip"></div>
+          </div>
+        </div>
+        <p class="kline-zoom-hint">手指按住并游走，十字线显示该点价格与时间</p>
+      </div>
     </div>
 
     <div class="float-tabs" role="tablist" aria-label="浮窗">
@@ -8594,6 +8688,7 @@
               `<span class="notes-rank-kcard-rank">${index + 1}</span>`,
               `<button type="button" class="notes-rank-sym" data-copy="${escapeHtml(row.label)}" data-jump="${escapeHtml(row.symbol)}" title="点击复制">${escapeHtml(row.label)}</button>`,
               `<span class="${notesRankMetricClass(row, primaryKey)}">${escapeHtml(notesRankMetricText(row, primaryKey))}</span>`,
+              `<button type="button" class="notes-rank-kcard-metric" data-kline-zoom="${escapeHtml(row.symbol)}">放大</button>`,
               `</div>`,
               `<canvas class="notes-rank-kline" data-kline="${escapeHtml(row.symbol)}"></canvas>`,
               `<div class="notes-rank-kcard-stats">`,
@@ -9515,7 +9610,6 @@
           width,
           height,
         };
-        bindKlineCrosshair(canvas);
       }
 
       function formatCrosshairTime(ms) {
@@ -9529,28 +9623,12 @@
       }
 
       function ensureKlineCrosshairLayer(canvas) {
-        const parent = canvas.parentElement;
-        if (!parent) return null;
-        if (getComputedStyle(parent).position === "static") {
-          parent.style.position = "relative";
-        }
-        let layer = parent.querySelector(":scope > .kline-crosshair");
-        if (!layer) {
-          layer = document.createElement("div");
-          layer.className = "kline-crosshair";
-          layer.hidden = true;
-          layer.innerHTML = [
-            '<div class="kline-crosshair-v"></div>',
-            '<div class="kline-crosshair-h"></div>',
-            '<div class="kline-crosshair-dot"></div>',
-            '<div class="kline-crosshair-price"></div>',
-            '<div class="kline-crosshair-time"></div>',
-            '<div class="kline-crosshair-tip"></div>',
-          ].join("");
-          canvas.insertAdjacentElement("afterend", layer);
-        }
+        if (!canvas || canvas.id !== "klineZoomCanvas") return null;
+        const layer = document.getElementById("klineZoomCrosshair");
+        const wrap = document.getElementById("klineZoomChart");
+        if (!layer || !wrap) return null;
         const rect = canvas.getBoundingClientRect();
-        const prect = parent.getBoundingClientRect();
+        const prect = wrap.getBoundingClientRect();
         layer.style.left = `${Math.round(rect.left - prect.left)}px`;
         layer.style.top = `${Math.round(rect.top - prect.top)}px`;
         layer.style.width = `${Math.round(rect.width)}px`;
@@ -9559,8 +9637,7 @@
       }
 
       function hideKlineCrosshair(canvas) {
-        const parent = canvas && canvas.parentElement;
-        const layer = parent && parent.querySelector(":scope > .kline-crosshair");
+        const layer = document.getElementById("klineZoomCrosshair");
         if (layer) layer.hidden = true;
         if (canvas) canvas.classList.remove("is-crosshair");
       }
@@ -9629,81 +9706,119 @@
         }
       }
 
-      function bindKlineCrosshair(canvas) {
-        if (!canvas || canvas.dataset.crosshairBound === "1") return;
-        canvas.dataset.crosshairBound = "1";
-        const longMs = 420;
-        let pressTimer = 0;
-        let active = false;
-        let startX = 0;
-        let startY = 0;
+      let klineZoomSymbol = null;
+      let klineZoomBound = false;
+
+      function isKlineZoomOpen() {
+        const gate = document.getElementById("klineZoomGate");
+        return !!(gate && !gate.hidden);
+      }
+
+      function closeKlineZoom() {
+        const gate = document.getElementById("klineZoomGate");
+        const canvas = document.getElementById("klineZoomCanvas");
+        if (gate) gate.hidden = true;
+        hideKlineCrosshair(canvas);
+        klineZoomSymbol = null;
+        document.body.classList.remove("is-kline-zoom");
+        syncBodyScrollLock();
+      }
+
+      function bindKlineZoomPointer() {
+        const canvas = document.getElementById("klineZoomCanvas");
+        if (!canvas || klineZoomBound) return;
+        klineZoomBound = true;
+        let tracking = false;
         let pointerId = null;
-
-        const clearPress = () => {
-          if (pressTimer) {
-            clearTimeout(pressTimer);
-            pressTimer = 0;
-          }
-        };
-
-        const end = () => {
-          clearPress();
-          if (!active) return;
-          active = false;
-          pointerId = null;
-          hideKlineCrosshair(canvas);
-          // 松手后短暂抑制卡片选框 click
-          window.__klineCrosshairSuppressClick = true;
-          window.setTimeout(() => {
-            window.__klineCrosshairSuppressClick = false;
-          }, 280);
-        };
-
         canvas.addEventListener(
           "pointerdown",
           (event) => {
             if (event.pointerType === "mouse" && event.button !== 0) return;
-            if (!canvas.__klineMeta) return;
-            startX = event.clientX;
-            startY = event.clientY;
-            clearPress();
-            pressTimer = window.setTimeout(() => {
-              pressTimer = 0;
-              active = true;
-              pointerId = event.pointerId;
-              try {
-                canvas.setPointerCapture(event.pointerId);
-              } catch (error) {
-                /* ignore */
-              }
-              if (navigator.vibrate) navigator.vibrate(12);
-              updateKlineCrosshair(canvas, event.clientX, event.clientY);
-            }, longMs);
+            tracking = true;
+            pointerId = event.pointerId;
+            try {
+              canvas.setPointerCapture(event.pointerId);
+            } catch (error) {
+              /* ignore */
+            }
+            updateKlineCrosshair(canvas, event.clientX, event.clientY);
           },
           { passive: true },
         );
-
         canvas.addEventListener(
           "pointermove",
           (event) => {
-            if (!active && pressTimer) {
-              const dx = event.clientX - startX;
-              const dy = event.clientY - startY;
-              if (dx * dx + dy * dy > 64) clearPress();
-              return;
-            }
-            if (!active) return;
+            if (!tracking) return;
             if (pointerId != null && event.pointerId !== pointerId) return;
             updateKlineCrosshair(canvas, event.clientX, event.clientY);
           },
           { passive: true },
         );
+        const stopTrack = () => {
+          tracking = false;
+          pointerId = null;
+        };
+        canvas.addEventListener("pointerup", stopTrack);
+        canvas.addEventListener("pointercancel", stopTrack);
+      }
 
-        canvas.addEventListener("pointerup", end);
-        canvas.addEventListener("pointercancel", end);
-        canvas.addEventListener("lostpointercapture", () => {
-          if (active) end();
-        });
+      async function paintKlineZoom(symbol) {
+        const canvas = document.getElementById("klineZoomCanvas");
+        const metaEl = document.getElementById("klineZoomMeta");
+        if (!canvas || !symbol) return;
+        const pinItem = pinItemBySymbol(symbol);
+        const interval = chartInterval();
+        const candles = await fetchKlines(symbol, interval);
+        drawKline(
+          canvas,
+          candles,
+          pinItem ? pinItem.pinPrice : null,
+          pinItem ? pinItem.pinnedAt : null,
+          notesMarksForSymbol(symbol),
+        );
+        hideKlineCrosshair(canvas);
+        const current = marketMap[symbol]?.price;
+        const change = marketMap[symbol]?.change24h;
+        if (metaEl) {
+          metaEl.textContent = [
+            klineRangeLabel(),
+            interval,
+            Number.isFinite(current) ? `现价 ${formatPinPrice(current)}` : "",
+            Number.isFinite(change) ? formatPercent(change) : "",
+            "按住滑动看价格",
+          ]
+            .filter(Boolean)
+            .join(" · ");
+        }
+      }
+
+      async function openKlineZoom(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        closeCardActions(true);
+        const gate = document.getElementById("klineZoomGate");
+        const title = document.getElementById("klineZoomTitle");
+        const metaEl = document.getElementById("klineZoomMeta");
+        if (!gate) return;
+        klineZoomSymbol = key;
+        if (title) title.textContent = key.replace(/USDT$/i, "");
+        if (metaEl) metaEl.textContent = "加载 K 线…";
+        gate.hidden = false;
+        document.body.classList.add("is-kline-zoom");
+        syncBodyScrollLock();
+        bindKlineZoomPointer();
+        try {
+          await paintKlineZoom(key);
+          window.requestAnimationFrame(() => {
+            if (klineZoomSymbol === key) void paintKlineZoom(key);
+          });
+        } catch (error) {
+          console.error(error);
+          if (metaEl) metaEl.textContent = error.message || "K 线加载失败";
+          showToast(error.message || "放大 K 线失败");
+        }
       }
 
       async function renderKlineCard(card, symbol, interval, signal, pinItem) {
@@ -9968,6 +10083,7 @@
         sheet.setAttribute("aria-label", `${label} 操作`);
         sheet.innerHTML = [
           `<div class="card-actions-title">${escapeHtml(label)}</div>`,
+          `<button type="button" data-action="zoom">放大</button>`,
           `<button type="button" data-action="refresh">刷新</button>`,
           `<button type="button" data-action="pin">${
             pinned
@@ -10032,6 +10148,11 @@
             refreshEggChromeForSymbol(symbol);
             closeCardActions(true);
             showToast("已取消 NEW 背景");
+            return;
+          }
+          if (action === "zoom") {
+            closeCardActions(true);
+            void openKlineZoom(symbol);
             return;
           }
           if (action === "refresh") {
@@ -10615,14 +10736,6 @@
           ) {
             return;
           }
-          // 长按十字线读价时不切换选框
-          if (
-            window.__klineCrosshairSuppressClick ||
-            (event.target.closest("canvas") &&
-              event.target.classList.contains("is-crosshair"))
-          ) {
-            return;
-          }
           if (pinSelectMode && isPinCardSection(card.dataset.section)) {
             return;
           }
@@ -10650,6 +10763,10 @@
             return;
           }
           openCardActions(card);
+          return;
+        }
+        if (action === "zoom") {
+          void openKlineZoom(symbol);
           return;
         }
         if (action === "refresh") {
@@ -10801,7 +10918,8 @@
         const nailOpen = document
           .getElementById("nailDrawer")
           ?.classList.contains("is-open");
-        document.body.style.overflow = hiddenOpen || nailOpen ? "hidden" : "";
+        document.body.style.overflow =
+          hiddenOpen || nailOpen || isKlineZoomOpen() ? "hidden" : "";
       }
 
       function isNailDrawerOpen() {
@@ -10943,6 +11061,7 @@
               `<div class="nail-kcard-head">`,
               `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "取消置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
               `<button type="button" class="nail-name" data-nail-jump="${symbol}" title="跳到 K 线">${label}${tag}</button>`,
+              `<button type="button" class="nail-pin" data-kline-zoom="${symbol}" title="放大 K 线">放</button>`,
               `<button type="button" class="nail-del" data-nail-del="${symbol}">删除</button>`,
               `</div>`,
               nailPriceRowHtml(item.symbol),
@@ -12942,6 +13061,13 @@
             void toggleNailPinned(pinBtn.getAttribute("data-nail-pin"));
             return;
           }
+          const zoomBtn = event.target.closest("[data-kline-zoom]");
+          if (zoomBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            void openKlineZoom(zoomBtn.getAttribute("data-kline-zoom"));
+            return;
+          }
           const jumpBtn = event.target.closest("[data-nail-jump]");
           if (jumpBtn) {
             jumpNailToSymbol(jumpBtn.getAttribute("data-nail-jump"));
@@ -13026,6 +13152,14 @@
           void runFocusBarAction(btn.getAttribute("data-focus-action"));
         });
       }
+      const klineZoomClose = document.getElementById("klineZoomClose");
+      if (klineZoomClose) {
+        klineZoomClose.addEventListener("click", () => closeKlineZoom());
+      }
+      window.addEventListener("resize", () => {
+        if (!isKlineZoomOpen() || !klineZoomSymbol) return;
+        void paintKlineZoom(klineZoomSymbol);
+      });
       // 兜底：任意浮层/列表里的币名跳转（避免个别容器漏绑）
       document.addEventListener("click", (event) => {
         const link = event.target.closest("a.notify-coin[data-jump]");
@@ -13037,6 +13171,10 @@
       });
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
+          if (isKlineZoomOpen()) {
+            closeKlineZoom();
+            return;
+          }
           closeCardActions();
           setFocusActionSymbol(null);
           setHiddenPinDrawerOpen(false);
@@ -13196,6 +13334,13 @@
             void copyName(
               copyBtn.getAttribute("data-copy") || copyBtn.textContent,
             );
+            return;
+          }
+          const zoomBtn = event.target.closest("[data-kline-zoom]");
+          if (zoomBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            void openKlineZoom(zoomBtn.getAttribute("data-kline-zoom"));
             return;
           }
           const jumpBtn = event.target.closest("[data-jump]");
