@@ -1609,6 +1609,12 @@
         outline: 2px dashed var(--accent);
         outline-offset: 1px;
       }
+      .nail-kcard.is-focus {
+        outline: 2px solid var(--accent, #2f8f6e);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 1px
+          color-mix(in srgb, var(--accent, #2f8f6e) 35%, transparent);
+      }
       .nail-kcard-head {
         display: flex;
         align-items: center;
@@ -2035,6 +2041,14 @@
       .card-focus-close:active {
         color: var(--label, #5a6a68);
         background: var(--fill, rgba(90, 106, 104, 0.12));
+      }
+      .card-focus-bar.is-nail-scope {
+        z-index: 130;
+      }
+      .card-focus-bar.is-nail-scope [data-focus-action="note"],
+      .card-focus-bar.is-nail-scope [data-focus-action="zoom"],
+      .card-focus-bar.is-nail-scope [data-focus-action="more"] {
+        display: none;
       }
       .card-focus-bar .card-focus-label {
         flex: 0 1 auto;
@@ -3076,48 +3090,54 @@
         background: color-mix(in srgb, var(--bg) 78%, transparent);
         backdrop-filter: blur(10px) saturate(140%);
         -webkit-backdrop-filter: blur(10px) saturate(140%);
-        padding: max(10px, env(safe-area-inset-top, 0px)) 10px
-          max(12px, env(safe-area-inset-bottom, 0px));
+        padding: max(8px, env(safe-area-inset-top, 0px)) 8px
+          max(8px, env(safe-area-inset-bottom, 0px));
+        box-sizing: border-box;
+        overflow: hidden;
       }
       .kline-zoom-gate[hidden] {
         display: none !important;
       }
       .kline-zoom-panel {
-        flex: 1;
+        flex: 1 1 auto;
+        min-width: 0;
         min-height: 0;
+        width: 100%;
+        height: 100%;
         display: flex;
         flex-direction: column;
         border: 0.5px solid var(--separator);
         border-radius: 14px;
         background: color-mix(in srgb, var(--elevated) 92%, transparent);
         overflow: hidden;
+        box-sizing: border-box;
       }
       .kline-zoom-head {
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
-        gap: 10px;
-        padding: 12px 12px 8px;
+        gap: 8px;
+        padding: 8px 10px 6px;
         flex: 0 0 auto;
       }
       .kline-zoom-head h2 {
         margin: 0;
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 700;
       }
       .kline-zoom-head p {
-        margin: 4px 0 0;
-        font-size: 12px;
+        margin: 2px 0 0;
+        font-size: 11px;
         color: var(--secondary);
       }
       .kline-zoom-head button {
         border: none;
         background: var(--fill, rgba(90, 106, 104, 0.12));
         color: var(--label);
-        height: 32px;
-        padding: 0 12px;
+        height: 30px;
+        padding: 0 10px;
         border-radius: 8px;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 650;
         cursor: pointer;
         flex: 0 0 auto;
@@ -3125,8 +3145,8 @@
       .kline-zoom-chart {
         position: relative;
         flex: 1 1 auto;
-        min-height: 220px;
-        margin: 0 8px;
+        min-height: 0;
+        margin: 0 6px;
         touch-action: none;
       }
       .kline-zoom-chart canvas {
@@ -3137,44 +3157,45 @@
         touch-action: none;
       }
       .kline-zoom-hint {
-        margin: 8px 12px 12px;
-        font-size: 12px;
+        margin: 4px 10px 8px;
+        font-size: 11px;
         color: var(--secondary);
         flex: 0 0 auto;
       }
-      /* 竖屏手机：整页旋转成横屏画布，K 线更宽 */
+      /* 竖屏手机：旋转成横屏，并按可视区缩放整页（含边距） */
       @media (orientation: portrait) and (max-width: 900px) {
         .kline-zoom-gate.is-landscape-layout {
           padding: 0;
-          overflow: hidden;
+          align-items: center;
+          justify-content: center;
         }
         .kline-zoom-gate.is-landscape-layout .kline-zoom-panel {
           position: absolute;
-          top: 0;
-          left: 100%;
-          width: 100vh;
-          height: 100vw;
-          border-radius: 0;
-          border: none;
-          transform: rotate(90deg);
-          transform-origin: top left;
-          padding: max(8px, env(safe-area-inset-left, 0px))
-            max(10px, env(safe-area-inset-top, 0px))
-            max(8px, env(safe-area-inset-right, 0px))
-            max(10px, env(safe-area-inset-bottom, 0px));
+          top: 50%;
+          left: 50%;
+          /* 旋转后：宽≈屏高、高≈屏宽；再整体缩小一点留边 */
+          width: var(--kline-zoom-land-w, 100vh);
+          height: var(--kline-zoom-land-h, 100vw);
+          border-radius: 10px;
+          border: 0.5px solid var(--separator);
+          transform: translate(-50%, -50%) rotate(90deg)
+            scale(var(--kline-zoom-fit-scale, 0.92));
+          transform-origin: center center;
+          padding: 6px 8px;
           box-sizing: border-box;
         }
-        @supports (height: 100dvh) {
-          .kline-zoom-gate.is-landscape-layout .kline-zoom-panel {
-            width: 100dvh;
-            height: 100dvw;
-          }
-        }
         .kline-zoom-gate.is-landscape-layout .kline-zoom-head {
-          padding: 8px 10px 6px;
+          padding: 4px 6px 2px;
+        }
+        .kline-zoom-gate.is-landscape-layout .kline-zoom-head h2 {
+          font-size: 15px;
         }
         .kline-zoom-gate.is-landscape-layout .kline-zoom-hint {
-          margin: 6px 10px 8px;
+          margin: 2px 6px 4px;
+          font-size: 10px;
+        }
+        .kline-zoom-gate.is-landscape-layout .kline-zoom-chart {
+          margin: 0 4px;
         }
       }
       .kline-crosshair {
@@ -4215,6 +4236,8 @@
       let priceAlertItems = [];
       let priceAlertSaving = false;
       let focusActionSymbol = null;
+      /** 'main' | 'nail' | null */
+      let focusActionScope = null;
       const RECENT_AUTO_COLLAPSE_KEY = "kline-recent-auto-collapsed-v1";
       let recentAutoPinCollapsed = false;
       try {
@@ -9896,7 +9919,39 @@
           window.matchMedia &&
           window.matchMedia("(orientation: portrait)").matches;
         const narrow = window.innerWidth <= 900;
-        gate.classList.toggle("is-landscape-layout", !!(portrait && narrow));
+        const useLand = !!(portrait && narrow);
+        gate.classList.toggle("is-landscape-layout", useLand);
+        if (!useLand) {
+          gate.style.removeProperty("--kline-zoom-land-w");
+          gate.style.removeProperty("--kline-zoom-land-h");
+          gate.style.removeProperty("--kline-zoom-fit-scale");
+          return;
+        }
+        const vv = window.visualViewport;
+        const viewW = Math.max(
+          1,
+          Math.round((vv && vv.width) || window.innerWidth || 1),
+        );
+        const viewH = Math.max(
+          1,
+          Math.round((vv && vv.height) || window.innerHeight || 1),
+        );
+        // 旋转后：面板宽≈竖屏高、面板高≈竖屏宽
+        const landW = viewH;
+        const landH = viewW;
+        const pad = 12;
+        // 旋转后视觉占满 viewW×viewH，再整体缩小以留边并吃掉地址栏误差
+        const fit = Math.min(
+          (viewW - pad) / landH,
+          (viewH - pad) / landW,
+          0.94,
+        );
+        gate.style.setProperty("--kline-zoom-land-w", `${landW}px`);
+        gate.style.setProperty("--kline-zoom-land-h", `${landH}px`);
+        gate.style.setProperty(
+          "--kline-zoom-fit-scale",
+          String(Math.max(0.72, Math.min(0.94, fit))),
+        );
       }
 
       async function lockKlineZoomLandscape() {
@@ -9927,7 +9982,12 @@
           klineZoomLockedOrientation = false;
         }
         const gate = document.getElementById("klineZoomGate");
-        if (gate) gate.classList.remove("is-landscape-layout");
+        if (gate) {
+          gate.classList.remove("is-landscape-layout");
+          gate.style.removeProperty("--kline-zoom-land-w");
+          gate.style.removeProperty("--kline-zoom-land-h");
+          gate.style.removeProperty("--kline-zoom-fit-scale");
+        }
       }
 
       function closeKlineZoom() {
@@ -10849,18 +10909,26 @@
         const key = focusActionSymbol
           ? String(focusActionSymbol).trim().toUpperCase()
           : "";
-        document.querySelectorAll(".kline-card.is-focus").forEach((card) => {
-          card.classList.remove("is-focus");
-        });
-        if (key) {
+        const scope = key ? focusActionScope || "main" : null;
+        document
+          .querySelectorAll(".kline-card.is-focus, .nail-kcard.is-focus")
+          .forEach((card) => {
+            card.classList.remove("is-focus");
+          });
+        if (key && scope === "main") {
           document
             .querySelectorAll(`.kline-card[data-symbol="${key}"]`)
+            .forEach((card) => card.classList.add("is-focus"));
+        } else if (key && scope === "nail") {
+          document
+            .querySelectorAll(`#nailList .nail-kcard[data-nail-symbol="${key}"]`)
             .forEach((card) => card.classList.add("is-focus"));
         }
         const bar = document.getElementById("cardFocusBar");
         const labelEl = document.getElementById("cardFocusLabel");
         if (!bar) return;
-        if (!key || pinSelectMode) {
+        bar.classList.toggle("is-nail-scope", scope === "nail");
+        if (!key || pinSelectMode || (scope === "nail" && !isNailDrawerOpen())) {
           bar.hidden = true;
           document.body.classList.remove("has-card-focus");
           return;
@@ -10894,21 +10962,34 @@
         });
       }
 
-      function setFocusActionSymbol(symbol) {
+      function setFocusActionSymbol(symbol, scope) {
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
         focusActionSymbol = key || null;
+        focusActionScope = key
+          ? scope === "nail"
+            ? "nail"
+            : "main"
+          : null;
         applyFocusActionChrome();
       }
 
-      function toggleFocusActionSymbol(symbol) {
+      function toggleFocusActionSymbol(symbol, scope) {
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
         if (!key) return;
-        if (focusActionSymbol === key) setFocusActionSymbol(null);
-        else setFocusActionSymbol(key);
+        const nextScope = scope === "nail" ? "nail" : "main";
+        if (focusActionSymbol === key && focusActionScope === nextScope) {
+          setFocusActionSymbol(null);
+        } else {
+          setFocusActionSymbol(key, nextScope);
+        }
+      }
+
+      function clearNailFocusSelection() {
+        if (focusActionScope === "nail") setFocusActionSymbol(null);
       }
 
       function focusCardEl(symbol) {
@@ -10989,13 +11070,21 @@
           return;
         }
         if (action === "refresh") {
-          if (!card) {
-            showToast("当前列表找不到该币卡片");
-            return;
-          }
           setFocusBarBusy(true, activeBtn, "刷新中");
           try {
-            await refreshSingleKlineCard(card);
+            if (focusActionScope === "nail") {
+              const ok = await refreshSingleNailKline(symbol);
+              if (!ok) {
+                showToast("钉子列表找不到该币");
+                return;
+              }
+            } else {
+              if (!card) {
+                showToast("当前列表找不到该币卡片");
+                return;
+              }
+              await refreshSingleKlineCard(card);
+            }
             const price = marketMap[symbol]?.price;
             showToast(
               Number.isFinite(price)
@@ -11107,15 +11196,7 @@
         const drawer = document.getElementById("hiddenPinDrawer");
         const tab = document.getElementById("hiddenPinTab");
         if (!drawer) return;
-        if (open) {
-          const nail = document.getElementById("nailDrawer");
-          if (nail && nail.classList.contains("is-open")) {
-            nail.classList.remove("is-open");
-            nail.setAttribute("aria-hidden", "true");
-            const nailTab = document.getElementById("nailTab");
-            if (nailTab) nailTab.setAttribute("aria-expanded", "false");
-          }
-        }
+        if (open && isNailDrawerOpen()) setNailDrawerOpen(false);
         drawer.classList.toggle("is-open", !!open);
         drawer.setAttribute("aria-hidden", open ? "false" : "true");
         if (tab) tab.setAttribute("aria-expanded", open ? "true" : "false");
@@ -11164,6 +11245,7 @@
           });
         } else {
           abortNailKlines();
+          clearNailFocusSelection();
         }
       }
 
@@ -11260,9 +11342,20 @@
             : "复制名称后新增 · 置顶 / 长按拖动排序";
         }
         if (!listEl) return;
+        if (
+          focusActionScope === "nail" &&
+          focusActionSymbol &&
+          !items.some(
+            (item) =>
+              String(item.symbol || "").toUpperCase() === focusActionSymbol,
+          )
+        ) {
+          clearNailFocusSelection();
+        }
         if (!n) {
           abortNailKlines();
           listEl.innerHTML = '<div class="nail-empty">还没有钉子</div>';
+          applyFocusActionChrome();
           return;
         }
         listEl.innerHTML = `<div class="nail-grid">${items
@@ -11276,7 +11369,7 @@
             const label = escapeHtml(item.label || item.symbol);
             const symbol = escapeHtml(item.symbol);
             return [
-              `<article class="nail-kcard${pinned ? " is-pinned" : ""}" data-nail-symbol="${symbol}" data-nail-jump="${symbol}">`,
+              `<article class="nail-kcard${pinned ? " is-pinned" : ""}" data-nail-symbol="${symbol}">`,
               `<div class="nail-kcard-head">`,
               `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "取消置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
               `<button type="button" class="nail-name" data-nail-jump="${symbol}" title="跳到 K 线">${label}${tag}</button>`,
@@ -11291,6 +11384,8 @@
           })
           .join("")}</div>`;
         bindNailDrag(listEl);
+        bindNailFocusSelect(listEl);
+        applyFocusActionChrome();
         if (isNailDrawerOpen()) {
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
@@ -11298,6 +11393,71 @@
             });
           });
         }
+      }
+
+      async function refreshSingleNailKline(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || !isNailDrawerOpen()) return false;
+        const canvas = document.querySelector(
+          `#nailList canvas.nail-kline[data-kline="${key}"]`,
+        );
+        if (!canvas) return false;
+        await fetchBinanceTickerForSymbol(key);
+        syncNailPriceRows();
+        const candles = await fetchKlines(key, chartInterval());
+        const pin = pinItemBySymbol(key);
+        drawKline(
+          canvas,
+          candles,
+          pin ? pin.pinPrice : null,
+          pin ? pin.pinnedAt : null,
+          notesMarksForSymbol(key),
+        );
+        return true;
+      }
+
+      function bindNailFocusSelect(root) {
+        const listEl = root || document.getElementById("nailList");
+        if (!listEl || listEl.dataset.nailFocusBound === "1") return;
+        listEl.dataset.nailFocusBound = "1";
+        let startX = 0;
+        let startY = 0;
+        let moved = false;
+        listEl.addEventListener(
+          "pointerdown",
+          (event) => {
+            if (event.pointerType === "mouse" && event.button !== 0) return;
+            if (event.target.closest("button, a, input, label")) return;
+            const card = event.target.closest(".nail-kcard[data-nail-symbol]");
+            if (!card) return;
+            startX = event.clientX;
+            startY = event.clientY;
+            moved = false;
+          },
+          { passive: true },
+        );
+        listEl.addEventListener(
+          "pointermove",
+          (event) => {
+            const dx = event.clientX - startX;
+            const dy = event.clientY - startY;
+            if (dx * dx + dy * dy > 64) moved = true;
+          },
+          { passive: true },
+        );
+        listEl.addEventListener("click", (event) => {
+          if (event.target.closest("button, a, input, label")) return;
+          const card = event.target.closest(".nail-kcard[data-nail-symbol]");
+          if (!card || moved) return;
+          event.preventDefault();
+          event.stopPropagation();
+          toggleFocusActionSymbol(
+            card.getAttribute("data-nail-symbol"),
+            "nail",
+          );
+        });
       }
 
       function abortNailKlines() {
@@ -13383,18 +13543,18 @@
       if (klineZoomClose) {
         klineZoomClose.addEventListener("click", () => closeKlineZoom());
       }
-      window.addEventListener("resize", () => {
+      const syncKlineZoomOnViewport = () => {
         if (!isKlineZoomOpen() || !klineZoomSymbol) return;
         syncKlineZoomLandscapeClass();
         void paintKlineZoom(klineZoomSymbol);
-      });
+      };
+      window.addEventListener("resize", syncKlineZoomOnViewport);
       window.addEventListener("orientationchange", () => {
-        if (!isKlineZoomOpen() || !klineZoomSymbol) return;
-        window.setTimeout(() => {
-          syncKlineZoomLandscapeClass();
-          void paintKlineZoom(klineZoomSymbol);
-        }, 120);
+        window.setTimeout(syncKlineZoomOnViewport, 120);
       });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", syncKlineZoomOnViewport);
+      }
       // 兜底：任意浮层/列表里的币名跳转（避免个别容器漏绑）
       document.addEventListener("click", (event) => {
         const link = event.target.closest("a.notify-coin[data-jump]");
