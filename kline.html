@@ -1991,7 +1991,7 @@
         width: min(560px, calc(100vw - 16px));
         max-width: calc(100vw - 16px);
         min-height: var(--card-focus-bar-h);
-        padding: 8px 10px;
+        padding: 8px 28px 8px 10px;
         border-radius: 12px;
         border: 0.5px solid var(--separator, rgba(200, 208, 204, 0.85));
         background: color-mix(in srgb, var(--elevated, #fbfcfa) 94%, transparent);
@@ -2006,6 +2006,35 @@
       }
       .card-focus-bar.is-busy {
         pointer-events: none;
+      }
+      .card-focus-bar.is-busy .card-focus-close {
+        pointer-events: auto;
+      }
+      .card-focus-close {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: none;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--secondary, #8a9692);
+        font-size: 16px;
+        font-weight: 500;
+        line-height: 1;
+        cursor: pointer;
+        flex: none !important;
+      }
+      .card-focus-close:hover,
+      .card-focus-close:active {
+        color: var(--label, #5a6a68);
+        background: var(--fill, rgba(90, 106, 104, 0.12));
       }
       .card-focus-bar .card-focus-label {
         flex: 0 1 auto;
@@ -3848,6 +3877,15 @@
     </div>
 
     <div id="cardFocusBar" class="card-focus-bar" hidden>
+      <button
+        type="button"
+        class="card-focus-close"
+        id="cardFocusClose"
+        title="关闭"
+        aria-label="关闭操作栏"
+      >
+        ×
+      </button>
       <span class="card-focus-label" id="cardFocusLabel">—</span>
       <button type="button" data-focus-action="note">记一笔</button>
       <button type="button" data-focus-action="zoom">放大</button>
@@ -13328,6 +13366,14 @@
       const cardFocusBar = document.getElementById("cardFocusBar");
       if (cardFocusBar) {
         cardFocusBar.addEventListener("click", (event) => {
+          const closeBtn = event.target.closest("#cardFocusClose, .card-focus-close");
+          if (closeBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            closeCardActions(true);
+            setFocusActionSymbol(null);
+            return;
+          }
           const btn = event.target.closest("[data-focus-action]");
           if (!btn) return;
           void runFocusBarAction(btn.getAttribute("data-focus-action"));
