@@ -30,7 +30,8 @@
   // 暂时关闭盯一下过期；改 true 可恢复 12h TTL。
   const PIN_EXPIRY_ENABLED = false;
   const MOM_NOTES_MAX = 200;
-  const ACTION_LOG_MAX = 120;
+  const ACTION_LOG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  const ACTION_LOG_MAX = 2500;
   const NAILS_MAX = 80;
   const PRICE_ALERTS_MAX = 40;
   const PRICE_ALERT_SEND_MAX = 10;
@@ -1197,7 +1198,9 @@
       seen.add(key);
       out.push(entry);
     }
+    const cutoff = Date.now() - ACTION_LOG_TTL_MS;
     return out
+      .filter((entry) => (Number(entry.at) || 0) >= cutoff)
       .sort((a, b) => (b.at || 0) - (a.at || 0))
       .slice(0, ACTION_LOG_MAX);
   }
@@ -2147,6 +2150,7 @@
     patchMomNotes,
     ACTION_LOG_PATH,
     ACTION_LOG_MAX,
+    ACTION_LOG_TTL_MS,
     normalizeActionLog,
     serializeActionLog,
     mergeActionLogs,

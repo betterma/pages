@@ -4033,7 +4033,11 @@
       const ACTION_LOG_MAX =
         Number(WatchFavorites.ACTION_LOG_MAX) > 0
           ? Number(WatchFavorites.ACTION_LOG_MAX)
-          : 120;
+          : 2500;
+      const ACTION_LOG_TTL_MS =
+        Number(WatchFavorites.ACTION_LOG_TTL_MS) > 0
+          ? Number(WatchFavorites.ACTION_LOG_TTL_MS)
+          : 7 * 24 * 60 * 60 * 1000;
       let actionLogEntries = [];
       let actionLogSaving = false;
       let actionLogCategory = "capture";
@@ -5748,7 +5752,9 @@
             ? Number(cooldownMs)
             : 8 * 60 * 1000;
         const edgeKinds = new Set(["auto-pin", "rewarm", "zone-drop"]);
+        const cutoff = Date.now() - ACTION_LOG_TTL_MS;
         const chron = (Array.isArray(list) ? list : [])
+          .filter((entry) => (Number(entry && entry.at) || 0) >= cutoff)
           .slice()
           .sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0));
         const lastKept = new Map();

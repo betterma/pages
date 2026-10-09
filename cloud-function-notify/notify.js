@@ -52,7 +52,10 @@ const CONFIG = {
   POSITIONS_PATH: process.env.POSITIONS_PATH || 'watch-positions.json',
   NOTIFY_STATE_PATH: process.env.NOTIFY_STATE_PATH || 'watch-notify-state.json',
   ACTION_LOG_PATH: process.env.ACTION_LOG_PATH || 'watch-action-log.json',
-  ACTION_LOG_MAX: Number(process.env.ACTION_LOG_MAX || 120),
+  ACTION_LOG_MAX: Number(process.env.ACTION_LOG_MAX || 2500),
+  ACTION_LOG_TTL_MS: Number(
+    process.env.ACTION_LOG_TTL_MS || 7 * 24 * 60 * 60 * 1000,
+  ),
   MOM_NOTES_PATH: process.env.MOM_NOTES_PATH || 'watch-mom-notes.json',
   MOM_NOTES_MAX: Number(process.env.MOM_NOTES_MAX || 200),
   PRICE_ALERTS_PATH: process.env.PRICE_ALERTS_PATH || 'watch-price-alerts.json',
@@ -697,12 +700,14 @@ async function appendAutoPinActionLog(now, newcomers, dropped, momNotes) {
       seen.add(key);
       entries.push(entry);
     }
+    const cutoff = Date.now() - CONFIG.ACTION_LOG_TTL_MS;
     entries.sort((a, b) => (b.at || 0) - (a.at || 0));
+    const kept = entries.filter((entry) => (Number(entry.at) || 0) >= cutoff);
     try {
       await saveJson(
         CONFIG.ACTION_LOG_PATH,
         {
-          entries: entries.slice(0, CONFIG.ACTION_LOG_MAX),
+          entries: kept.slice(0, CONFIG.ACTION_LOG_MAX),
           updatedAt: Date.now(),
         },
         file.sha,
