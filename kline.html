@@ -1299,7 +1299,7 @@
       }
       .hidden-pin-tab {
         position: fixed;
-        top: 42%;
+        top: 58%;
         right: 0;
         z-index: 40;
         display: flex;
@@ -1310,20 +1310,25 @@
         width: 22px;
         min-height: 36px;
         padding: 6px 2px 6px 4px;
-        border: 0.5px solid #c9d0d0;
+        border: 0.5px solid color-mix(in srgb, #c9d0d0 55%, transparent);
         border-right: 0;
         border-radius: 8px 0 0 8px;
-        background: color-mix(in srgb, #eef2ef 82%, transparent);
+        background: color-mix(in srgb, #eef2ef 48%, transparent);
         color: #6a7774;
         cursor: pointer;
         box-shadow: none;
+        opacity: 0.55;
+        transform: translateY(-50%);
+        transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
       }
-      .hidden-pin-tab:hover {
-        background: #e4ebe6;
+      .hidden-pin-tab:hover,
+      .hidden-pin-tab:active {
+        background: color-mix(in srgb, #e4ebe6 78%, transparent);
         color: #3d4a48;
+        opacity: 0.92;
       }
       .hidden-pin-tab[data-count="0"] {
-        opacity: 0.4;
+        opacity: 0.32;
       }
       .hidden-pin-tab svg {
         width: 13px;
@@ -1406,7 +1411,7 @@
       }
       .nail-tab {
         position: fixed;
-        top: 42%;
+        top: 58%;
         left: 0;
         z-index: 121;
         display: flex;
@@ -1417,20 +1422,25 @@
         width: 22px;
         min-height: 36px;
         padding: 6px 4px 6px 2px;
-        border: 0.5px solid var(--separator);
+        border: 0.5px solid color-mix(in srgb, var(--separator) 55%, transparent);
         border-left: 0;
         border-radius: 0 8px 8px 0;
-        background: color-mix(in srgb, var(--elevated) 82%, transparent);
+        background: color-mix(in srgb, var(--elevated) 48%, transparent);
         color: var(--secondary);
         cursor: pointer;
         box-shadow: none;
+        opacity: 0.55;
+        transform: translateY(-50%);
+        transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
       }
-      .nail-tab:hover {
-        background: var(--fill);
+      .nail-tab:hover,
+      .nail-tab:active {
+        background: color-mix(in srgb, var(--fill) 78%, transparent);
         color: var(--label);
+        opacity: 0.92;
       }
       .nail-tab[data-count="0"] {
-        opacity: 0.4;
+        opacity: 0.32;
       }
       .nail-tab svg {
         width: 13px;
