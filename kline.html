@@ -3242,13 +3242,16 @@
         z-index: 1;
         padding: 3px 8px;
         border-radius: 4px;
-        background: rgba(40, 50, 48, 0.88);
-        color: #f4f7f5;
+        background: transparent;
+        color: var(--label, #3d4a48);
         font-size: 13px;
         font-weight: 650;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
         line-height: 1.35;
+        text-shadow:
+          0 0 3px color-mix(in srgb, var(--elevated, #fbfcfa) 90%, transparent),
+          0 1px 2px color-mix(in srgb, var(--elevated, #fbfcfa) 80%, transparent);
       }
       .kline-crosshair-price {
         right: 2px;
@@ -3266,8 +3269,8 @@
         max-width: calc(100% - 12px);
         padding: 5px 8px;
         border-radius: 6px;
-        background: rgba(40, 50, 48, 0.88);
-        color: #f4f7f5;
+        background: transparent;
+        color: var(--label, #3d4a48);
         font-size: 12px;
         font-weight: 600;
         font-variant-numeric: tabular-nums;
@@ -3275,6 +3278,9 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        text-shadow:
+          0 0 3px color-mix(in srgb, var(--elevated, #fbfcfa) 90%, transparent),
+          0 1px 2px color-mix(in srgb, var(--elevated, #fbfcfa) 80%, transparent);
       }
       .up {
         color: var(--up);
