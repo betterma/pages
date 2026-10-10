@@ -52,7 +52,7 @@ const CONFIG = {
   POSITIONS_PATH: process.env.POSITIONS_PATH || 'watch-positions.json',
   NOTIFY_STATE_PATH: process.env.NOTIFY_STATE_PATH || 'watch-notify-state.json',
   ACTION_LOG_PATH: process.env.ACTION_LOG_PATH || 'watch-action-log.json',
-  ACTION_LOG_MAX: Number(process.env.ACTION_LOG_MAX || 2500),
+  ACTION_LOG_MAX: Number(process.env.ACTION_LOG_MAX || 10000),
   ACTION_LOG_TTL_MS: Number(
     process.env.ACTION_LOG_TTL_MS || 7 * 24 * 60 * 60 * 1000,
   ),
@@ -548,6 +548,14 @@ async function tryAcquireNotifyLock(stateFile, now) {
   }
 }
 
+const ACTION_LOG_PRIORITY_KINDS = new Set([
+  'buy',
+  'sell',
+  'sell-stop',
+  'mom-note',
+  'period-low-exit',
+]);
+
 function actionLogKey(entry) {
   const symbols = (Array.isArray(entry && entry.symbols) ? entry.symbols : [])
     .map((symbol) => String(symbol || '').trim().toUpperCase())
@@ -558,6 +566,29 @@ function actionLogKey(entry) {
   const price =
     Number.isFinite(entry.price) && entry.price > 0 ? String(entry.price) : '';
   return `${Number(entry.at) || 0}|${kind}|${symbols.join(',')}|${price}`;
+}
+
+/** Keep last 7 days; if over max, prefer trade/note rows over zone-drop flood. */
+function trimActionLogEntries(list) {
+  const cutoff = Date.now() - CONFIG.ACTION_LOG_TTL_MS;
+  const max = CONFIG.ACTION_LOG_MAX;
+  const fresh = (Array.isArray(list) ? list : [])
+    .filter((entry) => (Number(entry && entry.at) || 0) >= cutoff)
+    .sort((a, b) => (b.at || 0) - (a.at || 0));
+  if (fresh.length <= max) return fresh;
+  const priority = [];
+  const rest = [];
+  for (const entry of fresh) {
+    if (ACTION_LOG_PRIORITY_KINDS.has(String(entry.kind || ''))) {
+      priority.push(entry);
+    } else {
+      rest.push(entry);
+    }
+  }
+  if (priority.length >= max) return priority.slice(0, max);
+  return [...priority, ...rest.slice(0, max - priority.length)].sort(
+    (a, b) => (b.at || 0) - (a.at || 0),
+  );
 }
 
 function normalizeActionLogEntry(item) {
@@ -700,14 +731,12 @@ async function appendAutoPinActionLog(now, newcomers, dropped, momNotes) {
       seen.add(key);
       entries.push(entry);
     }
-    const cutoff = Date.now() - CONFIG.ACTION_LOG_TTL_MS;
-    entries.sort((a, b) => (b.at || 0) - (a.at || 0));
-    const kept = entries.filter((entry) => (Number(entry.at) || 0) >= cutoff);
+    const kept = trimActionLogEntries(entries);
     try {
       await saveJson(
         CONFIG.ACTION_LOG_PATH,
         {
-          entries: kept.slice(0, CONFIG.ACTION_LOG_MAX),
+          entries: kept,
           updatedAt: Date.now(),
         },
         file.sha,

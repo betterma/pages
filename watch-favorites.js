@@ -30,8 +30,17 @@
   // 暂时关闭盯一下过期；改 true 可恢复 12h TTL。
   const PIN_EXPIRY_ENABLED = false;
   const MOM_NOTES_MAX = 200;
+  /** 动作日志 / 战绩统一保留近 7 天；条数上限只做安全阀。 */
   const ACTION_LOG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-  const ACTION_LOG_MAX = 2500;
+  const ACTION_LOG_MAX = 10000;
+  /** 裁满上限时优先留买卖与记一笔，避免被 zone-drop 挤掉战绩。 */
+  const ACTION_LOG_PRIORITY_KINDS = new Set([
+    "buy",
+    "sell",
+    "sell-stop",
+    "mom-note",
+    "period-low-exit",
+  ]);
   const NAILS_MAX = 80;
   const PRICE_ALERTS_MAX = 40;
   const PRICE_ALERT_SEND_MAX = 10;
@@ -1186,6 +1195,33 @@
     );
   }
 
+  function trimActionLogEntries(list, options) {
+    const ttlMs =
+      options && Number(options.ttlMs) > 0
+        ? Number(options.ttlMs)
+        : ACTION_LOG_TTL_MS;
+    const max =
+      options && Number(options.max) > 0 ? Number(options.max) : ACTION_LOG_MAX;
+    const cutoff = Date.now() - ttlMs;
+    const fresh = (Array.isArray(list) ? list : [])
+      .filter((entry) => (Number(entry && entry.at) || 0) >= cutoff)
+      .sort((a, b) => (b.at || 0) - (a.at || 0));
+    if (fresh.length <= max) return fresh;
+    const priority = [];
+    const rest = [];
+    for (const entry of fresh) {
+      if (ACTION_LOG_PRIORITY_KINDS.has(String(entry.kind || ""))) {
+        priority.push(entry);
+      } else {
+        rest.push(entry);
+      }
+    }
+    if (priority.length >= max) return priority.slice(0, max);
+    return [...priority, ...rest.slice(0, max - priority.length)].sort(
+      (a, b) => (b.at || 0) - (a.at || 0),
+    );
+  }
+
   function normalizeActionLog(raw) {
     if (!Array.isArray(raw)) return [];
     const seen = new Set();
@@ -1198,11 +1234,7 @@
       seen.add(key);
       out.push(entry);
     }
-    const cutoff = Date.now() - ACTION_LOG_TTL_MS;
-    return out
-      .filter((entry) => (Number(entry.at) || 0) >= cutoff)
-      .sort((a, b) => (b.at || 0) - (a.at || 0))
-      .slice(0, ACTION_LOG_MAX);
+    return trimActionLogEntries(out);
   }
 
   function serializeActionLog(list) {
@@ -1321,7 +1353,7 @@
               ? result.list
               : entries;
         }
-        const nextEntries = serializeActionLog(nextList).slice(0, ACTION_LOG_MAX);
+        const nextEntries = trimActionLogEntries(serializeActionLog(nextList));
         const nextData = {
           entries: nextEntries,
           entriesUpdatedAt: Date.now(),
@@ -2151,6 +2183,7 @@
     ACTION_LOG_PATH,
     ACTION_LOG_MAX,
     ACTION_LOG_TTL_MS,
+    trimActionLogEntries,
     normalizeActionLog,
     serializeActionLog,
     mergeActionLogs,
