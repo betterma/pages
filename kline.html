@@ -1418,13 +1418,13 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 2px;
-        width: 22px;
-        min-height: 36px;
-        padding: 6px 4px 6px 2px;
+        gap: 3px;
+        width: 34px;
+        min-height: 58px;
+        padding: 10px 5px 10px 4px;
         border: 0.5px solid color-mix(in srgb, var(--separator) 55%, transparent);
         border-left: 0;
-        border-radius: 0 8px 8px 0;
+        border-radius: 0 10px 10px 0;
         background: color-mix(in srgb, var(--elevated) 48%, transparent);
         color: var(--secondary);
         cursor: pointer;
@@ -1443,14 +1443,14 @@
         opacity: 0.32;
       }
       .nail-tab svg {
-        width: 13px;
-        height: 13px;
+        width: 18px;
+        height: 18px;
         display: block;
       }
       .nail-tab .tab-count {
         display: block;
         min-width: 0;
-        font-size: 9px;
+        font-size: 11px;
         line-height: 1;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
@@ -1458,6 +1458,50 @@
       }
       .nail-tab[data-count="0"] .tab-count {
         display: none;
+      }
+      .nail-rising-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 14px;
+        border-bottom: 0.5px solid var(--separator);
+        flex: 0 0 auto;
+      }
+      .nail-rising-row span {
+        font-size: 13px;
+        font-weight: 650;
+        color: var(--label);
+      }
+      .nail-switch {
+        position: relative;
+        width: 46px;
+        height: 28px;
+        flex: 0 0 auto;
+        border: none;
+        padding: 0;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--secondary) 28%, var(--fill));
+        cursor: pointer;
+        transition: background 0.18s ease;
+      }
+      .nail-switch[aria-checked="true"] {
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 82%, #1a5c45);
+      }
+      .nail-switch::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+        transition: transform 0.18s ease;
+      }
+      .nail-switch[aria-checked="true"]::after {
+        transform: translateX(18px);
       }
       .nail-drawer {
         position: fixed;
@@ -3721,6 +3765,18 @@
             <button type="button" data-close-nails>关闭</button>
           </div>
         </div>
+        <div class="nail-rising-row">
+          <span>当前窗口上涨</span>
+          <button
+            type="button"
+            class="nail-switch"
+            id="nailRisingFilter"
+            role="switch"
+            aria-checked="true"
+            title="只显示当前窗口上涨的钉子"
+            aria-label="当前窗口上涨"
+          ></button>
+        </div>
         <form class="nail-form" id="nailForm" hidden>
           <input
             id="nailNameInput"
@@ -4133,6 +4189,15 @@
       let nailItems = [];
       let nailSaving = false;
       let nailKlineAbort = null;
+      const NAIL_RISING_FILTER_KEY = "kline-nail-rising-filter-v1";
+      let nailRisingFilterOn = true;
+      try {
+        const savedNailRising = localStorage.getItem(NAIL_RISING_FILTER_KEY);
+        if (savedNailRising === "0") nailRisingFilterOn = false;
+        else if (savedNailRising === "1") nailRisingFilterOn = true;
+      } catch (_) {
+        nailRisingFilterOn = true;
+      }
       let positionItems = [];
       let lastPinPrices = {};
       let lastPinNotify = null;
@@ -11350,19 +11415,56 @@
           });
       }
 
+      function syncNailRisingFilterUi() {
+        const sw = document.getElementById("nailRisingFilter");
+        if (!sw) return;
+        sw.setAttribute("aria-checked", nailRisingFilterOn ? "true" : "false");
+        sw.title = nailRisingFilterOn
+          ? "只显示当前窗口上涨的钉子"
+          : "显示全部钉子";
+      }
+
+      function setNailRisingFilter(on) {
+        nailRisingFilterOn = !!on;
+        try {
+          localStorage.setItem(
+            NAIL_RISING_FILTER_KEY,
+            nailRisingFilterOn ? "1" : "0",
+          );
+        } catch (_) {
+          /* ignore */
+        }
+        syncNailRisingFilterUi();
+        renderNailDrawer();
+      }
+
+      function nailDrawerVisibleItems() {
+        const items = Array.isArray(nailItems) ? nailItems : [];
+        if (!nailRisingFilterOn) return items.slice();
+        const interval = CONFIG.KLINE_INTERVAL || "4h";
+        return items.filter((item) => hasWindowGain(item.symbol, interval));
+      }
+
       function renderNailDrawer() {
         const listEl = document.getElementById("nailList");
         const tab = document.getElementById("nailTab");
         const badge = document.getElementById("nailTabCount");
         const meta = document.getElementById("nailMeta");
-        const items = Array.isArray(nailItems) ? nailItems : [];
+        syncNailRisingFilterUi();
+        const allItems = Array.isArray(nailItems) ? nailItems : [];
+        const items = nailDrawerVisibleItems();
         const n = items.length;
+        const total = allItems.length;
         if (tab) tab.dataset.count = String(n);
         if (badge) badge.textContent = String(n);
         if (meta) {
-          meta.textContent = n
-            ? `${n} 个钉子 · 置顶 / 长按拖动排序`
-            : "复制名称后新增 · 置顶 / 长按拖动排序";
+          if (!total) {
+            meta.textContent = "复制名称后新增 · 置顶 / 长按拖动排序";
+          } else if (nailRisingFilterOn) {
+            meta.textContent = `窗口上涨 ${n}/${total} · 置顶 / 长按拖动排序`;
+          } else {
+            meta.textContent = `${n} 个钉子 · 置顶 / 长按拖动排序`;
+          }
         }
         if (!listEl) return;
         if (
@@ -11375,9 +11477,17 @@
         ) {
           clearNailFocusSelection();
         }
-        if (!n) {
+        if (!total) {
           abortNailKlines();
           listEl.innerHTML = '<div class="nail-empty">还没有钉子</div>';
+          applyFocusActionChrome();
+          return;
+        }
+        if (!n) {
+          abortNailKlines();
+          listEl.innerHTML = nailRisingFilterOn
+            ? '<div class="nail-empty">当前没有窗口上涨的钉子 · 可关闭上方开关查看全部</div>'
+            : '<div class="nail-empty">还没有钉子</div>';
           applyFocusActionChrome();
           return;
         }
@@ -13474,6 +13584,13 @@
           if (jumpBtn) {
             jumpNailToSymbol(jumpBtn.getAttribute("data-nail-jump"));
           }
+        });
+      }
+      const nailRisingFilter = document.getElementById("nailRisingFilter");
+      if (nailRisingFilter) {
+        syncNailRisingFilterUi();
+        nailRisingFilter.addEventListener("click", () => {
+          setNailRisingFilter(!nailRisingFilterOn);
         });
       }
       const nailRefreshBtn = document.getElementById("nailRefreshBtn");
