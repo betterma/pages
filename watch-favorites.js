@@ -998,6 +998,48 @@
     );
   }
 
+  function upsertNailsBatch(list, symbols) {
+    const keys = [
+      ...new Set(
+        (symbols || [])
+          .map((symbol) => nailSymbolKey(symbol))
+          .filter(Boolean),
+      ),
+    ];
+    if (!keys.length) return normalizeNails(list);
+    const prev = normalizeNails(list);
+    const existingMap = new Map(prev.map((item) => [item.symbol, item]));
+    const rest = prev.filter((item) => !keys.includes(item.symbol));
+    const now = Date.now();
+    const added = keys.map((key, index) => {
+      const existing = existingMap.get(key) || null;
+      return {
+        id: (existing && existing.id) || `${now.toString(36)}-${index}`,
+        at: now,
+        symbol: key,
+        label: key.replace(/USDT$/i, ""),
+        note: (existing && existing.note) || "",
+        exitedAt: 0,
+        pinned: !!(existing && existing.pinned),
+        pinnedAt: (existing && existing.pinnedAt) || 0,
+        order: 0,
+      };
+    });
+    return reindexNails([...added, ...rest]).slice(0, NAILS_MAX);
+  }
+
+  function removeNailsBatch(list, symbols) {
+    const keys = new Set(
+      (symbols || [])
+        .map((symbol) => nailSymbolKey(symbol))
+        .filter(Boolean),
+    );
+    if (!keys.size) return normalizeNails(list);
+    return reindexNails(
+      normalizeNails(list).filter((item) => !keys.has(item.symbol)),
+    );
+  }
+
   function setNailPinned(list, symbol, pinned) {
     const key = nailSymbolKey(symbol);
     if (!key) return normalizeNails(list);
@@ -1019,6 +1061,22 @@
       else next.splice(firstUnpinned, 0, updated);
     }
     return reindexNails(next);
+  }
+
+  function setNailsPinnedBatch(list, symbols, pinned) {
+    const keys = [
+      ...new Set(
+        (symbols || [])
+          .map((symbol) => nailSymbolKey(symbol))
+          .filter(Boolean),
+      ),
+    ];
+    if (!keys.length) return normalizeNails(list);
+    let next = normalizeNails(list);
+    for (const key of keys) {
+      next = setNailPinned(next, key, pinned);
+    }
+    return next;
   }
 
   function reorderNails(list, fromSymbol, toSymbol) {
@@ -2208,7 +2266,10 @@
     serializeNails,
     upsertNail,
     removeNail,
+    upsertNailsBatch,
+    removeNailsBatch,
     setNailPinned,
+    setNailsPinnedBatch,
     reorderNails,
     markNailsExited,
     loadNailsRaw,

@@ -725,6 +725,7 @@
       }
       .notes-rank-refresh,
       .notes-rank-view,
+      .notes-rank-select,
       .notes-rank-close {
         flex: 0 0 auto;
         border: none;
@@ -738,15 +739,74 @@
         cursor: pointer;
       }
       .notes-rank-refresh,
-      .notes-rank-view {
+      .notes-rank-view,
+      .notes-rank-select {
         padding: 0 12px;
       }
       .notes-rank-refresh:disabled {
         opacity: 0.45;
         cursor: wait;
       }
-      .notes-rank-view.is-on {
+      .notes-rank-view.is-on,
+      .notes-rank-select.is-active {
         color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 16%, transparent);
+      }
+      .notes-rank-batch-bar {
+        flex: 0 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px
+          max(10px, env(safe-area-inset-bottom, 0px));
+        border-top: 0.5px solid var(--separator);
+        background: color-mix(in srgb, var(--elevated) 94%, transparent);
+      }
+      .notes-rank-batch-bar[hidden] {
+        display: none !important;
+      }
+      .notes-rank-batch-bar .notes-rank-batch-count {
+        font-size: 12px;
+        color: var(--secondary);
+        margin-right: 2px;
+      }
+      .notes-rank-batch-bar button {
+        border: none;
+        background: var(--fill);
+        color: var(--label);
+        height: 32px;
+        padding: 0 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .notes-rank-batch-bar button.is-primary {
+        background: color-mix(in srgb, var(--accent) 18%, transparent);
+        color: var(--accent);
+      }
+      .notes-rank-batch-bar button:disabled {
+        opacity: 0.4;
+        cursor: wait;
+      }
+      .notes-rank-kcard.is-selected,
+      .notes-rank-table tbody tr.is-selected {
+        outline: 2px solid var(--accent, #2f8f6e);
+        outline-offset: 1px;
+        background: color-mix(in srgb, var(--accent) 12%, transparent);
+      }
+      .notes-rank-check {
+        flex: 0 0 auto;
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        accent-color: var(--accent, #2f8f6e);
+        cursor: pointer;
+      }
+      .notes-rank-scroll.is-selecting .notes-rank-kcard,
+      .notes-rank-scroll.is-selecting .notes-rank-table tbody tr {
+        cursor: pointer;
       }
       .notes-rank-close {
         width: 36px;
@@ -1459,6 +1519,69 @@
       .nail-tab[data-count="0"] .tab-count {
         display: none;
       }
+      .nail-head-actions button.is-active {
+        background: color-mix(in srgb, var(--accent) 18%, transparent);
+        color: var(--accent);
+      }
+      .nail-batch-bar {
+        flex: 0 0 auto;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px max(10px, env(safe-area-inset-bottom, 0px));
+        border-top: 0.5px solid var(--separator);
+        background: color-mix(in srgb, var(--elevated) 94%, transparent);
+      }
+      .nail-batch-bar[hidden] {
+        display: none !important;
+      }
+      .nail-batch-bar .nail-batch-count {
+        font-size: 12px;
+        color: var(--secondary);
+      }
+      .nail-batch-bar button {
+        border: none;
+        background: var(--fill);
+        color: var(--label);
+        height: 32px;
+        padding: 0 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .nail-batch-bar button.is-primary {
+        background: color-mix(in srgb, var(--accent) 18%, transparent);
+        color: var(--accent);
+      }
+      .nail-batch-bar button.is-danger {
+        color: var(--down, #a05a52);
+      }
+      .nail-batch-bar button:disabled {
+        opacity: 0.4;
+        cursor: wait;
+      }
+      .nail-kcard.is-selected {
+        outline: 2px solid var(--accent, #2f8f6e);
+        outline-offset: 1px;
+        box-shadow: 0 0 0 1px
+          color-mix(in srgb, var(--accent, #2f8f6e) 35%, transparent);
+      }
+      .nail-check {
+        position: absolute;
+        left: 6px;
+        bottom: 6px;
+        z-index: 2;
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        accent-color: var(--accent, #2f8f6e);
+        cursor: pointer;
+      }
+      .nail-body.is-selecting .nail-kcard {
+        cursor: pointer;
+      }
       .nail-rising-row {
         display: flex;
         align-items: center;
@@ -1798,10 +1921,17 @@
       }
       @media (max-width: 720px) {
         .nail-grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 6px;
         }
         .nail-kline {
-          height: 96px;
+          height: 88px;
+        }
+        .nail-kcard {
+          padding: 6px 6px 4px;
+        }
+        .nail-name {
+          font-size: 11px;
         }
       }
       .boot-init-gate {
@@ -3475,6 +3605,15 @@
         </div>
         <button
           type="button"
+          class="notes-rank-select"
+          id="notesRankSelectBtn"
+          title="多选后批量加入钉子抽屉"
+          aria-pressed="false"
+        >
+          多选
+        </button>
+        <button
+          type="button"
           class="notes-rank-view"
           id="notesRankViewBtn"
           title="列表与 K 线互斥显示"
@@ -3501,6 +3640,19 @@
       </div>
       <div class="notes-rank-scroll" id="notesRankScroll">
         <div class="notes-rank-loading" id="notesRankBody">加载中…</div>
+      </div>
+      <div class="notes-rank-batch-bar" id="notesRankBatchBar" hidden>
+        <span class="notes-rank-batch-count" id="notesRankBatchCount">0</span>
+        <button type="button" id="notesRankSelectAllBtn">全选</button>
+        <button
+          type="button"
+          class="is-primary"
+          id="notesRankAddNailsBtn"
+          title="把选中币加入钉子抽屉"
+        >
+          加入钉子
+        </button>
+        <button type="button" id="notesRankSelectCancelBtn">取消</button>
       </div>
     </div>
     <div class="app-chrome" id="appChrome">
@@ -3758,6 +3910,14 @@
             <p id="nailMeta">复制名称后新增 · 置顶 / 长按拖动排序</p>
           </div>
           <div class="nail-head-actions">
+            <button
+              type="button"
+              id="nailSelectBtn"
+              title="多选后批量删除"
+              aria-pressed="false"
+            >
+              多选
+            </button>
             <button type="button" id="nailRefreshBtn" title="重新拉取钉子列表和 K 线">
               刷新
             </button>
@@ -3796,6 +3956,34 @@
           </div>
         </form>
         <div class="nail-body" id="nailList"></div>
+        <div class="nail-batch-bar" id="nailBatchBar" hidden>
+          <span class="nail-batch-count" id="nailBatchCount">0</span>
+          <button type="button" id="nailBatchSelectAllBtn">全选</button>
+          <button
+            type="button"
+            class="is-primary"
+            id="nailBatchPinBtn"
+            title="置顶选中的钉子"
+          >
+            置顶
+          </button>
+          <button
+            type="button"
+            id="nailBatchUnpinBtn"
+            title="取消置顶选中的钉子"
+          >
+            取消置顶
+          </button>
+          <button
+            type="button"
+            class="is-danger"
+            id="nailBatchDeleteBtn"
+            title="删除选中的钉子"
+          >
+            删除
+          </button>
+          <button type="button" id="nailBatchCancelBtn">取消</button>
+        </div>
         <div class="nail-saving" id="nailSaving" hidden>保存中…</div>
       </aside>
     </div>
@@ -4189,6 +4377,8 @@
       let nailItems = [];
       let nailSaving = false;
       let nailKlineAbort = null;
+      let nailSelectMode = false;
+      const selectedNailSymbols = new Set();
       const NAIL_RISING_FILTER_KEY = "kline-nail-rising-filter-v1";
       let nailRisingFilterOn = true;
       try {
@@ -4282,6 +4472,8 @@
       let notesRankLoadedAt = 0;
       let notesRankFocusSymbol = "";
       let notesRankKlineAbort = null;
+      let notesRankSelectMode = false;
+      const selectedNotesRankSymbols = new Set();
       const NOTES_RANK_KLINE_TOP = 10;
       const NOTES_RANK_CACHE_MS = 3 * 60 * 1000;
       const MOM_NOTES_LOCAL_KEY = "kline-mom-notes-v1";
@@ -8960,17 +9152,26 @@
         const focusKey = String(notesRankFocusSymbol || "").toUpperCase();
         const klineCards = unionRows
           .map((row, index) => {
+            const key = String(row.symbol || "").toUpperCase();
             const focused =
-              focusKey && String(row.symbol || "").toUpperCase() === focusKey
-                ? " is-focus"
+              focusKey && key === focusKey ? " is-focus" : "";
+            const selected =
+              notesRankSelectMode && selectedNotesRankSymbols.has(key)
+                ? " is-selected"
                 : "";
+            const check = notesRankSelectMode
+              ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
+              : "";
             return [
-              `<article class="notes-rank-kcard${focused}" data-jump="${escapeHtml(row.symbol)}">`,
+              `<article class="notes-rank-kcard${focused}${selected}" data-jump="${escapeHtml(row.symbol)}" data-symbol="${escapeHtml(key)}">`,
               `<div class="notes-rank-kcard-head">`,
+              check,
               `<span class="notes-rank-kcard-rank">${index + 1}</span>`,
               `<button type="button" class="notes-rank-sym" data-copy="${escapeHtml(row.label)}" data-jump="${escapeHtml(row.symbol)}" title="点击复制">${escapeHtml(row.label)}</button>`,
               `<span class="${notesRankMetricClass(row, primaryKey)}">${escapeHtml(notesRankMetricText(row, primaryKey))}</span>`,
-              `<button type="button" class="notes-rank-zoom" data-kline-zoom="${escapeHtml(row.symbol)}" title="放大 K 线" aria-label="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button>`,
+              notesRankSelectMode
+                ? ""
+                : `<button type="button" class="notes-rank-zoom" data-kline-zoom="${escapeHtml(row.symbol)}" title="放大 K 线" aria-label="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button>`,
               `</div>`,
               `<canvas class="notes-rank-kline" data-kline="${escapeHtml(row.symbol)}"></canvas>`,
               `<div class="notes-rank-kcard-stats">`,
@@ -8986,17 +9187,23 @@
         const multi = activeKeys.length > 1;
         const tableRows = rows
           .map((row) => {
+            const key = String(row.symbol || "").toUpperCase();
             const focused =
-              focusKey && String(row.symbol || "").toUpperCase() === focusKey
-                ? " is-focus"
+              focusKey && key === focusKey ? " is-focus" : "";
+            const selected =
+              notesRankSelectMode && selectedNotesRankSymbols.has(key)
+                ? " is-selected"
                 : "";
             const hitMark =
               multi && row.hitCount > 0
                 ? `<span class="notes-rank-hit">${row.hitCount}</span>`
                 : "";
+            const check = notesRankSelectMode
+              ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
+              : "";
             return [
-              `<tr class="${focused.trim()}" data-symbol="${escapeHtml(row.symbol)}">`,
-              `<td><button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button>${hitMark}</td>`,
+              `<tr class="${focused.trim()}${selected}" data-symbol="${escapeHtml(key)}">`,
+              `<td>${check}<button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button>${hitMark}</td>`,
               pctCell(row.gain),
               pctCell(row.change2h),
               pctCell(row.change1h),
@@ -9018,13 +9225,126 @@
           `<tbody>${tableRows}</tbody>`,
           `</table>`,
         ].join("");
+        scroll.classList.toggle("is-selecting", notesRankSelectMode);
         syncNotesRankViewUi();
+        syncNotesRankSelectUi();
         if (notesRankKlineView) {
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               void paintNotesRankKlines();
             });
           });
+        }
+      }
+
+      function notesRankVisibleSymbols() {
+        const rows = sortNotesRankRows(notesRankRows);
+        const list = notesRankKlineView
+          ? rows.filter((row) => (row.hitCount || 0) > 0)
+          : rows;
+        return list
+          .map((row) => String(row.symbol || "").trim().toUpperCase())
+          .filter(Boolean);
+      }
+
+      function syncNotesRankSelectUi() {
+        const btn = document.getElementById("notesRankSelectBtn");
+        const bar = document.getElementById("notesRankBatchBar");
+        const countEl = document.getElementById("notesRankBatchCount");
+        const addBtn = document.getElementById("notesRankAddNailsBtn");
+        const scroll = document.getElementById("notesRankScroll");
+        if (btn) {
+          btn.classList.toggle("is-active", notesRankSelectMode);
+          btn.setAttribute("aria-pressed", notesRankSelectMode ? "true" : "false");
+          btn.textContent = notesRankSelectMode ? "选中" : "多选";
+        }
+        if (bar) bar.hidden = !notesRankSelectMode;
+        if (scroll) scroll.classList.toggle("is-selecting", notesRankSelectMode);
+        if (countEl) countEl.textContent = String(selectedNotesRankSymbols.size);
+        if (addBtn) {
+          addBtn.disabled = selectedNotesRankSymbols.size === 0 || nailSaving;
+          addBtn.textContent =
+            selectedNotesRankSymbols.size > 0
+              ? `加入钉子 (${selectedNotesRankSymbols.size})`
+              : "加入钉子";
+        }
+      }
+
+      function setNotesRankSelectMode(on) {
+        const next = !!on;
+        if (next === notesRankSelectMode) {
+          syncNotesRankSelectUi();
+          return;
+        }
+        notesRankSelectMode = next;
+        if (!notesRankSelectMode) selectedNotesRankSymbols.clear();
+        renderNotesRankTable({ fromCache: true });
+        syncNotesRankSelectUi();
+      }
+
+      function toggleNotesRankSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        if (selectedNotesRankSymbols.has(key)) selectedNotesRankSymbols.delete(key);
+        else selectedNotesRankSymbols.add(key);
+        document
+          .querySelectorAll(
+            `#notesRankScroll [data-symbol="${key}"], #notesRankScroll [data-notes-select="${key}"]`,
+          )
+          .forEach((el) => {
+            if (el.matches("input.notes-rank-check")) {
+              el.checked = selectedNotesRankSymbols.has(key);
+              return;
+            }
+            el.classList.toggle("is-selected", selectedNotesRankSymbols.has(key));
+            const check = el.querySelector(".notes-rank-check");
+            if (check) check.checked = selectedNotesRankSymbols.has(key);
+          });
+        syncNotesRankSelectUi();
+      }
+
+      async function addSelectedNotesRankToNails() {
+        const symbols = [...selectedNotesRankSymbols];
+        if (!symbols.length) {
+          showToast("先选中要加入的币");
+          return;
+        }
+        if (nailSaving) {
+          showToast("钉子保存中…");
+          return;
+        }
+        const before = new Set(
+          (nailItems || []).map((item) =>
+            String(item.symbol || "").toUpperCase(),
+          ),
+        );
+        const fresh = symbols.filter((symbol) => !before.has(symbol));
+        try {
+          await persistNails(
+            (list) =>
+              typeof WatchFavorites.upsertNailsBatch === "function"
+                ? WatchFavorites.upsertNailsBatch(list, symbols)
+                : symbols.reduce(
+                    (acc, symbol) => WatchFavorites.upsertNail(acc, symbol, ""),
+                    list,
+                  ),
+            `Add nails x${symbols.length}`,
+            { loadingText: `加入钉子 ${symbols.length}…` },
+          );
+          setNotesRankSelectMode(false);
+          showToast(
+            fresh.length
+              ? `已加入钉子 ${fresh.length} 个` +
+                  (fresh.length < symbols.length
+                    ? ` · 已有 ${symbols.length - fresh.length}`
+                    : "")
+              : `已在钉子中 ${symbols.length} 个（已更新）`,
+          );
+        } catch (error) {
+          console.warn(error);
+          showToast(error.message || "加入钉子失败");
         }
       }
 
@@ -9097,6 +9417,7 @@
           window.location.href = "./index.html";
           return;
         }
+        setNotesRankSelectMode(false);
         const gate = document.getElementById("notesRankGate");
         if (gate) gate.hidden = true;
       }
@@ -11334,6 +11655,7 @@
         } else {
           abortNailKlines();
           clearNailFocusSelection();
+          setNailSelectMode(false);
         }
       }
 
@@ -11424,6 +11746,140 @@
           : "显示全部钉子";
       }
 
+      function syncNailSelectUi() {
+        const btn = document.getElementById("nailSelectBtn");
+        const bar = document.getElementById("nailBatchBar");
+        const countEl = document.getElementById("nailBatchCount");
+        const pinBtn = document.getElementById("nailBatchPinBtn");
+        const unpinBtn = document.getElementById("nailBatchUnpinBtn");
+        const delBtn = document.getElementById("nailBatchDeleteBtn");
+        const listEl = document.getElementById("nailList");
+        const n = selectedNailSymbols.size;
+        const busy = nailSaving;
+        if (btn) {
+          btn.classList.toggle("is-active", nailSelectMode);
+          btn.setAttribute("aria-pressed", nailSelectMode ? "true" : "false");
+          btn.textContent = nailSelectMode ? "选中" : "多选";
+        }
+        if (bar) bar.hidden = !nailSelectMode;
+        if (listEl) listEl.classList.toggle("is-selecting", nailSelectMode);
+        if (countEl) countEl.textContent = String(n);
+        if (pinBtn) {
+          pinBtn.disabled = n === 0 || busy;
+          pinBtn.textContent = n > 0 ? `置顶 (${n})` : "置顶";
+        }
+        if (unpinBtn) {
+          unpinBtn.disabled = n === 0 || busy;
+          unpinBtn.textContent = n > 0 ? `取消置顶 (${n})` : "取消置顶";
+        }
+        if (delBtn) {
+          delBtn.disabled = n === 0 || busy;
+          delBtn.textContent = n > 0 ? `删除 (${n})` : "删除";
+        }
+      }
+
+      function setNailSelectMode(on) {
+        const next = !!on;
+        if (next === nailSelectMode) {
+          syncNailSelectUi();
+          return;
+        }
+        nailSelectMode = next;
+        if (!nailSelectMode) selectedNailSymbols.clear();
+        if (nailSelectMode) clearNailFocusSelection();
+        renderNailDrawer();
+        syncNailSelectUi();
+      }
+
+      function toggleNailSelectSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        if (selectedNailSymbols.has(key)) selectedNailSymbols.delete(key);
+        else selectedNailSymbols.add(key);
+        document
+          .querySelectorAll(`#nailList .nail-kcard[data-nail-symbol="${key}"]`)
+          .forEach((card) => {
+            card.classList.toggle("is-selected", selectedNailSymbols.has(key));
+            const check = card.querySelector(".nail-check");
+            if (check) check.checked = selectedNailSymbols.has(key);
+          });
+        syncNailSelectUi();
+      }
+
+      async function setPinnedSelectedNails(pinned) {
+        const symbols = [...selectedNailSymbols];
+        if (!symbols.length) {
+          showToast(pinned ? "先选中要置顶的钉子" : "先选中要取消置顶的钉子");
+          return;
+        }
+        const want = !!pinned;
+        try {
+          await persistNails(
+            (list) =>
+              typeof WatchFavorites.setNailsPinnedBatch === "function"
+                ? WatchFavorites.setNailsPinnedBatch(list, symbols, want)
+                : symbols.reduce(
+                    (acc, symbol) =>
+                      WatchFavorites.setNailPinned(acc, symbol, want),
+                    list,
+                  ),
+            `${want ? "Pin" : "Unpin"} nails x${symbols.length}`,
+            {
+              loadingText: want
+                ? `置顶 ${symbols.length}…`
+                : `取消置顶 ${symbols.length}…`,
+            },
+          );
+          setNailSelectMode(false);
+          showToast(
+            want
+              ? `已置顶 ${symbols.length} 个`
+              : `已取消置顶 ${symbols.length} 个`,
+          );
+        } catch (error) {
+          console.warn(error);
+          showToast(error.message || (want ? "批量置顶失败" : "批量取消置顶失败"));
+        }
+      }
+
+      async function deleteSelectedNails() {
+        const symbols = [...selectedNailSymbols];
+        if (!symbols.length) {
+          showToast("先选中要删除的钉子");
+          return;
+        }
+        if (
+          !window.confirm(
+            `删除选中的 ${symbols.length} 个钉子？\n${symbols
+              .slice(0, 8)
+              .map((symbol) => symbol.replace(/USDT$/i, ""))
+              .join("、")}${symbols.length > 8 ? "…" : ""}`,
+          )
+        ) {
+          return;
+        }
+        try {
+          await persistNails(
+            (list) =>
+              typeof WatchFavorites.removeNailsBatch === "function"
+                ? WatchFavorites.removeNailsBatch(list, symbols)
+                : symbols.reduce(
+                    (acc, symbol) => WatchFavorites.removeNail(acc, symbol),
+                    list,
+                  ),
+            `Remove nails x${symbols.length}`,
+            { loadingText: `删除 ${symbols.length}…` },
+          );
+          setNailSelectMode(false);
+          showToast(`已删除 ${symbols.length} 个钉子`);
+        } catch (error) {
+          console.warn(error);
+          showToast(error.message || "批量删除失败");
+        }
+      }
+
       function setNailRisingFilter(on) {
         nailRisingFilterOn = !!on;
         try {
@@ -11455,6 +11911,12 @@
         const items = nailDrawerVisibleItems();
         const n = items.length;
         const total = allItems.length;
+        const visibleKeys = new Set(
+          items.map((item) => String(item.symbol || "").toUpperCase()),
+        );
+        for (const key of [...selectedNailSymbols]) {
+          if (!visibleKeys.has(key)) selectedNailSymbols.delete(key);
+        }
         if (tab) tab.dataset.count = String(n);
         if (badge) badge.textContent = String(n);
         if (meta) {
@@ -11481,6 +11943,7 @@
           abortNailKlines();
           listEl.innerHTML = '<div class="nail-empty">还没有钉子</div>';
           applyFocusActionChrome();
+          syncNailSelectUi();
           return;
         }
         if (!n) {
@@ -11489,6 +11952,7 @@
             ? '<div class="nail-empty">当前没有窗口上涨的钉子 · 可关闭上方开关查看全部</div>'
             : '<div class="nail-empty">还没有钉子</div>';
           applyFocusActionChrome();
+          syncNailSelectUi();
           return;
         }
         listEl.innerHTML = `<div class="nail-grid">${items
@@ -11501,17 +11965,32 @@
               : "";
             const label = escapeHtml(item.label || item.symbol);
             const symbol = escapeHtml(item.symbol);
+            const key = String(item.symbol || "").toUpperCase();
+            const selected =
+              nailSelectMode && selectedNailSymbols.has(key)
+                ? " is-selected"
+                : "";
+            const check = nailSelectMode
+              ? `<input type="checkbox" class="nail-check" data-nail-select="${symbol}" ${selectedNailSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
+              : "";
             return [
-              `<article class="nail-kcard${pinned ? " is-pinned" : ""}" data-nail-symbol="${symbol}">`,
+              `<article class="nail-kcard${pinned ? " is-pinned" : ""}${selected}" data-nail-symbol="${symbol}">`,
               `<div class="nail-kcard-head">`,
-              `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "取消置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
+              nailSelectMode
+                ? ""
+                : `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "取消置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
               `<button type="button" class="nail-name" data-nail-jump="${symbol}" title="跳到 K 线">${label}${tag}</button>`,
-              `<button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线" aria-label="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button>`,
-              `<button type="button" class="nail-del" data-nail-del="${symbol}">删除</button>`,
+              nailSelectMode
+                ? ""
+                : `<button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线" aria-label="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button>`,
+              nailSelectMode
+                ? ""
+                : `<button type="button" class="nail-del" data-nail-del="${symbol}">删除</button>`,
               `</div>`,
               nailPriceRowHtml(item.symbol),
               `<canvas class="nail-kline" data-kline="${symbol}"></canvas>`,
               note ? `<p class="nail-note">${escapeHtml(note)}</p>` : "",
+              check,
               `</article>`,
             ].join("");
           })
@@ -11519,6 +11998,7 @@
         bindNailDrag(listEl);
         bindNailFocusSelect(listEl);
         applyFocusActionChrome();
+        syncNailSelectUi();
         if (isNailDrawerOpen()) {
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
@@ -11581,6 +12061,7 @@
           { passive: true },
         );
         listEl.addEventListener("click", (event) => {
+          if (nailSelectMode) return;
           if (event.target.closest("button, a, input, label")) return;
           const card = event.target.closest(".nail-kcard[data-nail-symbol]");
           if (!card || moved) return;
@@ -11828,7 +12309,7 @@
         listEl.addEventListener(
           "pointerdown",
           (event) => {
-            if (nailSaving) return;
+            if (nailSaving || nailSelectMode) return;
             // 只认鼠标左键 / 触屏主触点；避免滚轮键等
             if (event.pointerType === "mouse" && event.button !== 0) return;
             // 按钮 / K 线 canvas（长按读价）不进入拖排序
@@ -13559,6 +14040,15 @@
             setNailDrawerOpen(false);
             return;
           }
+          if (nailSelectMode) {
+            const card = event.target.closest(".nail-kcard[data-nail-symbol]");
+            if (card && !event.target.closest("#nailBatchBar, .nail-head, .nail-rising-row, .nail-form")) {
+              event.preventDefault();
+              event.stopPropagation();
+              toggleNailSelectSymbol(card.getAttribute("data-nail-symbol"));
+            }
+            return;
+          }
           const delBtn = event.target.closest("[data-nail-del]");
           if (delBtn) {
             event.preventDefault();
@@ -13591,6 +14081,55 @@
         syncNailRisingFilterUi();
         nailRisingFilter.addEventListener("click", () => {
           setNailRisingFilter(!nailRisingFilterOn);
+        });
+      }
+      const nailSelectBtn = document.getElementById("nailSelectBtn");
+      if (nailSelectBtn) {
+        nailSelectBtn.addEventListener("click", () => {
+          setNailSelectMode(!nailSelectMode);
+        });
+      }
+      const nailBatchSelectAllBtn = document.getElementById(
+        "nailBatchSelectAllBtn",
+      );
+      if (nailBatchSelectAllBtn) {
+        nailBatchSelectAllBtn.addEventListener("click", () => {
+          const visible = nailDrawerVisibleItems().map((item) =>
+            String(item.symbol || "").toUpperCase(),
+          );
+          const allOn =
+            visible.length > 0 &&
+            visible.every((symbol) => selectedNailSymbols.has(symbol));
+          if (allOn) {
+            visible.forEach((symbol) => selectedNailSymbols.delete(symbol));
+          } else {
+            visible.forEach((symbol) => selectedNailSymbols.add(symbol));
+          }
+          renderNailDrawer();
+        });
+      }
+      const nailBatchPinBtn = document.getElementById("nailBatchPinBtn");
+      if (nailBatchPinBtn) {
+        nailBatchPinBtn.addEventListener("click", () => {
+          void setPinnedSelectedNails(true);
+        });
+      }
+      const nailBatchUnpinBtn = document.getElementById("nailBatchUnpinBtn");
+      if (nailBatchUnpinBtn) {
+        nailBatchUnpinBtn.addEventListener("click", () => {
+          void setPinnedSelectedNails(false);
+        });
+      }
+      const nailBatchDeleteBtn = document.getElementById("nailBatchDeleteBtn");
+      if (nailBatchDeleteBtn) {
+        nailBatchDeleteBtn.addEventListener("click", () => {
+          void deleteSelectedNails();
+        });
+      }
+      const nailBatchCancelBtn = document.getElementById("nailBatchCancelBtn");
+      if (nailBatchCancelBtn) {
+        nailBatchCancelBtn.addEventListener("click", () => {
+          setNailSelectMode(false);
         });
       }
       const nailRefreshBtn = document.getElementById("nailRefreshBtn");
@@ -13842,6 +14381,45 @@
           closeNotesRankOverlay();
         });
       }
+      const notesRankSelectBtn = document.getElementById("notesRankSelectBtn");
+      if (notesRankSelectBtn) {
+        notesRankSelectBtn.addEventListener("click", () => {
+          setNotesRankSelectMode(!notesRankSelectMode);
+        });
+      }
+      const notesRankSelectAllBtn = document.getElementById(
+        "notesRankSelectAllBtn",
+      );
+      if (notesRankSelectAllBtn) {
+        notesRankSelectAllBtn.addEventListener("click", () => {
+          const visible = notesRankVisibleSymbols();
+          const allOn =
+            visible.length > 0 &&
+            visible.every((symbol) => selectedNotesRankSymbols.has(symbol));
+          if (allOn) {
+            visible.forEach((symbol) => selectedNotesRankSymbols.delete(symbol));
+          } else {
+            visible.forEach((symbol) => selectedNotesRankSymbols.add(symbol));
+          }
+          renderNotesRankTable({ fromCache: true });
+        });
+      }
+      const notesRankAddNailsBtn = document.getElementById(
+        "notesRankAddNailsBtn",
+      );
+      if (notesRankAddNailsBtn) {
+        notesRankAddNailsBtn.addEventListener("click", () => {
+          void addSelectedNotesRankToNails();
+        });
+      }
+      const notesRankSelectCancelBtn = document.getElementById(
+        "notesRankSelectCancelBtn",
+      );
+      if (notesRankSelectCancelBtn) {
+        notesRankSelectCancelBtn.addEventListener("click", () => {
+          setNotesRankSelectMode(false);
+        });
+      }
       const notesRankViewBtn = document.getElementById("notesRankViewBtn");
       if (notesRankViewBtn) {
         notesRankViewBtn.addEventListener("click", () => {
@@ -13861,6 +14439,20 @@
           if (sortBtn) {
             setNotesRankSortKey(sortBtn.getAttribute("data-notes-sort"));
             return;
+          }
+          if (notesRankSelectMode) {
+            const selectEl = event.target.closest(
+              "[data-notes-select], .notes-rank-kcard[data-symbol], tr[data-symbol]",
+            );
+            if (selectEl) {
+              event.preventDefault();
+              event.stopPropagation();
+              const symbol =
+                selectEl.getAttribute("data-notes-select") ||
+                selectEl.getAttribute("data-symbol");
+              toggleNotesRankSymbol(symbol);
+              return;
+            }
           }
           const copyBtn = event.target.closest(".notes-rank-kcard [data-copy]");
           if (copyBtn) {
