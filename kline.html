@@ -680,6 +680,15 @@
       .notes-rank-gate > * {
         pointer-events: auto;
       }
+      /* 排序打开：保留底 tab，隐藏顶栏与侧栏（避免刘海/状态栏挡头） */
+      body.is-notes-rank-open .app-chrome,
+      body.is-notes-rank-open .top-progress,
+      body.is-notes-rank-open .nail-tab,
+      body.is-notes-rank-open .hidden-pin-tab,
+      body.is-notes-rank-open .nail-drawer,
+      body.is-notes-rank-open .hidden-pin-drawer {
+        display: none !important;
+      }
       /* 记记：全屏独立页，不依赖背后 kline 卡片 */
       body.is-jiji-view .page,
       body.is-jiji-view .app-chrome,
@@ -708,7 +717,7 @@
         flex-direction: column;
         align-items: stretch;
         gap: 10px;
-        padding: 12px 12px 10px;
+        padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
         border-bottom: 0.5px solid var(--separator);
         background: color-mix(in srgb, var(--grouped) 78%, transparent);
         backdrop-filter: saturate(180%) blur(12px);
@@ -9556,6 +9565,10 @@
         }
       }
 
+      function syncNotesRankOpenChrome() {
+        document.body.classList.toggle("is-notes-rank-open", isNotesRankOpen());
+      }
+
       function closeNotesRankOverlay() {
         if (isJijiView()) {
           window.location.href = "./index.html";
@@ -9564,6 +9577,7 @@
         setNotesRankSelectMode(false);
         const gate = document.getElementById("notesRankGate");
         if (gate) gate.hidden = true;
+        syncNotesRankOpenChrome();
       }
 
       async function reloadNotesRankSharedState() {
@@ -9625,6 +9639,7 @@
         const gate = document.getElementById("notesRankGate");
         if (!gate) return;
         gate.hidden = false;
+        syncNotesRankOpenChrome();
         if (!force) {
           if (notesRankBusy) {
             syncNotesRankMeta({ loading: true });
@@ -11801,6 +11816,92 @@
           clearNailFocusSelection();
           setNailSelectMode(false);
         }
+      }
+
+      /** 手机：左缘右滑开钉子抽屉；抽屉内左滑关闭。 */
+      function bindNailDrawerSwipeGestures() {
+        const EDGE_PX = 28;
+        const MIN_DX = 56;
+        const AXIS_RATIO = 1.5;
+        let tracking = null;
+
+        function isHiddenPinDrawerOpen() {
+          const drawer = document.getElementById("hiddenPinDrawer");
+          return !!(drawer && drawer.classList.contains("is-open"));
+        }
+
+        function ignoreSwipeTarget(target) {
+          return !!(
+            target &&
+            target.closest &&
+            target.closest(
+              'input, textarea, select, [contenteditable="true"], .notes-rank-gate, .kline-zoom-gate, .stop-loss-gate, .boot-init-gate, .card-actions, .notify-float, .momentum-float, .float-tabs',
+            )
+          );
+        }
+
+        function canEdgeOpenNail() {
+          if (isJijiView() || isNotesRankOpen() || isKlineZoomOpen()) return false;
+          if (isNailDrawerOpen() || isHiddenPinDrawerOpen()) return false;
+          if (document.body.classList.contains("is-stop-loss-locked")) return false;
+          return true;
+        }
+
+        document.addEventListener(
+          "pointerdown",
+          (event) => {
+            if (event.pointerType === "mouse") return;
+            if (ignoreSwipeTarget(event.target)) return;
+            if (isNailDrawerOpen()) {
+              if (!event.target.closest || !event.target.closest("#nailDrawer")) {
+                return;
+              }
+              tracking = {
+                id: event.pointerId,
+                x0: event.clientX,
+                y0: event.clientY,
+                mode: "close",
+              };
+              return;
+            }
+            if (!canEdgeOpenNail()) return;
+            if (event.clientX > EDGE_PX) return;
+            tracking = {
+              id: event.pointerId,
+              x0: event.clientX,
+              y0: event.clientY,
+              mode: "open",
+            };
+          },
+          { passive: true },
+        );
+
+        const endSwipe = (event) => {
+          if (!tracking || event.pointerId !== tracking.id) return;
+          const dx = event.clientX - tracking.x0;
+          const dy = event.clientY - tracking.y0;
+          const mode = tracking.mode;
+          tracking = null;
+          if (!Number.isFinite(dx) || Math.abs(dx) < MIN_DX) return;
+          if (Math.abs(dx) < AXIS_RATIO * Math.abs(dy || 0)) return;
+          if (mode === "open" && dx > 0 && canEdgeOpenNail()) {
+            closeCardActions();
+            setNailDrawerOpen(true);
+            return;
+          }
+          if (mode === "close" && dx < 0 && isNailDrawerOpen()) {
+            setNailDrawerOpen(false);
+          }
+        };
+
+        document.addEventListener("pointerup", endSwipe, { passive: true });
+        document.addEventListener(
+          "pointercancel",
+          (event) => {
+            if (tracking && event.pointerId === tracking.id) tracking = null;
+          },
+          { passive: true },
+        );
       }
 
       function setNailFormOpen(open) {
@@ -14177,6 +14278,7 @@
           setNailDrawerOpen(true);
         });
       }
+      bindNailDrawerSwipeGestures();
       const nailDrawer = document.getElementById("nailDrawer");
       if (nailDrawer) {
         nailDrawer.addEventListener("click", (event) => {
