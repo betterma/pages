@@ -1,0 +1,13 @@
+---
+description: Timed/scheduled watch features must run in cloud function, not the browser
+alwaysApply: true
+---
+
+# Timed work → cloud function, not open pages
+
+For this `pages` project (kline / watch pool):
+
+- Any **interval / cron / “every N minutes”** behavior (snapshots, edge detect, alerts, trim, compare-and-log) must run in `cloud-function-notify` (existing ~5m timer), **not** in `kline.html` `setInterval` / `setTimeout` that only fires while a tab is open.
+- Browser may **read** GitHub JSON and render results; it must not be the sole producer of durable timed state.
+- Prefer extending `notify.js` (or a sibling module required from it) + GitHub `watch-*.json`. Redeploy the full `cloud-function-notify` package when cloud code changes.
+- If a feature needs scores (24h / 1h / 2h / gain), compute them in the cloud from Binance + pins / mom-notes — do not assume `marketMap` from an open page.

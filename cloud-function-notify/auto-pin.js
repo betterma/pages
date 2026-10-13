@@ -433,6 +433,7 @@ module.exports = {
   runAutoPin,
   savePinsFile,
   normalizePinList,
+  loadBlacklistSet,
   listRisingZone,
   listRisingSymbols,
   CONFIG,

@@ -16,6 +16,7 @@ const {
   loadMomNotes,
   listBreakHighUniverse,
 } = require('./break-high');
+const { runNotesRankSnap } = require('./notes-rank-snap');
 
 function webhookKeyHint(url) {
   try {
@@ -55,6 +56,9 @@ const CONFIG = {
   ACTION_LOG_MAX: Number(process.env.ACTION_LOG_MAX || 10000),
   ACTION_LOG_TTL_MS: Number(
     process.env.ACTION_LOG_TTL_MS || 7 * 24 * 60 * 60 * 1000,
+  ),
+  ACTION_LOG_RANK_TTL_MS: Number(
+    process.env.ACTION_LOG_RANK_TTL_MS || 24 * 60 * 60 * 1000,
   ),
   MOM_NOTES_PATH: process.env.MOM_NOTES_PATH || 'watch-mom-notes.json',
   MOM_NOTES_MAX: Number(process.env.MOM_NOTES_MAX || 200),
@@ -555,6 +559,7 @@ const ACTION_LOG_PRIORITY_KINDS = new Set([
   'mom-note',
   'period-low-exit',
 ]);
+const ACTION_LOG_RANK_KINDS = new Set(['rank-new', 'rank-up']);
 
 function actionLogKey(entry) {
   const symbols = (Array.isArray(entry && entry.symbols) ? entry.symbols : [])
@@ -568,12 +573,18 @@ function actionLogKey(entry) {
   return `${Number(entry.at) || 0}|${kind}|${symbols.join(',')}|${price}`;
 }
 
-/** Keep last 7 days; if over max, prefer trade/note rows over zone-drop flood. */
+/** Keep last 7 days (rank-* 1 day); if over max, prefer trade/note rows. */
 function trimActionLogEntries(list) {
-  const cutoff = Date.now() - CONFIG.ACTION_LOG_TTL_MS;
+  const now = Date.now();
   const max = CONFIG.ACTION_LOG_MAX;
   const fresh = (Array.isArray(list) ? list : [])
-    .filter((entry) => (Number(entry && entry.at) || 0) >= cutoff)
+    .filter((entry) => {
+      const at = Number(entry && entry.at) || 0;
+      const ttl = ACTION_LOG_RANK_KINDS.has(String(entry && entry.kind || ''))
+        ? CONFIG.ACTION_LOG_RANK_TTL_MS
+        : CONFIG.ACTION_LOG_TTL_MS;
+      return at >= now - ttl;
+    })
     .sort((a, b) => (b.at || 0) - (a.at || 0));
   if (fresh.length <= max) return fresh;
   const priority = [];
@@ -686,6 +697,50 @@ async function saveAutoPinMomNotes(now, newcomers, pins) {
   return [];
 }
 
+/** Merge incoming action-log rows onto GitHub (conflict-retry). */
+async function appendActionLogEntries(incoming, message) {
+  const batch = Array.isArray(incoming) ? incoming : [];
+  if (!batch.length) return;
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const file = await loadJson(CONFIG.ACTION_LOG_PATH);
+    const prev = Array.isArray(file.data && file.data.entries)
+      ? file.data.entries
+      : [];
+    const seen = new Set();
+    const entries = [];
+    for (const item of [...batch, ...prev]) {
+      const entry = normalizeActionLogEntry(item);
+      if (!entry) continue;
+      const key = actionLogKey(entry);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      entries.push(entry);
+    }
+    const kept = trimActionLogEntries(entries);
+    try {
+      await saveJson(
+        CONFIG.ACTION_LOG_PATH,
+        {
+          entries: kept,
+          updatedAt: Date.now(),
+        },
+        file.sha,
+        message || `Action log +${batch.length}`,
+      );
+      return;
+    } catch (error) {
+      lastError = error;
+      const messageText = error && error.message ? error.message : String(error);
+      if (!/409|conflict|sha/i.test(messageText)) break;
+    }
+  }
+  console.warn(
+    'append action log failed',
+    lastError && lastError.message ? lastError.message : lastError,
+  );
+}
+
 /** Same batches as WeCom: webpage 日志 follows cloud edges, not page refresh. */
 async function appendAutoPinActionLog(now, newcomers, dropped, momNotes) {
   const incoming = [];
@@ -715,43 +770,9 @@ async function appendAutoPinActionLog(now, newcomers, dropped, momNotes) {
     });
   }
   if (!incoming.length) return;
-  let lastError = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const file = await loadJson(CONFIG.ACTION_LOG_PATH);
-    const prev = Array.isArray(file.data && file.data.entries)
-      ? file.data.entries
-      : [];
-    const seen = new Set();
-    const entries = [];
-    for (const item of [...incoming, ...prev]) {
-      const entry = normalizeActionLogEntry(item);
-      if (!entry) continue;
-      const key = actionLogKey(entry);
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      entries.push(entry);
-    }
-    const kept = trimActionLogEntries(entries);
-    try {
-      await saveJson(
-        CONFIG.ACTION_LOG_PATH,
-        {
-          entries: kept,
-          updatedAt: Date.now(),
-        },
-        file.sha,
-        `Action log auto-pin ${incoming.length}`,
-      );
-      return;
-    } catch (error) {
-      lastError = error;
-      const message = error && error.message ? error.message : String(error);
-      if (!/409|conflict|sha/i.test(message)) break;
-    }
-  }
-  console.warn(
-    'append auto-pin action log failed',
-    lastError && lastError.message ? lastError.message : lastError,
+  await appendActionLogEntries(
+    incoming,
+    `Action log auto-pin ${incoming.length}`,
   );
 }
 
@@ -1122,6 +1143,25 @@ async function main() {
   ];
   const tickers = await fetchBinanceTickers(symbols);
 
+  let notesRankSnap = null;
+  try {
+    notesRankSnap = await runNotesRankSnap({
+      pins,
+      notes: momNotes,
+      tickers,
+      now,
+      appendActionLog: appendActionLogEntries,
+    });
+    if (notesRankSnap && !notesRankSnap.skipped) {
+      console.log('notes-rank snap', JSON.stringify(notesRankSnap));
+    }
+  } catch (error) {
+    console.warn(
+      'notes-rank snap failed',
+      error && error.message ? error.message : error,
+    );
+  }
+
   // Build + send positions first. Pin momentum/charts can timeout or hit WeCom
   // rate limits when many pins are up; those must not block the 5m position push.
   const { text: positionText, nextDropAlerts } = buildPositionReport(
@@ -1312,6 +1352,7 @@ async function main() {
       dropsArmed: Object.keys(dropAlertsToSave).length,
       autoPinned,
       autoDropped,
+      notesRankSnap,
       sendErrors,
     }),
   );
@@ -1328,6 +1369,7 @@ async function main() {
     breakHighHits: breakHighHits.map((hit) => hit.symbol),
     autoPinned,
     autoDropped,
+    notesRankSnap,
     sendErrors,
   };
 }

@@ -24,6 +24,8 @@
   const CARD_EGGS_PATH = "watch-card-eggs.json";
   const BREAK_HIGH_PATH = "watch-break-high.json";
   const NAILS_PATH = "watch-nails.json";
+  const NOTES_RANK_SNAPS_PATH = "watch-notes-rank-snaps.json";
+  const NOTES_RANK_PREFS_PATH = "watch-notes-rank-prefs.json";
   const PRICE_ALERTS_PATH = "watch-price-alerts.json";
   const LEGACY_DATA_PATH = "watch-data.json";
   const PIN_TTL_MS = 12 * 60 * 60 * 1000;
@@ -33,6 +35,9 @@
   /** 动作日志 / 战绩统一保留近 7 天；条数上限只做安全阀。 */
   const ACTION_LOG_TTL_MS = 7 * 24 * 60 * 60 * 1000;
   const ACTION_LOG_MAX = 10000;
+  /** 排序动态日志单独保留 1 天。 */
+  const ACTION_LOG_RANK_TTL_MS = 24 * 60 * 60 * 1000;
+  const ACTION_LOG_RANK_KINDS = new Set(["rank-new", "rank-up"]);
   /** 裁满上限时优先留买卖与记一笔，避免被 zone-drop 挤掉战绩。 */
   const ACTION_LOG_PRIORITY_KINDS = new Set([
     "buy",
@@ -42,6 +47,20 @@
     "period-low-exit",
   ]);
   const NAILS_MAX = 80;
+  const NOTES_RANK_SNAPS_TTL_MS = 24 * 60 * 60 * 1000;
+  const NOTES_RANK_SNAPS_MAX = 48;
+  /** Cloud + browser share this sort for 排序动态 snaps. */
+  const NOTES_RANK_PREFS_DEFAULT = {
+    keys: ["change2h", "noteAt", "change1h"],
+    last: "change2h",
+  };
+  const NOTES_RANK_SORT_KEYS = new Set([
+    "change2h",
+    "change1h",
+    "change24h",
+    "noteAt",
+    "gain",
+  ]);
   const PRICE_ALERTS_MAX = 40;
   const PRICE_ALERT_SEND_MAX = 10;
   const PRICE_ALERT_SEND_GAP_MS = 60 * 1000;
@@ -1199,6 +1218,317 @@
     throw lastError || new Error("保存钉子失败");
   }
 
+  function normalizeNotesRankSnap(item) {
+    if (!item || typeof item !== "object") return null;
+    const at = Number(item.at) || 0;
+    const symbols = [
+      ...new Set(
+        (Array.isArray(item.symbols) ? item.symbols : [])
+          .map((symbol) => String(symbol || "").trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    ];
+    if (!at || !symbols.length) return null;
+    return { at, symbols };
+  }
+
+  function normalizeNotesRankSnaps(raw) {
+    const cutoff = Date.now() - NOTES_RANK_SNAPS_TTL_MS;
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map(normalizeNotesRankSnap)
+      .filter((item) => item && item.at >= cutoff)
+      .sort((a, b) => (b.at || 0) - (a.at || 0))
+      .slice(0, NOTES_RANK_SNAPS_MAX);
+  }
+
+  function serializeNotesRankSnaps(list) {
+    return normalizeNotesRankSnaps(list).map((item) => ({
+      at: item.at,
+      symbols: item.symbols.slice(),
+    }));
+  }
+
+  function appendNotesRankSnap(list, symbols, at) {
+    const ts = Number(at) || Date.now();
+    const nextSymbols = [
+      ...new Set(
+        (symbols || [])
+          .map((symbol) => String(symbol || "").trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    ];
+    if (!nextSymbols.length) return normalizeNotesRankSnaps(list);
+    return normalizeNotesRankSnaps([
+      { at: ts, symbols: nextSymbols },
+      ...(list || []),
+    ]);
+  }
+
+  function compareNotesRankSnaps(prev, curr) {
+    const prevSymbols = Array.isArray(prev && prev.symbols) ? prev.symbols : [];
+    const currSymbols = Array.isArray(curr && curr.symbols) ? curr.symbols : [];
+    const prevRank = new Map();
+    prevSymbols.forEach((symbol, index) => {
+      const key = String(symbol || "")
+        .trim()
+        .toUpperCase();
+      if (key && !prevRank.has(key)) prevRank.set(key, index + 1);
+    });
+    const currRank = new Map();
+    currSymbols.forEach((symbol, index) => {
+      const key = String(symbol || "")
+        .trim()
+        .toUpperCase();
+      if (key && !currRank.has(key)) currRank.set(key, index + 1);
+    });
+    const added = [];
+    const advanced = [];
+    for (const [symbol, rank] of currRank) {
+      if (!prevRank.has(symbol)) {
+        added.push(symbol);
+        continue;
+      }
+      const before = prevRank.get(symbol);
+      if (Number.isFinite(before) && rank < before) advanced.push(symbol);
+    }
+    return { added, advanced };
+  }
+
+  async function loadNotesRankSnapsRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || NOTES_RANK_SNAPS_PATH;
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          snaps: normalizeNotesRankSnaps(current.data.snaps),
+          snapsUpdatedAt: Number.isFinite(Number(current.data.snapsUpdatedAt))
+            ? Number(current.data.snapsUpdatedAt)
+            : null,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadNotesRankSnaps via API failed, trying raw", error);
+    }
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          snaps: normalizeNotesRankSnaps(data.snaps),
+          snapsUpdatedAt: Number.isFinite(Number(data.snapsUpdatedAt))
+            ? Number(data.snapsUpdatedAt)
+            : null,
+          source: "raw-commit",
+        };
+      }
+      if (response.status !== 404) {
+        console.warn(`读取排序快照 raw 失败: ${response.status}`);
+      }
+    } catch (error) {
+      console.warn("loadNotesRankSnaps via commit-raw failed", error);
+    }
+    return { snaps: [], snapsUpdatedAt: null, source: "empty" };
+  }
+
+  async function patchNotesRankSnaps(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || NOTES_RANK_SNAPS_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = current.data || { snaps: [], snapsUpdatedAt: null };
+        const snaps = normalizeNotesRankSnaps(base.snaps);
+        let nextList = snaps;
+        if (typeof options.mutate === "function") {
+          const result = options.mutate(snaps.slice());
+          nextList = Array.isArray(result)
+            ? result
+            : result && result.list
+              ? result.list
+              : snaps;
+        }
+        const nextSnaps = serializeNotesRankSnaps(nextList);
+        const nextData = {
+          snaps: nextSnaps,
+          snapsUpdatedAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update notes-rank snaps",
+        });
+        return {
+          snaps: nextSnaps,
+          snapsUpdatedAt: nextData.snapsUpdatedAt,
+        };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存排序快照失败");
+  }
+
+  function normalizeNotesRankSortKey(key) {
+    const raw = String(key || "").trim();
+    return NOTES_RANK_SORT_KEYS.has(raw)
+      ? raw
+      : NOTES_RANK_PREFS_DEFAULT.last;
+  }
+
+  function uniqueNotesRankSortKeys(keys) {
+    const seen = new Set();
+    const list = [];
+    for (const raw of keys || []) {
+      const key = normalizeNotesRankSortKey(raw);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push(key);
+    }
+    return list.length ? list : NOTES_RANK_PREFS_DEFAULT.keys.slice();
+  }
+
+  function normalizeNotesRankPrefs(raw) {
+    const base =
+      raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    const keys = uniqueNotesRankSortKeys(
+      Array.isArray(base.keys) ? base.keys : NOTES_RANK_PREFS_DEFAULT.keys,
+    );
+    let last = normalizeNotesRankSortKey(
+      base.last || NOTES_RANK_PREFS_DEFAULT.last,
+    );
+    if (!keys.includes(last)) last = keys[keys.length - 1];
+    return {
+      keys,
+      last,
+      updatedAt: Number.isFinite(Number(base.updatedAt))
+        ? Number(base.updatedAt)
+        : 0,
+    };
+  }
+
+  function serializeNotesRankPrefs(prefs) {
+    const next = normalizeNotesRankPrefs(prefs);
+    return {
+      keys: next.keys.slice(),
+      last: next.last,
+      updatedAt: next.updatedAt || Date.now(),
+    };
+  }
+
+  async function loadNotesRankPrefsRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || NOTES_RANK_PREFS_PATH;
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          prefs: normalizeNotesRankPrefs(current.data),
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadNotesRankPrefs via API failed, trying raw", error);
+    }
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          prefs: normalizeNotesRankPrefs(data),
+          source: "raw-commit",
+        };
+      }
+      if (response.status !== 404) {
+        console.warn(`读取排序偏好 raw 失败: ${response.status}`);
+      }
+    } catch (error) {
+      console.warn("loadNotesRankPrefs via commit-raw failed", error);
+    }
+    return {
+      prefs: normalizeNotesRankPrefs(NOTES_RANK_PREFS_DEFAULT),
+      source: "default",
+    };
+  }
+
+  async function patchNotesRankPrefs(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || NOTES_RANK_PREFS_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = normalizeNotesRankPrefs(
+          current.data || NOTES_RANK_PREFS_DEFAULT,
+        );
+        let nextPrefs = base;
+        if (typeof options.mutate === "function") {
+          const result = options.mutate({ ...base, keys: base.keys.slice() });
+          nextPrefs = normalizeNotesRankPrefs(result || base);
+        }
+        const nextData = serializeNotesRankPrefs({
+          ...nextPrefs,
+          updatedAt: Date.now(),
+        });
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update notes-rank prefs",
+        });
+        return { prefs: nextData };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存排序偏好失败");
+  }
+
   function normalizeActionLogEntry(item) {
     if (!item || typeof item !== "object") return null;
     const kind = String(item.kind || "").trim();
@@ -1253,6 +1583,12 @@
     );
   }
 
+  function actionLogEntryTtlMs(kind, fallbackTtl) {
+    const k = String(kind || "");
+    if (ACTION_LOG_RANK_KINDS.has(k)) return ACTION_LOG_RANK_TTL_MS;
+    return fallbackTtl;
+  }
+
   function trimActionLogEntries(list, options) {
     const ttlMs =
       options && Number(options.ttlMs) > 0
@@ -1260,9 +1596,13 @@
         : ACTION_LOG_TTL_MS;
     const max =
       options && Number(options.max) > 0 ? Number(options.max) : ACTION_LOG_MAX;
-    const cutoff = Date.now() - ttlMs;
+    const now = Date.now();
     const fresh = (Array.isArray(list) ? list : [])
-      .filter((entry) => (Number(entry && entry.at) || 0) >= cutoff)
+      .filter((entry) => {
+        const at = Number(entry && entry.at) || 0;
+        const keepMs = actionLogEntryTtlMs(entry && entry.kind, ttlMs);
+        return at >= now - keepMs;
+      })
       .sort((a, b) => (b.at || 0) - (a.at || 0));
     if (fresh.length <= max) return fresh;
     const priority = [];
@@ -2241,6 +2581,8 @@
     ACTION_LOG_PATH,
     ACTION_LOG_MAX,
     ACTION_LOG_TTL_MS,
+    ACTION_LOG_RANK_TTL_MS,
+    ACTION_LOG_RANK_KINDS,
     trimActionLogEntries,
     normalizeActionLog,
     serializeActionLog,
@@ -2274,6 +2616,21 @@
     markNailsExited,
     loadNailsRaw,
     patchNails,
+    NOTES_RANK_SNAPS_PATH,
+    NOTES_RANK_SNAPS_TTL_MS,
+    NOTES_RANK_SNAPS_MAX,
+    normalizeNotesRankSnaps,
+    serializeNotesRankSnaps,
+    appendNotesRankSnap,
+    compareNotesRankSnaps,
+    loadNotesRankSnapsRaw,
+    patchNotesRankSnaps,
+    NOTES_RANK_PREFS_PATH,
+    NOTES_RANK_PREFS_DEFAULT,
+    normalizeNotesRankPrefs,
+    serializeNotesRankPrefs,
+    loadNotesRankPrefsRaw,
+    patchNotesRankPrefs,
     normalizePositions,
     serializePositions,
     positionsToSymbolSet,

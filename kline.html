@@ -659,8 +659,12 @@
       }
       .notes-rank-gate {
         position: fixed;
-        inset: 0;
-        z-index: 110;
+        top: 0;
+        left: 0;
+        right: 0;
+        /* 留给底部日志/动态/企微三个 tab */
+        bottom: calc(var(--float-dock-h, 54px) + env(safe-area-inset-bottom, 0px));
+        z-index: 40;
         display: flex;
         flex-direction: column;
         /* 半透明：背后 K 线仍可见 */
@@ -693,6 +697,7 @@
         background: var(--bg);
         backdrop-filter: none;
         -webkit-backdrop-filter: none;
+        bottom: 0;
       }
       body.is-jiji-view .notes-rank-gate[hidden] {
         display: flex !important;
@@ -700,7 +705,8 @@
       .notes-rank-head {
         flex: 0 0 auto;
         display: flex;
-        align-items: center;
+        flex-direction: column;
+        align-items: stretch;
         gap: 10px;
         padding: 12px 12px 10px;
         border-bottom: 0.5px solid var(--separator);
@@ -709,7 +715,7 @@
         -webkit-backdrop-filter: saturate(180%) blur(12px);
       }
       .notes-rank-head-text {
-        flex: 1 1 auto;
+        flex: 0 0 auto;
         min-width: 0;
       }
       .notes-rank-head h2 {
@@ -718,10 +724,16 @@
         font-weight: 700;
       }
       .notes-rank-meta {
-        margin: 0;
+        margin: 4px 0 0;
         font-size: 12px;
         color: var(--secondary);
         font-variant-numeric: tabular-nums;
+      }
+      .notes-rank-head-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
       }
       .notes-rank-refresh,
       .notes-rank-view,
@@ -758,8 +770,7 @@
         flex-wrap: wrap;
         align-items: center;
         gap: 6px;
-        padding: 8px 12px
-          max(10px, env(safe-area-inset-bottom, 0px));
+        padding: 8px 12px;
         border-top: 0.5px solid var(--separator);
         background: color-mix(in srgb, var(--elevated) 94%, transparent);
       }
@@ -3033,7 +3044,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        z-index: 41;
+        z-index: 45;
         display: grid;
         grid-template-columns: 1fr 1fr 1fr;
         gap: 0;
@@ -3603,40 +3614,42 @@
           <h2 id="notesRankTitle">记一笔排序</h2>
           <p class="notes-rank-meta" id="notesRankMeta">有记相对记住点 · 无记相对盯住价 · 近2h · 近1h · 24h</p>
         </div>
-        <button
-          type="button"
-          class="notes-rank-select"
-          id="notesRankSelectBtn"
-          title="多选后批量加入钉子抽屉"
-          aria-pressed="false"
-        >
-          多选
-        </button>
-        <button
-          type="button"
-          class="notes-rank-view"
-          id="notesRankViewBtn"
-          title="列表与 K 线互斥显示"
-        >
-          切换K线
-        </button>
-        <button
-          type="button"
-          class="notes-rank-refresh"
-          id="notesRankRefresh"
-          title="重新拉取近2h/1h 和 K 线"
-        >
-          刷新
-        </button>
-        <button
-          type="button"
-          class="notes-rank-close"
-          id="notesRankClose"
-          title="关闭"
-          aria-label="关闭记一笔排序"
-        >
-          ×
-        </button>
+        <div class="notes-rank-head-actions">
+          <button
+            type="button"
+            class="notes-rank-select"
+            id="notesRankSelectBtn"
+            title="多选后批量加入钉子抽屉"
+            aria-pressed="false"
+          >
+            多选
+          </button>
+          <button
+            type="button"
+            class="notes-rank-view"
+            id="notesRankViewBtn"
+            title="列表与 K 线互斥显示"
+          >
+            切换K线
+          </button>
+          <button
+            type="button"
+            class="notes-rank-refresh"
+            id="notesRankRefresh"
+            title="重新拉取近2h/1h 和 K 线"
+          >
+            刷新
+          </button>
+          <button
+            type="button"
+            class="notes-rank-close"
+            id="notesRankClose"
+            title="关闭"
+            aria-label="关闭记一笔排序"
+          >
+            ×
+          </button>
+        </div>
       </div>
       <div class="notes-rank-scroll" id="notesRankScroll">
         <div class="notes-rank-loading" id="notesRankBody">加载中…</div>
@@ -4139,6 +4152,14 @@
         </button>
         <button
           type="button"
+          data-log-cat="rank"
+          role="tab"
+          aria-selected="false"
+        >
+          排序动态
+        </button>
+        <button
+          type="button"
           data-log-cat="other"
           role="tab"
           aria-selected="false"
@@ -4399,8 +4420,20 @@
       let momNotesSaving = false;
       let momNotesExpanded = true;
       const NOTES_RANK_SORT_KEY = "kline-notes-rank-sort-v1";
-      const NOTES_RANK_SORT_DEFAULT = "change24h";
+      const NOTES_RANK_PREFS_PATH = "watch-notes-rank-prefs.json";
+      const NOTES_RANK_PREFS_DEFAULT =
+        WatchFavorites.NOTES_RANK_PREFS_DEFAULT || {
+          keys: ["change2h", "noteAt", "change1h"],
+          last: "change2h",
+        };
+      const NOTES_RANK_SORT_DEFAULT = NOTES_RANK_PREFS_DEFAULT.last || "change2h";
       function normalizeNotesRankSortKey(key) {
+        if (typeof WatchFavorites.normalizeNotesRankPrefs === "function") {
+          return WatchFavorites.normalizeNotesRankPrefs({
+            keys: [key],
+            last: key,
+          }).last;
+        }
         return key === "change2h" ||
           key === "change1h" ||
           key === "change24h" ||
@@ -4410,6 +4443,12 @@
           : NOTES_RANK_SORT_DEFAULT;
       }
       function uniqueNotesRankSortKeys(keys) {
+        if (typeof WatchFavorites.normalizeNotesRankPrefs === "function") {
+          return WatchFavorites.normalizeNotesRankPrefs({
+            keys,
+            last: NOTES_RANK_SORT_DEFAULT,
+          }).keys;
+        }
         const seen = new Set();
         const list = [];
         for (const raw of keys || []) {
@@ -4418,10 +4457,10 @@
           seen.add(key);
           list.push(key);
         }
-        return list.length ? list : [NOTES_RANK_SORT_DEFAULT];
+        return list.length ? list : NOTES_RANK_PREFS_DEFAULT.keys.slice();
       }
-      function readNotesRankSortState() {
-        let keys = [NOTES_RANK_SORT_DEFAULT];
+      function readNotesRankSortStateLocal() {
+        let keys = NOTES_RANK_PREFS_DEFAULT.keys.slice();
         let last = NOTES_RANK_SORT_DEFAULT;
         try {
           const raw = localStorage.getItem(NOTES_RANK_SORT_KEY);
@@ -4436,12 +4475,28 @@
             keys = [last];
           }
         } catch (error) {
-          keys = [NOTES_RANK_SORT_DEFAULT];
+          keys = NOTES_RANK_PREFS_DEFAULT.keys.slice();
           last = NOTES_RANK_SORT_DEFAULT;
         }
         return { keys, last };
       }
+      let notesRankPrefsSaving = false;
+      let notesRankPrefsSaveTimer = 0;
+      function applyNotesRankPrefs(prefs) {
+        const next =
+          typeof WatchFavorites.normalizeNotesRankPrefs === "function"
+            ? WatchFavorites.normalizeNotesRankPrefs(prefs)
+            : {
+                keys: uniqueNotesRankSortKeys(prefs && prefs.keys),
+                last: normalizeNotesRankSortKey(prefs && prefs.last),
+              };
+        notesRankSortKeys = next.keys.slice();
+        notesRankLastKey = next.keys.includes(next.last)
+          ? next.last
+          : next.keys[next.keys.length - 1];
+      }
       function persistNotesRankSortState() {
+        // Ephemeral mirror only; durable prefs live on GitHub for cloud snaps.
         try {
           localStorage.setItem(
             NOTES_RANK_SORT_KEY,
@@ -4453,8 +4508,73 @@
         } catch (error) {
           /* ignore */
         }
+        if (notesRankPrefsSaveTimer) {
+          window.clearTimeout(notesRankPrefsSaveTimer);
+        }
+        notesRankPrefsSaveTimer = window.setTimeout(() => {
+          notesRankPrefsSaveTimer = 0;
+          void flushNotesRankPrefs();
+        }, 400);
       }
-      const notesRankSortBoot = readNotesRankSortState();
+      async function flushNotesRankPrefs() {
+        if (typeof WatchFavorites.patchNotesRankPrefs !== "function") return;
+        if (notesRankPrefsSaving) return;
+        notesRankPrefsSaving = true;
+        try {
+          await WatchFavorites.patchNotesRankPrefs({
+            repo: CONFIG.GITHUB_REPO,
+            path: NOTES_RANK_PREFS_PATH,
+            message: `Notes-rank prefs ${notesRankSortKeys.join("+")}`,
+            mutate: () => ({
+              keys: notesRankSortKeys.slice(),
+              last: notesRankLastKey,
+            }),
+          });
+        } catch (error) {
+          console.warn("persist notes-rank prefs failed", error);
+        } finally {
+          notesRankPrefsSaving = false;
+        }
+      }
+      async function loadNotesRankPrefsShared() {
+        if (typeof WatchFavorites.loadNotesRankPrefsRaw !== "function") {
+          return false;
+        }
+        try {
+          const remote = await WatchFavorites.loadNotesRankPrefsRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: NOTES_RANK_PREFS_PATH,
+          });
+          if (remote && remote.prefs) {
+            if (remote.source === "default") {
+              // Seed GitHub from current browser keys (migrate localStorage once).
+              applyNotesRankPrefs({
+                keys: notesRankSortKeys,
+                last: notesRankLastKey,
+              });
+              await flushNotesRankPrefs();
+            } else {
+              applyNotesRankPrefs(remote.prefs);
+              try {
+                localStorage.setItem(
+                  NOTES_RANK_SORT_KEY,
+                  JSON.stringify({
+                    keys: notesRankSortKeys,
+                    last: notesRankLastKey,
+                  }),
+                );
+              } catch (_) {
+                /* ignore */
+              }
+            }
+            return true;
+          }
+        } catch (error) {
+          console.warn("load notes-rank prefs failed", error);
+        }
+        return false;
+      }
+      const notesRankSortBoot = readNotesRankSortStateLocal();
       let notesRankSortKeys = notesRankSortBoot.keys;
       let notesRankLastKey = notesRankSortBoot.last;
       const NOTES_RANK_VIEW_KEY = "kline-notes-rank-view-v1";
@@ -4497,6 +4617,10 @@
         Number(WatchFavorites.ACTION_LOG_TTL_MS) > 0
           ? Number(WatchFavorites.ACTION_LOG_TTL_MS)
           : 7 * 24 * 60 * 60 * 1000;
+      const ACTION_LOG_RANK_TTL_MS =
+        Number(WatchFavorites.ACTION_LOG_RANK_TTL_MS) > 0
+          ? Number(WatchFavorites.ACTION_LOG_RANK_TTL_MS)
+          : 24 * 60 * 60 * 1000;
       let actionLogEntries = [];
       let actionLogSaving = false;
       let actionLogCategory = "capture";
@@ -4504,6 +4628,7 @@
         capture: new Set(["auto-pin", "rewarm"]),
         drop: new Set(["zone-drop"]),
         notes: new Set(["mom-note"]),
+        rank: new Set(["rank-new", "rank-up"]),
         other: new Set(["buy", "sell", "sell-stop", "period-low-exit"]),
       };
       let priceAlertItems = [];
@@ -4724,6 +4849,7 @@
         { id: "eggs", label: "彩蛋 watch-card-eggs", wave: 1 },
         { id: "break", label: "破点高 watch-break-high", wave: 1 },
         { id: "alerts", label: "价格预警 watch-price-alerts", wave: 1 },
+        { id: "rankPrefs", label: "排序偏好 watch-notes-rank-prefs", wave: 1 },
       ];
 
       function bootInitSortTasks(tasks) {
@@ -6213,9 +6339,18 @@
             ? Number(cooldownMs)
             : 8 * 60 * 1000;
         const edgeKinds = new Set(["auto-pin", "rewarm", "zone-drop"]);
-        const cutoff = Date.now() - ACTION_LOG_TTL_MS;
+        const rankKinds = ACTION_LOG_CAT_KINDS.rank;
+        const nowMs = Date.now();
         const chron = (Array.isArray(list) ? list : [])
-          .filter((entry) => (Number(entry && entry.at) || 0) >= cutoff)
+          .filter((entry) => {
+            const at = Number(entry && entry.at) || 0;
+            const kind = String(entry && entry.kind || "");
+            const ttl =
+              rankKinds && rankKinds.has(kind)
+                ? ACTION_LOG_RANK_TTL_MS
+                : ACTION_LOG_TTL_MS;
+            return at >= nowMs - ttl;
+          })
           .slice()
           .sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0));
         const lastKept = new Map();
@@ -6438,6 +6573,8 @@
         if (kind === "rewarm") return "回暖(旧)";
         if (kind === "zone-drop") return "掉出窗口";
         if (kind === "mom-note") return "记一下";
+        if (kind === "rank-new") return "新进排序";
+        if (kind === "rank-up") return "位次前进";
         if (kind === "buy") return "买";
         if (kind === "sell") return "卖";
         if (kind === "sell-stop") return "止损";
@@ -6450,12 +6587,14 @@
         if (ACTION_LOG_CAT_KINDS.capture.has(k)) return "capture";
         if (ACTION_LOG_CAT_KINDS.drop.has(k)) return "drop";
         if (ACTION_LOG_CAT_KINDS.notes.has(k)) return "notes";
+        if (ACTION_LOG_CAT_KINDS.rank.has(k)) return "rank";
         return "other";
       }
 
       function setActionLogCategory(cat) {
         const next =
           cat === "notes" ||
+          cat === "rank" ||
           cat === "other" ||
           cat === "capture" ||
           cat === "drop" ||
@@ -6637,7 +6776,9 @@
                 ? "暂无掉出窗口"
                 : actionLogCategory === "notes"
                   ? "暂无记一下"
-                  : "暂无 · 买 / 卖 / 止损 / 触底退出";
+                  : actionLogCategory === "rank"
+                    ? "暂无排序动态 · 云函数约每半小时按共享排序维度对比"
+                    : "暂无 · 买 / 卖 / 止损 / 触底退出";
           body.innerHTML = `<div class="action-log-empty">${emptyHint}</div>`;
           return;
         }
@@ -7138,6 +7279,9 @@
           }),
           soft("break", "破点高", async () => {
             await loadSharedBreakHigh();
+          }),
+          soft("rankPrefs", "排序偏好", async () => {
+            await loadNotesRankPrefsShared();
           }),
           soft("alerts", "价格预警", async () => {
             await loadSharedPriceAlerts();
@@ -14366,9 +14510,23 @@
         if (open) closeCardActions();
       });
       document.addEventListener("dblclick", (event) => {
+        const inNotesRank = event.target.closest(".notes-rank-gate");
+        if (inNotesRank) {
+          if (
+            event.target.closest(
+              "button, a, input, select, textarea, label, th, .notes-rank-batch-bar, .notes-rank-head-actions",
+            )
+          ) {
+            return;
+          }
+          if (!isNotesRankOpen()) return;
+          event.preventDefault();
+          closeNotesRankOverlay();
+          return;
+        }
         if (
           event.target.closest(
-            "button, a, input, select, textarea, label, .card-actions, summary, .mode-switch, .notes-rank-gate, .stop-loss-gate, .notify-float, .float-tabs, .app-chrome, .nail-drawer, .nail-tab, .hidden-pin-drawer, .hidden-pin-tab",
+            "button, a, input, select, textarea, label, .card-actions, summary, .mode-switch, .stop-loss-gate, .notify-float, .float-tabs, .app-chrome, .nail-drawer, .nail-tab, .hidden-pin-drawer, .hidden-pin-tab",
           )
         ) {
           return;

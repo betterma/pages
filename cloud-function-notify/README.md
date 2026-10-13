@@ -20,19 +20,29 @@
 
 网页刷新不再单独自动盯。
 
+## 排序动态（notes-rank 快照）
+
+云函数在 **5 分钟定时**里检查：距上一帧 ≥ **约 30 分钟** 则对「记一笔 ∪ 盯一下」（去拉黑）拍快照，写入 `watch-notes-rank-snaps.json`；与上一帧对比后写动作日志 `rank-new` / `rank-up`（「排序动态」，保留 1 天）。**不依赖网页打开。**
+
+排序维度读 `watch-notes-rank-prefs.json`（网页改 notes-rank 表头多选时写入；与页面同一套 hitCount + 主序逻辑）。默认：`keys=["change2h","noteAt","change1h"]`，`last="change2h"`（近2h + 记时 + 近1h，优先近2h）。需要 1h/2h 时拉 15m K 线计算。
+
+- `NOTES_RANK_SNAP_ENABLED`：默认 `1`；`0` 关闭。
+- `NOTES_RANK_SNAP_INTERVAL_MS`：默认 `1800000`（30 分钟）。
+
 ## 仅网页、不推微信
 
 1. **持仓** → `lastPositionNotify`（企微浮窗右侧）
 2. **盯一下上涨文案** → `lastPinNotify`（企微浮窗左侧）
 3. **破点高** → `watch-break-high.json`（动态浮窗右侧；10 分钟冷却照旧）
+4. **排序动态** → 读 `watch-action-log.json`（由云函数写入）
 
 ## 部署
 
-1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js`）。只更新 `index.js` 会出现 `main is not a function`。
+1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js` + `notes-rank-snap.js`）。只更新 `index.js` 会出现 `main is not a function`。
 2. Handler：`index.handler`，Node.js 18+
-2. **超时建议 ≥ 60～120 秒**
-3. 定时触发器：`0 */5 * * * *`
-4. 环境变量：
+3. **超时建议 ≥ 60～120 秒**
+4. 定时触发器：`0 */5 * * * *`
+5. 环境变量：
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
@@ -41,5 +51,6 @@
 | `AUTO_PIN_PUSHPLUS` | 否 | 默认 `1` |
 | `AUTO_PIN_WECOM` | 否 | 默认 `0` |
 | `WECOM_WEBHOOK_POSITIONS` | 否 | 仅当 `AUTO_PIN_WECOM=1` |
+| `NOTES_RANK_SNAP_ENABLED` | 否 | 默认 `1` |
 
 \* `AUTO_PIN_PUSHPLUS=0` 时可空。
