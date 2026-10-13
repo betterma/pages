@@ -13847,7 +13847,8 @@
           overlay: false,
           label: progressLabel,
         });
-        const showBootInit = reason === "boot";
+        // 冷启动与「同步池」都弹出并行初始化进度框；轻刷新只用顶栏进度。
+        const showBootInit = reason === "boot" || reason === "sync-pool";
         if (showBootInit) {
           const wave2 = isJijiView()
             ? [
@@ -13864,10 +13865,12 @@
                   wave: 2,
                 },
               ];
-          bootInitBegin("WAVE 1 · 观察池 / 共享态 / 行情 并行", [
-            ...BOOT_INIT_WAVE1_TASKS,
-            ...wave2,
-          ]);
+          bootInitBegin(
+            reason === "sync-pool"
+              ? "同步池 · WAVE 1 · 观察池 / 共享态 / 行情"
+              : "WAVE 1 · 观察池 / 共享态 / 行情 并行",
+            [...BOOT_INIT_WAVE1_TASKS, ...wave2],
+          );
         }
         try {
           let watchMeta = { fromCache: true, source: "memory" };
@@ -14006,7 +14009,9 @@
           }
         } finally {
           if (showBootInit) {
-            bootInitSetStep("初始化完成");
+            bootInitSetStep(
+              reason === "sync-pool" ? "同步完成" : "初始化完成",
+            );
             window.setTimeout(() => bootInitEnd(), 420);
           } else {
             bootInitEnd();
