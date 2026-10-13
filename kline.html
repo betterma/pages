@@ -5243,6 +5243,11 @@
         setTimeout(() => toast.remove(), ms);
       }
 
+      /** 删除 / 清空 / 取消盯住等破坏性操作统一二次确认。 */
+      function confirmDestructive(message) {
+        return window.confirm(String(message || "确定执行此删除操作？"));
+      }
+
       let lastApiIssueAt = 0;
       let lastApiIssueKind = "";
       let apiIssueSuppressed = 0;
@@ -8742,17 +8747,23 @@
 
       async function removeMomNote(id) {
         if (!id || momNotesSaving) return;
+        const note = (momNoteItems || []).find((item) => item && item.id === id);
+        const label =
+          (note && (note.label || String(note.symbol || "").replace(/USDT$/i, ""))) ||
+          "这条记一笔";
+        if (!confirmDestructive(`确定删除记一笔「${label}」？`)) return;
         momNotesSaving = true;
         try {
           const result = await WatchFavorites.patchMomNotes({
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.MOM_NOTES_PATH,
             message: "Remove momentum note",
-            mutate: (list) => list.filter((note) => note.id !== id),
+            mutate: (list) => list.filter((item) => item.id !== id),
           });
           momNoteItems = result.notes || [];
           applyNotesFilter();
           refreshMomentumFloatBody();
+          showToast(`已删除记一笔 ${label}`);
         } catch (error) {
           console.warn(error);
           showToast(error.message || "删除失败");
@@ -8763,6 +8774,12 @@
 
       async function clearMomNotes() {
         if (momNotesSaving) return;
+        const n = (momNoteItems || []).length;
+        if (!n) {
+          showToast("没有记一笔");
+          return;
+        }
+        if (!confirmDestructive(`确定清空全部 ${n} 条记一笔？`)) return;
         momNotesSaving = true;
         try {
           const result = await WatchFavorites.patchMomNotes({
@@ -8924,11 +8941,13 @@
           .trim()
           .toUpperCase();
         if (!key) return false;
+        const label = key.replace(/USDT$/i, "");
+        if (!confirmDestructive(`确定取消 ${label} 的价格预警？`)) return false;
         await persistPriceAlerts(
           (list) => WatchFavorites.removePriceAlert(list, key),
           `Clear price alert ${key}`,
         );
-        showToast(`${key.replace(/USDT$/i, "")} 预警已取消`);
+        showToast(`${label} 预警已取消`);
         return true;
       }
 
@@ -11287,8 +11306,8 @@
         if (pinSaving || !selectedPinSymbols.size) return;
         const symbols = [...selectedPinSymbols];
         if (
-          !window.confirm(
-            `确定取消盯住选中的 ${symbols.length} 个币？`,
+          !confirmDestructive(
+            `确定取消盯住选中的 ${symbols.length} 个币？\n（会一并清掉相关记一笔）`,
           )
         ) {
           return;
@@ -11376,7 +11395,7 @@
         const symbols = [...selectedPinSymbols];
         const keySet = new Set(symbols);
         if (
-          !window.confirm(
+          !confirmDestructive(
             `确定取消选中的 ${symbols.length} 个记一笔？`,
           )
         ) {
@@ -12150,8 +12169,8 @@
           return;
         }
         if (
-          !window.confirm(
-            `删除选中的 ${symbols.length} 个钉子？\n${symbols
+          !confirmDestructive(
+            `确定删除选中的 ${symbols.length} 个钉子？\n${symbols
               .slice(0, 8)
               .map((symbol) => symbol.replace(/USDT$/i, ""))
               .join("、")}${symbols.length > 8 ? "…" : ""}`,
@@ -12721,12 +12740,19 @@
           ? WatchFavorites.nailSymbolKey(symbol)
           : String(symbol || "").toUpperCase();
         if (!key) return;
+        if (nailSaving) {
+          showToast("钉子保存中…");
+          return;
+        }
+        const label = key.replace(/USDT$/i, "");
+        if (!confirmDestructive(`确定删除钉子 ${label}？`)) return;
         try {
           await persistNails(
             (list) => WatchFavorites.removeNail(list, key),
-            `Remove nail ${key.replace(/USDT$/i, "")}`,
+            `Remove nail ${label}`,
+            { loadingText: `删除 ${label}…` },
           );
-          showToast(`${key.replace(/USDT$/i, "")} 已从钉子去掉`);
+          showToast(`${label} 已从钉子去掉`);
         } catch (error) {
           console.warn(error);
           showToast(error.message || "删除失败");
@@ -13330,8 +13356,22 @@
 
       async function toggleFavoriteForSymbol(symbol) {
         if (!symbol || favoriteSaving) return;
-        favoriteSaving = true;
         const label = symbol.replace("USDT", "");
+        const already =
+          typeof WatchFavorites.hasFavorite === "function"
+            ? WatchFavorites.hasFavorite(favoriteItems, symbol)
+            : (favoriteItems || []).some(
+                (item) =>
+                  String(item && item.symbol || "").toUpperCase() ===
+                  String(symbol).toUpperCase(),
+              );
+        if (
+          already &&
+          !confirmDestructive(`确定取消收藏 ${label}？`)
+        ) {
+          return;
+        }
+        favoriteSaving = true;
         try {
           setStatus(false, `正在保存 ${label} 收藏到 GitHub...`);
           const result = await WatchFavorites.patchFavorites({
@@ -13361,8 +13401,15 @@
 
       async function togglePinForSymbol(symbol) {
         if (!symbol || pinSaving) return;
-        pinSaving = true;
         const label = symbol.replace("USDT", "");
+        const alreadyPinned = WatchFavorites.hasPin(pinItems, symbol);
+        if (
+          alreadyPinned &&
+          !confirmDestructive(`确定取消盯住 ${label}？\n（会一并清掉该币记一笔）`)
+        ) {
+          return;
+        }
+        pinSaving = true;
         const price = marketMap[symbol]?.price;
         try {
           setStatus(false, `正在保存 ${label} 盯一下到 GitHub...`);
@@ -13407,8 +13454,15 @@
       async function clearPinForSymbol(symbol) {
         if (!symbol || pinSaving) return;
         if (!WatchFavorites.hasPin(pinItems, symbol)) return;
-        pinSaving = true;
         const label = symbol.replace("USDT", "");
+        if (
+          !confirmDestructive(
+            `确定清除 ${label} 盯一下？\n（会一并清掉该币记一笔）`,
+          )
+        ) {
+          return;
+        }
+        pinSaving = true;
         try {
           setStatus(false, `正在清除 ${label} 盯一下...`);
           const result = await WatchFavorites.patchPins({
@@ -13456,8 +13510,8 @@
           return;
         }
         if (
-          !window.confirm(
-            `清除全部 ${expired.length} 个过期盯一下？\n${expired
+          !confirmDestructive(
+            `确定清除全部 ${expired.length} 个过期盯一下？\n${expired
               .map((item) => item.symbol.replace(/USDT$/i, ""))
               .join("、")}`,
           )
@@ -13507,8 +13561,8 @@
           return;
         }
         if (
-          !window.confirm(
-            `清除全部 ${held.length} 条持仓记录？\n（不影响盯一下）\n${held
+          !confirmDestructive(
+            `确定清除全部 ${held.length} 条持仓记录？\n（不影响盯一下）\n${held
               .map((item) => item.symbol.replace(/USDT$/i, ""))
               .join("、")}`,
           )
@@ -13669,7 +13723,7 @@
         const current = Number(marketMap[symbol]?.price);
         let sellPrice = Number(options && options.sellPrice);
         if (!(options && options.skipConfirm)) {
-          if (!window.confirm(`确认卖出并停止观测 ${label} 持仓？`)) {
+          if (!confirmDestructive(`确认卖出并停止观测 ${label} 持仓？`)) {
             return false;
           }
         }
@@ -13743,7 +13797,7 @@
       async function addToBlacklist(symbol, options) {
         if (!symbol || blacklistSaving) return false;
         const label = symbol.replace("USDT", "");
-        if (!window.confirm(`确定将 ${label} 加入黑名单？`)) return false;
+        if (!confirmDestructive(`确定将 ${label} 加入黑名单？`)) return false;
         if (options && typeof options.onSaving === "function") options.onSaving();
         blacklistSaving = true;
         try {
@@ -14467,6 +14521,12 @@
         setActionLogOpen(false);
       });
       document.getElementById("actionLogClear").addEventListener("click", () => {
+        const n = (readActionLog() || []).length;
+        if (!n) {
+          showToast("日志已空");
+          return;
+        }
+        if (!confirmDestructive(`确定清空全部 ${n} 条动作日志？`)) return;
         void persistActionLog([], "Clear action log", { replace: true });
       });
       const actionLogCats = document.getElementById("actionLogCats");
