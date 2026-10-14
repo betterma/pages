@@ -384,7 +384,9 @@ async function buildRankedSymbols(universe, pins, notes, tickers, prefs) {
       nameAt: noteAt || pinAt,
     };
   });
+  // 与网页「切换K线」一致：只保留各维度 TopN 命中并集（hitCount>0），不拍整表。
   return sortNotesRankRows(rows, prefs)
+    .filter((row) => (Number(row.hitCount) || 0) > 0)
     .map((row) => row.symbol)
     .filter(Boolean);
 }

@@ -22,7 +22,7 @@
 
 ## 排序动态（notes-rank 快照）
 
-云函数在 **5 分钟定时**里检查：距上一帧 ≥ **约 30 分钟** 则对「记一笔 ∪ 盯一下」（去拉黑）拍快照，写入 `watch-notes-rank-snaps.json`；与上一帧对比后写动作日志 `rank-new` / `rank-up`（「排序动态」，保留 1 天）。**不依赖网页打开。**
+云函数在 **5 分钟定时**里检查：距上一帧 ≥ **约 30 分钟** 则对「记一笔 ∪ 盯一下」（去拉黑）按共享排序维度算分，**只对网页 K 线视图那一批**（各维度 Top10 命中并集，`hitCount>0`）拍快照，写入 `watch-notes-rank-snaps.json`；与上一帧对比后写动作日志 `rank-new` / `rank-up`（「排序动态」，保留 1 天）。**不对比列表里的全部币。不依赖网页打开。**
 
 排序维度读 `watch-notes-rank-prefs.json`（网页改 notes-rank 表头多选时写入；与页面同一套 hitCount + 主序逻辑）。默认：`keys=["change2h","noteAt","change1h"]`，`last="change2h"`（近2h + 记时 + 近1h，优先近2h）。需要 1h/2h 时拉 15m K 线计算。
 
