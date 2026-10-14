@@ -16,7 +16,20 @@ const {
   loadMomNotes,
   listBreakHighUniverse,
 } = require('./break-high');
-const { runNotesRankSnap } = require('./notes-rank-snap');
+
+let runNotesRankSnap = async () => ({
+  skipped: true,
+  reason: 'module-missing',
+});
+try {
+  // 必须与 notes-rank-snap.js 整包上传；缺文件时不拖垮自动盯。
+  runNotesRankSnap = require('./notes-rank-snap').runNotesRankSnap;
+} catch (error) {
+  console.warn(
+    'notes-rank-snap module missing — 请整包上传 cloud-function-notify',
+    error && error.message ? error.message : error,
+  );
+}
 
 function webhookKeyHint(url) {
   try {
@@ -1143,6 +1156,23 @@ async function main() {
   ];
   const tickers = await fetchBinanceTickers(symbols);
 
+  const sent = [];
+  const sendErrors = [];
+
+  // 边沿日志先落盘，避免排序快照耗时/失败影响捕捉记录。
+  if (autoPinned.length || autoDropped.length) {
+    try {
+      await appendAutoPinActionLog(
+        now,
+        autoPinned,
+        autoDropped,
+        autoPinMomNotes,
+      );
+    } catch (error) {
+      console.warn('auto-pin action log failed', error.message || error);
+    }
+  }
+
   let notesRankSnap = null;
   try {
     notesRankSnap = await runNotesRankSnap({
@@ -1152,9 +1182,7 @@ async function main() {
       now,
       appendActionLog: appendActionLogEntries,
     });
-    if (notesRankSnap && !notesRankSnap.skipped) {
-      console.log('notes-rank snap', JSON.stringify(notesRankSnap));
-    }
+    console.log('notes-rank snap', JSON.stringify(notesRankSnap));
   } catch (error) {
     console.warn(
       'notes-rank snap failed',
@@ -1170,22 +1198,6 @@ async function main() {
     dropAlerts,
     now,
   );
-
-  const sent = [];
-  const sendErrors = [];
-
-  if (autoPinned.length || autoDropped.length) {
-    try {
-      await appendAutoPinActionLog(
-        now,
-        autoPinned,
-        autoDropped,
-        autoPinMomNotes,
-      );
-    } catch (error) {
-      console.warn('auto-pin action log failed', error.message || error);
-    }
-  }
   if (autoPinned.length) {
     try {
       const tag = await sendAutoPinAlert();

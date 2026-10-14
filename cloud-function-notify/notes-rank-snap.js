@@ -38,7 +38,11 @@ const CONFIG = {
   NOTES_RANK_SNAP_CONCURRENCY: Number(
     process.env.NOTES_RANK_SNAP_CONCURRENCY ||
       process.env.MOMENTUM_CONCURRENCY ||
-      5,
+      8,
+  ),
+  /** 拉 15m 算近1h/2h 的时间预算；超时则用已有分值 + 24h/记时 降级排序，仍要写出快照。 */
+  NOTES_RANK_HOUR_BUDGET_MS: Number(
+    process.env.NOTES_RANK_HOUR_BUDGET_MS || 18 * 1000,
   ),
 };
 
@@ -259,8 +263,15 @@ async function mapPool(items, concurrency, mapper) {
 async function loadHourScores(symbols, tickers) {
   const scores = new Map();
   const list = [...new Set((symbols || []).filter(Boolean))];
+  const deadline = Date.now() + CONFIG.NOTES_RANK_HOUR_BUDGET_MS;
+  let timedOut = false;
   await mapPool(list, CONFIG.NOTES_RANK_SNAP_CONCURRENCY, async (symbol) => {
     const key = String(symbol).toUpperCase();
+    if (Date.now() >= deadline) {
+      timedOut = true;
+      if (!scores.has(key)) scores.set(key, { change1h: null, change2h: null });
+      return;
+    }
     try {
       const candles = await fetchKlines(
         key,
@@ -280,6 +291,20 @@ async function loadHourScores(symbols, tickers) {
       scores.set(key, { change1h: null, change2h: null });
     }
   });
+  if (timedOut) {
+    console.warn(
+      'notes-rank hour scores budget hit',
+      JSON.stringify({
+        budgetMs: CONFIG.NOTES_RANK_HOUR_BUDGET_MS,
+        symbols: list.length,
+        scored: [...scores.values()].filter(
+          (row) =>
+            row &&
+            (Number.isFinite(row.change1h) || Number.isFinite(row.change2h)),
+        ).length,
+      }),
+    );
+  }
   return scores;
 }
 

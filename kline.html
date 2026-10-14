@@ -6791,7 +6791,7 @@
                 : actionLogCategory === "notes"
                   ? "暂无记一下"
                   : actionLogCategory === "rank"
-                    ? "暂无排序动态 · 云函数约每半小时按共享排序维度对比"
+                    ? "暂无排序动态 · 云函数约每半小时对比；长期为空请确认已整包部署 notes-rank-snap.js"
                     : "暂无 · 买 / 卖 / 止损 / 触底退出";
           body.innerHTML = `<div class="action-log-empty">${emptyHint}</div>`;
           return;
