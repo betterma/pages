@@ -4408,6 +4408,8 @@
       let nailSaving = false;
       let nailKlineAbort = null;
       let nailSelectMode = false;
+      /** 长按拖排序进行中：禁用抽屉左滑关闭。 */
+      let nailReorderDragging = false;
       const selectedNailSymbols = new Set();
       const NAIL_RISING_FILTER_KEY = "kline-nail-rising-filter-v1";
       let nailRisingFilterOn = true;
@@ -11884,7 +11886,13 @@
             setNailDrawerOpen(true);
             return true;
           }
-          if (mode === "close" && dx < 0 && isNailDrawerOpen()) {
+          if (
+            mode === "close" &&
+            dx < 0 &&
+            isNailDrawerOpen() &&
+            !nailReorderDragging &&
+            !document.querySelector("#nailList .nail-kcard.is-dragging")
+          ) {
             tracking = null;
             setNailDrawerOpen(false);
             return true;
@@ -11901,6 +11909,12 @@
             if (!pt) return;
             if (isNailDrawerOpen()) {
               if (!event.target.closest || !event.target.closest("#nailDrawer")) {
+                return;
+              }
+              if (
+                nailReorderDragging ||
+                document.querySelector("#nailList .nail-kcard.is-dragging")
+              ) {
                 return;
               }
               tracking = {
@@ -11932,6 +11946,15 @@
             if (!tracking) return;
             const pt = touchPoint(event);
             if (!pt || pt.id !== tracking.id) return;
+            // 拖排序一旦启动，取消本次左滑关闭
+            if (
+              tracking.mode === "close" &&
+              (nailReorderDragging ||
+                document.querySelector("#nailList .nail-kcard.is-dragging"))
+            ) {
+              tracking = null;
+              return;
+            }
             const dx = pt.x - tracking.x0;
             const dy = pt.y - tracking.y0;
             if (!tracking.locked) {
@@ -12601,7 +12624,10 @@
 
         const endDrag = (commit) => {
           clearPress();
-          if (!dragging) return;
+          if (!dragging) {
+            nailReorderDragging = false;
+            return;
+          }
           const from = dragging.from;
           const to = dragging.to;
           listEl
@@ -12610,6 +12636,7 @@
               el.classList.remove("is-dragging", "is-drop-target"),
             );
           dragging = null;
+          nailReorderDragging = false;
           if (commit && from && to && from !== to) {
             suppressClick = true;
             void persistNailOrder(from, to);
@@ -12647,6 +12674,7 @@
               pressCard = null;
               if (!target) return;
               dragging = { from: symbol, to: symbol };
+              nailReorderDragging = true;
               target.classList.add("is-dragging");
               try {
                 target.setPointerCapture(event.pointerId);
