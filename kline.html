@@ -11839,7 +11839,11 @@
         }
       }
 
-      /** 手机：主页任意右滑开钉子抽屉；抽屉内左滑关闭（避开安卓左缘系统手势）。 */
+      /**
+       * 手机手势：
+       * - 主页右滑开钉子抽屉；钉子抽屉内左滑关闭（拖排序中不关）
+       * - 右侧隐藏抽屉打开时右滑关闭
+       */
       function bindNailDrawerSwipeGestures() {
         const MIN_DX = 64;
         const AXIS_RATIO = 1.35;
@@ -11897,6 +11901,15 @@
             setNailDrawerOpen(false);
             return true;
           }
+          if (
+            mode === "close-hidden" &&
+            dx > 0 &&
+            isHiddenPinDrawerOpen()
+          ) {
+            tracking = null;
+            setHiddenPinDrawerOpen(false);
+            return true;
+          }
           return false;
         }
 
@@ -11922,6 +11935,22 @@
                 x0: pt.x,
                 y0: pt.y,
                 mode: "close",
+                locked: false,
+              };
+              return;
+            }
+            if (isHiddenPinDrawerOpen()) {
+              if (
+                !event.target.closest ||
+                !event.target.closest("#hiddenPinDrawer")
+              ) {
+                return;
+              }
+              tracking = {
+                id: pt.id,
+                x0: pt.x,
+                y0: pt.y,
+                mode: "close-hidden",
                 locked: false,
               };
               return;
@@ -11964,8 +11993,15 @@
                 tracking = null;
                 return;
               }
-              // 开抽屉只要右滑；左滑不抢页面
-              if (tracking.mode === "open" && dx <= 0) {
+              // 开钉子 / 关隐藏抽屉：只要右滑；关钉子：只要左滑
+              if (
+                (tracking.mode === "open" || tracking.mode === "close-hidden") &&
+                dx <= 0
+              ) {
+                tracking = null;
+                return;
+              }
+              if (tracking.mode === "close" && dx >= 0) {
                 tracking = null;
                 return;
               }
