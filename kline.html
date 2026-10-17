@@ -735,6 +735,18 @@
         justify-content: flex-end;
         flex-shrink: 0;
       }
+      /* 捕捉精选：顶部改上下排布（文字在上，按钮在下） */
+      #capturePickPanel .rank-panel-head {
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+      }
+      #capturePickPanel .rank-panel-head-text {
+        flex: none;
+      }
+      #capturePickPanel .rank-panel-actions {
+        justify-content: flex-start;
+      }
       .rank-panel-body {
         padding: 0 8px 8px;
       }
@@ -3884,7 +3896,7 @@
           <div class="notes-rank-head-text">
             <h2 id="notesRankTitle">捕捉精选</h2>
             <p class="notes-rank-meta" id="notesRankPageMeta">
-              上：自动盯后 W1/W2 仍涨 · 下：记一笔排序
+              上：自动盯后 W1/W2/W3 仍涨 · 下：记一笔排序
             </p>
           </div>
           <div class="notes-rank-head-actions">
@@ -3927,7 +3939,7 @@
           <div class="rank-panel-head">
             <div class="rank-panel-head-text">
               <h3>捕捉精选</h3>
-              <p id="capturePickMeta">自动盯 · 下一/下下窗口仍上涨 · 按盯时新→旧</p>
+              <p id="capturePickMeta">自动盯 · 下一/下下/下下下窗口仍上涨 · 按盯时新→旧</p>
             </div>
             <div class="rank-panel-actions">
               <button
@@ -3942,7 +3954,7 @@
                 type="button"
                 class="notes-rank-refresh"
                 id="capturePickRefresh"
-                title="重算 W1/W2 并拉取近2h/1h"
+                title="重算 W1/W2/W3 并拉取近2h/1h"
               >
                 刷新
               </button>
@@ -4581,7 +4593,7 @@
         class="notify-float-tab"
         id="capturePickTab"
         data-float="capture-pick"
-        title="捕捉精选：自动盯后下一/下下窗口仍上涨"
+        title="捕捉精选：自动盯后下一/下下/下下下窗口仍上涨"
       >
         捕捉精选
       </button>
@@ -5730,7 +5742,7 @@
       }
 
       /**
-       * 捕捉精选：自动盯之后，处于「下一窗口」或「下下窗口」，
+       * 捕捉精选：自动盯之后，处于「下一窗口」「下下窗口」或「下下下窗口」，
        * 且当前 4h 窗口仍上涨的币。返回 { symbol, pinnedAt }[] 按盯时新→旧。
        */
       function listCapturePickPins() {
@@ -5750,9 +5762,11 @@
           const pinWindow = getWindowStart(at, duration);
           const next1 = pinWindow + duration;
           const next2 = pinWindow + duration * 2;
+          const next3 = pinWindow + duration * 3;
           if (
             currentWindowStart !== next1 &&
-            currentWindowStart !== next2
+            currentWindowStart !== next2 &&
+            currentWindowStart !== next3
           ) {
             continue;
           }
@@ -9733,7 +9747,7 @@
           return;
         }
         if (!rows.length) {
-          meta.textContent = "暂无 · 自动盯后下一/下下窗口仍上涨";
+          meta.textContent = "暂无 · 自动盯后下一/下下/下下下窗口仍上涨";
           return;
         }
         const staleBit = fromCache ? " · 未重新请求" : "";
@@ -9940,7 +9954,7 @@
         }
         if (!rows.length) {
           body.innerHTML =
-            '<div class="notes-rank-empty">暂无 · 自动盯后下一窗口或下下窗口仍上涨的币</div>';
+            '<div class="notes-rank-empty">暂无 · 自动盯后下一/下下/下下下窗口仍上涨的币</div>';
           body.classList.toggle("is-kline-view", !!capturePickKlineView);
           body.classList.toggle("is-selecting", notesRankSelectMode);
           syncCapturePickViewUi();
