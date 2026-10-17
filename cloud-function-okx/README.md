@@ -30,6 +30,7 @@
 ## 说明
 
 - 行情走 Basic：`GET /api/v6/dex/market/candles`（月免费约 100K），不再用 Premium 的 `historical-candles`
+- 每轮额外：`POST …/token/basic-info`（图标/名称）+ `POST …/price-info`（市值），写入 OBS 缓存字段 `tokenLogoUrl` / `marketCap`，供 `okx/kline.html` 展示
 - 额度用尽后接口返回 **HTTP 402 + x402**（要按次付费），不是 Key 坏了。函数会立刻停拉、保留上一份 OBS 缓存
 - 约 20 个自选 × 6 个周期、5 分钟一轮，几天就能打满 10 万次。可把定时拉长，或减少 `OKX_CANDLE_BARS`
 - 新加自选后，等下一次定时才有 K 线

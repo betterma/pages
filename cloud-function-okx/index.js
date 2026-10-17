@@ -8,13 +8,14 @@
  *
  * 流程：
  *   读 GitHub okx/favorites.json
- *   拉 OKX market/candles（Basic，多周期）+ token basic-info
- *   写 OBS okx-candles-cache.json
+ *   拉 OKX market/candles（Basic，多周期）+ token basic-info + price-info（市值）
+ *   写 OBS okx-candles-cache.json（含 marketCap / tokenLogoUrl）
  *   若补全了名字则回写 favorites.json
  */
 const {
   fetchCandles,
   fetchTokenBasicInfo,
+  fetchTokenPriceInfo,
   isPlaceholderSymbol,
   isRateLimitError,
   isQuotaExhaustedError,
@@ -192,6 +193,33 @@ async function syncCandlesCache() {
     }
   }
 
+  let priceMap = new Map();
+  try {
+    priceMap = await fetchTokenPriceInfo(tokens);
+    console.log(`okx-candles price-info hit=${priceMap.size}`);
+  } catch (error) {
+    console.warn(`price-info failed: ${error.message}`);
+    if (isQuotaExhaustedError(error) && previous && previous.tokens) {
+      console.warn('OKX quota exhausted on price-info; keep previous OBS cache');
+      const kept = {
+        ...previous,
+        quotaExhausted: true,
+        quotaAt: Date.now(),
+      };
+      await putObjectJson(OBS_CANDLES_KEY, kept);
+      return {
+        obsKey: OBS_CANDLES_KEY,
+        publicUrl: `${obsConfig().publicBase}/${OBS_CANDLES_KEY}`,
+        skipped: true,
+        reason: 'quota-exhausted',
+        tokenCount: tokens.length,
+        okCount: previous.okCount || 0,
+        failCount: previous.failCount || 0,
+        updatedAt: previous.updatedAt,
+      };
+    }
+  }
+
   const results = {};
   let okCount = 0;
   let failCount = 0;
@@ -234,12 +262,26 @@ async function syncCandlesCache() {
       const ok = okBars > 0;
       if (ok) okCount += 1;
       else failCount += 1;
+      const prevRow =
+        previousTokens[key] && typeof previousTokens[key] === 'object'
+          ? previousTokens[key]
+          : {};
+      const priceRow = priceMap.get(key);
+      const marketCap =
+        priceRow && Number.isFinite(priceRow.marketCap)
+          ? priceRow.marketCap
+          : Number.isFinite(Number(prevRow.marketCap))
+            ? Number(prevRow.marketCap)
+            : null;
       results[key] = {
         ok,
         chainIndex: token.chainIndex,
         tokenContractAddress: token.tokenContractAddress,
         symbol: nextFavorites[nextFavorites.length - 1].symbol,
-        tokenName: (meta && meta.tokenName) || '',
+        tokenName: (meta && meta.tokenName) || prevRow.tokenName || '',
+        tokenLogoUrl:
+          (meta && meta.tokenLogoUrl) || prevRow.tokenLogoUrl || '',
+        marketCap,
         candlesByBar: byBar,
         candles: byBar['4H'] || byBar[BARS[0]] || [],
         errors: Object.keys(errors).length ? errors : undefined,
@@ -259,12 +301,25 @@ async function syncCandlesCache() {
         break;
       }
       failCount += 1;
+      const prevRow =
+        previousTokens[key] && typeof previousTokens[key] === 'object'
+          ? previousTokens[key]
+          : {};
+      const priceRow = priceMap.get(key);
       results[key] = {
         ok: false,
         chainIndex: token.chainIndex,
         tokenContractAddress: token.tokenContractAddress,
         symbol: nextFavorites[nextFavorites.length - 1].symbol,
-        tokenName: (meta && meta.tokenName) || '',
+        tokenName: (meta && meta.tokenName) || prevRow.tokenName || '',
+        tokenLogoUrl:
+          (meta && meta.tokenLogoUrl) || prevRow.tokenLogoUrl || '',
+        marketCap:
+          priceRow && Number.isFinite(priceRow.marketCap)
+            ? priceRow.marketCap
+            : Number.isFinite(Number(prevRow.marketCap))
+              ? Number(prevRow.marketCap)
+              : null,
         candlesByBar: {},
         candles: [],
         error: error.message || String(error),

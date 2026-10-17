@@ -225,11 +225,25 @@
       }
       .kline-card-head {
         display: flex;
-        align-items: baseline;
+        align-items: center;
         justify-content: space-between;
         gap: 8px;
         margin-bottom: 6px;
         font-size: 13px;
+      }
+      .kline-card-head .symbol-left {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+      }
+      .kline-card-head .token-logo {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+        background: #e8e4df;
       }
       .kline-card-head .symbol-copy {
         color: inherit;
@@ -253,6 +267,11 @@
         font-variant-numeric: tabular-nums;
         color: #28323a;
         font-size: 12px;
+      }
+      .kline-card-head .mcap {
+        font-variant-numeric: tabular-nums;
+        color: #6a6360;
+        font-size: 11px;
       }
       .kline-card-head .change-line {
         font-size: 12px;
@@ -496,6 +515,26 @@
         if (abs >= 0.0001) return value.toFixed(6);
         if (abs >= 1e-8) return value.toFixed(8);
         return value.toExponential(2);
+      }
+
+      function formatMarketCap(value) {
+        if (!Number.isFinite(value) || value <= 0) return "--";
+        if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
+        if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
+        if (value >= 1e3) return `$${(value / 1e3).toFixed(1)}K`;
+        return `$${Math.round(value)}`;
+      }
+
+      function safeLogoUrl(url) {
+        const text = String(url || "").trim();
+        if (!text) return "";
+        try {
+          const parsed = new URL(text);
+          if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+            return parsed.href;
+          }
+        } catch (_) {}
+        return "";
       }
 
       /** 现价优先用更短周期最新收盘，图表周期仍按 activeBar */
@@ -748,7 +787,16 @@
         const barLabel = barMeta(activeBar).label;
         const price = latestPrice(cacheRow);
         const priceText = formatPrice(price);
-        return `<div class="kline-card" data-key="${packed.key}" data-chain="${item.chainIndex}" data-address="${item.tokenContractAddress}"><div class="kline-card-head"><button type="button" class="symbol-copy" data-copy="${item.tokenContractAddress}" title="点击复制合约">${label}<span class="chain-tag">${chain}</span></button><span style="display:inline-flex;align-items:center;gap:6px"><span class="meta-right"><span class="price" title="最新价（USD）">$${priceText}</span><span data-kline-status class="change-line ${changeClass}">${changeText} · ${barLabel}</span></span><button type="button" class="remove-card-btn" title="移出自选" aria-label="移出自选">⊖</button></span></div><canvas></canvas></div>`;
+        const mcap = cacheRow ? Number(cacheRow.marketCap) : NaN;
+        const mcapText = formatMarketCap(mcap);
+        const logoUrl = safeLogoUrl(cacheRow && cacheRow.tokenLogoUrl);
+        const logoAttr = logoUrl
+          ? logoUrl.replace(/&/g, "&amp;").replace(/"/g, "&quot;")
+          : "";
+        const logoHtml = logoAttr
+          ? `<img class="token-logo" src="${logoAttr}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">`
+          : "";
+        return `<div class="kline-card" data-key="${packed.key}" data-chain="${item.chainIndex}" data-address="${item.tokenContractAddress}"><div class="kline-card-head"><span class="symbol-left">${logoHtml}<button type="button" class="symbol-copy" data-copy="${item.tokenContractAddress}" title="点击复制合约">${label}<span class="chain-tag">${chain}</span></button></span><span style="display:inline-flex;align-items:center;gap:6px"><span class="meta-right"><span class="price" title="最新价（USD）">$${priceText}</span><span class="mcap" title="市值（USD）">${mcapText}</span><span data-kline-status class="change-line ${changeClass}">${changeText} · ${barLabel}</span></span><button type="button" class="remove-card-btn" title="移出自选" aria-label="移出自选">⊖</button></span></div><canvas></canvas></div>`;
       }
 
       function bindCardInteractions(root) {

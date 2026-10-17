@@ -234,15 +234,93 @@ async function fetchTokenBasicInfo(tokens) {
     const key = `${chainIndex}:${tokenContractAddress}`;
     const tokenSymbol = String(row.tokenSymbol || '').trim();
     const tokenName = String(row.tokenName || '').trim();
-    if (!key || (!tokenSymbol && !tokenName)) return;
+    const tokenLogoUrl = String(row.tokenLogoUrl || '').trim();
+    if (!key || (!tokenSymbol && !tokenName && !tokenLogoUrl)) return;
     map.set(key, {
       chainIndex,
       tokenContractAddress,
       tokenSymbol: tokenSymbol || tokenName,
       tokenName: tokenName || tokenSymbol,
-      tokenLogoUrl: String(row.tokenLogoUrl || ''),
+      tokenLogoUrl,
     });
   });
+  return map;
+}
+
+/**
+ * POST /api/v6/dex/market/price-info
+ * body: [{ chainIndex, tokenContractAddress }, ...]  (最多约 100)
+ * 返回市值 marketCap 等交易信息。
+ */
+async function fetchTokenPriceInfo(tokens) {
+  const { baseUrl } = okxConfig();
+  const list = (Array.isArray(tokens) ? tokens : [])
+    .map((item) => {
+      const chainIndex = String(item.chainIndex || '').trim();
+      const tokenContractAddress = normalizeAddress(
+        chainIndex,
+        item.tokenContractAddress || item.address,
+      );
+      if (!chainIndex || !tokenContractAddress) return null;
+      return { chainIndex, tokenContractAddress };
+    })
+    .filter(Boolean);
+
+  if (!list.length) return new Map();
+
+  const requestPath = '/api/v6/dex/market/price-info';
+  const map = new Map();
+  const BATCH = 100;
+
+  for (let i = 0; i < list.length; i += BATCH) {
+    const chunk = list.slice(i, i + BATCH);
+    const body = JSON.stringify(chunk);
+    const headers = authHeaders('POST', requestPath, body);
+    const response = await requestRaw(`${baseUrl}${requestPath}`, {
+      method: 'POST',
+      headers,
+      body,
+    });
+
+    if (response.status === 402 || (response.data && response.data.x402Version)) {
+      throw new Error(
+        `OKX price-info HTTP 402: 月免费额度已用尽（x402）。打开 Onchain OS 看配额，或等下月 1 号重置。`,
+      );
+    }
+    if (!response.ok) {
+      throw new Error(
+        `OKX price-info HTTP ${response.status}: ${String(response.text || '').slice(0, 240)}`,
+      );
+    }
+    if (!response.data || String(response.data.code) !== '0') {
+      throw new Error(
+        `OKX price-info error: ${JSON.stringify(response.data).slice(0, 240)}`,
+      );
+    }
+
+    const rows = Array.isArray(response.data.data) ? response.data.data : [];
+    rows.forEach((row) => {
+      if (!row || typeof row !== 'object') return;
+      const chainIndex = String(row.chainIndex || '').trim();
+      const tokenContractAddress = normalizeAddress(
+        chainIndex,
+        row.tokenContractAddress,
+      );
+      const key = `${chainIndex}:${tokenContractAddress}`;
+      if (!chainIndex || !tokenContractAddress) return;
+      const marketCap = Number(row.marketCap);
+      const price = Number(row.price);
+      map.set(key, {
+        chainIndex,
+        tokenContractAddress,
+        marketCap: Number.isFinite(marketCap) && marketCap > 0 ? marketCap : null,
+        price: Number.isFinite(price) && price > 0 ? price : null,
+        liquidity: Number(row.liquidity) || null,
+        holders: Number(row.holders) || null,
+      });
+    });
+  }
+
   return map;
 }
 
@@ -329,6 +407,7 @@ module.exports = {
   /** @deprecated 使用 fetchCandles（Basic /market/candles） */
   fetchHistoricalCandles: fetchCandles,
   fetchTokenBasicInfo,
+  fetchTokenPriceInfo,
   normalizeAddress,
   shortLabel,
   isPlaceholderSymbol,
