@@ -689,27 +689,54 @@
       body.is-notes-rank-open .hidden-pin-drawer {
         display: none !important;
       }
-      /* 记记：全屏独立页，不依赖背后 kline 卡片 */
-      body.is-jiji-view .page,
-      body.is-jiji-view .app-chrome,
-      body.is-jiji-view .float-tabs,
-      body.is-jiji-view .notify-float,
-      body.is-jiji-view .momentum-float,
-      body.is-jiji-view #hiddenPinDrawer,
-      body.is-jiji-view #hiddenPinTab,
-      body.is-jiji-view #pinBatchBar,
-      body.is-jiji-view .top-progress {
-        display: none !important;
+      .rank-panel {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        border-bottom: 0.5px solid var(--separator);
       }
-      body.is-jiji-view .notes-rank-gate {
-        pointer-events: auto;
-        background: var(--bg);
-        backdrop-filter: none;
-        -webkit-backdrop-filter: none;
-        bottom: 0;
+      .rank-panel:last-child {
+        border-bottom: none;
+        padding-bottom: 24px;
       }
-      body.is-jiji-view .notes-rank-gate[hidden] {
-        display: flex !important;
+      .rank-panel-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px 6px;
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        background: color-mix(in srgb, var(--bg) 82%, transparent);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+      }
+      .rank-panel-head h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 700;
+      }
+      .rank-panel-head-text {
+        min-width: 0;
+        flex: 1;
+      }
+      .rank-panel-head-text p {
+        margin: 4px 0 0;
+        font-size: 11px;
+        color: var(--secondary);
+        line-height: 1.35;
+      }
+      .rank-panel-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: flex-end;
+        flex-shrink: 0;
+      }
+      .rank-panel-body {
+        padding: 0 8px 8px;
       }
       .notes-rank-head {
         flex: 0 0 auto;
@@ -723,9 +750,20 @@
         backdrop-filter: saturate(180%) blur(12px);
         -webkit-backdrop-filter: saturate(180%) blur(12px);
       }
+      .notes-rank-head-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+      }
       .notes-rank-head-text {
-        flex: 0 0 auto;
+        flex: 1 1 auto;
         min-width: 0;
+      }
+      .notes-rank-head .notes-rank-batch-bar {
+        padding: 0;
+        border-top: none;
+        background: transparent;
       }
       .notes-rank-head h2 {
         margin: 0;
@@ -824,8 +862,8 @@
         accent-color: var(--accent, #2f8f6e);
         cursor: pointer;
       }
-      .notes-rank-scroll.is-selecting .notes-rank-kcard,
-      .notes-rank-scroll.is-selecting .notes-rank-table tbody tr {
+      .rank-panel-body.is-selecting .notes-rank-kcard,
+      .rank-panel-body.is-selecting .notes-rank-table tbody tr {
         cursor: pointer;
       }
       .notes-rank-close {
@@ -843,10 +881,10 @@
         overflow: auto;
         -webkit-overflow-scrolling: touch;
       }
-      .notes-rank-scroll:not(.is-kline-view) .notes-rank-klines {
+      .rank-panel-body:not(.is-kline-view) .notes-rank-klines {
         display: none;
       }
-      .notes-rank-scroll.is-kline-view .notes-rank-table {
+      .rank-panel-body.is-kline-view .notes-rank-table {
         display: none;
       }
       .notes-rank-table {
@@ -3745,9 +3783,6 @@
       .quick-orb-menu .quick-orb-count[data-count="0"] {
         display: none;
       }
-      body.is-jiji-view .quick-orb {
-        display: none !important;
-      }
       /* 钉子只保留手势打开，侧边图标不再显示 */
       .nail-tab {
         display: none !important;
@@ -3845,62 +3880,107 @@
       aria-labelledby="notesRankTitle"
     >
       <div class="notes-rank-head">
-        <div class="notes-rank-head-text">
-          <h2 id="notesRankTitle">记一笔排序</h2>
-          <p class="notes-rank-meta" id="notesRankMeta">有记相对记住点 · 无记相对盯住价 · 近2h · 近1h · 24h</p>
+        <div class="notes-rank-head-row">
+          <div class="notes-rank-head-text">
+            <h2 id="notesRankTitle">捕捉精选</h2>
+            <p class="notes-rank-meta" id="notesRankPageMeta">
+              上：自动盯后 W1/W2 仍涨 · 下：记一笔排序
+            </p>
+          </div>
+          <div class="notes-rank-head-actions">
+            <button
+              type="button"
+              class="notes-rank-select"
+              id="notesRankSelectBtn"
+              title="上下一起多选，再加入钉子"
+              aria-pressed="false"
+            >
+              多选
+            </button>
+            <button
+              type="button"
+              class="notes-rank-close"
+              id="notesRankClose"
+              title="关闭"
+              aria-label="关闭捕捉精选"
+            >
+              ×
+            </button>
+          </div>
         </div>
-        <div class="notes-rank-head-actions">
+        <div class="notes-rank-batch-bar" id="notesRankBatchBar" hidden>
+          <span class="notes-rank-batch-count" id="notesRankBatchCount">0</span>
+          <button type="button" id="notesRankSelectAllBtn">全选</button>
           <button
             type="button"
-            class="notes-rank-select"
-            id="notesRankSelectBtn"
-            title="多选后批量加入钉子抽屉"
-            aria-pressed="false"
+            class="is-primary"
+            id="notesRankAddNailsBtn"
+            title="把上下已选币加入钉子抽屉"
           >
-            多选
+            加入钉子
           </button>
-          <button
-            type="button"
-            class="notes-rank-view"
-            id="notesRankViewBtn"
-            title="列表与 K 线互斥显示"
-          >
-            切换K线
-          </button>
-          <button
-            type="button"
-            class="notes-rank-refresh"
-            id="notesRankRefresh"
-            title="重新拉取近2h/1h 和 K 线"
-          >
-            刷新
-          </button>
-          <button
-            type="button"
-            class="notes-rank-close"
-            id="notesRankClose"
-            title="关闭"
-            aria-label="关闭记一笔排序"
-          >
-            ×
-          </button>
+          <button type="button" id="notesRankSelectCancelBtn">取消</button>
         </div>
       </div>
       <div class="notes-rank-scroll" id="notesRankScroll">
-        <div class="notes-rank-loading" id="notesRankBody">加载中…</div>
-      </div>
-      <div class="notes-rank-batch-bar" id="notesRankBatchBar" hidden>
-        <span class="notes-rank-batch-count" id="notesRankBatchCount">0</span>
-        <button type="button" id="notesRankSelectAllBtn">全选</button>
-        <button
-          type="button"
-          class="is-primary"
-          id="notesRankAddNailsBtn"
-          title="把选中币加入钉子抽屉"
-        >
-          加入钉子
-        </button>
-        <button type="button" id="notesRankSelectCancelBtn">取消</button>
+        <section class="rank-panel" id="capturePickPanel" aria-label="捕捉精选">
+          <div class="rank-panel-head">
+            <div class="rank-panel-head-text">
+              <h3>捕捉精选</h3>
+              <p id="capturePickMeta">自动盯 · 下一/下下窗口仍上涨 · 按盯时新→旧</p>
+            </div>
+            <div class="rank-panel-actions">
+              <button
+                type="button"
+                class="notes-rank-view"
+                id="capturePickViewBtn"
+                title="列表与 K 线互斥显示"
+              >
+                切换K线
+              </button>
+              <button
+                type="button"
+                class="notes-rank-refresh"
+                id="capturePickRefresh"
+                title="重算 W1/W2 并拉取近2h/1h"
+              >
+                刷新
+              </button>
+            </div>
+          </div>
+          <div class="rank-panel-body" id="capturePickBody">
+            <div class="notes-rank-loading">加载中…</div>
+          </div>
+        </section>
+        <section class="rank-panel" id="notesRankPanel" aria-label="记一笔排序">
+          <div class="rank-panel-head">
+            <div class="rank-panel-head-text">
+              <h3>记一笔排序</h3>
+              <p id="notesRankMeta">有记相对记住点 · 无记相对盯住价 · 近2h · 近1h · 24h</p>
+            </div>
+            <div class="rank-panel-actions">
+              <button
+                type="button"
+                class="notes-rank-view"
+                id="notesRankViewBtn"
+                title="列表与 K 线互斥显示"
+              >
+                切换K线
+              </button>
+              <button
+                type="button"
+                class="notes-rank-refresh"
+                id="notesRankRefresh"
+                title="重新拉取近2h/1h 和 K 线"
+              >
+                刷新
+              </button>
+            </div>
+          </div>
+          <div class="rank-panel-body" id="notesRankBody">
+            <div class="notes-rank-loading">加载中…</div>
+          </div>
+        </section>
       </div>
     </div>
     <div class="app-chrome" id="appChrome">
@@ -4480,9 +4560,8 @@
       <div class="hub-ball-menu" id="hubBallMenu" hidden>
         <button type="button" data-hub="nails">钉子抽屉</button>
         <button type="button" data-hub="capture">捕捉精选</button>
-        <button type="button" data-hub="notes">记一笔排序</button>
       </div>
-      <button type="button" class="hub-ball-fab" id="hubBallFab" aria-label="快捷入口" title="钉子 / 捕捉精选 / 记一笔排序">
+      <button type="button" class="hub-ball-fab" id="hubBallFab" aria-label="快捷入口" title="钉子抽屉 / 捕捉精选">
         ✦
       </button>
     </div>
@@ -4855,16 +4934,25 @@
         notesRankKlineView = false;
       }
       let notesRankRows = [];
+      let capturePickRows = [];
       let notesRankBusy = false;
+      let capturePickBusy = false;
       let notesRankAbort = null;
+      let capturePickAbort = null;
       let notesRankScoreMap = new Map();
       let notesRankScoresAt = 0;
       let notesRankLoadedAt = 0;
+      let capturePickLoadedAt = 0;
       let notesRankFocusSymbol = "";
       let notesRankKlineAbort = null;
       let notesRankSelectMode = false;
-      /** "notes" | "capture-pick" — 共用记一笔排序全屏 UI */
-      let notesRankMode = "notes";
+      let capturePickKlineView = false;
+      try {
+        capturePickKlineView =
+          localStorage.getItem("kline-capture-pick-view-v1") === "kline";
+      } catch (error) {
+        capturePickKlineView = false;
+      }
       const selectedNotesRankSymbols = new Set();
       const NOTES_RANK_KLINE_TOP = 10;
       const NOTES_RANK_CACHE_MS = 3 * 60 * 1000;
@@ -4975,16 +5063,13 @@
       let positionSaving = false;
       let klineViewKey = "3d-4h";
       let notesViewMode = false;
-      let jijiViewMode = false;
       try {
         const viewParam = new URLSearchParams(window.location.search).get(
           "view",
         );
         notesViewMode = viewParam === "notes";
-        jijiViewMode = viewParam === "jiji";
       } catch (error) {
         notesViewMode = false;
-        jijiViewMode = false;
       }
 
       function isNotesView() {
@@ -4992,7 +5077,7 @@
       }
 
       function isJijiView() {
-        return !!jijiViewMode;
+        return false;
       }
 
       function syncModeSwitchUi() {
@@ -5027,33 +5112,21 @@
 
       function applyPageChrome() {
         const notes = isNotesView();
-        const jiji = isJijiView();
         document.body.classList.toggle("is-notes-view", notes);
-        document.body.classList.toggle("is-jiji-view", jiji);
-        if (jiji) {
-          document.title = "记记";
-        } else {
-          document.title = notes ? "观察池 K 线 · 记一笔" : "观察池 K 线";
-        }
+        document.body.classList.remove("is-jiji-view");
+        document.title = notes ? "观察池 K 线 · 记一笔" : "观察池 K 线";
         const h1 = document.querySelector(".page-header h1");
         if (h1) h1.textContent = notes ? "币安观察 · 记一笔" : "币安观察";
         const pinTitle = document.getElementById("pinSectionTitle");
         if (pinTitle) pinTitle.textContent = "盯一下";
         const rankTitle = document.getElementById("notesRankTitle");
-        if (rankTitle) rankTitle.textContent = jiji ? "记记" : "记一笔排序";
+        if (rankTitle) rankTitle.textContent = "捕捉精选";
         const closeBtn = document.getElementById("notesRankClose");
         if (closeBtn) {
-          if (jiji) {
-            closeBtn.textContent = "首页";
-            closeBtn.title = "回总导航";
-            closeBtn.setAttribute("aria-label", "回总导航");
-            closeBtn.classList.add("notes-rank-home");
-          } else {
-            closeBtn.textContent = "×";
-            closeBtn.title = "关闭";
-            closeBtn.setAttribute("aria-label", "关闭记一笔排序");
-            closeBtn.classList.remove("notes-rank-home");
-          }
+          closeBtn.textContent = "×";
+          closeBtn.title = "关闭";
+          closeBtn.setAttribute("aria-label", "关闭捕捉精选");
+          closeBtn.classList.remove("notes-rank-home");
         }
         syncModeSwitchUi();
       }
@@ -5656,15 +5729,11 @@
         return list;
       }
 
-      function isCapturePickMode() {
-        return notesRankMode === "capture-pick";
-      }
-
       /**
        * 捕捉精选：自动盯之后，处于「下一窗口」或「下下窗口」，
-       * 且当前 4h 窗口仍上涨的币。
+       * 且当前 4h 窗口仍上涨的币。返回 { symbol, pinnedAt }[] 按盯时新→旧。
        */
-      function capturePickSymbolList() {
+      function listCapturePickPins() {
         const duration = DURATION_MS[CONFIG.KLINE_INTERVAL];
         if (!duration) return [];
         const now = Date.now();
@@ -5691,15 +5760,14 @@
           const symbol = String(item.symbol).trim().toUpperCase();
           if (!symbol || seen.has(symbol)) continue;
           seen.add(symbol);
-          list.push(symbol);
+          list.push({ symbol, pinnedAt: at });
         }
+        list.sort((a, b) => (b.pinnedAt || 0) - (a.pinnedAt || 0));
         return list;
       }
 
-      function activeNotesRankSymbols() {
-        return isCapturePickMode()
-          ? capturePickSymbolList()
-          : notesRankSymbolList();
+      function capturePickSymbolList() {
+        return listCapturePickPins().map((item) => item.symbol);
       }
 
       /** Same universe as 币安观察 盯一下区 / 近2h·1h 浮窗：未拉黑且当前窗口上涨. */
@@ -7305,7 +7373,7 @@
         if (notifyTab) notifyTab.classList.remove("is-active");
         if (logTab) logTab.classList.remove("is-active");
         // 捕捉精选是全屏页，不在此清 is-active（由 syncNotesRankHeadUi 管）
-        if (pickTab && !(isNotesRankOpen() && isCapturePickMode())) {
+        if (pickTab && !isNotesRankOpen()) {
           pickTab.classList.remove("is-active");
         }
       }
@@ -9381,7 +9449,7 @@
           const change24h = Number(marketMap[symbol]?.change24h);
           const noteAt = Number(note && note.at) || 0;
           const pinAt = Number(pin && pin.pinnedAt) || 0;
-        return {
+          return {
             symbol,
             label:
               (note && note.label) ||
@@ -9392,8 +9460,18 @@
             change1h: Number.isFinite(score.change1h) ? score.change1h : null,
             change24h: Number.isFinite(change24h) ? change24h : null,
             noteAt,
+            pinAt,
             nameAt: noteAt || pinAt,
           };
+        });
+      }
+
+      function sortCapturePickRows(rows) {
+        return (rows || []).slice().sort((a, b) => {
+          const ta = Number(a.pinAt) || Number(a.nameAt) || 0;
+          const tb = Number(b.pinAt) || Number(b.nameAt) || 0;
+          if (tb !== ta) return tb - ta;
+          return String(a.symbol || "").localeCompare(String(b.symbol || ""));
         });
       }
 
@@ -9483,10 +9561,16 @@
       }
 
       function syncNotesRankRefreshBtn() {
-        const btn = document.getElementById("notesRankRefresh");
-        if (!btn) return;
-        btn.disabled = notesRankBusy;
-        btn.textContent = notesRankBusy ? "…" : "刷新";
+        const notesBtn = document.getElementById("notesRankRefresh");
+        if (notesBtn) {
+          notesBtn.disabled = notesRankBusy;
+          notesBtn.textContent = notesRankBusy ? "…" : "刷新";
+        }
+        const captureBtn = document.getElementById("capturePickRefresh");
+        if (captureBtn) {
+          captureBtn.disabled = capturePickBusy;
+          captureBtn.textContent = capturePickBusy ? "…" : "刷新";
+        }
       }
 
       function persistNotesRankView() {
@@ -9500,10 +9584,23 @@
         }
       }
 
+      const CAPTURE_PICK_VIEW_KEY = "kline-capture-pick-view-v1";
+
+      function persistCapturePickView() {
+        try {
+          localStorage.setItem(
+            CAPTURE_PICK_VIEW_KEY,
+            capturePickKlineView ? "kline" : "list",
+          );
+        } catch (error) {
+          /* ignore */
+        }
+      }
+
       function syncNotesRankViewUi() {
-        const scroll = document.getElementById("notesRankScroll");
-        if (scroll) {
-          scroll.classList.toggle("is-kline-view", !!notesRankKlineView);
+        const body = document.getElementById("notesRankBody");
+        if (body) {
+          body.classList.toggle("is-kline-view", !!notesRankKlineView);
         }
         const btn = document.getElementById("notesRankViewBtn");
         if (btn) {
@@ -9513,13 +9610,37 @@
         }
       }
 
+      function syncCapturePickViewUi() {
+        const body = document.getElementById("capturePickBody");
+        if (body) {
+          body.classList.toggle("is-kline-view", !!capturePickKlineView);
+        }
+        const btn = document.getElementById("capturePickViewBtn");
+        if (btn) {
+          btn.textContent = capturePickKlineView ? "切换列表" : "切换K线";
+          btn.classList.toggle("is-on", !!capturePickKlineView);
+          btn.title = capturePickKlineView ? "回到列表" : "切换 K 线";
+        }
+      }
+
       function toggleNotesRankView() {
         notesRankKlineView = !notesRankKlineView;
         persistNotesRankView();
         syncNotesRankViewUi();
-        const scroll = document.getElementById("notesRankScroll");
-        if (scroll) scroll.scrollTop = 0;
         if (notesRankKlineView) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              void paintNotesRankKlines();
+            });
+          });
+        }
+      }
+
+      function toggleCapturePickView() {
+        capturePickKlineView = !capturePickKlineView;
+        persistCapturePickView();
+        syncCapturePickViewUi();
+        if (capturePickKlineView) {
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               void paintNotesRankKlines();
@@ -9540,26 +9661,36 @@
         return ` · ${clock}（${ago}）`;
       }
 
+      function capturePickDataAgeText() {
+        const at = capturePickLoadedAt;
+        if (!(at > 0)) return "";
+        const d = new Date(at);
+        const pad = (n) => String(n).padStart(2, "0");
+        const clock = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        const sec = Math.max(0, Math.round((Date.now() - at) / 1000));
+        const ago =
+          sec < 60 ? `${sec}秒前` : `${Math.max(1, Math.round(sec / 60))}分钟前`;
+        return ` · ${clock}（${ago}）`;
+      }
+
       function notesRankDomIsReady() {
-        const scroll = document.getElementById("notesRankScroll");
-        if (!scroll) return false;
-        if (scroll.querySelector(".notes-rank-table")) return true;
-        if (scroll.querySelector(".notes-rank-empty")) return true;
-        return false;
+        const notesBody = document.getElementById("notesRankBody");
+        const captureBody = document.getElementById("capturePickBody");
+        if (!notesBody || !captureBody) return false;
+        const ready = (el) =>
+          !!(
+            el.querySelector(".notes-rank-table") ||
+            el.querySelector(".notes-rank-empty")
+          );
+        return ready(notesBody) && ready(captureBody);
       }
 
       function syncNotesRankHeadUi() {
         const title = document.getElementById("notesRankTitle");
-        const capture = isCapturePickMode();
-        if (title) {
-          title.textContent = capture ? "捕捉精选" : "记一笔排序";
-        }
+        if (title) title.textContent = "捕捉精选";
         const pickTab = document.getElementById("capturePickTab");
         if (pickTab) {
-          pickTab.classList.toggle(
-            "is-active",
-            isNotesRankOpen() && capture,
-          );
+          pickTab.classList.toggle("is-active", isNotesRankOpen());
         }
       }
 
@@ -9572,17 +9703,12 @@
         const activeKeys = notesRankActiveKeys();
         const primaryKey = notesRankPrimaryKey();
         const unionRows = rows.filter((row) => (row.hitCount || 0) > 0);
-        const capture = isCapturePickMode();
         if (loading) {
-          meta.textContent = capture
-            ? "正在重算窗口并拉取近2h/1h…"
-            : "正在拉取近2h/1h…";
+          meta.textContent = "正在拉取近2h/1h…";
           return;
         }
         if (!rows.length) {
-          meta.textContent = capture
-            ? "暂无 · 自动盯后下一/下下窗口仍上涨"
-            : "暂无记一笔或盯住";
+          meta.textContent = "暂无记一笔或盯住";
           return;
         }
         const sortBit = activeKeys
@@ -9593,8 +9719,25 @@
             ? ` · K线并集${unionRows.length}`
             : ` · 前${unionRows.length}K线`;
         const staleBit = fromCache ? " · 未重新请求" : "";
-        const scopeBit = capture ? "自动盯·下一/下下窗上涨 · " : "";
-        meta.textContent = `${scopeBit}共 ${rows.length} 个 · ${sortBit} · 优先${notesRankSortLabel(primaryKey)}↓${klineBit}${notesRankDataAgeText()}${staleBit}`;
+        meta.textContent = `共 ${rows.length} 个 · ${sortBit} · 优先${notesRankSortLabel(primaryKey)}↓${klineBit}${notesRankDataAgeText()}${staleBit}`;
+      }
+
+      function syncCapturePickMeta(options) {
+        const meta = document.getElementById("capturePickMeta");
+        if (!meta) return;
+        const loading = !!(options && options.loading);
+        const fromCache = !!(options && options.fromCache);
+        const rows = sortCapturePickRows(capturePickRows);
+        if (loading) {
+          meta.textContent = "正在重算窗口并拉取近2h/1h…";
+          return;
+        }
+        if (!rows.length) {
+          meta.textContent = "暂无 · 自动盯后下一/下下窗口仍上涨";
+          return;
+        }
+        const staleBit = fromCache ? " · 未重新请求" : "";
+        meta.textContent = `共 ${rows.length} 个 · 按盯时新→旧${capturePickDataAgeText()}${staleBit}`;
       }
 
       function notesRankCacheAgeMs() {
@@ -9620,7 +9763,6 @@
           });
         }
         notesRankScoresAt = Date.now();
-        notesRankLoadedAt = notesRankScoresAt;
       }
 
       function absorbMomentumSnapshotIntoNotesRank(symbols) {
@@ -9651,8 +9793,8 @@
       }
 
       function renderNotesRankTable(options) {
-        const scroll = document.getElementById("notesRankScroll");
-        if (!scroll) return;
+        const body = document.getElementById("notesRankBody");
+        if (!body) return;
         const loading = !!(options && options.loading);
         const fromCache = !!(options && options.fromCache);
         const rows = sortNotesRankRows(notesRankRows);
@@ -9662,16 +9804,21 @@
         syncNotesRankMeta(options);
         syncNotesRankRefreshBtn();
         if (loading) {
-          abortNotesRankKlines();
-          scroll.innerHTML =
+          body.innerHTML =
             '<div class="notes-rank-loading">加载中…</div>';
+          body.classList.toggle("is-kline-view", !!notesRankKlineView);
+          body.classList.toggle("is-selecting", notesRankSelectMode);
+          syncNotesRankViewUi();
+          syncNotesRankSelectUi();
           return;
         }
         if (!rows.length) {
-          abortNotesRankKlines();
-          scroll.innerHTML = isCapturePickMode()
-            ? '<div class="notes-rank-empty">暂无 · 自动盯后下一窗口或下下窗口仍上涨的币</div>'
-            : '<div class="notes-rank-empty">暂无记一笔或盯住币种</div>';
+          body.innerHTML =
+            '<div class="notes-rank-empty">暂无记一笔或盯住币种</div>';
+          body.classList.toggle("is-kline-view", !!notesRankKlineView);
+          body.classList.toggle("is-selecting", notesRankSelectMode);
+          syncNotesRankViewUi();
+          syncNotesRankSelectUi();
           return;
         }
         const headCell = (key, label) => {
@@ -9749,7 +9896,7 @@
             ].join("");
           })
           .join("");
-        scroll.innerHTML = [
+        body.innerHTML = [
           `<div class="notes-rank-klines">${klineCards}</div>`,
           `<table class="notes-rank-table">`,
           `<thead><tr>`,
@@ -9762,7 +9909,7 @@
           `<tbody>${tableRows}</tbody>`,
           `</table>`,
         ].join("");
-        scroll.classList.toggle("is-selecting", notesRankSelectMode);
+        body.classList.toggle("is-selecting", notesRankSelectMode);
         syncNotesRankViewUi();
         syncNotesRankSelectUi();
         if (notesRankKlineView) {
@@ -9771,6 +9918,134 @@
               void paintNotesRankKlines();
             });
           });
+        }
+      }
+
+      function renderCapturePickPanel(options) {
+        const body = document.getElementById("capturePickBody");
+        if (!body) return;
+        const loading = !!(options && options.loading);
+        const fromCache = !!(options && options.fromCache);
+        const rows = sortCapturePickRows(capturePickRows);
+        syncCapturePickMeta(options);
+        syncNotesRankRefreshBtn();
+        if (loading) {
+          body.innerHTML =
+            '<div class="notes-rank-loading">加载中…</div>';
+          body.classList.toggle("is-kline-view", !!capturePickKlineView);
+          body.classList.toggle("is-selecting", notesRankSelectMode);
+          syncCapturePickViewUi();
+          syncCapturePickSelectUi();
+          return;
+        }
+        if (!rows.length) {
+          body.innerHTML =
+            '<div class="notes-rank-empty">暂无 · 自动盯后下一窗口或下下窗口仍上涨的币</div>';
+          body.classList.toggle("is-kline-view", !!capturePickKlineView);
+          body.classList.toggle("is-selecting", notesRankSelectMode);
+          syncCapturePickViewUi();
+          syncCapturePickSelectUi();
+          return;
+        }
+        const pctCell = (value) => {
+          const cls = hourClass(value);
+          return `<td class="${cls}">${escapeHtml(formatPercent(value))}</td>`;
+        };
+        const focusKey = String(notesRankFocusSymbol || "").toUpperCase();
+        const klineCards = rows
+          .map((row, index) => {
+            const key = String(row.symbol || "").toUpperCase();
+            const focused =
+              focusKey && key === focusKey ? " is-focus" : "";
+            const selected =
+              notesRankSelectMode && selectedNotesRankSymbols.has(key)
+                ? " is-selected"
+                : "";
+            const check = notesRankSelectMode
+              ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
+              : "";
+            const pinAge = notesRankAgeLabel(row.pinAt || row.nameAt);
+            return [
+              `<article class="notes-rank-kcard${focused}${selected}" data-jump="${escapeHtml(row.symbol)}" data-symbol="${escapeHtml(key)}">`,
+              `<div class="notes-rank-kcard-head">`,
+              check,
+              `<span class="notes-rank-kcard-rank">${index + 1}</span>`,
+              `<button type="button" class="notes-rank-sym" data-copy="${escapeHtml(row.label)}" data-jump="${escapeHtml(row.symbol)}" title="点击复制">${escapeHtml(row.label)}</button>`,
+              `<span class="notes-rank-kcard-metric" title="盯时">${escapeHtml(pinAge)}</span>`,
+              notesRankSelectMode
+                ? ""
+                : `<button type="button" class="notes-rank-zoom" data-kline-zoom="${escapeHtml(row.symbol)}" title="放大 K 线" aria-label="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button>`,
+              `</div>`,
+              `<canvas class="notes-rank-kline" data-kline="${escapeHtml(row.symbol)}"></canvas>`,
+              `<div class="notes-rank-kcard-stats">`,
+              `<span class="${hourClass(row.gain)}">${escapeHtml(formatPercent(row.gain))}</span>`,
+              `<span class="${hourClass(row.change2h)}">2h ${escapeHtml(formatPercent(row.change2h))}</span>`,
+              `<span class="${hourClass(row.change1h)}">1h ${escapeHtml(formatPercent(row.change1h))}</span>`,
+              `<span class="${hourClass(row.change24h)}">24h ${escapeHtml(formatPercent(row.change24h))}</span>`,
+              `</div>`,
+              `</article>`,
+            ].join("");
+          })
+          .join("");
+        const tableRows = rows
+          .map((row) => {
+            const key = String(row.symbol || "").toUpperCase();
+            const focused =
+              focusKey && key === focusKey ? " is-focus" : "";
+            const selected =
+              notesRankSelectMode && selectedNotesRankSymbols.has(key)
+                ? " is-selected"
+                : "";
+            const check = notesRankSelectMode
+              ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
+              : "";
+            return [
+              `<tr class="${focused.trim()}${selected}" data-symbol="${escapeHtml(key)}">`,
+              `<td>${check}<button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button></td>`,
+              pctCell(row.gain),
+              pctCell(row.change2h),
+              pctCell(row.change1h),
+              pctCell(row.change24h),
+              `</tr>`,
+            ].join("");
+          })
+          .join("");
+        body.innerHTML = [
+          `<div class="notes-rank-klines">${klineCards}</div>`,
+          `<table class="notes-rank-table">`,
+          `<thead><tr>`,
+          `<th>名称</th>`,
+          `<th>涨幅</th>`,
+          `<th>2h</th>`,
+          `<th>1h</th>`,
+          `<th>24h</th>`,
+          `</tr></thead>`,
+          `<tbody>${tableRows}</tbody>`,
+          `</table>`,
+        ].join("");
+        body.classList.toggle("is-selecting", notesRankSelectMode);
+        syncCapturePickViewUi();
+        syncCapturePickSelectUi();
+        if (capturePickKlineView) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              void paintNotesRankKlines();
+            });
+          });
+        }
+      }
+
+      function renderCombinedRankPanels(options) {
+        const opts = options || {};
+        const section =
+          opts.section === "capture" || opts.section === "notes"
+            ? opts.section
+            : "all";
+        if (section === "all" || section === "capture") {
+          renderCapturePickPanel(opts);
+        }
+        if (section === "all" || section === "notes") {
+          renderNotesRankTable(opts);
         }
       }
 
@@ -9784,27 +10059,46 @@
           .filter(Boolean);
       }
 
+      function capturePickVisibleSymbols() {
+        return sortCapturePickRows(capturePickRows)
+          .map((row) => String(row.symbol || "").trim().toUpperCase())
+          .filter(Boolean);
+      }
+
+      function syncSharedNailBatchCounts() {
+        const n = selectedNotesRankSymbols.size;
+        const notesCount = document.getElementById("notesRankBatchCount");
+        const notesAdd = document.getElementById("notesRankAddNailsBtn");
+        if (notesCount) notesCount.textContent = String(n);
+        if (notesAdd) {
+          notesAdd.disabled = n === 0 || nailSaving;
+          notesAdd.textContent = n > 0 ? `加入钉子 (${n})` : "加入钉子";
+        }
+      }
+
       function syncNotesRankSelectUi() {
         const btn = document.getElementById("notesRankSelectBtn");
         const bar = document.getElementById("notesRankBatchBar");
-        const countEl = document.getElementById("notesRankBatchCount");
-        const addBtn = document.getElementById("notesRankAddNailsBtn");
-        const scroll = document.getElementById("notesRankScroll");
+        const notesBody = document.getElementById("notesRankBody");
+        const captureBody = document.getElementById("capturePickBody");
         if (btn) {
           btn.classList.toggle("is-active", notesRankSelectMode);
-          btn.setAttribute("aria-pressed", notesRankSelectMode ? "true" : "false");
+          btn.setAttribute(
+            "aria-pressed",
+            notesRankSelectMode ? "true" : "false",
+          );
           btn.textContent = notesRankSelectMode ? "选中" : "多选";
         }
         if (bar) bar.hidden = !notesRankSelectMode;
-        if (scroll) scroll.classList.toggle("is-selecting", notesRankSelectMode);
-        if (countEl) countEl.textContent = String(selectedNotesRankSymbols.size);
-        if (addBtn) {
-          addBtn.disabled = selectedNotesRankSymbols.size === 0 || nailSaving;
-          addBtn.textContent =
-            selectedNotesRankSymbols.size > 0
-              ? `加入钉子 (${selectedNotesRankSymbols.size})`
-              : "加入钉子";
+        if (notesBody) notesBody.classList.toggle("is-selecting", notesRankSelectMode);
+        if (captureBody) {
+          captureBody.classList.toggle("is-selecting", notesRankSelectMode);
         }
+        syncSharedNailBatchCounts();
+      }
+
+      function syncCapturePickSelectUi() {
+        syncNotesRankSelectUi();
       }
 
       function setNotesRankSelectMode(on) {
@@ -9815,7 +10109,7 @@
         }
         notesRankSelectMode = next;
         if (!notesRankSelectMode) selectedNotesRankSymbols.clear();
-        renderNotesRankTable({ fromCache: true });
+        renderCombinedRankPanels({ fromCache: true });
         syncNotesRankSelectUi();
       }
 
@@ -9828,7 +10122,7 @@
         else selectedNotesRankSymbols.add(key);
         document
           .querySelectorAll(
-            `#notesRankScroll [data-symbol="${key}"], #notesRankScroll [data-notes-select="${key}"]`,
+            `#capturePickBody [data-symbol="${key}"], #capturePickBody [data-notes-select="${key}"], #notesRankBody [data-symbol="${key}"], #notesRankBody [data-notes-select="${key}"]`,
           )
           .forEach((el) => {
             if (el.matches("input.notes-rank-check")) {
@@ -9840,6 +10134,7 @@
             if (check) check.checked = selectedNotesRankSymbols.has(key);
           });
         syncNotesRankSelectUi();
+        syncCapturePickSelectUi();
       }
 
       async function addSelectedNotesRankToNails() {
@@ -9870,7 +10165,11 @@
             `Add nails x${symbols.length}`,
             { loadingText: `加入钉子 ${symbols.length}…` },
           );
-          setNotesRankSelectMode(false);
+          notesRankSelectMode = false;
+          selectedNotesRankSymbols.clear();
+          renderCombinedRankPanels({ fromCache: true });
+          syncNotesRankSelectUi();
+          syncCapturePickSelectUi();
           showToast(
             fresh.length
               ? `已加入钉子 ${fresh.length} 个` +
@@ -9900,7 +10199,7 @@
         abortNotesRankKlines();
         const canvases = [
           ...document.querySelectorAll(
-            "#notesRankScroll canvas.notes-rank-kline",
+            "#notesRankScroll .rank-panel-body.is-kline-view canvas.notes-rank-kline",
           ),
         ];
         if (!canvases.length) return;
@@ -9954,16 +10253,14 @@
       }
 
       function closeNotesRankOverlay() {
-        if (isJijiView()) {
-          window.location.href = "./index.html";
-          return;
-        }
-        setNotesRankSelectMode(false);
-        notesRankMode = "notes";
+        notesRankSelectMode = false;
+        selectedNotesRankSymbols.clear();
         const gate = document.getElementById("notesRankGate");
         if (gate) gate.hidden = true;
         syncNotesRankOpenChrome();
         syncNotesRankHeadUi();
+        syncNotesRankSelectUi();
+        syncCapturePickSelectUi();
       }
 
       async function reloadNotesRankSharedState() {
@@ -10022,141 +10319,200 @@
 
       async function openNotesRankOverlay(options) {
         const opts = options || {};
-        const mode =
-          opts.mode === "capture-pick" || opts.mode === "notes"
-            ? opts.mode
-            : notesRankMode || "notes";
-        const modeChanged = mode !== notesRankMode;
-        notesRankMode = mode;
-        // 捕捉精选每次进入/刷新都重算；记一笔排序仍可走缓存
-        const force = !!opts.force || mode === "capture-pick" || modeChanged;
+        const force = !!opts.force;
+        const section =
+          opts.section === "capture" || opts.section === "notes"
+            ? opts.section
+            : "all";
+        const wantCapture = section === "all" || section === "capture";
+        const wantNotes = section === "all" || section === "notes";
         const gate = document.getElementById("notesRankGate");
         if (!gate) return;
-        if (mode === "capture-pick") {
-          closeAllFloatPanels();
-        }
+        closeAllFloatPanels();
         gate.hidden = false;
         syncNotesRankOpenChrome();
         syncNotesRankHeadUi();
         if (!force) {
-          if (notesRankBusy) {
-            syncNotesRankMeta({ loading: true });
+          if (
+            (wantNotes && notesRankBusy) ||
+            (wantCapture && capturePickBusy)
+          ) {
+            if (wantNotes) syncNotesRankMeta({ loading: true });
+            if (wantCapture) syncCapturePickMeta({ loading: true });
             syncNotesRankRefreshBtn();
             syncNotesRankViewUi();
+            syncCapturePickViewUi();
             return;
           }
           if (notesRankDomIsReady()) {
-            syncNotesRankMeta({ fromCache: true });
+            if (wantNotes) syncNotesRankMeta({ fromCache: true });
+            if (wantCapture) syncCapturePickMeta({ fromCache: true });
             syncNotesRankRefreshBtn();
             syncNotesRankViewUi();
+            syncCapturePickViewUi();
             return;
           }
         }
         if (force) {
-          syncNotesRankMeta({ loading: true });
+          if (wantNotes) syncNotesRankMeta({ loading: true });
+          if (wantCapture) syncCapturePickMeta({ loading: true });
           await reloadNotesRankSharedState();
+          try {
+            await loadBinanceTicker();
+          } catch (error) {
+            console.warn("notes-rank ticker failed", error);
+          }
         }
-        // 不锁 body 滚动，便于点名称后背后 K 线滚入视野
-        let symbols = activeNotesRankSymbols();
-        if (!symbols.length) {
-          notesRankRows = [];
-          renderNotesRankTable();
+
+        let captureSymbols = wantCapture ? capturePickSymbolList() : [];
+        let notesSymbols = wantNotes ? notesRankSymbolList() : [];
+        let fetchSymbols = [
+          ...new Set([...(wantCapture ? captureSymbols : []), ...(wantNotes ? notesSymbols : [])]),
+        ];
+
+        if (!fetchSymbols.length) {
+          if (wantCapture) capturePickRows = [];
+          if (wantNotes) notesRankRows = [];
+          renderCombinedRankPanels({ section });
           return;
         }
 
-        absorbMomentumSnapshotIntoNotesRank(symbols);
-        if (!force && notesRankCacheUsable(symbols) && notesRankDomIsReady()) {
-          syncNotesRankMeta({ fromCache: true });
+        absorbMomentumSnapshotIntoNotesRank(fetchSymbols);
+        if (wantCapture) {
+          capturePickRows = buildNotesRankRows(captureSymbols, notesRankScoreMap);
+        }
+        if (wantNotes) {
+          notesRankRows = buildNotesRankRows(notesSymbols, notesRankScoreMap);
+        }
+
+        if (
+          !force &&
+          notesRankCacheUsable(fetchSymbols) &&
+          notesRankDomIsReady()
+        ) {
+          if (wantNotes) syncNotesRankMeta({ fromCache: true });
+          if (wantCapture) syncCapturePickMeta({ fromCache: true });
           return;
         }
-        if (!force && notesRankCacheUsable(symbols)) {
-          notesRankRows = buildNotesRankRows(symbols, notesRankScoreMap);
-          if (!notesRankLoadedAt) notesRankLoadedAt = notesRankScoresAt || Date.now();
-          renderNotesRankTable({ fromCache: true });
+        if (!force && notesRankCacheUsable(fetchSymbols)) {
+          const now = notesRankScoresAt || Date.now();
+          if (wantNotes && !notesRankLoadedAt) notesRankLoadedAt = now;
+          if (wantCapture && !capturePickLoadedAt) capturePickLoadedAt = now;
+          renderCombinedRankPanels({ fromCache: true, section });
           return;
         }
 
         const cacheExpired = notesRankCacheAgeMs() > NOTES_RANK_CACHE_MS;
-        let missing = force || cacheExpired
-          ? symbols.slice()
-          : symbols.filter((symbol) => !notesRankScoreMap.has(symbol));
-        notesRankRows = buildNotesRankRows(symbols, notesRankScoreMap);
+        let missing =
+          force || cacheExpired
+            ? fetchSymbols.slice()
+            : fetchSymbols.filter((symbol) => !notesRankScoreMap.has(symbol));
         if (!missing.length) {
-          if (!notesRankLoadedAt) notesRankLoadedAt = notesRankScoresAt || Date.now();
-          renderNotesRankTable({ fromCache: true });
+          const now = notesRankScoresAt || Date.now();
+          if (wantNotes && !notesRankLoadedAt) notesRankLoadedAt = now;
+          if (wantCapture && !capturePickLoadedAt) capturePickLoadedAt = now;
+          renderCombinedRankPanels({ fromCache: true, section });
           return;
         }
 
-        renderNotesRankTable({ loading: true });
-        if (notesRankAbort) {
+        renderCombinedRankPanels({ loading: true, section });
+
+        if (wantNotes && notesRankAbort) {
           try {
             notesRankAbort.abort();
           } catch (error) {
             /* ignore */
           }
         }
+        if (wantCapture && capturePickAbort) {
+          try {
+            capturePickAbort.abort();
+          } catch (error) {
+            /* ignore */
+          }
+        }
         const controller = new AbortController();
-        notesRankAbort = controller;
-        notesRankBusy = true;
+        if (wantNotes) notesRankAbort = controller;
+        if (wantCapture) capturePickAbort = controller;
+        if (wantNotes) notesRankBusy = true;
+        if (wantCapture) capturePickBusy = true;
         syncNotesRankRefreshBtn();
         try {
-          // 过期 / 强制刷新：先拉最新现价与 24h，再算 2h/1h。
-          try {
-            await loadBinanceTicker();
-          } catch (error) {
-            console.warn("notes-rank ticker failed", error);
-          }
-          if (controller.signal.aborted) return;
-          // 捕捉精选依赖窗口涨跌，ticker 后再筛一遍
-          if (isCapturePickMode()) {
-            symbols = capturePickSymbolList();
-            missing = symbols.slice();
-            if (!symbols.length) {
-              notesRankRows = [];
-              renderNotesRankTable();
-              return;
-            }
-          }
           const scoreMap = await loadPinHourScores(
             missing,
             controller.signal,
             (done, total) => {
-              const el = document.getElementById("notesRankMeta");
-              if (el) el.textContent = `近2h/1h ${done}/${total}`;
+              const text = `近2h/1h ${done}/${total}`;
+              if (wantNotes) {
+                const el = document.getElementById("notesRankMeta");
+                if (el) el.textContent = text;
+              }
+              if (wantCapture) {
+                const el = document.getElementById("capturePickMeta");
+                if (el) el.textContent = text;
+              }
             },
           );
           if (controller.signal.aborted) return;
           mergeNotesRankScores(scoreMap);
-          if (isCapturePickMode()) symbols = capturePickSymbolList();
-          notesRankRows = buildNotesRankRows(symbols, notesRankScoreMap);
-          renderNotesRankTable();
+          const now = Date.now();
+          if (wantCapture) {
+            captureSymbols = capturePickSymbolList();
+            capturePickRows = buildNotesRankRows(
+              captureSymbols,
+              notesRankScoreMap,
+            );
+            capturePickLoadedAt = now;
+          }
+          if (wantNotes) {
+            notesSymbols = notesRankSymbolList();
+            notesRankRows = buildNotesRankRows(notesSymbols, notesRankScoreMap);
+            notesRankLoadedAt = now;
+          }
+          renderCombinedRankPanels({ section });
         } catch (error) {
           if (error && error.name === "AbortError") return;
           console.warn(error);
-          notesRankRows = buildNotesRankRows(
-            activeNotesRankSymbols(),
-            notesRankScoreMap,
-          );
-          renderNotesRankTable({ fromCache: notesRankScoreMap.size > 0 });
-          showToast(
-            error.message ||
-              (isCapturePickMode() ? "捕捉精选加载失败" : "记一笔排序加载失败"),
-          );
+          if (wantCapture) {
+            capturePickRows = buildNotesRankRows(
+              capturePickSymbolList(),
+              notesRankScoreMap,
+            );
+          }
+          if (wantNotes) {
+            notesRankRows = buildNotesRankRows(
+              notesRankSymbolList(),
+              notesRankScoreMap,
+            );
+          }
+          renderCombinedRankPanels({
+            fromCache: notesRankScoreMap.size > 0,
+            section,
+          });
+          showToast(error.message || "捕捉精选加载失败");
         } finally {
-          if (notesRankAbort === controller) {
+          if (wantNotes && notesRankAbort === controller) {
             notesRankAbort = null;
             notesRankBusy = false;
-            syncNotesRankRefreshBtn();
           }
+          if (wantCapture && capturePickAbort === controller) {
+            capturePickAbort = null;
+            capturePickBusy = false;
+          }
+          syncNotesRankRefreshBtn();
         }
       }
 
       function toggleCapturePickOverlay() {
-        if (isNotesRankOpen() && isCapturePickMode()) {
+        if (isNotesRankOpen()) {
           closeNotesRankOverlay();
           return;
         }
-        void openNotesRankOverlay({ force: true, mode: "capture-pick" });
+        void openNotesRankOverlay({ force: true });
+      }
+
+      function refreshCapturePickPanel() {
+        void openNotesRankOverlay({ force: true, section: "capture" });
       }
 
       function setNotesRankSortKey(key) {
@@ -14424,26 +14780,18 @@
         // 冷启动与「同步池」都弹出并行初始化进度框；轻刷新只用顶栏进度。
         const showBootInit = reason === "boot" || reason === "sync-pool";
         if (showBootInit) {
-          const wave2 = isJijiView()
-            ? [
-                {
-                  id: "jiji",
-                  label: "记记排行 2h/1h + K线",
-                  wave: 2,
-                },
-              ]
-            : [
-                {
-                  id: "klines",
-                  label: "卡片 K 线批量拉取",
-                  wave: 2,
-                },
-              ];
           bootInitBegin(
             reason === "sync-pool"
               ? "同步池 · WAVE 1 · 观察池 / 共享态 / 行情"
               : "WAVE 1 · 观察池 / 共享态 / 行情 并行",
-            [...BOOT_INIT_WAVE1_TASKS, ...wave2],
+            [
+              ...BOOT_INIT_WAVE1_TASKS,
+              {
+                id: "klines",
+                label: "卡片 K 线批量拉取",
+                wave: 2,
+              },
+            ],
           );
         }
         try {
@@ -14480,19 +14828,7 @@
           }
           syncStopLossGate();
 
-          if (isJijiView()) {
-            setStatus(false, "打开记记…");
-            bootInitSetStep("WAVE 2 · 记记排行");
-            updateWatchPool();
-            syncStopLossGate();
-            await bootTrack("jiji", "记记排行 2h/1h + K线", () =>
-              openNotesRankOverlay({ force: true, mode: "notes" }),
-            );
-            setStatus(
-              true,
-              `记记 · 盯 ${pinItems.length} · 记 ${(momNoteItems || []).length}`,
-            );
-          } else {
+          {
             setStatus(
               false,
               mode === "full" ? "WAVE 2 · 加载K线…" : "更新 K 线…",
@@ -14706,10 +15042,8 @@
           }
           setNailDrawerOpen(false);
           if (name === "capture") {
-            void openNotesRankOverlay({ force: true, mode: "capture-pick" });
-            return;
+            void openNotesRankOverlay({ force: true });
           }
-          void openNotesRankOverlay({ force: true, mode: "notes" });
         }
 
         apply();
@@ -14779,7 +15113,7 @@
           toggleCapturePickOverlay();
           return;
         }
-        if (isNotesRankOpen() && isCapturePickMode()) {
+        if (isNotesRankOpen()) {
           closeNotesRankOverlay();
         }
         toggleFloatPanel(name);
@@ -15355,7 +15689,7 @@
         ) {
           return;
         }
-        void openNotesRankOverlay({ mode: "notes" });
+        void openNotesRankOverlay({ force: true });
       });
       const notesRankCloseBtn = document.getElementById("notesRankClose");
       if (notesRankCloseBtn) {
@@ -15374,7 +15708,12 @@
       );
       if (notesRankSelectAllBtn) {
         notesRankSelectAllBtn.addEventListener("click", () => {
-          const visible = notesRankVisibleSymbols();
+          const visible = [
+            ...new Set([
+              ...capturePickVisibleSymbols(),
+              ...notesRankVisibleSymbols(),
+            ]),
+          ];
           const allOn =
             visible.length > 0 &&
             visible.every((symbol) => selectedNotesRankSymbols.has(symbol));
@@ -15383,7 +15722,7 @@
           } else {
             visible.forEach((symbol) => selectedNotesRankSymbols.add(symbol));
           }
-          renderNotesRankTable({ fromCache: true });
+          renderCombinedRankPanels({ fromCache: true });
         });
       }
       const notesRankAddNailsBtn = document.getElementById(
@@ -15411,21 +15750,36 @@
       const notesRankRefreshBtn = document.getElementById("notesRankRefresh");
       if (notesRankRefreshBtn) {
         notesRankRefreshBtn.addEventListener("click", () => {
-          void openNotesRankOverlay({
-            force: true,
-            mode: notesRankMode || "notes",
-          });
+          void openNotesRankOverlay({ force: true, section: "notes" });
+        });
+      }
+      const capturePickViewBtn = document.getElementById("capturePickViewBtn");
+      if (capturePickViewBtn) {
+        capturePickViewBtn.addEventListener("click", () => {
+          toggleCapturePickView();
+        });
+      }
+      const capturePickRefreshBtn = document.getElementById("capturePickRefresh");
+      if (capturePickRefreshBtn) {
+        capturePickRefreshBtn.addEventListener("click", () => {
+          refreshCapturePickPanel();
         });
       }
       const notesRankScrollEl = document.getElementById("notesRankScroll");
       if (notesRankScrollEl) {
         notesRankScrollEl.addEventListener("click", (event) => {
-          const sortBtn = event.target.closest("[data-notes-sort]");
+          const sortBtn = event.target.closest(
+            "#notesRankBody [data-notes-sort]",
+          );
           if (sortBtn) {
             setNotesRankSortKey(sortBtn.getAttribute("data-notes-sort"));
             return;
           }
-          if (notesRankSelectMode) {
+          const inPanel = event.target.closest(
+            "#capturePickBody, #notesRankBody",
+          );
+          const selectArmed = notesRankSelectMode && inPanel;
+          if (selectArmed) {
             const selectEl = event.target.closest(
               "[data-notes-select], .notes-rank-kcard[data-symbol], tr[data-symbol]",
             );
@@ -15494,7 +15848,6 @@
         }
         if (event.key === "Escape" && isNotesRankOpen()) {
           event.preventDefault();
-          if (isJijiView()) return;
           closeNotesRankOverlay();
           return;
         }
