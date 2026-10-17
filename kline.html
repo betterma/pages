@@ -662,7 +662,7 @@
         top: 0;
         left: 0;
         right: 0;
-        /* 留给底部日志/动态/企微三个 tab */
+        /* 留给底部日志/捕捉精选/动态/企微 tab */
         bottom: calc(var(--float-dock-h, 54px) + env(safe-area-inset-bottom, 0px));
         z-index: 40;
         display: flex;
@@ -1490,8 +1490,9 @@
         grid-template-columns: 1fr;
       }
       .nail-tab {
+        display: none !important;
         position: fixed;
-        top: 58%;
+        top: calc(58% - 30px);
         left: 0;
         z-index: 121;
         display: flex;
@@ -2509,9 +2510,44 @@
         cursor: pointer;
         white-space: nowrap;
       }
+      .action-log-cats button[hidden] {
+        display: none !important;
+      }
       .action-log-cats button.is-active {
         background: color-mix(in srgb, var(--ios-fill) 70%, transparent);
         color: var(--ios-label);
+      }
+      .action-log-cats .action-log-cat-capture {
+        flex: 1 1 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        min-width: 0;
+      }
+      .action-log-cats .action-log-cat-capture > [data-log-cat] {
+        flex: 1 1 auto;
+      }
+      .action-log-expand {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        margin: -2px 0;
+        border: none;
+        border-radius: 5px;
+        background: color-mix(in srgb, var(--ios-fill) 55%, transparent);
+        color: var(--ios-secondary);
+        font-size: 12px;
+        line-height: 1;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+      .action-log-expand:hover,
+      .action-log-expand:active {
+        color: var(--ios-blue);
+        background: color-mix(in srgb, var(--ios-blue) 14%, transparent);
       }
       .action-log-body {
         padding: 8px 10px 10px;
@@ -2522,11 +2558,28 @@
         -webkit-overflow-scrolling: touch;
       }
       .action-log-row {
-        padding: 6px 0;
-        border-bottom: 0.5px solid var(--ios-separator);
-      }
-      .action-log-row:last-child {
+        padding: 7px 8px;
+        margin: 0 0 2px;
+        border-radius: 8px;
         border-bottom: none;
+      }
+      .action-log-row.day-band-0 {
+        background: #eef6f3;
+      }
+      .action-log-row.day-band-1 {
+        background: #f3f1ea;
+      }
+      .action-log-row.day-band-2 {
+        background: #eef2f8;
+      }
+      .action-log-row.day-band-3 {
+        background: #f5efe8;
+      }
+      .action-log-row.day-band-4 {
+        background: #f0f4ee;
+      }
+      .action-log-row.day-band-5 {
+        background: #f4f0f3;
       }
       .action-log-time {
         color: var(--ios-secondary);
@@ -3055,7 +3108,8 @@
         bottom: 0;
         z-index: 45;
         display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
+        /* 日志 1/3 · 捕捉精选 1/3 · 动态+企微 各占右 1/3 的一半 */
+        grid-template-columns: 2fr 2fr 1fr 1fr;
         gap: 0;
         width: 100%;
         max-width: none;
@@ -3074,7 +3128,7 @@
         border-radius: 0;
         background: transparent;
         color: var(--ios-secondary);
-        padding: 0 8px;
+        padding: 0 6px;
         min-height: 0;
         height: 100%;
         width: 100%;
@@ -3082,6 +3136,10 @@
         font-weight: 500;
         box-shadow: none;
         cursor: pointer;
+      }
+      #capturePickTab {
+        font-size: 10px;
+        letter-spacing: -0.02em;
       }
       .notify-float-tab + .notify-float-tab {
         border-left: 0.5px solid var(--ios-separator);
@@ -3510,6 +3568,59 @@
         background: transparent;
         font-size: 12px;
       }
+      .hub-ball {
+        position: fixed;
+        z-index: 12000;
+        width: 48px;
+        height: 48px;
+        touch-action: none;
+        user-select: none;
+      }
+      .hub-ball-fab {
+        width: 48px;
+        height: 48px;
+        border: none;
+        border-radius: 50%;
+        background: color-mix(in srgb, var(--elevated) 72%, var(--accent));
+        color: var(--label);
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);
+        font-size: 18px;
+        line-height: 1;
+        cursor: grab;
+      }
+      .hub-ball.is-dragging .hub-ball-fab {
+        cursor: grabbing;
+      }
+      .hub-ball-menu {
+        position: absolute;
+        bottom: 56px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .hub-ball-menu[hidden] {
+        display: none !important;
+      }
+      .hub-ball.is-left .hub-ball-menu {
+        left: 0;
+        align-items: flex-start;
+      }
+      .hub-ball.is-right .hub-ball-menu {
+        right: 0;
+        align-items: flex-end;
+      }
+      .hub-ball-menu button {
+        border: none;
+        border-radius: 999px;
+        padding: 8px 12px;
+        background: color-mix(in srgb, var(--elevated) 94%, transparent);
+        color: var(--label);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+        font-size: 13px;
+        font-weight: 650;
+        white-space: nowrap;
+        cursor: pointer;
+      }
       .toast {
         position: fixed;
         left: 50%;
@@ -3521,10 +3632,125 @@
         padding: 8px 14px;
         border-radius: 8px;
         font-size: 13px;
-        z-index: 95;
+        /* 高于钉子抽屉(122)、全屏门闩等，保证任何浮层上都能看见 */
+        z-index: 10000;
         pointer-events: none;
         max-width: min(90vw, 420px);
         text-align: center;
+      }
+      /* 系统级快捷浮球：钉子 / 捕捉精选 / 记一笔排序 */
+      .quick-orb {
+        --quick-orb-size: 48px;
+        position: fixed;
+        top: 42%;
+        right: max(8px, env(safe-area-inset-right, 0px));
+        left: auto;
+        z-index: 9990;
+        width: var(--quick-orb-size);
+        height: var(--quick-orb-size);
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .quick-orb[data-side="left"] {
+        left: max(8px, env(safe-area-inset-left, 0px));
+        right: auto;
+      }
+      .quick-orb[data-side="right"] {
+        right: max(8px, env(safe-area-inset-right, 0px));
+        left: auto;
+      }
+      .quick-orb.is-dragging {
+        opacity: 0.92;
+      }
+      .quick-orb-ball {
+        width: var(--quick-orb-size);
+        height: var(--quick-orb-size);
+        border: 0.5px solid color-mix(in srgb, var(--separator) 70%, transparent);
+        border-radius: 50%;
+        background: color-mix(in srgb, var(--elevated) 92%, transparent);
+        color: var(--label);
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
+        backdrop-filter: saturate(160%) blur(14px);
+        -webkit-backdrop-filter: saturate(160%) blur(14px);
+        cursor: grab;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        font: inherit;
+      }
+      .quick-orb-ball:active {
+        cursor: grabbing;
+      }
+      .quick-orb-ball[aria-expanded="true"] {
+        color: var(--accent);
+        border-color: color-mix(in srgb, var(--accent) 45%, var(--separator));
+      }
+      .quick-orb-ball svg {
+        width: 22px;
+        height: 22px;
+        display: block;
+      }
+      .quick-orb-menu {
+        position: absolute;
+        top: 50%;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 108px;
+        transform: translateY(-50%);
+      }
+      .quick-orb[data-side="right"] .quick-orb-menu {
+        right: calc(100% + 8px);
+        left: auto;
+        align-items: flex-end;
+      }
+      .quick-orb[data-side="left"] .quick-orb-menu {
+        left: calc(100% + 8px);
+        right: auto;
+        align-items: flex-start;
+      }
+      .quick-orb-menu[hidden] {
+        display: none !important;
+      }
+      .quick-orb-menu button {
+        border: 0.5px solid color-mix(in srgb, var(--separator) 65%, transparent);
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--elevated) 94%, transparent);
+        color: var(--label);
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 650;
+        line-height: 1.2;
+        white-space: nowrap;
+        cursor: pointer;
+        box-shadow: 0 3px 12px rgba(0, 0, 0, 0.16);
+        backdrop-filter: saturate(160%) blur(12px);
+        -webkit-backdrop-filter: saturate(160%) blur(12px);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .quick-orb-menu button:active {
+        background: color-mix(in srgb, var(--fill) 80%, transparent);
+      }
+      .quick-orb-menu .quick-orb-count {
+        min-width: 1.2em;
+        font-variant-numeric: tabular-nums;
+        color: var(--secondary);
+        font-weight: 700;
+        font-size: 11px;
+      }
+      .quick-orb-menu .quick-orb-count:empty,
+      .quick-orb-menu .quick-orb-count[data-count="0"] {
+        display: none;
+      }
+      body.is-jiji-view .quick-orb {
+        display: none !important;
+      }
+      /* 钉子只保留手势打开，侧边图标不再显示 */
+      .nail-tab {
+        display: none !important;
       }
       @media (max-width: 768px) {
         .page {
@@ -4134,20 +4360,33 @@
         role="tablist"
         aria-label="日志分类"
       >
-        <button
-          type="button"
-          data-log-cat="capture"
-          class="is-active"
-          role="tab"
-          aria-selected="true"
-        >
-          捕捉
-        </button>
+        <span class="action-log-cat-capture">
+          <button
+            type="button"
+            data-log-cat="capture"
+            class="is-active"
+            role="tab"
+            aria-selected="true"
+          >
+            捕捉
+          </button>
+          <button
+            type="button"
+            class="action-log-expand"
+            data-capture-pick-open
+            title="打开捕捉精选"
+            aria-label="打开捕捉精选"
+          >
+            ⛶
+          </button>
+        </span>
         <button
           type="button"
           data-log-cat="drop"
           role="tab"
           aria-selected="false"
+          hidden
+          title="暂时隐藏"
         >
           掉出窗口
         </button>
@@ -4237,15 +4476,35 @@
       </div>
     </div>
 
+    <div id="hubBall" class="hub-ball is-left">
+      <div class="hub-ball-menu" id="hubBallMenu" hidden>
+        <button type="button" data-hub="nails">钉子抽屉</button>
+        <button type="button" data-hub="capture">捕捉精选</button>
+        <button type="button" data-hub="notes">记一笔排序</button>
+      </div>
+      <button type="button" class="hub-ball-fab" id="hubBallFab" aria-label="快捷入口" title="钉子 / 捕捉精选 / 记一笔排序">
+        ✦
+      </button>
+    </div>
+
     <div class="float-tabs" role="tablist" aria-label="浮窗">
       <button
         type="button"
         class="notify-float-tab"
         id="actionLogTab"
         data-float="log"
-        title="捕捉 / 掉出窗口 / 记一下 / 买卖等其他"
+        title="捕捉 / 记一下 / 买卖等其他"
       >
         日志
+      </button>
+      <button
+        type="button"
+        class="notify-float-tab"
+        id="capturePickTab"
+        data-float="capture-pick"
+        title="捕捉精选：自动盯后下一/下下窗口仍上涨"
+      >
+        捕捉精选
       </button>
       <button
         type="button"
@@ -4256,15 +4515,15 @@
       >
         动态
       </button>
-    <button
-      type="button"
-      class="notify-float-tab"
-      id="notifyFloatTab"
+      <button
+        type="button"
+        class="notify-float-tab"
+        id="notifyFloatTab"
         data-float="notify"
         title="企微同步（盯一下 / 持仓）"
-    >
+      >
         企微
-    </button>
+      </button>
     </div>
 
     <div id="pinBatchBar" class="pin-batch-bar" hidden>
@@ -4604,9 +4863,12 @@
       let notesRankFocusSymbol = "";
       let notesRankKlineAbort = null;
       let notesRankSelectMode = false;
+      /** "notes" | "capture-pick" — 共用记一笔排序全屏 UI */
+      let notesRankMode = "notes";
       const selectedNotesRankSymbols = new Set();
       const NOTES_RANK_KLINE_TOP = 10;
       const NOTES_RANK_CACHE_MS = 3 * 60 * 1000;
+      const ACTION_LOG_DAY_BANDS = 6;
       const MOM_NOTES_LOCAL_KEY = "kline-mom-notes-v1";
       const MOM_NOTES_MAX = 200;
       const BREAK_HIGH_COOLDOWN_MS = 10 * 60 * 1000;
@@ -5392,6 +5654,52 @@
         for (const note of momNoteItems || []) add(note && note.symbol);
         for (const pin of pinItems || []) add(pin && pin.symbol);
         return list;
+      }
+
+      function isCapturePickMode() {
+        return notesRankMode === "capture-pick";
+      }
+
+      /**
+       * 捕捉精选：自动盯之后，处于「下一窗口」或「下下窗口」，
+       * 且当前 4h 窗口仍上涨的币。
+       */
+      function capturePickSymbolList() {
+        const duration = DURATION_MS[CONFIG.KLINE_INTERVAL];
+        if (!duration) return [];
+        const now = Date.now();
+        const currentWindowStart = getWindowStart(now, duration);
+        const sources = new Set(["auto-rising", "auto-cloud", "auto-rewarm"]);
+        const blocked = blacklistSymbols();
+        const seen = new Set();
+        const list = [];
+        for (const item of pinItems || []) {
+          if (!item || !item.symbol || blocked.has(item.symbol)) continue;
+          if (!sources.has(String(item.source || ""))) continue;
+          const at = Number(item.pinnedAt) || 0;
+          if (!(at > 0)) continue;
+          const pinWindow = getWindowStart(at, duration);
+          const next1 = pinWindow + duration;
+          const next2 = pinWindow + duration * 2;
+          if (
+            currentWindowStart !== next1 &&
+            currentWindowStart !== next2
+          ) {
+            continue;
+          }
+          if (!hasWindowGain(item.symbol, CONFIG.KLINE_INTERVAL)) continue;
+          const symbol = String(item.symbol).trim().toUpperCase();
+          if (!symbol || seen.has(symbol)) continue;
+          seen.add(symbol);
+          list.push(symbol);
+        }
+        return list;
+      }
+
+      function activeNotesRankSymbols() {
+        return isCapturePickMode()
+          ? capturePickSymbolList()
+          : notesRankSymbolList();
       }
 
       /** Same universe as 币安观察 盯一下区 / 近2h·1h 浮窗：未拉黑且当前窗口上涨. */
@@ -6584,6 +6892,15 @@
         return `${hh}:${mm}`;
       }
 
+      function actionLogDayKey(at) {
+        const date = new Date(Number(at) || 0);
+        if (!Number.isFinite(date.getTime())) return "";
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, "0");
+        const d = String(date.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      }
+
       function actionLogKindLabel(kind) {
         if (kind === "auto-pin") return "自动盯";
         if (kind === "rewarm") return "回暖(旧)";
@@ -6608,7 +6925,7 @@
       }
 
       function setActionLogCategory(cat) {
-        const next =
+        let next =
           cat === "notes" ||
           cat === "rank" ||
           cat === "other" ||
@@ -6617,6 +6934,8 @@
           cat === "record"
             ? cat
             : "capture";
+        // 掉出窗口 tab 暂时隐藏
+        if (next === "drop") next = "capture";
         actionLogCategory = next;
         const wrap = document.getElementById("actionLogCats");
         if (wrap) {
@@ -6798,6 +7117,8 @@
           body.innerHTML = `<div class="action-log-empty">${emptyHint}</div>`;
           return;
         }
+        let dayBand = -1;
+        let lastDay = "";
         body.innerHTML = list
           .map((entry) => {
             const kind = actionLogKindLabel(entry.kind);
@@ -6826,7 +7147,16 @@
               entry.kind === "sell-stop"
                 ? `<button type="button" class="action-log-edit" data-edit-log-price="${id}">改价</button>`
                 : "";
-            return `<div class="action-log-row"><span class="action-log-time">${formatActionLogTime(entry.at)}</span><span class="action-log-kind">${escapeHtml(kind)}</span>${names}${price}${edit}</div>`;
+            let bandClass = "";
+            if (actionLogCategory === "capture") {
+              const day = actionLogDayKey(entry.at);
+              if (day && day !== lastDay) {
+                lastDay = day;
+                dayBand = (dayBand + 1) % ACTION_LOG_DAY_BANDS;
+              }
+              if (dayBand >= 0) bandClass = ` day-band-${dayBand}`;
+            }
+            return `<div class="action-log-row${bandClass}"><span class="action-log-time">${formatActionLogTime(entry.at)}</span><span class="action-log-kind">${escapeHtml(kind)}</span>${names}${price}${edit}</div>`;
           })
           .join("");
       }
@@ -6954,6 +7284,12 @@
         return false;
       }
 
+      function dismissCardSelectionChrome() {
+        closeCardActions();
+        setFocusActionSymbol(null);
+        if (pinSelectMode) setPinSelectMode(false);
+      }
+
       function closeAllFloatPanels() {
         const momentum = document.getElementById("momentumFloat");
         const notify = document.getElementById("notifyFloat");
@@ -6961,12 +7297,17 @@
         const momTab = document.getElementById("momentumFloatTab");
         const notifyTab = document.getElementById("notifyFloatTab");
         const logTab = document.getElementById("actionLogTab");
+        const pickTab = document.getElementById("capturePickTab");
         if (momentum) momentum.hidden = true;
         if (notify) notify.hidden = true;
         if (log) log.hidden = true;
         if (momTab) momTab.classList.remove("is-active");
         if (notifyTab) notifyTab.classList.remove("is-active");
         if (logTab) logTab.classList.remove("is-active");
+        // 捕捉精选是全屏页，不在此清 is-active（由 syncNotesRankHeadUi 管）
+        if (pickTab && !(isNotesRankOpen() && isCapturePickMode())) {
+          pickTab.classList.remove("is-active");
+        }
       }
 
       function openFloatPanel(name) {
@@ -9207,6 +9548,21 @@
         return false;
       }
 
+      function syncNotesRankHeadUi() {
+        const title = document.getElementById("notesRankTitle");
+        const capture = isCapturePickMode();
+        if (title) {
+          title.textContent = capture ? "捕捉精选" : "记一笔排序";
+        }
+        const pickTab = document.getElementById("capturePickTab");
+        if (pickTab) {
+          pickTab.classList.toggle(
+            "is-active",
+            isNotesRankOpen() && capture,
+          );
+        }
+      }
+
       function syncNotesRankMeta(options) {
         const meta = document.getElementById("notesRankMeta");
         if (!meta) return;
@@ -9216,12 +9572,17 @@
         const activeKeys = notesRankActiveKeys();
         const primaryKey = notesRankPrimaryKey();
         const unionRows = rows.filter((row) => (row.hitCount || 0) > 0);
+        const capture = isCapturePickMode();
         if (loading) {
-          meta.textContent = "正在拉取近2h/1h…";
+          meta.textContent = capture
+            ? "正在重算窗口并拉取近2h/1h…"
+            : "正在拉取近2h/1h…";
           return;
         }
         if (!rows.length) {
-          meta.textContent = "暂无记一笔或盯住";
+          meta.textContent = capture
+            ? "暂无 · 自动盯后下一/下下窗口仍上涨"
+            : "暂无记一笔或盯住";
           return;
         }
         const sortBit = activeKeys
@@ -9232,7 +9593,8 @@
             ? ` · K线并集${unionRows.length}`
             : ` · 前${unionRows.length}K线`;
         const staleBit = fromCache ? " · 未重新请求" : "";
-        meta.textContent = `共 ${rows.length} 个 · ${sortBit} · 优先${notesRankSortLabel(primaryKey)}↓${klineBit}${notesRankDataAgeText()}${staleBit}`;
+        const scopeBit = capture ? "自动盯·下一/下下窗上涨 · " : "";
+        meta.textContent = `${scopeBit}共 ${rows.length} 个 · ${sortBit} · 优先${notesRankSortLabel(primaryKey)}↓${klineBit}${notesRankDataAgeText()}${staleBit}`;
       }
 
       function notesRankCacheAgeMs() {
@@ -9307,8 +9669,9 @@
         }
         if (!rows.length) {
           abortNotesRankKlines();
-          scroll.innerHTML =
-            '<div class="notes-rank-empty">暂无记一笔或盯住币种</div>';
+          scroll.innerHTML = isCapturePickMode()
+            ? '<div class="notes-rank-empty">暂无 · 自动盯后下一窗口或下下窗口仍上涨的币</div>'
+            : '<div class="notes-rank-empty">暂无记一笔或盯住币种</div>';
           return;
         }
         const headCell = (key, label) => {
@@ -9596,9 +9959,11 @@
           return;
         }
         setNotesRankSelectMode(false);
+        notesRankMode = "notes";
         const gate = document.getElementById("notesRankGate");
         if (gate) gate.hidden = true;
         syncNotesRankOpenChrome();
+        syncNotesRankHeadUi();
       }
 
       async function reloadNotesRankSharedState() {
@@ -9656,11 +10021,23 @@
       }
 
       async function openNotesRankOverlay(options) {
-        const force = !!(options && options.force);
+        const opts = options || {};
+        const mode =
+          opts.mode === "capture-pick" || opts.mode === "notes"
+            ? opts.mode
+            : notesRankMode || "notes";
+        const modeChanged = mode !== notesRankMode;
+        notesRankMode = mode;
+        // 捕捉精选每次进入/刷新都重算；记一笔排序仍可走缓存
+        const force = !!opts.force || mode === "capture-pick" || modeChanged;
         const gate = document.getElementById("notesRankGate");
         if (!gate) return;
+        if (mode === "capture-pick") {
+          closeAllFloatPanels();
+        }
         gate.hidden = false;
         syncNotesRankOpenChrome();
+        syncNotesRankHeadUi();
         if (!force) {
           if (notesRankBusy) {
             syncNotesRankMeta({ loading: true });
@@ -9680,7 +10057,7 @@
           await reloadNotesRankSharedState();
         }
         // 不锁 body 滚动，便于点名称后背后 K 线滚入视野
-        const symbols = notesRankSymbolList();
+        let symbols = activeNotesRankSymbols();
         if (!symbols.length) {
           notesRankRows = [];
           renderNotesRankTable();
@@ -9700,7 +10077,7 @@
         }
 
         const cacheExpired = notesRankCacheAgeMs() > NOTES_RANK_CACHE_MS;
-        const missing = force || cacheExpired
+        let missing = force || cacheExpired
           ? symbols.slice()
           : symbols.filter((symbol) => !notesRankScoreMap.has(symbol));
         notesRankRows = buildNotesRankRows(symbols, notesRankScoreMap);
@@ -9730,6 +10107,16 @@
             console.warn("notes-rank ticker failed", error);
           }
           if (controller.signal.aborted) return;
+          // 捕捉精选依赖窗口涨跌，ticker 后再筛一遍
+          if (isCapturePickMode()) {
+            symbols = capturePickSymbolList();
+            missing = symbols.slice();
+            if (!symbols.length) {
+              notesRankRows = [];
+              renderNotesRankTable();
+              return;
+            }
+          }
           const scoreMap = await loadPinHourScores(
             missing,
             controller.signal,
@@ -9740,14 +10127,21 @@
           );
           if (controller.signal.aborted) return;
           mergeNotesRankScores(scoreMap);
+          if (isCapturePickMode()) symbols = capturePickSymbolList();
           notesRankRows = buildNotesRankRows(symbols, notesRankScoreMap);
           renderNotesRankTable();
         } catch (error) {
           if (error && error.name === "AbortError") return;
           console.warn(error);
-          notesRankRows = buildNotesRankRows(symbols, notesRankScoreMap);
+          notesRankRows = buildNotesRankRows(
+            activeNotesRankSymbols(),
+            notesRankScoreMap,
+          );
           renderNotesRankTable({ fromCache: notesRankScoreMap.size > 0 });
-          showToast(error.message || "记一笔排序加载失败");
+          showToast(
+            error.message ||
+              (isCapturePickMode() ? "捕捉精选加载失败" : "记一笔排序加载失败"),
+          );
         } finally {
           if (notesRankAbort === controller) {
             notesRankAbort = null;
@@ -9755,6 +10149,14 @@
             syncNotesRankRefreshBtn();
           }
         }
+      }
+
+      function toggleCapturePickOverlay() {
+        if (isNotesRankOpen() && isCapturePickMode()) {
+          closeNotesRankOverlay();
+          return;
+        }
+        void openNotesRankOverlay({ force: true, mode: "capture-pick" });
       }
 
       function setNotesRankSortKey(key) {
@@ -11861,7 +12263,7 @@
             target &&
             target.closest &&
             target.closest(
-              'input, textarea, select, [contenteditable="true"], button, a, .notes-rank-gate, .kline-zoom-gate, .stop-loss-gate, .boot-init-gate, .card-actions, .notify-float, .momentum-float, .float-tabs, .app-chrome, .nail-tab, .hidden-pin-tab',
+              'input, textarea, select, [contenteditable="true"], button, a, .notes-rank-gate, .kline-zoom-gate, .stop-loss-gate, .boot-init-gate, .card-actions, .notify-float, .momentum-float, .float-tabs, .app-chrome, .nail-tab, .hidden-pin-tab, .hub-ball',
             )
           );
         }
@@ -14084,7 +14486,7 @@
             updateWatchPool();
             syncStopLossGate();
             await bootTrack("jiji", "记记排行 2h/1h + K线", () =>
-              openNotesRankOverlay({ force: true }),
+              openNotesRankOverlay({ force: true, mode: "notes" }),
             );
             setStatus(
               true,
@@ -14245,11 +14647,141 @@
         .addEventListener("click", () => {
           refreshNotifyFloat();
         });
+      function bindHubBall() {
+        const root = document.getElementById("hubBall");
+        const fab = document.getElementById("hubBallFab");
+        const menu = document.getElementById("hubBallMenu");
+        if (!root || !fab || !menu) return;
+        const SIZE = 48;
+        const MARGIN = 8;
+        const POS_KEY = "kline-hub-ball-v1";
+        let pos = {
+          x: MARGIN,
+          y: Math.round(window.innerHeight * 0.42),
+        };
+        try {
+          const saved = JSON.parse(localStorage.getItem(POS_KEY) || "null");
+          if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+            pos = { x: saved.x, y: saved.y };
+          }
+        } catch (_) {}
+        let drag = null;
+
+        function clampY(y) {
+          const minY = 72;
+          const maxY = window.innerHeight - SIZE - 72;
+          return Math.min(Math.max(minY, y), Math.max(minY, maxY));
+        }
+        function apply() {
+          pos.y = clampY(pos.y);
+          root.style.left = `${pos.x}px`;
+          root.style.top = `${pos.y}px`;
+          const onLeft = pos.x + SIZE / 2 < window.innerWidth / 2;
+          root.classList.toggle("is-left", onLeft);
+          root.classList.toggle("is-right", !onLeft);
+        }
+        function snap() {
+          const onLeft = pos.x + SIZE / 2 < window.innerWidth / 2;
+          pos.x = onLeft
+            ? MARGIN
+            : Math.max(MARGIN, window.innerWidth - SIZE - MARGIN);
+          pos.y = clampY(pos.y);
+          apply();
+          try {
+            localStorage.setItem(POS_KEY, JSON.stringify(pos));
+          } catch (_) {}
+        }
+        function closeMenu() {
+          menu.hidden = true;
+          root.classList.remove("is-open");
+        }
+        function openHubTarget(name) {
+          dismissCardSelectionChrome();
+          closeMenu();
+          if (name === "nails") {
+            if (isNotesRankOpen()) closeNotesRankOverlay();
+            closeAllFloatPanels();
+            setNailDrawerOpen(true);
+            return;
+          }
+          setNailDrawerOpen(false);
+          if (name === "capture") {
+            void openNotesRankOverlay({ force: true, mode: "capture-pick" });
+            return;
+          }
+          void openNotesRankOverlay({ force: true, mode: "notes" });
+        }
+
+        apply();
+        snap();
+        fab.addEventListener("pointerdown", (event) => {
+          if (event.button != null && event.button !== 0) return;
+          drag = {
+            id: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+            ox: pos.x,
+            oy: pos.y,
+            moved: false,
+          };
+          try {
+            fab.setPointerCapture(event.pointerId);
+          } catch (_) {}
+        });
+        fab.addEventListener("pointermove", (event) => {
+          if (!drag || event.pointerId !== drag.id) return;
+          const dx = event.clientX - drag.x;
+          const dy = event.clientY - drag.y;
+          if (!drag.moved && Math.hypot(dx, dy) < 8) return;
+          drag.moved = true;
+          root.classList.add("is-dragging");
+          closeMenu();
+          pos = { x: drag.ox + dx, y: drag.oy + dy };
+          pos.x = Math.min(
+            Math.max(MARGIN, pos.x),
+            Math.max(MARGIN, window.innerWidth - SIZE - MARGIN),
+          );
+          apply();
+        });
+        function endDrag(event) {
+          if (!drag || (event && event.pointerId !== drag.id)) return;
+          const moved = drag.moved;
+          drag = null;
+          root.classList.remove("is-dragging");
+          if (moved) {
+            snap();
+            return;
+          }
+          const open = menu.hidden;
+          menu.hidden = !open;
+          root.classList.toggle("is-open", open);
+        }
+        fab.addEventListener("pointerup", endDrag);
+        fab.addEventListener("pointercancel", endDrag);
+        menu.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-hub]");
+          if (!btn) return;
+          openHubTarget(btn.getAttribute("data-hub"));
+        });
+        document.addEventListener("pointerdown", (event) => {
+          if (!root.contains(event.target)) closeMenu();
+        });
+        window.addEventListener("resize", () => snap());
+      }
+      bindHubBall();
+
       document.querySelector(".float-tabs").addEventListener("click", (event) => {
         const btn = event.target.closest("button[data-float]");
         if (!btn || btn.disabled) return;
-        closeCardActions();
+        dismissCardSelectionChrome();
         const name = btn.dataset.float;
+        if (name === "capture-pick") {
+          toggleCapturePickOverlay();
+          return;
+        }
+        if (isNotesRankOpen() && isCapturePickMode()) {
+          closeNotesRankOverlay();
+        }
         toggleFloatPanel(name);
         if (name === "notify" && isFloatPanelOpen("notify")) {
         refreshNotifyFloat({ silent: true });
@@ -14596,6 +15128,13 @@
       const actionLogCats = document.getElementById("actionLogCats");
       if (actionLogCats) {
         actionLogCats.addEventListener("click", (event) => {
+          const expand = event.target.closest("[data-capture-pick-open]");
+          if (expand) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleCapturePickOverlay();
+            return;
+          }
           const btn = event.target.closest("[data-log-cat]");
           if (!btn) return;
           setActionLogCategory(btn.getAttribute("data-log-cat"));
@@ -14816,7 +15355,7 @@
         ) {
           return;
         }
-        void openNotesRankOverlay();
+        void openNotesRankOverlay({ mode: "notes" });
       });
       const notesRankCloseBtn = document.getElementById("notesRankClose");
       if (notesRankCloseBtn) {
@@ -14872,7 +15411,10 @@
       const notesRankRefreshBtn = document.getElementById("notesRankRefresh");
       if (notesRankRefreshBtn) {
         notesRankRefreshBtn.addEventListener("click", () => {
-          void openNotesRankOverlay({ force: true });
+          void openNotesRankOverlay({
+            force: true,
+            mode: notesRankMode || "notes",
+          });
         });
       }
       const notesRankScrollEl = document.getElementById("notesRankScroll");
