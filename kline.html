@@ -527,9 +527,100 @@
       .recent-auto-pin .kline-card .symbol-copy {
         color: var(--pin-zone-label);
       }
+      .section-jump {
+        position: sticky;
+        top: calc(var(--chrome-top-h) + env(safe-area-inset-top, 0px));
+        z-index: 55;
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        padding: 8px 0 6px;
+        margin: 0 0 6px;
+        background: color-mix(in srgb, var(--ios-bg) 92%, transparent);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+      .section-jump::-webkit-scrollbar {
+        display: none;
+      }
+      .section-jump button {
+        flex: 0 0 auto;
+        border: none;
+        border-radius: 980px;
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 650;
+        background: var(--ios-fill);
+        color: var(--ios-secondary);
+        cursor: pointer;
+      }
+      .section-jump button:hover {
+        background: var(--ios-fill-strong);
+        color: var(--ios-label);
+      }
+      .section-jump button.is-active {
+        background: color-mix(in srgb, var(--ios-blue) 22%, var(--ios-fill));
+        color: var(--ios-label);
+      }
+      .section-jump button[hidden] {
+        display: none !important;
+      }
+      body.is-notes-rank-open .section-jump {
+        display: none !important;
+      }
+      .resume-pin {
+        margin: 0 0 14px;
+        padding: 10px 10px 12px;
+        border-radius: var(--ios-radius-lg);
+        background: var(--recent-zone-bg);
+        border: 0.5px solid
+          color-mix(in srgb, var(--up) 40%, var(--ios-separator));
+        box-shadow: inset 0 1px 0
+          color-mix(in srgb, var(--up) 12%, transparent);
+      }
+      .resume-pin[hidden] {
+        display: none !important;
+      }
+      .resume-pin-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+        font-size: 12px;
+        color: color-mix(in srgb, var(--up) 70%, var(--recent-zone-label));
+        margin: 0 0 8px;
+        font-weight: 650;
+        letter-spacing: 0.02em;
+      }
+      .resume-pin .kline-card {
+        background: var(--recent-zone-card);
+        border-color: color-mix(in srgb, var(--up) 28%, var(--ios-separator));
+        color: var(--ios-secondary);
+        opacity: 0.96;
+        filter: none;
+      }
+      .resume-pin .kline-card .symbol-copy {
+        color: var(--recent-zone-label);
+      }
+      .pin-main {
+        margin: 0 0 14px;
+      }
+      .pin-main-head {
+        font-size: 12px;
+        color: var(--ios-secondary);
+        margin: 0 0 8px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      .pin-main-head[hidden] {
+        display: none !important;
+      }
       /* 盯一下主网格：浅色区 token = recent-zone-*（方案命名） */
       #pinGrid {
-        margin: 0 0 14px;
+        margin: 0;
         padding: 10px;
         border-radius: var(--ios-radius-lg);
         background: var(--recent-zone-bg);
@@ -3991,6 +4082,13 @@
           title="行情与 K 线最近一次成功刷新的本地时间。轻刷新会同步动态/企微/日志，但不拉 OBS；「同步池」才强制更新观察池快照"
         ></span>
       </div>
+      <nav id="sectionJumpNav" class="section-jump" aria-label="分区跳转">
+        <button type="button" data-jump="recentAutoPinSection">置顶</button>
+        <button type="button" data-jump="resumePinSection">转强</button>
+        <button type="button" data-jump="pinMainSection">盯一下</button>
+        <button type="button" data-jump="risingSection">窗口上涨</button>
+        <button type="button" data-jump="favSection">收藏</button>
+      </nav>
       <!-- 指引已隐藏：熟悉操作后收起，需要时再解开
       <p class="hint">长按选 盯/购买/卖出/收藏/拉黑 · 盯一下展示当前窗口上涨（可低于盯住价）· 右侧看窗口回落 · 企微同步</p>
       -->
@@ -4050,7 +4148,16 @@
         </div>
         <div id="recentAutoPinGrid" class="kline-grid"></div>
       </div>
-      <div id="pinGrid" class="kline-grid"></div>
+      <div id="resumePinSection" class="resume-pin" hidden>
+        <div class="resume-pin-head">
+          <span id="resumePinMeta">转强 · 回踩后第一根</span>
+        </div>
+        <div id="resumePinGrid" class="kline-grid"></div>
+      </div>
+      <div id="pinMainSection" class="pin-main">
+        <div id="pinMainHead" class="pin-main-head" hidden>盯一下 · 窗口上涨</div>
+        <div id="pinGrid" class="kline-grid"></div>
+      </div>
 
       <div id="risingSection" class="page-section">
       <h2 class="section-title">窗口上涨</h2>
@@ -4850,6 +4957,14 @@
       const PIN_SORT_KEY = "kline-pin-sort-v1";
       const AUTO_PIN_EVENTS_SEEN_KEY = "kline-auto-pin-events-seen-v1";
       const NEW_AUTO_PIN_MS = 12 * 60 * 60 * 1000;
+      /** 本轮渲染命中「转强」的币，供排序时从盯一下网格排除 */
+      let lastResumePinSymbols = [];
+      const klineFetchCache = new Map();
+      const KLINE_FETCH_CACHE_TTL_MS = 90 * 1000;
+      const PIN_CARD_ROOT_SELECTOR =
+        "#pinGrid .kline-card[data-symbol], #recentAutoPinGrid .kline-card[data-symbol], #resumePinGrid .kline-card[data-symbol], #hiddenPinGrid .kline-card[data-symbol]";
+      const PIN_SELECT_MODE_SELECTOR =
+        "#pinGrid .kline-card.is-select-mode, #recentAutoPinGrid .kline-card.is-select-mode, #resumePinGrid .kline-card.is-select-mode, #hiddenPinGrid .kline-card.is-select-mode";
       let cardEggState = WatchFavorites.emptyCardEggs
         ? WatchFavorites.emptyCardEggs()
         : {
@@ -7595,6 +7710,167 @@
         }
       }
 
+      function resumePinSymbolSet() {
+        return new Set(lastResumePinSymbols || []);
+      }
+
+      /** 回踩 1～2 根后再转强：当前窗涨 + 回踩前盯入后曾有阳线 */
+      function isResumeAfterPullback(symbol, candles, interval) {
+        const iv = interval || CONFIG.KLINE_INTERVAL;
+        if (!hasWindowGain(symbol, iv)) return false;
+        const pin = pinItemBySymbol(symbol);
+        if (!pin || !Array.isArray(candles) || !candles.length) return false;
+        const duration = DURATION_MS[iv];
+        if (!duration) return false;
+        const currentStart = getWindowStart(Date.now(), duration);
+        const closed = candles.filter(
+          (bar) => Number(bar && bar.time) < currentStart,
+        );
+        const isUp = (bar) => Number(bar.close) > Number(bar.open);
+        let pullback = 0;
+        for (let i = closed.length - 1; i >= 0; i -= 1) {
+          if (isUp(closed[i])) break;
+          pullback += 1;
+        }
+        if (pullback < 1 || pullback > 2) return false;
+        const pinWindow = getWindowStart(Number(pin.pinnedAt) || 0, duration);
+        const before = closed.slice(0, closed.length - pullback);
+        return before.some((bar) => bar.time >= pinWindow && isUp(bar));
+      }
+
+      async function splitResumePinSymbols(candidates, interval, signal) {
+        const iv = interval || CONFIG.KLINE_INTERVAL;
+        const list = [...(candidates || [])].filter(Boolean);
+        if (!list.length) return { resume: [], rest: [] };
+        const batchSize = Math.max(1, CONFIG.KLINE_CARD_CONCURRENCY || 10);
+        const candleMap = new Map();
+        for (let i = 0; i < list.length; i += batchSize) {
+          if (signal && signal.aborted) break;
+          const batch = list.slice(i, i + batchSize);
+          await Promise.all(
+            batch.map(async (symbol) => {
+              try {
+                const candles = await fetchKlines(symbol, iv, signal);
+                candleMap.set(symbol, candles);
+              } catch (error) {
+                if (error && error.name === "AbortError") throw error;
+              }
+            }),
+          );
+        }
+        if (signal && signal.aborted) return { resume: [], rest: list };
+        const resume = [];
+        const rest = [];
+        for (const symbol of list) {
+          const candles = candleMap.get(symbol);
+          if (candles && isResumeAfterPullback(symbol, candles, iv)) {
+            resume.push(symbol);
+          } else {
+            rest.push(symbol);
+          }
+        }
+        resume.sort((a, b) => {
+          const changeA = windowPriceChange(a, iv);
+          const changeB = windowPriceChange(b, iv);
+          const hasA = Number.isFinite(changeA);
+          const hasB = Number.isFinite(changeB);
+          if (hasA && hasB && changeB !== changeA) return changeB - changeA;
+          if (hasA !== hasB) return hasA ? -1 : 1;
+          return String(a).localeCompare(String(b));
+        });
+        return { resume, rest };
+      }
+
+      function chromeOffsetPx() {
+        const chrome = document.getElementById("appChrome");
+        const jump = document.getElementById("sectionJumpNav");
+        return (chrome?.offsetHeight || 0) + (jump?.offsetHeight || 0);
+      }
+
+      function jumpToPageSection(id) {
+        const el = document.getElementById(id);
+        if (!el || el.hidden) return;
+        if (
+          id === "recentAutoPinSection" &&
+          el.classList.contains("is-collapsed")
+        ) {
+          setRecentAutoPinCollapsed(false);
+        }
+        const top =
+          el.getBoundingClientRect().top +
+          window.scrollY -
+          chromeOffsetPx() -
+          6;
+        window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      }
+
+      function syncSectionJumpNav(activeId) {
+        const nav = document.getElementById("sectionJumpNav");
+        if (!nav) return;
+        const specs = [
+          "recentAutoPinSection",
+          "resumePinSection",
+          "pinMainSection",
+          "risingSection",
+          "favSection",
+        ];
+        for (const id of specs) {
+          const btn = nav.querySelector(`[data-jump="${id}"]`);
+          const section = document.getElementById(id);
+          if (!btn || !section) continue;
+          let empty = !!section.hidden;
+          if (!empty) {
+            empty = !section.querySelector(".kline-card[data-symbol]");
+          }
+          btn.hidden = empty;
+          if (activeId) {
+            btn.classList.toggle("is-active", id === activeId && !empty);
+          }
+        }
+      }
+
+      function bindSectionJumpNav() {
+        const nav = document.getElementById("sectionJumpNav");
+        if (!nav || nav.dataset.bound === "1") return;
+        nav.dataset.bound = "1";
+        nav.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-jump]");
+          if (!btn || btn.hidden) return;
+          jumpToPageSection(btn.getAttribute("data-jump"));
+        });
+        const targets = [
+          "recentAutoPinSection",
+          "resumePinSection",
+          "pinMainSection",
+          "risingSection",
+          "favSection",
+        ]
+          .map((id) => document.getElementById(id))
+          .filter(Boolean);
+        if (!targets.length || typeof IntersectionObserver !== "function") {
+          return;
+        }
+        const observer = new IntersectionObserver(
+          (entries) => {
+            const visible = entries
+              .filter((entry) => entry.isIntersecting)
+              .sort(
+                (a, b) =>
+                  (b.intersectionRatio || 0) - (a.intersectionRatio || 0),
+              );
+            if (!visible.length) return;
+            const id = visible[0].target.id;
+            if (id) syncSectionJumpNav(id);
+          },
+          {
+            root: null,
+            rootMargin: `-${chromeOffsetPx() + 8}px 0px -55% 0px`,
+            threshold: [0.08, 0.2, 0.4],
+          },
+        );
+        targets.forEach((el) => observer.observe(el));
+      }
+
       function listRecentAutoPins(interval) {
         const now = Date.now();
         const blocked = blacklistSymbols();
@@ -8125,6 +8401,16 @@
 
       async function fetchKlines(symbol, interval, signal, limitOverride) {
         const limit = limitOverride || klineLimit(interval);
+        const cacheKey = `${symbol}|${interval}|${limit}`;
+        const cached = klineFetchCache.get(cacheKey);
+        if (
+          cached &&
+          Date.now() - cached.at < KLINE_FETCH_CACHE_TTL_MS &&
+          Array.isArray(cached.candles) &&
+          cached.candles.length
+        ) {
+          return cached.candles;
+        }
         const query = `symbol=${symbol}&interval=${interval}&limit=${limit}`;
         const endpoints = [
           `https://data-api.binance.vision/api/v3/klines?${query}`,
@@ -8145,7 +8431,7 @@
               lastError.userMessage = "币安K线返回为空";
               continue;
             }
-            return rows.map((row) => ({
+            const candles = rows.map((row) => ({
               time: Number(row[0]),
               open: Number(row[1]),
               high: Number(row[2]),
@@ -8153,6 +8439,8 @@
               close: Number(row[4]),
               volume: Number(row[5]),
             }));
+            klineFetchCache.set(cacheKey, { at: Date.now(), candles });
+            return candles;
           } catch (error) {
             if (error.name === "AbortError") throw error;
             if (error && error.kind) {
@@ -8221,10 +8509,7 @@
           card.appendChild(canvas);
         }
         const section = card.dataset.section || "";
-        const isPinSection =
-          section === "pin" ||
-          section === "pin-hidden" ||
-          section === "pin-recent";
+        const isPinSection = isPinCardSection(section);
         const pinItem = isPinSection ? pinItemBySymbol(symbol) : null;
         await renderKlineCard(
           card,
@@ -8626,8 +8911,11 @@
         const recentAutoSet = new Set(
           listRecentAutoPins().map((item) => item.symbol),
         );
+        const resumeSet = resumePinSymbolSet();
         const list = listWindowUpPinSymbols()
-          .filter((symbol) => !recentAutoSet.has(symbol))
+          .filter(
+            (symbol) => !recentAutoSet.has(symbol) && !resumeSet.has(symbol),
+          )
           .slice()
           .sort((a, b) => compareMomentumSignal(a, b, scoreMap));
         applyPinGridOrder(list);
@@ -8637,9 +8925,10 @@
         const recentAutoSet = new Set(
           listRecentAutoPins().map((item) => item.symbol),
         );
+        const resumeSet = resumePinSymbolSet();
         applyPinGridOrder(
           listWindowUpPinSymbols().filter(
-            (symbol) => !recentAutoSet.has(symbol),
+            (symbol) => !recentAutoSet.has(symbol) && !resumeSet.has(symbol),
           ),
         );
       }
@@ -11726,7 +12015,8 @@
         return (
           section === "pin" ||
           section === "pin-hidden" ||
-          section === "pin-recent"
+          section === "pin-recent" ||
+          section === "pin-resume"
         );
       }
 
@@ -11817,9 +12107,7 @@
       function applyPinSelectChrome() {
         const wantSelect = pinSelectMode;
         document
-          .querySelectorAll(
-            "#pinGrid .kline-card[data-symbol], #recentAutoPinGrid .kline-card[data-symbol], #hiddenPinGrid .kline-card[data-symbol]",
-          )
+          .querySelectorAll(PIN_CARD_ROOT_SELECTOR)
           .forEach((card) => {
             const symbol = String(card.dataset.symbol || "").toUpperCase();
             card.classList.toggle("is-select-mode", wantSelect);
@@ -11869,9 +12157,7 @@
 
       function onPinSelectPointer(event) {
         if (!pinSelectMode) return;
-        const card = event.target.closest(
-          "#pinGrid .kline-card.is-select-mode, #recentAutoPinGrid .kline-card.is-select-mode, #hiddenPinGrid .kline-card.is-select-mode",
-        );
+        const card = event.target.closest(PIN_SELECT_MODE_SELECTOR);
         if (!card) return;
         if (event.target.closest(".card-actions, .mom-badge")) return;
         if (event.type === "change") {
@@ -11889,8 +12175,9 @@
       function bindPinSelectDelegation() {
         const pinGrid = document.getElementById("pinGrid");
         const recentGrid = document.getElementById("recentAutoPinGrid");
+        const resumeGrid = document.getElementById("resumePinGrid");
         const hiddenGrid = document.getElementById("hiddenPinGrid");
-        for (const root of [pinGrid, recentGrid, hiddenGrid]) {
+        for (const root of [pinGrid, recentGrid, resumeGrid, hiddenGrid]) {
           if (!root || root.dataset.pinSelectBound === "1") continue;
           root.dataset.pinSelectBound = "1";
           root.addEventListener("click", onPinSelectPointer);
@@ -12311,10 +12598,7 @@
         const favSet = favoriteSymbols();
         const pairs = pairSet || new Set();
         const pins = pinMap || new Map();
-        const isPinSection =
-          section === "pin" ||
-          section === "pin-hidden" ||
-          section === "pin-recent";
+        const isPinSection = isPinCardSection(section);
         grid.innerHTML = symbols.length
           ? symbols
               .map((symbol) => {
@@ -12347,6 +12631,8 @@
                     ? "当前没有隐藏的盯一下（窗口回落）"
                     : section === "pin-recent"
                       ? "暂无新自动盯"
+                      : section === "pin-resume"
+                        ? "暂无转强"
                     : "暂无窗口上涨的收藏"
             }</div>`;
 
@@ -13588,6 +13874,7 @@
           .toUpperCase();
         if (!key) return;
         const order = [
+          "pin-resume",
           "pin",
           "pin-recent",
           "rising",
@@ -13794,8 +14081,30 @@
         let pinSymbolsList = listWindowUpPinSymbols(interval).filter(
           (symbol) => !recentAutoSet.has(symbol),
         );
+        if (klineAbort) klineAbort.abort();
+        klineAbort = new AbortController();
+        const { signal } = klineAbort;
+        if (momentumAbort) {
+          momentumAbort.abort();
+          momentumAbort = null;
+          momentumBusy = false;
+          setMomentumUiBusy(false);
+        }
+        const resumeSplit = await splitResumePinSymbols(
+          pinSymbolsList,
+          interval,
+          signal,
+        );
+        if (signal.aborted) return;
+        const resumePinList = resumeSplit.resume;
+        pinSymbolsList = resumeSplit.rest;
+        lastResumePinSymbols = resumePinList.slice();
         const scoreUniverse = [
-          ...new Set([...recentAutoList, ...pinSymbolsList]),
+          ...new Set([
+            ...recentAutoList,
+            ...resumePinList,
+            ...pinSymbolsList,
+          ]),
         ];
         const activePins = pinItems.filter(
           (item) =>
@@ -13816,16 +14125,6 @@
           return !hasWindowGain(item.symbol, interval);
             }).length
           : 0;
-
-        if (klineAbort) klineAbort.abort();
-        klineAbort = new AbortController();
-        const { signal } = klineAbort;
-        if (momentumAbort) {
-          momentumAbort.abort();
-          momentumAbort = null;
-          momentumBusy = false;
-          setMomentumUiBusy(false);
-        }
 
         // 先按盯幅出卡片；爬升排序 / 浮窗所需动量放到后台。
         lastScoreUniverse = scoreUniverse.slice();
@@ -13869,6 +14168,9 @@
           ];
           if (recentAutoList.length) {
             parts.push(`新自动盯 ${recentAutoList.length}`);
+          }
+          if (resumePinList.length) {
+            parts.push(`转强 ${resumePinList.length}`);
           }
           if (pinShownBelowPin > 0) {
             parts.push(`其中低于盯住价 ${pinShownBelowPin}`);
@@ -13921,22 +14223,13 @@
 
         klineTotal =
           pinSymbolsList.length +
+          resumePinList.length +
           recentAutoList.length +
           pinHiddenList.length +
           rising.length +
           favRising.length;
         if (typeof onProgress === "function") onProgress(0, klineTotal);
 
-        await fillGrid(
-          document.getElementById("pinGrid"),
-          pinSymbolsList,
-          "pin",
-          signal,
-          pairSet,
-          pinMap,
-          bumpKline,
-        );
-        if (signal.aborted) return;
         const recentSection = document.getElementById("recentAutoPinSection");
         const recentMeta = document.getElementById("recentAutoPinMeta");
         const recentGrid = document.getElementById("recentAutoPinGrid");
@@ -13965,6 +14258,51 @@
             recentGrid.innerHTML = "";
             syncSortRailRecentVisibility();
           }
+        }
+        if (signal.aborted) return;
+        const resumeSection = document.getElementById("resumePinSection");
+        const resumeMeta = document.getElementById("resumePinMeta");
+        const resumeGrid = document.getElementById("resumePinGrid");
+        if (resumeSection && resumeGrid) {
+          if (resumePinList.length) {
+            resumeSection.hidden = false;
+            if (resumeMeta) {
+              resumeMeta.textContent = `转强 ${resumePinList.length} · 回踩后第一根`;
+            }
+            await fillGrid(
+              resumeGrid,
+              resumePinList,
+              "pin-resume",
+              signal,
+              pairSet,
+              pinMap,
+              bumpKline,
+            );
+            applyPinSelectChrome();
+            updatePinSelectUi();
+          } else {
+            resumeSection.hidden = true;
+            resumeGrid.innerHTML = "";
+          }
+        }
+        if (signal.aborted) return;
+        const pinMainHead = document.getElementById("pinMainHead");
+        const pinGridEl = document.getElementById("pinGrid");
+        if (pinMainHead) {
+          pinMainHead.hidden = !pinSymbolsList.length;
+        }
+        if (pinSymbolsList.length) {
+          await fillGrid(
+            pinGridEl,
+            pinSymbolsList,
+            "pin",
+            signal,
+            pairSet,
+            pinMap,
+            bumpKline,
+          );
+        } else if (pinGridEl) {
+          pinGridEl.innerHTML = "";
         }
         if (signal.aborted) return;
         await fillGrid(
@@ -13997,6 +14335,7 @@
           bumpKline,
         );
         if (signal.aborted) return;
+        syncSectionJumpNav();
         updateNotifyFloatPanel();
         updatePinSelectUi();
         applyNotesFilter();
@@ -14750,6 +15089,11 @@
             document.getElementById("pinGrid").innerHTML = "";
             document.getElementById("favGrid").innerHTML = "";
             document.getElementById("hiddenPinGrid").innerHTML = "";
+            const resumeGridErr = document.getElementById("resumePinGrid");
+            const resumeSectionErr = document.getElementById("resumePinSection");
+            if (resumeGridErr) resumeGridErr.innerHTML = "";
+            if (resumeSectionErr) resumeSectionErr.hidden = true;
+            lastResumePinSymbols = [];
             updateHiddenPinTab(0);
             setHiddenPinDrawerOpen(false);
           }
@@ -14968,6 +15312,8 @@
         setPinSelectMode(!pinSelectMode);
       });
       bindPinSelectDelegation();
+      bindSectionJumpNav();
+      syncSectionJumpNav();
       document.getElementById("pinBatchExitBtn").addEventListener("click", () => {
         setPinSelectMode(false);
       });
@@ -14984,10 +15330,8 @@
         .getElementById("pinBatchSelectAllBtn")
         .addEventListener("click", () => {
           const allowed = pinSymbols();
-          document
-            .querySelectorAll(
-              "#pinGrid .kline-card[data-symbol], #recentAutoPinGrid .kline-card[data-symbol], #hiddenPinGrid .kline-card[data-symbol]",
-            )
+            document
+            .querySelectorAll(PIN_CARD_ROOT_SELECTOR)
             .forEach((card) => {
               if (card.classList.contains("is-notes-filtered-out")) return;
               const symbol = String(card.dataset.symbol || "").toUpperCase();
