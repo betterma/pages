@@ -826,16 +826,16 @@
         justify-content: flex-end;
         flex-shrink: 0;
       }
-      /* 捕捉精选：顶部改上下排布（文字在上，按钮在下） */
-      #capturePickPanel .rank-panel-head {
+      /* 捕捉精选页：文案在上、按钮在下 */
+      .notes-rank-scroll .rank-panel-head {
         flex-direction: column;
         align-items: stretch;
         justify-content: flex-start;
       }
-      #capturePickPanel .rank-panel-head-text {
+      .notes-rank-scroll .rank-panel-head-text {
         flex: none;
       }
-      #capturePickPanel .rank-panel-actions {
+      .notes-rank-scroll .rank-panel-actions {
         justify-content: flex-start;
       }
       .rank-panel-body {
@@ -855,12 +855,13 @@
       }
       .notes-rank-head-row {
         display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 10px;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 8px;
       }
       .notes-rank-head-text {
-        flex: 1 1 auto;
+        flex: none;
         min-width: 0;
       }
       .notes-rank-head .notes-rank-batch-bar {
@@ -883,6 +884,7 @@
         display: flex;
         flex-wrap: wrap;
         align-items: center;
+        justify-content: flex-start;
         gap: 8px;
       }
       .notes-rank-refresh,
