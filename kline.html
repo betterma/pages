@@ -2711,6 +2711,31 @@
         top: 22px;
         color: #4f7a6e;
       }
+      .nail-in-mark {
+        position: absolute;
+        left: 8px;
+        bottom: 8px;
+        z-index: 2;
+        font-size: 10px;
+        line-height: 1;
+        font-weight: 650;
+        color: color-mix(in srgb, var(--accent) 72%, var(--secondary));
+        pointer-events: none;
+        letter-spacing: 0.02em;
+      }
+      .nail-in-mark.is-inline {
+        position: static;
+        display: inline-block;
+        margin-left: 6px;
+        bottom: auto;
+        left: auto;
+        vertical-align: middle;
+      }
+      .notes-rank-kcard-head .nail-in-mark {
+        position: static;
+        margin-left: 4px;
+        flex: 0 0 auto;
+      }
       .notify-float.is-action-log {
         width: min(420px, 100vw);
         max-height: min(42vh, calc(100vh - var(--float-dock-h, 54px) - 8px));
@@ -6366,6 +6391,73 @@
         return WatchFavorites.pinsToSymbolSet(pinItems);
       }
 
+      function nailSymbolSet() {
+        return new Set(
+          (nailItems || [])
+            .map((item) =>
+              String(item && item.symbol || "")
+                .trim()
+                .toUpperCase(),
+            )
+            .filter(Boolean),
+        );
+      }
+
+      function hasNailForSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        return !!key && nailSymbolSet().has(key);
+      }
+
+      function syncNailInMarks() {
+        const nails = nailSymbolSet();
+        document
+          .querySelectorAll(".kline-card[data-symbol]")
+          .forEach((card) => {
+            const key = String(card.dataset.symbol || "").toUpperCase();
+            let mark = card.querySelector(".nail-in-mark");
+            const want = nails.has(key);
+            if (want && !mark) {
+              mark = document.createElement("span");
+              mark.className = "nail-in-mark";
+              mark.title = "已在钉子抽屉";
+              mark.textContent = "钉子抽屉";
+              card.appendChild(mark);
+            } else if (!want && mark) {
+              mark.remove();
+            }
+          });
+        document
+          .querySelectorAll(
+            "#capturePickBody [data-symbol], #notesRankBody [data-symbol], #capturePickBody tr[data-symbol], #notesRankBody tr[data-symbol]",
+          )
+          .forEach((el) => {
+            const key = String(el.dataset.symbol || "").toUpperCase();
+            const want = nails.has(key);
+            let mark = el.querySelector(".nail-in-mark");
+            if (want && !mark) {
+              mark = document.createElement("span");
+              mark.className = "nail-in-mark is-inline";
+              mark.title = "已在钉子抽屉";
+              mark.textContent = "钉子抽屉";
+              const head = el.querySelector(".notes-rank-kcard-head");
+              const cell = el.querySelector("td");
+              const host = head || cell || el;
+              const sym = host.querySelector(".notes-rank-sym");
+              if (sym && sym.nextSibling) {
+                host.insertBefore(mark, sym.nextSibling);
+              } else if (sym) {
+                host.appendChild(mark);
+              } else {
+                host.appendChild(mark);
+              }
+            } else if (!want && mark) {
+              mark.remove();
+            }
+          });
+      }
+
       function positionSymbols() {
         return WatchFavorites.positionsToSymbolSet(positionItems);
       }
@@ -7708,6 +7800,7 @@
               nailItems = [];
             }
             renderNailDrawer();
+            syncNailInMarks();
           }),
           soft("pos", "持仓", async () => {
             const posState = await WatchFavorites.loadPositionsRaw({
@@ -10034,12 +10127,16 @@
             const check = notesRankSelectMode
               ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
               : "";
+            const nailMark = hasNailForSymbol(key)
+              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉子抽屉</span>`
+              : "";
             return [
               `<article class="notes-rank-kcard${focused}${selected}" data-jump="${escapeHtml(row.symbol)}" data-symbol="${escapeHtml(key)}">`,
               `<div class="notes-rank-kcard-head">`,
               check,
               `<span class="notes-rank-kcard-rank">${index + 1}</span>`,
               `<button type="button" class="notes-rank-sym" data-copy="${escapeHtml(row.label)}" data-jump="${escapeHtml(row.symbol)}" title="点击复制">${escapeHtml(row.label)}</button>`,
+              nailMark,
               `<span class="${notesRankMetricClass(row, primaryKey)}">${escapeHtml(notesRankMetricText(row, primaryKey))}</span>`,
               notesRankSelectMode
                 ? ""
@@ -10070,12 +10167,15 @@
               multi && row.hitCount > 0
                 ? `<span class="notes-rank-hit">${row.hitCount}</span>`
                 : "";
+            const nailMark = hasNailForSymbol(key)
+              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉子抽屉</span>`
+              : "";
             const check = notesRankSelectMode
               ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
               : "";
             return [
               `<tr class="${focused.trim()}${selected}" data-symbol="${escapeHtml(key)}">`,
-              `<td>${check}<button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button>${hitMark}</td>`,
+              `<td>${check}<button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button>${nailMark}${hitMark}</td>`,
               pctCell(row.gain),
               pctCell(row.change2h),
               pctCell(row.change1h),
@@ -10153,12 +10253,16 @@
               ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
               : "";
             const pinAge = notesRankAgeLabel(row.pinAt || row.nameAt);
+            const nailMark = hasNailForSymbol(key)
+              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉子抽屉</span>`
+              : "";
             return [
               `<article class="notes-rank-kcard${focused}${selected}" data-jump="${escapeHtml(row.symbol)}" data-symbol="${escapeHtml(key)}">`,
               `<div class="notes-rank-kcard-head">`,
               check,
               `<span class="notes-rank-kcard-rank">${index + 1}</span>`,
               `<button type="button" class="notes-rank-sym" data-copy="${escapeHtml(row.label)}" data-jump="${escapeHtml(row.symbol)}" title="点击复制">${escapeHtml(row.label)}</button>`,
+              nailMark,
               `<span class="notes-rank-kcard-metric" title="盯时">${escapeHtml(pinAge)}</span>`,
               notesRankSelectMode
                 ? ""
@@ -10184,12 +10288,15 @@
               notesRankSelectMode && selectedNotesRankSymbols.has(key)
                 ? " is-selected"
                 : "";
+            const nailMark = hasNailForSymbol(key)
+              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉子抽屉</span>`
+              : "";
             const check = notesRankSelectMode
               ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
               : "";
             return [
               `<tr class="${focused.trim()}${selected}" data-symbol="${escapeHtml(key)}">`,
-              `<td>${check}<button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button></td>`,
+              `<td>${check}<button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button>${nailMark}</td>`,
               pctCell(row.gain),
               pctCell(row.change2h),
               pctCell(row.change1h),
@@ -10476,6 +10583,7 @@
           blacklistItems = blackState.blacklist || [];
           nailItems = nailState.nails || [];
           renderNailDrawer();
+          syncNailInMarks();
         } catch (error) {
           console.warn("notes-rank shared reload failed", error);
         }
@@ -11758,6 +11866,11 @@
         if (options.hasPosition) {
           marks.push('<span class="pos-mark">持仓</span>');
         }
+        if (options.isNail) {
+          marks.push(
+            '<span class="nail-in-mark" title="已在钉子抽屉">钉子抽屉</span>',
+          );
+        }
         if (fireworks) {
           marks.push(
             '<span class="egg-mark" title="近3天·4h 区间新高 · 同一次触发只显示一次 · 长按可取消彩蛋">新高</span>',
@@ -12669,6 +12782,7 @@
                   selectMode: pinSelectMode && isPinSection,
                   isSelected: selectedPinSymbols.has(symbol),
                   hasPosition: positionSymbols().has(symbol),
+                  isNail: hasNailForSymbol(symbol),
                   isExpired: isPinSection && expired,
                   pinItem: isPinSection ? pinItem : null,
                   showMark: section === "rising" && favSet.has(symbol),
@@ -13422,6 +13536,7 @@
           });
           nailItems = nailState.nails || [];
           renderNailDrawer();
+          syncNailInMarks();
           syncNailPriceRows();
           await paintNailKlines();
           showToast("钉子已刷新");
@@ -13514,6 +13629,7 @@
           });
           nailItems = result.nails || [];
           renderNailDrawer();
+          syncNailInMarks();
           return result;
         } finally {
           nailSaving = false;
