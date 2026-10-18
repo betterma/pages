@@ -3618,59 +3618,6 @@
         background: transparent;
         font-size: 12px;
       }
-      .hub-ball {
-        position: fixed;
-        z-index: 12000;
-        width: 48px;
-        height: 48px;
-        touch-action: none;
-        user-select: none;
-      }
-      .hub-ball-fab {
-        width: 48px;
-        height: 48px;
-        border: none;
-        border-radius: 50%;
-        background: color-mix(in srgb, var(--elevated) 72%, var(--accent));
-        color: var(--label);
-        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);
-        font-size: 18px;
-        line-height: 1;
-        cursor: grab;
-      }
-      .hub-ball.is-dragging .hub-ball-fab {
-        cursor: grabbing;
-      }
-      .hub-ball-menu {
-        position: absolute;
-        bottom: 56px;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-      .hub-ball-menu[hidden] {
-        display: none !important;
-      }
-      .hub-ball.is-left .hub-ball-menu {
-        left: 0;
-        align-items: flex-start;
-      }
-      .hub-ball.is-right .hub-ball-menu {
-        right: 0;
-        align-items: flex-end;
-      }
-      .hub-ball-menu button {
-        border: none;
-        border-radius: 999px;
-        padding: 8px 12px;
-        background: color-mix(in srgb, var(--elevated) 94%, transparent);
-        color: var(--label);
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
-        font-size: 13px;
-        font-weight: 650;
-        white-space: nowrap;
-        cursor: pointer;
-      }
       .toast {
         position: fixed;
         left: 50%;
@@ -3687,113 +3634,6 @@
         pointer-events: none;
         max-width: min(90vw, 420px);
         text-align: center;
-      }
-      /* 系统级快捷浮球：钉子 / 捕捉精选 / 记一笔排序 */
-      .quick-orb {
-        --quick-orb-size: 48px;
-        position: fixed;
-        top: 42%;
-        right: max(8px, env(safe-area-inset-right, 0px));
-        left: auto;
-        z-index: 9990;
-        width: var(--quick-orb-size);
-        height: var(--quick-orb-size);
-        touch-action: none;
-        user-select: none;
-        -webkit-user-select: none;
-      }
-      .quick-orb[data-side="left"] {
-        left: max(8px, env(safe-area-inset-left, 0px));
-        right: auto;
-      }
-      .quick-orb[data-side="right"] {
-        right: max(8px, env(safe-area-inset-right, 0px));
-        left: auto;
-      }
-      .quick-orb.is-dragging {
-        opacity: 0.92;
-      }
-      .quick-orb-ball {
-        width: var(--quick-orb-size);
-        height: var(--quick-orb-size);
-        border: 0.5px solid color-mix(in srgb, var(--separator) 70%, transparent);
-        border-radius: 50%;
-        background: color-mix(in srgb, var(--elevated) 92%, transparent);
-        color: var(--label);
-        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.22);
-        backdrop-filter: saturate(160%) blur(14px);
-        -webkit-backdrop-filter: saturate(160%) blur(14px);
-        cursor: grab;
-        display: grid;
-        place-items: center;
-        padding: 0;
-        font: inherit;
-      }
-      .quick-orb-ball:active {
-        cursor: grabbing;
-      }
-      .quick-orb-ball[aria-expanded="true"] {
-        color: var(--accent);
-        border-color: color-mix(in srgb, var(--accent) 45%, var(--separator));
-      }
-      .quick-orb-ball svg {
-        width: 22px;
-        height: 22px;
-        display: block;
-      }
-      .quick-orb-menu {
-        position: absolute;
-        top: 50%;
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        min-width: 108px;
-        transform: translateY(-50%);
-      }
-      .quick-orb[data-side="right"] .quick-orb-menu {
-        right: calc(100% + 8px);
-        left: auto;
-        align-items: flex-end;
-      }
-      .quick-orb[data-side="left"] .quick-orb-menu {
-        left: calc(100% + 8px);
-        right: auto;
-        align-items: flex-start;
-      }
-      .quick-orb-menu[hidden] {
-        display: none !important;
-      }
-      .quick-orb-menu button {
-        border: 0.5px solid color-mix(in srgb, var(--separator) 65%, transparent);
-        border-radius: 999px;
-        background: color-mix(in srgb, var(--elevated) 94%, transparent);
-        color: var(--label);
-        padding: 8px 12px;
-        font-size: 12px;
-        font-weight: 650;
-        line-height: 1.2;
-        white-space: nowrap;
-        cursor: pointer;
-        box-shadow: 0 3px 12px rgba(0, 0, 0, 0.16);
-        backdrop-filter: saturate(160%) blur(12px);
-        -webkit-backdrop-filter: saturate(160%) blur(12px);
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-      }
-      .quick-orb-menu button:active {
-        background: color-mix(in srgb, var(--fill) 80%, transparent);
-      }
-      .quick-orb-menu .quick-orb-count {
-        min-width: 1.2em;
-        font-variant-numeric: tabular-nums;
-        color: var(--secondary);
-        font-weight: 700;
-        font-size: 11px;
-      }
-      .quick-orb-menu .quick-orb-count:empty,
-      .quick-orb-menu .quick-orb-count[data-count="0"] {
-        display: none;
       }
       /* 钉子只保留手势打开，侧边图标不再显示 */
       .nail-tab {
@@ -3896,7 +3736,7 @@
           <div class="notes-rank-head-text">
             <h2 id="notesRankTitle">捕捉精选</h2>
             <p class="notes-rank-meta" id="notesRankPageMeta">
-              上：自动盯后 W1/W2/W3 仍涨 · 下：记一笔排序
+              上：自动盯后 W1–W4 仍涨 · 下：记一笔排序
             </p>
           </div>
           <div class="notes-rank-head-actions">
@@ -3939,7 +3779,7 @@
           <div class="rank-panel-head">
             <div class="rank-panel-head-text">
               <h3>捕捉精选</h3>
-              <p id="capturePickMeta">自动盯 · 下一/下下/下下下窗口仍上涨 · 按盯时新→旧</p>
+              <p id="capturePickMeta">自动盯 · 下一至第四窗口仍上涨 · 按盯时新→旧</p>
             </div>
             <div class="rank-panel-actions">
               <button
@@ -3954,7 +3794,7 @@
                 type="button"
                 class="notes-rank-refresh"
                 id="capturePickRefresh"
-                title="重算 W1/W2/W3 并拉取近2h/1h"
+                title="重算 W1–W4 并拉取近2h/1h"
               >
                 刷新
               </button>
@@ -4568,16 +4408,6 @@
       </div>
     </div>
 
-    <div id="hubBall" class="hub-ball is-left">
-      <div class="hub-ball-menu" id="hubBallMenu" hidden>
-        <button type="button" data-hub="nails">钉子抽屉</button>
-        <button type="button" data-hub="capture">捕捉精选</button>
-      </div>
-      <button type="button" class="hub-ball-fab" id="hubBallFab" aria-label="快捷入口" title="钉子抽屉 / 捕捉精选">
-        ✦
-      </button>
-    </div>
-
     <div class="float-tabs" role="tablist" aria-label="浮窗">
       <button
         type="button"
@@ -4593,7 +4423,7 @@
         class="notify-float-tab"
         id="capturePickTab"
         data-float="capture-pick"
-        title="捕捉精选：自动盯后下一/下下/下下下窗口仍上涨"
+        title="捕捉精选：自动盯后下一至第四窗口仍上涨"
       >
         捕捉精选
       </button>
@@ -5742,7 +5572,7 @@
       }
 
       /**
-       * 捕捉精选：自动盯之后，处于「下一窗口」「下下窗口」或「下下下窗口」，
+       * 捕捉精选：自动盯之后，处于下一至第四个窗口（next1–next4），
        * 且当前 4h 窗口仍上涨的币。返回 { symbol, pinnedAt }[] 按盯时新→旧。
        */
       function listCapturePickPins() {
@@ -5760,16 +5590,8 @@
           const at = Number(item.pinnedAt) || 0;
           if (!(at > 0)) continue;
           const pinWindow = getWindowStart(at, duration);
-          const next1 = pinWindow + duration;
-          const next2 = pinWindow + duration * 2;
-          const next3 = pinWindow + duration * 3;
-          if (
-            currentWindowStart !== next1 &&
-            currentWindowStart !== next2 &&
-            currentWindowStart !== next3
-          ) {
-            continue;
-          }
+          const steps = Math.round((currentWindowStart - pinWindow) / duration);
+          if (steps < 1 || steps > 4) continue;
           if (!hasWindowGain(item.symbol, CONFIG.KLINE_INTERVAL)) continue;
           const symbol = String(item.symbol).trim().toUpperCase();
           if (!symbol || seen.has(symbol)) continue;
@@ -9747,7 +9569,7 @@
           return;
         }
         if (!rows.length) {
-          meta.textContent = "暂无 · 自动盯后下一/下下/下下下窗口仍上涨";
+          meta.textContent = "暂无 · 自动盯后下一至第四窗口仍上涨";
           return;
         }
         const staleBit = fromCache ? " · 未重新请求" : "";
@@ -9954,7 +9776,7 @@
         }
         if (!rows.length) {
           body.innerHTML =
-            '<div class="notes-rank-empty">暂无 · 自动盯后下一/下下/下下下窗口仍上涨的币</div>';
+            '<div class="notes-rank-empty">暂无 · 自动盯后下一至第四窗口仍上涨的币</div>';
           body.classList.toggle("is-kline-view", !!capturePickKlineView);
           body.classList.toggle("is-selecting", notesRankSelectMode);
           syncCapturePickViewUi();
@@ -12633,7 +12455,7 @@
             target &&
             target.closest &&
             target.closest(
-              'input, textarea, select, [contenteditable="true"], button, a, .notes-rank-gate, .kline-zoom-gate, .stop-loss-gate, .boot-init-gate, .card-actions, .notify-float, .momentum-float, .float-tabs, .app-chrome, .nail-tab, .hidden-pin-tab, .hub-ball',
+              'input, textarea, select, [contenteditable="true"], button, a, .notes-rank-gate, .kline-zoom-gate, .stop-loss-gate, .boot-init-gate, .card-actions, .notify-float, .momentum-float, .float-tabs, .app-chrome, .nail-tab, .hidden-pin-tab',
             )
           );
         }
@@ -14997,127 +14819,6 @@
         .addEventListener("click", () => {
           refreshNotifyFloat();
         });
-      function bindHubBall() {
-        const root = document.getElementById("hubBall");
-        const fab = document.getElementById("hubBallFab");
-        const menu = document.getElementById("hubBallMenu");
-        if (!root || !fab || !menu) return;
-        const SIZE = 48;
-        const MARGIN = 8;
-        const POS_KEY = "kline-hub-ball-v1";
-        let pos = {
-          x: MARGIN,
-          y: Math.round(window.innerHeight * 0.42),
-        };
-        try {
-          const saved = JSON.parse(localStorage.getItem(POS_KEY) || "null");
-          if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
-            pos = { x: saved.x, y: saved.y };
-          }
-        } catch (_) {}
-        let drag = null;
-
-        function clampY(y) {
-          const minY = 72;
-          const maxY = window.innerHeight - SIZE - 72;
-          return Math.min(Math.max(minY, y), Math.max(minY, maxY));
-        }
-        function apply() {
-          pos.y = clampY(pos.y);
-          root.style.left = `${pos.x}px`;
-          root.style.top = `${pos.y}px`;
-          const onLeft = pos.x + SIZE / 2 < window.innerWidth / 2;
-          root.classList.toggle("is-left", onLeft);
-          root.classList.toggle("is-right", !onLeft);
-        }
-        function snap() {
-          const onLeft = pos.x + SIZE / 2 < window.innerWidth / 2;
-          pos.x = onLeft
-            ? MARGIN
-            : Math.max(MARGIN, window.innerWidth - SIZE - MARGIN);
-          pos.y = clampY(pos.y);
-          apply();
-          try {
-            localStorage.setItem(POS_KEY, JSON.stringify(pos));
-          } catch (_) {}
-        }
-        function closeMenu() {
-          menu.hidden = true;
-          root.classList.remove("is-open");
-        }
-        function openHubTarget(name) {
-          dismissCardSelectionChrome();
-          closeMenu();
-          if (name === "nails") {
-            if (isNotesRankOpen()) closeNotesRankOverlay();
-            closeAllFloatPanels();
-            setNailDrawerOpen(true);
-            return;
-          }
-          setNailDrawerOpen(false);
-          if (name === "capture") {
-            void openNotesRankOverlay({ force: true });
-          }
-        }
-
-        apply();
-        snap();
-        fab.addEventListener("pointerdown", (event) => {
-          if (event.button != null && event.button !== 0) return;
-          drag = {
-            id: event.pointerId,
-            x: event.clientX,
-            y: event.clientY,
-            ox: pos.x,
-            oy: pos.y,
-            moved: false,
-          };
-          try {
-            fab.setPointerCapture(event.pointerId);
-          } catch (_) {}
-        });
-        fab.addEventListener("pointermove", (event) => {
-          if (!drag || event.pointerId !== drag.id) return;
-          const dx = event.clientX - drag.x;
-          const dy = event.clientY - drag.y;
-          if (!drag.moved && Math.hypot(dx, dy) < 8) return;
-          drag.moved = true;
-          root.classList.add("is-dragging");
-          closeMenu();
-          pos = { x: drag.ox + dx, y: drag.oy + dy };
-          pos.x = Math.min(
-            Math.max(MARGIN, pos.x),
-            Math.max(MARGIN, window.innerWidth - SIZE - MARGIN),
-          );
-          apply();
-        });
-        function endDrag(event) {
-          if (!drag || (event && event.pointerId !== drag.id)) return;
-          const moved = drag.moved;
-          drag = null;
-          root.classList.remove("is-dragging");
-          if (moved) {
-            snap();
-            return;
-          }
-          const open = menu.hidden;
-          menu.hidden = !open;
-          root.classList.toggle("is-open", open);
-        }
-        fab.addEventListener("pointerup", endDrag);
-        fab.addEventListener("pointercancel", endDrag);
-        menu.addEventListener("click", (event) => {
-          const btn = event.target.closest("[data-hub]");
-          if (!btn) return;
-          openHubTarget(btn.getAttribute("data-hub"));
-        });
-        document.addEventListener("pointerdown", (event) => {
-          if (!root.contains(event.target)) closeMenu();
-        });
-        window.addEventListener("resize", () => snap());
-      }
-      bindHubBall();
-
       document.querySelector(".float-tabs").addEventListener("click", (event) => {
         const btn = event.target.closest("button[data-float]");
         if (!btn || btn.disabled) return;
