@@ -570,6 +570,88 @@
       body.is-notes-rank-open .section-jump {
         display: none !important;
       }
+      .step-hub {
+        position: fixed;
+        z-index: 130;
+        touch-action: none;
+        user-select: none;
+      }
+      body:has(#stopLossGate:not([hidden])) .step-hub {
+        display: none !important;
+      }
+      .step-hub.is-docked {
+        width: 12px;
+        height: 72px;
+      }
+      .step-hub.is-docked .step-hub-ball {
+        display: none;
+      }
+      .step-hub:not(.is-docked) .step-hub-bar {
+        display: none;
+      }
+      .step-hub-bar {
+        display: block;
+        width: 12px;
+        height: 72px;
+        padding: 0;
+        border: none;
+        background: color-mix(in srgb, var(--accent) 72%, var(--elevated));
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+        cursor: pointer;
+      }
+      .step-hub[data-side="left"] .step-hub-bar {
+        border-radius: 0 8px 8px 0;
+      }
+      .step-hub[data-side="right"] .step-hub-bar {
+        border-radius: 8px 0 0 8px;
+      }
+      .step-hub-ball {
+        position: relative;
+        width: 52px;
+        height: 52px;
+      }
+      .step-hub-orb {
+        width: 52px;
+        height: 52px;
+        border: none;
+        border-radius: 50%;
+        background: color-mix(in srgb, var(--accent) 78%, #121418);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 700;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+        cursor: pointer;
+      }
+      .step-hub-menu {
+        position: absolute;
+        top: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 118px;
+      }
+      .step-hub[data-side="right"] .step-hub-menu {
+        right: 58px;
+      }
+      .step-hub[data-side="left"] .step-hub-menu {
+        left: 58px;
+      }
+      .step-hub-menu[hidden] {
+        display: none !important;
+      }
+      .step-hub-menu button {
+        border: none;
+        border-radius: 12px;
+        padding: 8px 10px;
+        background: var(--elevated);
+        color: var(--label);
+        font-size: 13px;
+        font-weight: 650;
+        text-align: left;
+        white-space: nowrap;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+        cursor: pointer;
+      }
       .resume-pin {
         margin: 0 0 14px;
         padding: 10px 10px 12px;
@@ -3828,9 +3910,7 @@
         <div class="notes-rank-head-row">
           <div class="notes-rank-head-text">
             <h2 id="notesRankTitle">捕捉精选</h2>
-            <p class="notes-rank-meta" id="notesRankPageMeta">
-              上：自动盯后 W1–W4 仍涨 · 下：记一笔排序
-            </p>
+            <p class="notes-rank-meta" id="notesRankPageMeta">有延续</p>
           </div>
           <div class="notes-rank-head-actions">
             <button
@@ -3872,7 +3952,6 @@
           <div class="rank-panel-head">
             <div class="rank-panel-head-text">
               <h3>捕捉精选</h3>
-              <p id="capturePickMeta">自动盯 · 下一至第四窗口仍上涨 · 按盯时新→旧</p>
             </div>
             <div class="rank-panel-actions">
               <button
@@ -3901,7 +3980,7 @@
           <div class="rank-panel-head">
             <div class="rank-panel-head-text">
               <h3>记一笔排序</h3>
-              <p id="notesRankMeta">有记相对记住点 · 无记相对盯住价 · 近2h · 近1h · 24h</p>
+              <p id="notesRankMeta">此刻热度</p>
             </div>
             <div class="rank-panel-actions">
               <button
@@ -4137,7 +4216,7 @@
       </div>
       <div id="recentAutoPinSection" class="recent-auto-pin" hidden>
         <div class="recent-auto-pin-head">
-          <span id="recentAutoPinMeta">新自动盯 · 近12小时 · 窗口上涨</span>
+          <span id="recentAutoPinMeta">新加入</span>
           <button
             type="button"
             id="recentAutoPinToggle"
@@ -4152,12 +4231,12 @@
       </div>
       <div id="resumePinSection" class="resume-pin" hidden>
         <div class="resume-pin-head">
-          <span id="resumePinMeta">转强 · 回踩后第一根</span>
+          <span id="resumePinMeta">再启动</span>
         </div>
         <div id="resumePinGrid" class="kline-grid"></div>
       </div>
       <div id="pinMainSection" class="pin-main">
-        <div id="pinMainHead" class="pin-main-head" hidden>盯一下 · 窗口上涨</div>
+        <div id="pinMainHead" class="pin-main-head" hidden>还在涨</div>
         <div id="pinGrid" class="kline-grid"></div>
       </div>
 
@@ -4174,6 +4253,24 @@
       </div>
     </div>
 
+    <div
+      id="stepHub"
+      class="step-hub is-docked"
+      data-side="right"
+      style="top: 38vh; right: 0"
+    >
+      <button type="button" class="step-hub-bar" aria-label="展开步骤"></button>
+      <div class="step-hub-ball">
+        <button type="button" class="step-hub-orb" aria-expanded="false" aria-label="步骤">
+          步
+        </button>
+        <div class="step-hub-menu" hidden>
+          <button type="button" data-step="zones">置顶 / 转强</button>
+          <button type="button" data-step="capture">捕捉精选</button>
+          <button type="button" data-step="nails">钉子</button>
+        </div>
+      </div>
+    </div>
     <button
       type="button"
       id="nailTab"
@@ -9821,50 +9918,14 @@
         }
       }
 
-      function syncNotesRankMeta(options) {
+      function syncNotesRankMeta() {
         const meta = document.getElementById("notesRankMeta");
-        if (!meta) return;
-        const loading = !!(options && options.loading);
-        const fromCache = !!(options && options.fromCache);
-        const rows = sortNotesRankRows(notesRankRows);
-        const activeKeys = notesRankActiveKeys();
-        const primaryKey = notesRankPrimaryKey();
-        const unionRows = rows.filter((row) => (row.hitCount || 0) > 0);
-        if (loading) {
-          meta.textContent = "正在拉取近2h/1h…";
-          return;
-        }
-        if (!rows.length) {
-          meta.textContent = "暂无记一笔或盯住";
-          return;
-        }
-        const sortBit = activeKeys
-          .map((key) => notesRankSortLabel(key))
-          .join("+");
-        const klineBit =
-          activeKeys.length > 1
-            ? ` · K线并集${unionRows.length}`
-            : ` · 前${unionRows.length}K线`;
-        const staleBit = fromCache ? " · 未重新请求" : "";
-        meta.textContent = `共 ${rows.length} 个 · ${sortBit} · 优先${notesRankSortLabel(primaryKey)}↓${klineBit}${notesRankDataAgeText()}${staleBit}`;
+        if (meta) meta.textContent = "此刻热度";
       }
 
-      function syncCapturePickMeta(options) {
+      function syncCapturePickMeta() {
         const meta = document.getElementById("capturePickMeta");
-        if (!meta) return;
-        const loading = !!(options && options.loading);
-        const fromCache = !!(options && options.fromCache);
-        const rows = sortCapturePickRows(capturePickRows);
-        if (loading) {
-          meta.textContent = "正在重算窗口并拉取近2h/1h…";
-          return;
-        }
-        if (!rows.length) {
-          meta.textContent = "暂无 · 自动盯后下一至第四窗口仍上涨";
-          return;
-        }
-        const staleBit = fromCache ? " · 未重新请求" : "";
-        meta.textContent = `共 ${rows.length} 个 · 按盯时新→旧${capturePickDataAgeText()}${staleBit}`;
+        if (meta) meta.textContent = "";
       }
 
       function notesRankCacheAgeMs() {
@@ -10568,17 +10629,7 @@
           const scoreMap = await loadPinHourScores(
             missing,
             controller.signal,
-            (done, total) => {
-              const text = `近2h/1h ${done}/${total}`;
-              if (wantNotes) {
-                const el = document.getElementById("notesRankMeta");
-                if (el) el.textContent = text;
-              }
-              if (wantCapture) {
-                const el = document.getElementById("capturePickMeta");
-                if (el) el.textContent = text;
-              }
-            },
+            () => {},
           );
           if (controller.signal.aborted) return;
           mergeNotesRankScores(scoreMap);
@@ -14241,9 +14292,7 @@
             syncSortRailRecentVisibility();
             syncRecentAutoSortUi();
             syncRecentAutoCollapseUi();
-            if (recentMeta) {
-              recentMeta.textContent = `新自动盯 ${recentAutoList.length} · 近12小时 · 窗口上涨`;
-            }
+            if (recentMeta) recentMeta.textContent = "新加入";
             await fillGrid(
               recentGrid,
               recentAutoList,
@@ -14268,9 +14317,7 @@
         if (resumeSection && resumeGrid) {
           if (resumePinList.length) {
             resumeSection.hidden = false;
-            if (resumeMeta) {
-              resumeMeta.textContent = `转强 ${resumePinList.length} · 回踩后第一根`;
-            }
+            if (resumeMeta) resumeMeta.textContent = "再启动";
             await fillGrid(
               resumeGrid,
               resumePinList,
@@ -15313,8 +15360,202 @@
         closeCardActions();
         setPinSelectMode(!pinSelectMode);
       });
+      function bindStepHub() {
+        const root = document.getElementById("stepHub");
+        if (!root || root.dataset.bound === "1") return;
+        root.dataset.bound = "1";
+        const menu = root.querySelector(".step-hub-menu");
+        const orb = root.querySelector(".step-hub-orb");
+        const KEY = "kline-step-hub-v1";
+        const BAR_H = 72;
+        const BALL = 52;
+        let dockTimer = 0;
+        let drag = null;
+        let moved = false;
+
+        function readPos() {
+          try {
+            const raw = JSON.parse(localStorage.getItem(KEY) || "null");
+            if (raw && (raw.side === "left" || raw.side === "right")) {
+              const top = Number(raw.top);
+              if (Number.isFinite(top)) return { side: raw.side, top };
+            }
+          } catch (_) {}
+          return {
+            side: "right",
+            top: Math.round(window.innerHeight * 0.38),
+          };
+        }
+
+        function savePos(side, top) {
+          try {
+            localStorage.setItem(KEY, JSON.stringify({ side, top }));
+          } catch (_) {}
+        }
+
+        function clampTop(top, height) {
+          const max = Math.max(8, window.innerHeight - height - 8);
+          return Math.min(max, Math.max(8, top));
+        }
+
+        function setMenu(open) {
+          if (!menu || !orb) return;
+          menu.hidden = !open;
+          orb.setAttribute("aria-expanded", open ? "true" : "false");
+          if (!open) return;
+          const rect = root.getBoundingClientRect();
+          const cy = rect.top + rect.height / 2;
+          const upward = cy > window.innerHeight * 0.62;
+          menu.style.top = upward ? "auto" : "0";
+          menu.style.bottom = upward ? "0" : "auto";
+        }
+
+        function placeDock(side, top) {
+          const y = clampTop(top, BAR_H);
+          root.classList.add("is-docked");
+          root.dataset.side = side;
+          root.style.top = `${y}px`;
+          root.style.left = side === "left" ? "0px" : "auto";
+          root.style.right = side === "right" ? "0px" : "auto";
+          setMenu(false);
+          savePos(side, y);
+        }
+
+        function placeBall(left, top, side) {
+          const x = Math.min(
+            Math.max(8, left),
+            Math.max(8, window.innerWidth - BALL - 8),
+          );
+          const y = clampTop(top, BALL);
+          root.classList.remove("is-docked");
+          root.dataset.side = side || (x + BALL / 2 < window.innerWidth / 2 ? "left" : "right");
+          root.style.left = `${x}px`;
+          root.style.top = `${y}px`;
+          root.style.right = "auto";
+        }
+
+        function dockNow() {
+          window.clearTimeout(dockTimer);
+          dockTimer = 0;
+          const rect = root.getBoundingClientRect();
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          const side = cx < window.innerWidth / 2 ? "left" : "right";
+          placeDock(side, cy - BAR_H / 2);
+        }
+
+        function scheduleDock() {
+          window.clearTimeout(dockTimer);
+          if (menu && !menu.hidden) return;
+          dockTimer = window.setTimeout(dockNow, 2000);
+        }
+
+        const saved = readPos();
+        placeDock(saved.side, saved.top);
+
+        root.addEventListener("pointerdown", (event) => {
+          if (event.button != null && event.button !== 0) return;
+          if (event.target.closest("[data-step]")) return;
+          moved = false;
+          window.clearTimeout(dockTimer);
+          const rect = root.getBoundingClientRect();
+          drag = {
+            id: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+            left: rect.left,
+            top: rect.top,
+            docked: root.classList.contains("is-docked"),
+          };
+          root.setPointerCapture(event.pointerId);
+        });
+
+        root.addEventListener("pointermove", (event) => {
+          if (!drag || event.pointerId !== drag.id) return;
+          const dx = event.clientX - drag.x;
+          const dy = event.clientY - drag.y;
+          if (Math.hypot(dx, dy) <= 6) return;
+          moved = true;
+          setMenu(false);
+          placeBall(drag.left + dx, drag.top + dy);
+        });
+
+        function endDrag(event) {
+          if (!drag || event.pointerId !== drag.id) return;
+          const wasDocked = drag.docked;
+          drag = null;
+          if (root.hasPointerCapture(event.pointerId)) {
+            root.releasePointerCapture(event.pointerId);
+          }
+          if (moved) {
+            scheduleDock();
+            window.setTimeout(() => {
+              moved = false;
+            }, 0);
+            return;
+          }
+          if (wasDocked) {
+            const rect = root.getBoundingClientRect();
+            const side = root.dataset.side === "left" ? "left" : "right";
+            const left = side === "left" ? 10 : window.innerWidth - BALL - 10;
+            placeBall(left, rect.top + (rect.height - BALL) / 2, side);
+            scheduleDock();
+            return;
+          }
+          const opening = !!(menu && menu.hidden);
+          setMenu(opening);
+          if (opening) window.clearTimeout(dockTimer);
+          else scheduleDock();
+        }
+
+        root.addEventListener("pointerup", endDrag);
+        root.addEventListener("pointercancel", endDrag);
+
+        root.addEventListener("click", (event) => {
+          const step = event.target.closest("[data-step]");
+          if (!step || moved) return;
+          const id = step.getAttribute("data-step");
+          setMenu(false);
+          if (id === "zones") {
+            closeNotesRankOverlay();
+            setNailDrawerOpen(false);
+            const recent = document.getElementById("recentAutoPinSection");
+            const resume = document.getElementById("resumePinSection");
+            const target =
+              recent && !recent.hidden
+                ? "recentAutoPinSection"
+                : resume && !resume.hidden
+                  ? "resumePinSection"
+                  : "pinMainSection";
+            jumpToPageSection(target);
+          } else if (id === "capture") {
+            setNailDrawerOpen(false);
+            void openNotesRankOverlay({ force: true, section: "capture" });
+          } else if (id === "nails") {
+            closeNotesRankOverlay();
+            setNailDrawerOpen(true);
+          }
+          scheduleDock();
+        });
+
+        document.addEventListener("pointerdown", (event) => {
+          if (root.contains(event.target)) return;
+          if (menu && !menu.hidden) {
+            setMenu(false);
+            scheduleDock();
+          }
+        });
+
+        window.addEventListener("resize", () => {
+          if (root.classList.contains("is-docked")) {
+            placeDock(root.dataset.side === "left" ? "left" : "right", root.offsetTop);
+          }
+        });
+      }
+
       bindPinSelectDelegation();
       bindSectionJumpNav();
+      bindStepHub();
       syncSectionJumpNav();
       document.getElementById("pinBatchExitBtn").addEventListener("click", () => {
         setPinSelectMode(false);
