@@ -2716,7 +2716,7 @@
         left: 8px;
         bottom: 8px;
         z-index: 2;
-        font-size: 10px;
+        font-size: 9px;
         line-height: 1;
         font-weight: 650;
         color: color-mix(in srgb, var(--accent) 72%, var(--secondary));
@@ -2727,6 +2727,7 @@
         position: static;
         display: inline-block;
         margin-left: 6px;
+        font-size: 9px;
         bottom: auto;
         left: auto;
         vertical-align: middle;
@@ -2734,7 +2735,10 @@
       .notes-rank-kcard-head .nail-in-mark {
         position: static;
         margin-left: 4px;
-        flex: 0 0 auto;
+        flex: 0 0 1em;
+        max-width: 1em;
+        overflow: hidden;
+        white-space: nowrap;
       }
       .notify-float.is-action-log {
         width: min(420px, 100vw);
@@ -6440,7 +6444,7 @@
               mark = document.createElement("span");
               mark.className = "nail-in-mark is-inline";
               mark.title = "已在钉子抽屉";
-              mark.textContent = "钉子抽屉";
+              mark.textContent = "钉";
               const head = el.querySelector(".notes-rank-kcard-head");
               const cell = el.querySelector("td");
               const host = head || cell || el;
@@ -10128,7 +10132,7 @@
               ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
               : "";
             const nailMark = hasNailForSymbol(key)
-              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉子抽屉</span>`
+              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉</span>`
               : "";
             return [
               `<article class="notes-rank-kcard${focused}${selected}" data-jump="${escapeHtml(row.symbol)}" data-symbol="${escapeHtml(key)}">`,
@@ -10168,7 +10172,7 @@
                 ? `<span class="notes-rank-hit">${row.hitCount}</span>`
                 : "";
             const nailMark = hasNailForSymbol(key)
-              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉子抽屉</span>`
+              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉</span>`
               : "";
             const check = notesRankSelectMode
               ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
@@ -10254,7 +10258,7 @@
               : "";
             const pinAge = notesRankAgeLabel(row.pinAt || row.nameAt);
             const nailMark = hasNailForSymbol(key)
-              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉子抽屉</span>`
+              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉</span>`
               : "";
             return [
               `<article class="notes-rank-kcard${focused}${selected}" data-jump="${escapeHtml(row.symbol)}" data-symbol="${escapeHtml(key)}">`,
@@ -10289,7 +10293,7 @@
                 ? " is-selected"
                 : "";
             const nailMark = hasNailForSymbol(key)
-              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉子抽屉</span>`
+              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉</span>`
               : "";
             const check = notesRankSelectMode
               ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
