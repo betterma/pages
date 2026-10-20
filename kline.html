@@ -3728,6 +3728,15 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      .kline-zoom-long-market-cap {
+        flex: 0 0 auto;
+        min-height: 18px;
+        margin: 0 0 4px;
+        color: var(--label);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 18px;
+      }
       .kline-zoom-long-chart {
         position: relative;
         flex: 1 1 0;
@@ -4689,6 +4698,7 @@
             </div>
           </div>
           <p class="kline-zoom-long-meta" id="klineZoomLongMeta">加载周 K…</p>
+          <p class="kline-zoom-long-market-cap" id="klineZoomLongMarketCap">当前市值（USD）：加载中…</p>
           <div class="kline-zoom-long-chart">
             <canvas id="klineZoomLongCanvas"></canvas>
           </div>
@@ -11593,6 +11603,9 @@
       let klineZoomSymbol = null;
       let klineZoomBound = false;
       let klineZoomLongRange = "week";
+      const coinGeckoMarketCapCache = new Map();
+      const coinGeckoMarketCapRequests = new Map();
+      const COINGECKO_MARKET_CAP_CACHE_MS = 5 * 60 * 1000;
 
       const KLINE_ZOOM_ICON_SVG =
         '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M2 2h4v1.5H3.5V6H2V2zm8 0h4v4h-1.5V3.5H10V2zM2 10h1.5v2.5H6V14H2v-4zm8 2.5H13.5V10H15v4h-4v-1.5z"/></svg>';
@@ -11725,6 +11738,102 @@
         }
       }
 
+      async function fetchCoinGeckoMarketCap(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toLowerCase();
+        if (!key) throw new Error("缺少币种代码");
+        const cached = coinGeckoMarketCapCache.get(key);
+        if (cached && Date.now() - cached.at < COINGECKO_MARKET_CAP_CACHE_MS) {
+          return cached.data;
+        }
+        const existingRequest = coinGeckoMarketCapRequests.get(key);
+        if (existingRequest) return existingRequest;
+
+        const request = (async () => {
+          const searchResponse = await fetch(
+            `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(key)}`,
+            { cache: "no-store" },
+          );
+          if (!searchResponse.ok) {
+            throw new Error(`CoinGecko 搜索失败（HTTP ${searchResponse.status}）`);
+          }
+          const searchData = await searchResponse.json();
+          const candidates = Array.isArray(searchData?.coins)
+            ? searchData.coins.filter(
+                (coin) =>
+                  String(coin.symbol || "").toLowerCase() === key &&
+                  coin.id,
+              )
+            : [];
+          candidates.sort((a, b) => {
+            const rankA = Number(a.market_cap_rank);
+            const rankB = Number(b.market_cap_rank);
+            return (
+              (Number.isFinite(rankA) ? rankA : Number.MAX_SAFE_INTEGER) -
+              (Number.isFinite(rankB) ? rankB : Number.MAX_SAFE_INTEGER)
+            );
+          });
+          const coin = candidates[0];
+          if (!coin) throw new Error(`CoinGecko 未找到 ${key.toUpperCase()}`);
+
+          const marketResponse = await fetch(
+            `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${encodeURIComponent(coin.id)}`,
+            { cache: "no-store" },
+          );
+          if (!marketResponse.ok) {
+            throw new Error(
+              `CoinGecko 市值查询失败（HTTP ${marketResponse.status}）`,
+            );
+          }
+          const marketRows = await marketResponse.json();
+          const marketCap = Number(
+            Array.isArray(marketRows) ? marketRows[0]?.market_cap : NaN,
+          );
+          if (!Number.isFinite(marketCap) || marketCap <= 0) {
+            throw new Error(`CoinGecko 未返回 ${key.toUpperCase()} 市值`);
+          }
+          const result = {
+            marketCap,
+            name: String(marketRows[0].name || coin.name || key.toUpperCase()),
+          };
+          coinGeckoMarketCapCache.set(key, { at: Date.now(), data: result });
+          return result;
+        })().finally(() => {
+          coinGeckoMarketCapRequests.delete(key);
+        });
+        coinGeckoMarketCapRequests.set(key, request);
+        return request;
+      }
+
+      function formatMarketCapUsd(value) {
+        return new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+          notation: "compact",
+          maximumFractionDigits: 2,
+        }).format(value);
+      }
+
+      async function paintKlineZoomMarketCap(symbol) {
+        const marketCapEl = document.getElementById("klineZoomLongMarketCap");
+        if (!marketCapEl || !symbol) return;
+        marketCapEl.textContent = "当前市值（USD）：加载中…";
+        const baseSymbol = symbol.replace(/USDT$/i, "");
+        try {
+          const data = await fetchCoinGeckoMarketCap(baseSymbol);
+          if (!isKlineZoomOpen() || klineZoomSymbol !== symbol) return;
+          marketCapEl.textContent = `当前市值（USD）：${formatMarketCapUsd(data.marketCap)} · CoinGecko`;
+          marketCapEl.title = data.name;
+        } catch (error) {
+          console.error(error);
+          if (isKlineZoomOpen() && klineZoomSymbol === symbol) {
+            marketCapEl.textContent = `当前市值（USD）：暂不可用（${error.message || "CoinGecko 查询失败"}）`;
+            marketCapEl.title = "";
+          }
+        }
+      }
+
       function setKlineZoomLongRange(range) {
         klineZoomLongRange = range === "month" ? "month" : "week";
         document.querySelectorAll("[data-kline-zoom-range]").forEach((button) => {
@@ -11756,6 +11865,7 @@
           await Promise.all([
             paintKlineZoom(key),
             paintKlineZoomLong(key),
+            paintKlineZoomMarketCap(key),
           ]);
           window.requestAnimationFrame(() => {
             if (klineZoomSymbol === key) {
