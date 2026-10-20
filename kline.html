@@ -858,7 +858,6 @@
       body.is-notes-rank-open .top-progress,
       body.is-notes-rank-open .nail-tab,
       body.is-notes-rank-open .hidden-pin-tab,
-      body.is-notes-rank-open .nail-drawer,
       body.is-notes-rank-open .hidden-pin-drawer {
         display: none !important;
       }
@@ -1145,6 +1144,9 @@
         background: color-mix(in srgb, var(--elevated) 88%, transparent);
         cursor: pointer;
       }
+      .notes-rank-kcard.has-nail {
+        padding-bottom: 30px;
+      }
       .notes-rank-kcard.is-focus {
         border-color: color-mix(in srgb, var(--accent) 55%, var(--separator));
         background: color-mix(in srgb, var(--accent) 16%, transparent);
@@ -1375,6 +1377,7 @@
           transform: translateX(320%);
         }
       }
+
       button {
         border: 0.5px solid var(--ios-separator);
         background: var(--ios-elevated);
@@ -2106,11 +2109,12 @@
       }
       .nail-price {
         display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 6px;
+        align-items: center;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: 2px 8px;
         margin: 0 0 4px;
-        font-size: 12px;
+        font-size: 10px;
         font-variant-numeric: tabular-nums;
         color: var(--secondary);
       }
@@ -2120,6 +2124,9 @@
       }
       .nail-price .nail-chg {
         font-weight: 650;
+      }
+      .nail-price .nail-pin-chg {
+        color: var(--secondary);
       }
       .nail-price.is-up .nail-chg {
         color: var(--up, #2f8f6e);
@@ -2150,7 +2157,7 @@
         height: 112px;
         pointer-events: none;
         border-radius: 6px;
-        background: color-mix(in srgb, var(--elevated) 70%, transparent);
+        background: #111214;
       }
       .nail-empty {
         padding: 28px 16px;
@@ -2475,7 +2482,7 @@
       .card-focus-bar.is-nail-scope {
         z-index: 130;
       }
-      .card-focus-bar.is-nail-scope [data-focus-action="note"],
+      .card-focus-bar.is-nail-scope [data-focus-action="nail"],
       .card-focus-bar.is-nail-scope [data-focus-action="zoom"],
       .card-focus-bar.is-nail-scope [data-focus-action="more"] {
         display: none;
@@ -2661,6 +2668,10 @@
       .kline-card.is-egg-new .egg-mark {
         color: #4f7a66;
       }
+      .kline-card.is-egg-new .symbol-copy {
+        color: #17251f !important;
+        text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+      }
       .kline-card.is-selected {
         opacity: 0.88;
         filter: grayscale(0.18);
@@ -2716,29 +2727,41 @@
         left: 8px;
         bottom: 8px;
         z-index: 2;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 20px;
+        padding: 2px 7px;
+        border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+        border-radius: 7px;
+        background: color-mix(in srgb, var(--bg) 88%, transparent);
+        color: var(--accent);
+        font: inherit;
         font-size: 9px;
         line-height: 1;
         font-weight: 650;
-        color: color-mix(in srgb, var(--accent) 72%, var(--secondary));
-        pointer-events: none;
         letter-spacing: 0.02em;
+        cursor: pointer;
       }
       .nail-in-mark.is-inline {
         position: static;
         display: inline-block;
         margin-left: 6px;
+        min-height: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: none;
         font-size: 9px;
         bottom: auto;
         left: auto;
         vertical-align: middle;
       }
-      .notes-rank-kcard-head .nail-in-mark {
-        position: static;
-        margin-left: 4px;
-        flex: 0 0 1em;
-        max-width: 1em;
-        overflow: hidden;
-        white-space: nowrap;
+      .notes-rank-kcard > .nail-in-mark {
+        position: absolute;
+        left: 8px;
+        bottom: 8px;
+        margin: 0;
       }
       .notify-float.is-action-log {
         width: min(420px, 100vw);
@@ -4653,7 +4676,7 @@
         ×
       </button>
       <span class="card-focus-label" id="cardFocusLabel">—</span>
-      <button type="button" data-focus-action="note">记一笔</button>
+      <button type="button" data-focus-action="nail">钉</button>
       <button type="button" data-focus-action="zoom">放大</button>
       <button type="button" data-focus-action="refresh">刷新</button>
       <button type="button" class="is-primary" data-focus-action="more">
@@ -6486,10 +6509,13 @@
             let mark = card.querySelector(".nail-in-mark");
             const want = nails.has(key);
             if (want && !mark) {
-              mark = document.createElement("span");
+              mark = document.createElement("button");
+              mark.type = "button";
               mark.className = "nail-in-mark";
-              mark.title = "已在钉子抽屉";
-              mark.textContent = "钉子抽屉";
+              mark.dataset.openNail = key;
+              mark.title = "打开钉子抽屉并定位";
+              mark.setAttribute("aria-label", `打开钉子抽屉并定位到 ${key}`);
+              mark.textContent = "钉";
               card.appendChild(mark);
             } else if (!want && mark) {
               mark.remove();
@@ -6502,22 +6528,30 @@
           .forEach((el) => {
             const key = String(el.dataset.symbol || "").toUpperCase();
             const want = nails.has(key);
+            const isCard = el.classList.contains("notes-rank-kcard");
+            if (isCard) el.classList.toggle("has-nail", want);
             let mark = el.querySelector(".nail-in-mark");
             if (want && !mark) {
-              mark = document.createElement("span");
-              mark.className = "nail-in-mark is-inline";
-              mark.title = "已在钉子抽屉";
+              mark = document.createElement("button");
+              mark.type = "button";
+              mark.className = isCard
+                ? "nail-in-mark"
+                : "nail-in-mark is-inline";
+              mark.dataset.openNail = key;
+              mark.title = "打开钉子抽屉并定位";
+              mark.setAttribute("aria-label", `打开钉子抽屉并定位到 ${key}`);
               mark.textContent = "钉";
-              const head = el.querySelector(".notes-rank-kcard-head");
-              const cell = el.querySelector("td");
-              const host = head || cell || el;
-              const sym = host.querySelector(".notes-rank-sym");
-              if (sym && sym.nextSibling) {
-                host.insertBefore(mark, sym.nextSibling);
-              } else if (sym) {
-                host.appendChild(mark);
+              if (isCard) {
+                el.appendChild(mark);
               } else {
-                host.appendChild(mark);
+                const cell = el.querySelector("td");
+                const host = cell || el;
+                const sym = host.querySelector(".notes-rank-sym");
+                if (sym && sym.nextSibling) {
+                  host.insertBefore(mark, sym.nextSibling);
+                } else {
+                  host.appendChild(mark);
+                }
               }
             } else if (!want && mark) {
               mark.remove();
@@ -10195,10 +10229,11 @@
               ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
               : "";
             const nailMark = hasNailForSymbol(key)
-              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉</span>`
+              ? `<button type="button" class="nail-in-mark" data-open-nail="${escapeHtml(key)}" title="打开钉子抽屉并定位" aria-label="打开钉子抽屉并定位到 ${escapeHtml(key)}">钉</button>`
               : "";
+            const nailClass = nailMark ? " has-nail" : "";
             return [
-              `<article class="notes-rank-kcard${focused}${selected}" data-jump="${escapeHtml(row.symbol)}" data-symbol="${escapeHtml(key)}">`,
+              `<article class="notes-rank-kcard${focused}${selected}${nailClass}" data-jump="${escapeHtml(row.symbol)}" data-symbol="${escapeHtml(key)}">`,
               `<div class="notes-rank-kcard-head">`,
               check,
               `<span class="notes-rank-kcard-rank">${index + 1}</span>`,
@@ -10235,7 +10270,7 @@
                 ? `<span class="notes-rank-hit">${row.hitCount}</span>`
                 : "";
             const nailMark = hasNailForSymbol(key)
-              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉</span>`
+              ? `<button type="button" class="nail-in-mark is-inline" data-open-nail="${escapeHtml(key)}" title="打开钉子抽屉并定位" aria-label="打开钉子抽屉并定位到 ${escapeHtml(key)}">钉</button>`
               : "";
             const check = notesRankSelectMode
               ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
@@ -10321,10 +10356,11 @@
               : "";
             const pinAge = notesRankAgeLabel(row.pinAt || row.nameAt);
             const nailMark = hasNailForSymbol(key)
-              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉</span>`
+              ? `<button type="button" class="nail-in-mark" data-open-nail="${escapeHtml(key)}" title="打开钉子抽屉并定位" aria-label="打开钉子抽屉并定位到 ${escapeHtml(key)}">钉</button>`
               : "";
+            const nailClass = nailMark ? " has-nail" : "";
             return [
-              `<article class="notes-rank-kcard${focused}${selected}" data-jump="${escapeHtml(row.symbol)}" data-symbol="${escapeHtml(key)}">`,
+              `<article class="notes-rank-kcard${focused}${selected}${nailClass}" data-jump="${escapeHtml(row.symbol)}" data-symbol="${escapeHtml(key)}">`,
               `<div class="notes-rank-kcard-head">`,
               check,
               `<span class="notes-rank-kcard-rank">${index + 1}</span>`,
@@ -10356,7 +10392,7 @@
                 ? " is-selected"
                 : "";
             const nailMark = hasNailForSymbol(key)
-              ? `<span class="nail-in-mark is-inline" title="已在钉子抽屉">钉</span>`
+              ? `<button type="button" class="nail-in-mark is-inline" data-open-nail="${escapeHtml(key)}" title="打开钉子抽屉并定位" aria-label="打开钉子抽屉并定位到 ${escapeHtml(key)}">钉</button>`
               : "";
             const check = notesRankSelectMode
               ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
@@ -12015,7 +12051,7 @@
         }
         if (options.isNail) {
           marks.push(
-            '<span class="nail-in-mark" title="已在钉子抽屉">钉子抽屉</span>',
+            `<button type="button" class="nail-in-mark" data-open-nail="${escapeHtml(symbol)}" title="打开钉子抽屉并定位" aria-label="打开钉子抽屉并定位到 ${escapeHtml(symbol)}">钉</button>`,
           );
         }
         if (fireworks) {
@@ -12852,6 +12888,18 @@
           void openKlineZoom(symbol);
           return;
         }
+        if (action === "nail") {
+          setFocusBarBusy(true, activeBtn, "添加中");
+          try {
+            await addNailForSymbol(symbol);
+          } catch (error) {
+            console.error(error);
+            showToast(error.message || "添加到钉子抽屉失败");
+          } finally {
+            setFocusBarBusy(false);
+          }
+          return;
+        }
         if (action === "refresh") {
           setFocusBarBusy(true, activeBtn, "刷新中");
           try {
@@ -13031,6 +13079,42 @@
           clearNailFocusSelection();
           setNailSelectMode(false);
         }
+      }
+
+      function openNailDrawerAtSymbol(symbol) {
+        const key = String(symbol || "").trim().toUpperCase();
+        if (!key) return;
+        if (
+          nailRisingFilterOn &&
+          !nailDrawerVisibleItems().some(
+            (item) => String(item.symbol || "").toUpperCase() === key,
+          )
+        ) {
+          setNailRisingFilter(false);
+        }
+        setNailDrawerOpen(true);
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const card = [
+              ...document.querySelectorAll(
+                "#nailList .nail-kcard[data-nail-symbol]",
+              ),
+            ].find(
+              (item) =>
+                String(item.dataset.nailSymbol || "").toUpperCase() === key,
+            );
+            if (!card) {
+              showToast(`${key.replace(/USDT$/i, "")} 未出现在钉子抽屉`);
+              return;
+            }
+            document
+              .querySelectorAll("#nailList .nail-kcard.is-focus")
+              .forEach((item) => item.classList.remove("is-focus"));
+            card.classList.add("is-focus");
+            card.scrollIntoView({ behavior: "smooth", block: "center" });
+            window.setTimeout(() => card.classList.remove("is-focus"), 2800);
+          });
+        });
       }
 
       /**
@@ -13259,8 +13343,7 @@
           .toUpperCase();
         const price = Number(marketMap[key]?.price);
         const change = Number(marketMap[key]?.change24h);
-        const px = Number.isFinite(price) ? formatPinPrice(price) : "--";
-        const ch = Number.isFinite(change) ? formatPercent(change) : "";
+        const pinItem = pinItemBySymbol(key);
         const cls =
           Number.isFinite(change) && change !== 0
             ? change > 0
@@ -13269,8 +13352,11 @@
             : "";
         return [
           `<div class="nail-price${cls ? ` ${cls}` : ""}" data-nail-price="${escapeHtml(key)}">`,
-          `<span class="nail-px">${escapeHtml(px)}</span>`,
-          ch ? `<span class="nail-chg">${escapeHtml(ch)}</span>` : "",
+          `<span class="nail-px">现价 ${escapeHtml(Number.isFinite(price) ? formatPinPrice(price) : "--")}</span>`,
+          `<span class="nail-chg">24h ${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</span>`,
+          pinItem
+            ? `<span class="nail-pin-chg">盯幅 ${escapeHtml(formatPercent(pinChangePercent(pinItem)))}</span>`
+            : "",
           `</div>`,
         ].join("");
       }
@@ -13285,25 +13371,29 @@
             if (!key) return;
             const price = Number(marketMap[key]?.price);
             const change = Number(marketMap[key]?.change24h);
+            const pinItem = pinItemBySymbol(key);
             const pxEl = el.querySelector(".nail-px");
-            let chEl = el.querySelector(".nail-chg");
+            const chEl = el.querySelector(".nail-chg");
+            let pinChangeEl = el.querySelector(".nail-pin-chg");
             if (pxEl) {
-              pxEl.textContent = Number.isFinite(price)
-                ? formatPinPrice(price)
-                : "--";
+              pxEl.textContent = `现价 ${Number.isFinite(price) ? formatPinPrice(price) : "--"}`;
             }
             el.classList.remove("is-up", "is-down");
             if (Number.isFinite(change) && change !== 0) {
               el.classList.add(change > 0 ? "is-up" : "is-down");
-              const text = formatPercent(change);
-              if (!chEl) {
-                chEl = document.createElement("span");
-                chEl.className = "nail-chg";
-                el.appendChild(chEl);
+            }
+            if (chEl) {
+              chEl.textContent = `24h ${formatPercent(change)}`;
+            }
+            if (pinItem) {
+              if (!pinChangeEl) {
+                pinChangeEl = document.createElement("span");
+                pinChangeEl.className = "nail-pin-chg";
+                el.appendChild(pinChangeEl);
               }
-              chEl.textContent = text;
-            } else if (chEl) {
-              chEl.remove();
+              pinChangeEl.textContent = `盯幅 ${formatPercent(pinChangePercent(pinItem))}`;
+            } else if (pinChangeEl) {
+              pinChangeEl.remove();
             }
           });
       }
@@ -13993,6 +14083,22 @@
           console.warn(error);
           showToast(error.message || "保存钉子失败");
         }
+      }
+
+      async function addNailForSymbol(symbol) {
+        const key = WatchFavorites.nailSymbolKey
+          ? WatchFavorites.nailSymbolKey(symbol)
+          : String(symbol || "").trim().toUpperCase();
+        if (!key) return;
+        if (!hasNailForSymbol(key)) {
+          await persistNails(
+            (list) => WatchFavorites.upsertNail(list, key, ""),
+            `Add nail ${key.replace(/USDT$/i, "")}`,
+            { loadingText: `添加 ${key.replace(/USDT$/i, "")} 到钉子…` },
+          );
+        }
+        await openNailDrawerAtSymbol(key);
+        showToast(`${key.replace(/USDT$/i, "")} 已在钉子抽屉中`);
       }
 
       async function deleteNail(symbol) {
@@ -16085,6 +16191,17 @@
           void runFocusBarAction(btn.getAttribute("data-focus-action"));
         });
       }
+      document.addEventListener(
+        "click",
+        (event) => {
+          const mark = event.target.closest("[data-open-nail]");
+          if (!mark) return;
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          openNailDrawerAtSymbol(mark.getAttribute("data-open-nail"));
+        },
+        true,
+      );
       const klineZoomClose = document.getElementById("klineZoomClose");
       if (klineZoomClose) {
         klineZoomClose.addEventListener("click", () => closeKlineZoom());
