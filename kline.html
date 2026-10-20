@@ -3660,10 +3660,15 @@
       }
       .kline-zoom-chart {
         position: relative;
-        flex: 1 1 auto;
         min-height: 0;
-        margin: 0 6px;
+        margin: 0 6px 4px;
         touch-action: none;
+      }
+      .kline-zoom-main-chart {
+        width: min(100%, 67.2vh);
+        aspect-ratio: 1.6;
+        flex: 0 0 auto;
+        align-self: center;
       }
       .kline-zoom-chart canvas {
         display: block;
@@ -3672,46 +3677,81 @@
         pointer-events: auto;
         touch-action: none;
       }
+      .kline-zoom-long {
+        display: flex;
+        flex: 1 1 0;
+        flex-direction: column;
+        min-height: 0;
+        padding: 4px 6px 0;
+      }
+      .kline-zoom-long-head {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-height: 34px;
+      }
+      .kline-zoom-long-head h3 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .kline-zoom-range {
+        display: inline-flex;
+        padding: 2px;
+        border-radius: 8px;
+        background: var(--fill);
+      }
+      .kline-zoom-range button {
+        height: 26px;
+        padding: 0 10px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--secondary);
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .kline-zoom-range button.is-active {
+        background: var(--elevated);
+        color: var(--label);
+        font-weight: 650;
+      }
+      .kline-zoom-long-meta {
+        min-height: 16px;
+        margin: 0 0 4px;
+        overflow: hidden;
+        color: var(--secondary);
+        font-size: 10px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .kline-zoom-long-chart {
+        position: relative;
+        flex: 1 1 0;
+        min-height: 100px;
+        margin: 0 0 6px;
+      }
+      .kline-zoom-long-chart canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
       .kline-zoom-hint {
         margin: 4px 10px 8px;
         font-size: 11px;
         color: var(--secondary);
         flex: 0 0 auto;
       }
-      /* 竖屏手机：旋转成横屏，并按可视区缩放整页（含边距） */
-      @media (orientation: portrait) and (max-width: 900px) {
-        .kline-zoom-gate.is-landscape-layout {
-          padding: 0;
-          align-items: center;
-          justify-content: center;
+      @media (max-height: 680px) {
+        .kline-zoom-main-chart {
+          width: min(100%, 57.6vh);
         }
-        .kline-zoom-gate.is-landscape-layout .kline-zoom-panel {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          /* 旋转后：宽≈屏高、高≈屏宽；再整体缩小一点留边 */
-          width: var(--kline-zoom-land-w, 100vh);
-          height: var(--kline-zoom-land-h, 100vw);
-          border-radius: 10px;
-          border: 0.5px solid var(--separator);
-          transform: translate(-50%, -50%) rotate(90deg)
-            scale(var(--kline-zoom-fit-scale, 0.92));
-          transform-origin: center center;
-          padding: 6px 8px;
-          box-sizing: border-box;
-        }
-        .kline-zoom-gate.is-landscape-layout .kline-zoom-head {
-          padding: 4px 6px 2px;
-        }
-        .kline-zoom-gate.is-landscape-layout .kline-zoom-head h2 {
-          font-size: 15px;
-        }
-        .kline-zoom-gate.is-landscape-layout .kline-zoom-hint {
-          margin: 2px 6px 4px;
-          font-size: 10px;
-        }
-        .kline-zoom-gate.is-landscape-layout .kline-zoom-chart {
-          margin: 0 4px;
+        .kline-zoom-hint {
+          margin-top: 2px;
+          margin-bottom: 4px;
         }
       }
       .kline-crosshair {
@@ -4628,7 +4668,7 @@
           </div>
           <button type="button" id="klineZoomClose">关闭</button>
         </div>
-        <div class="kline-zoom-chart" id="klineZoomChart">
+        <div class="kline-zoom-chart kline-zoom-main-chart" id="klineZoomChart">
           <canvas id="klineZoomCanvas"></canvas>
           <div class="kline-crosshair" id="klineZoomCrosshair" hidden>
             <div class="kline-crosshair-v"></div>
@@ -4640,6 +4680,19 @@
           </div>
         </div>
         <p class="kline-zoom-hint">手指按住并游走，十字线显示该点价格与时间</p>
+        <section class="kline-zoom-long" aria-label="周月 K 线">
+          <div class="kline-zoom-long-head">
+            <h3>长周期走势</h3>
+            <div class="kline-zoom-range" role="group" aria-label="长周期 K 线范围">
+              <button type="button" data-kline-zoom-range="week" class="is-active" aria-pressed="true">一周</button>
+              <button type="button" data-kline-zoom-range="month" aria-pressed="false">一月</button>
+            </div>
+          </div>
+          <p class="kline-zoom-long-meta" id="klineZoomLongMeta">加载周 K…</p>
+          <div class="kline-zoom-long-chart">
+            <canvas id="klineZoomLongCanvas"></canvas>
+          </div>
+        </section>
       </div>
     </div>
 
@@ -11539,7 +11592,7 @@
 
       let klineZoomSymbol = null;
       let klineZoomBound = false;
-      let klineZoomLockedOrientation = false;
+      let klineZoomLongRange = "week";
 
       const KLINE_ZOOM_ICON_SVG =
         '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M2 2h4v1.5H3.5V6H2V2zm8 0h4v4h-1.5V3.5H10V2zM2 10h1.5v2.5H6V14H2v-4zm8 2.5H13.5V10H15v4h-4v-1.5z"/></svg>';
@@ -11549,91 +11602,12 @@
         return !!(gate && !gate.hidden);
       }
 
-      function syncKlineZoomLandscapeClass() {
-        const gate = document.getElementById("klineZoomGate");
-        if (!gate || gate.hidden) return;
-        const portrait =
-          window.matchMedia &&
-          window.matchMedia("(orientation: portrait)").matches;
-        const narrow = window.innerWidth <= 900;
-        const useLand = !!(portrait && narrow);
-        gate.classList.toggle("is-landscape-layout", useLand);
-        if (!useLand) {
-          gate.style.removeProperty("--kline-zoom-land-w");
-          gate.style.removeProperty("--kline-zoom-land-h");
-          gate.style.removeProperty("--kline-zoom-fit-scale");
-          return;
-        }
-        const vv = window.visualViewport;
-        const viewW = Math.max(
-          1,
-          Math.round((vv && vv.width) || window.innerWidth || 1),
-        );
-        const viewH = Math.max(
-          1,
-          Math.round((vv && vv.height) || window.innerHeight || 1),
-        );
-        // 旋转后：面板宽≈竖屏高、面板高≈竖屏宽
-        const landW = viewH;
-        const landH = viewW;
-        const pad = 12;
-        // 旋转后视觉占满 viewW×viewH，再整体缩小以留边并吃掉地址栏误差
-        const fit = Math.min(
-          (viewW - pad) / landH,
-          (viewH - pad) / landW,
-          0.94,
-        );
-        gate.style.setProperty("--kline-zoom-land-w", `${landW}px`);
-        gate.style.setProperty("--kline-zoom-land-h", `${landH}px`);
-        gate.style.setProperty(
-          "--kline-zoom-fit-scale",
-          String(Math.max(0.72, Math.min(0.94, fit))),
-        );
-      }
-
-      async function lockKlineZoomLandscape() {
-        klineZoomLockedOrientation = false;
-        try {
-          const orientation = screen.orientation;
-          if (
-            orientation &&
-            typeof orientation.lock === "function" &&
-            window.matchMedia("(orientation: portrait)").matches
-          ) {
-            await orientation.lock("landscape");
-            klineZoomLockedOrientation = true;
-          }
-        } catch (error) {
-          /* iOS / 无权限时走 CSS 横屏布局 */
-        }
-        syncKlineZoomLandscapeClass();
-      }
-
-      function unlockKlineZoomLandscape() {
-        if (klineZoomLockedOrientation) {
-          try {
-            screen.orientation?.unlock?.();
-          } catch (error) {
-            /* ignore */
-          }
-          klineZoomLockedOrientation = false;
-        }
-        const gate = document.getElementById("klineZoomGate");
-        if (gate) {
-          gate.classList.remove("is-landscape-layout");
-          gate.style.removeProperty("--kline-zoom-land-w");
-          gate.style.removeProperty("--kline-zoom-land-h");
-          gate.style.removeProperty("--kline-zoom-fit-scale");
-        }
-      }
-
       function closeKlineZoom() {
         const gate = document.getElementById("klineZoomGate");
         const canvas = document.getElementById("klineZoomCanvas");
         if (gate) gate.hidden = true;
         hideKlineCrosshair(canvas);
         klineZoomSymbol = null;
-        unlockKlineZoomLandscape();
         document.body.classList.remove("is-kline-zoom");
         syncBodyScrollLock();
       }
@@ -11683,6 +11657,7 @@
         const pinItem = pinItemBySymbol(symbol);
         const interval = chartInterval();
         const candles = await fetchKlines(symbol, interval);
+        if (!isKlineZoomOpen() || klineZoomSymbol !== symbol) return;
         drawKline(
           canvas,
           candles,
@@ -11698,12 +11673,66 @@
             klineRangeLabel(),
             interval,
             Number.isFinite(current) ? `现价 ${formatPinPrice(current)}` : "",
-            Number.isFinite(change) ? formatPercent(change) : "",
+            Number.isFinite(change) ? `24h ${formatPercent(change)}` : "",
             "按住滑动看价格",
           ]
             .filter(Boolean)
             .join(" · ");
         }
+      }
+
+      async function paintKlineZoomLong(symbol) {
+        const canvas = document.getElementById("klineZoomLongCanvas");
+        const metaEl = document.getElementById("klineZoomLongMeta");
+        if (!canvas || !symbol) return;
+        const range =
+          klineZoomLongRange === "month"
+            ? { interval: "1M", limit: 36, label: "月 K · 一根一月" }
+            : { interval: "1w", limit: 52, label: "周 K · 一根一周" };
+        if (metaEl) metaEl.textContent = `加载${range.label}…`;
+        try {
+          const candles = await fetchKlines(
+            symbol,
+            range.interval,
+            undefined,
+            range.limit,
+          );
+          if (
+            !isKlineZoomOpen() ||
+            klineZoomSymbol !== symbol ||
+            klineZoomLongRange !== (range.interval === "1M" ? "month" : "week")
+          ) {
+            return;
+          }
+          const pinItem = pinItemBySymbol(symbol);
+          drawKline(
+            canvas,
+            candles,
+            pinItem ? pinItem.pinPrice : null,
+            pinItem ? pinItem.pinnedAt : null,
+            notesMarksForSymbol(symbol),
+          );
+          if (metaEl) metaEl.textContent = `${range.label} · ${candles.length} 根`;
+        } catch (error) {
+          console.error(error);
+          if (
+            isKlineZoomOpen() &&
+            klineZoomSymbol === symbol &&
+            metaEl
+          ) {
+            metaEl.textContent = error.message || `${range.label}加载失败`;
+          }
+        }
+      }
+
+      function setKlineZoomLongRange(range) {
+        klineZoomLongRange = range === "month" ? "month" : "week";
+        document.querySelectorAll("[data-kline-zoom-range]").forEach((button) => {
+          const active = button.dataset.klineZoomRange === klineZoomLongRange;
+          button.classList.toggle("is-active", active);
+          button.setAttribute("aria-pressed", String(active));
+        });
+        if (klineZoomSymbol) void paintKlineZoomLong(klineZoomSymbol);
       }
 
       async function openKlineZoom(symbol) {
@@ -11722,13 +11751,17 @@
         gate.hidden = false;
         document.body.classList.add("is-kline-zoom");
         syncBodyScrollLock();
-        await lockKlineZoomLandscape();
         bindKlineZoomPointer();
         try {
-          await paintKlineZoom(key);
+          await Promise.all([
+            paintKlineZoom(key),
+            paintKlineZoomLong(key),
+          ]);
           window.requestAnimationFrame(() => {
-            syncKlineZoomLandscapeClass();
-            if (klineZoomSymbol === key) void paintKlineZoom(key);
+            if (klineZoomSymbol === key) {
+              void paintKlineZoom(key);
+              void paintKlineZoomLong(key);
+            }
           });
         } catch (error) {
           console.error(error);
@@ -15946,10 +15979,22 @@
       if (klineZoomClose) {
         klineZoomClose.addEventListener("click", () => closeKlineZoom());
       }
+      document.querySelectorAll("[data-kline-zoom-range]").forEach((button) => {
+        button.addEventListener("click", () => {
+          setKlineZoomLongRange(button.dataset.klineZoomRange);
+        });
+      });
       const syncKlineZoomOnViewport = () => {
         if (!isKlineZoomOpen() || !klineZoomSymbol) return;
-        syncKlineZoomLandscapeClass();
-        void paintKlineZoom(klineZoomSymbol);
+        const symbol = klineZoomSymbol;
+        void paintKlineZoom(symbol).catch((error) => {
+          console.error(error);
+          const meta = document.getElementById("klineZoomMeta");
+          if (klineZoomSymbol === symbol && meta) {
+            meta.textContent = error.message || "K 线加载失败";
+          }
+        });
+        void paintKlineZoomLong(symbol);
       };
       window.addEventListener("resize", syncKlineZoomOnViewport);
       window.addEventListener("orientationchange", () => {
