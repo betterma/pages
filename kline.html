@@ -12212,7 +12212,7 @@
       }
 
       /**
-       * 荧光绿窗口数：便签生效后，有几根柱被染绿（high > 阈值）。
+       * 荧光绿窗口数：便签生效后，收涨且 high > 阈值的 K 线根数。
        */
       function computeNailAlertGreenScore(candles, alertMark) {
         if (!alertMark || !Array.isArray(candles) || !candles.length) return null;
@@ -12228,8 +12228,17 @@
         for (let i = fromIndex; i < candles.length; i += 1) {
           const candle = candles[i];
           if (!candle) continue;
+          const open = Number(candle.open);
+          const close = Number(candle.close);
           const high = Number(candle.high);
-          if (!Number.isFinite(high)) continue;
+          if (
+            !Number.isFinite(open) ||
+            !Number.isFinite(close) ||
+            !Number.isFinite(high) ||
+            close < open
+          ) {
+            continue;
+          }
           if (high > alertPrice) count += 1;
         }
         return count;
@@ -12403,7 +12412,10 @@
           const up = candle.close >= candle.open;
           const base = up ? "#8a9a96" : "#9a8e88";
           const useAlert =
-            hasAlert && alertFromIndex >= 0 && index >= alertFromIndex;
+            hasAlert &&
+            up &&
+            alertFromIndex >= 0 &&
+            index >= alertFromIndex;
           const splitAt = useAlert ? alertPrice : NaN;
           strokeCandleWick(
             ctx,
