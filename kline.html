@@ -2565,6 +2565,9 @@
       .card-focus-bar.is-nail-scope [data-focus-action="more"] {
         display: none;
       }
+      .card-focus-bar:not(.is-nail-scope) [data-focus-action="nail-note"] {
+        display: none;
+      }
       .card-focus-bar .card-focus-label {
         flex: 0 1 auto;
         min-width: 3.5em;
@@ -4828,6 +4831,7 @@
       <button type="button" data-focus-action="nail">钉</button>
       <button type="button" data-focus-action="zoom">放大</button>
       <button type="button" data-focus-action="refresh">刷新</button>
+      <button type="button" data-focus-action="nail-note">便签</button>
       <button type="button" class="is-primary" data-focus-action="more">
         更多
       </button>
@@ -13560,6 +13564,11 @@
           } finally {
             setFocusBarBusy(false);
           }
+          return;
+        }
+        if (action === "nail-note") {
+          if (focusActionScope !== "nail") return;
+          openNailNoteEditor(symbol);
         }
       }
 
@@ -14329,7 +14338,9 @@
               `<canvas class="nail-kline" data-kline="${symbol}"></canvas>`,
               veil,
               `</div>`,
-              `<input type="text" class="nail-note-input" data-nail-note="${symbol}" maxlength="40" value="${escapeHtml(note)}" placeholder="便签…" aria-label="便签 ${label}" />`,
+              note
+                ? `<input type="text" class="nail-note-input" data-nail-note="${symbol}" maxlength="40" value="${escapeHtml(note)}" placeholder="便签…" aria-label="便签 ${label}" />`
+                : "",
               check,
               `</article>`,
             ].join("");
@@ -14567,6 +14578,60 @@
         }
       }
 
+      function nailNoteInputHtml(symbol, label, note) {
+        const text = String(note || "").trim();
+        const sym = escapeHtml(symbol);
+        const lab = escapeHtml(label || symbol);
+        return `<input type="text" class="nail-note-input" data-nail-note="${sym}" maxlength="40" value="${escapeHtml(text)}" placeholder="便签…" aria-label="便签 ${lab}" />`;
+      }
+
+      function openNailNoteEditor(symbol) {
+        const key = WatchFavorites.nailSymbolKey
+          ? WatchFavorites.nailSymbolKey(symbol)
+          : String(symbol || "")
+              .trim()
+              .toUpperCase();
+        if (!key) return;
+        const card = document.querySelector(
+          `#nailList .nail-kcard[data-nail-symbol="${key}"]`,
+        );
+        if (!card) {
+          showToast("钉子列表找不到该币");
+          return;
+        }
+        let input = card.querySelector("input[data-nail-note]");
+        if (!input) {
+          const item = (nailItems || []).find(
+            (row) => String(row.symbol || "").toUpperCase() === key,
+          );
+          const wrap = card.querySelector(".nail-kline-wrap");
+          const host = document.createElement("div");
+          host.innerHTML = nailNoteInputHtml(
+            key,
+            (item && item.label) || key.replace(/USDT$/i, ""),
+            (item && item.note) || "",
+          );
+          input = host.firstElementChild;
+          if (wrap) wrap.after(input);
+          else card.appendChild(input);
+        }
+        input.focus();
+        input.select();
+      }
+
+      function removeEmptyNailNoteInput(input) {
+        if (!input || !(input instanceof HTMLInputElement)) return;
+        if (String(input.value || "").trim()) return;
+        const key = String(input.getAttribute("data-nail-note") || "")
+          .trim()
+          .toUpperCase();
+        const current = (nailItems || []).find(
+          (item) => String(item.symbol || "").toUpperCase() === key,
+        );
+        if (current && String(current.note || "").trim()) return;
+        input.remove();
+      }
+
       async function saveNailNote(symbol, note) {
         const key = WatchFavorites.nailSymbolKey
           ? WatchFavorites.nailSymbolKey(symbol)
@@ -14581,7 +14646,15 @@
           (item) => String(item.symbol || "").toUpperCase() === key,
         );
         if (!current) return;
-        if (String(current.note || "").trim() === text) return;
+        if (String(current.note || "").trim() === text) {
+          if (!text) {
+            const input = document.querySelector(
+              `#nailList input[data-nail-note="${key}"]`,
+            );
+            removeEmptyNailNoteInput(input);
+          }
+          return;
+        }
         try {
           await persistNails(
             (list) => WatchFavorites.setNailNote(list, key, text),
@@ -16790,11 +16863,38 @@
           if (!input) return;
           void saveNailNote(input.getAttribute("data-nail-note"), input.value);
         });
+        nailDrawer.addEventListener(
+          "focusout",
+          (event) => {
+            const input = event.target.closest("input[data-nail-note]");
+            if (!input) return;
+            const text = String(input.value || "").trim();
+            if (text) {
+              void saveNailNote(input.getAttribute("data-nail-note"), text);
+              return;
+            }
+            void saveNailNote(input.getAttribute("data-nail-note"), "");
+            // 等保存/短路后再清掉空输入，避免占位
+            requestAnimationFrame(() => removeEmptyNailNoteInput(input));
+          },
+          true,
+        );
         nailDrawer.addEventListener("keydown", (event) => {
           const input = event.target.closest("input[data-nail-note]");
           if (!input) return;
           if (event.key === "Enter") {
             event.preventDefault();
+            input.blur();
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            const key = String(input.getAttribute("data-nail-note") || "")
+              .trim()
+              .toUpperCase();
+            const current = (nailItems || []).find(
+              (item) => String(item.symbol || "").toUpperCase() === key,
+            );
+            input.value = current ? String(current.note || "") : "";
             input.blur();
           }
         });
