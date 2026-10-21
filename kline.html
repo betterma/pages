@@ -5082,7 +5082,7 @@
       let nailBrowseMaskAt = 0;
       /** 本次打开抽屉是否处于蒙蔽浏览会话。 */
       let nailBrowseMaskSession = false;
-      /** 本会话已双击揭开的钉子。 */
+      /** 本蒙蔽窗口已双击揭开的钉子（同步 GitHub browseRevealed）。 */
       const nailBrowseRevealed = new Set();
       const NAIL_BROWSE_MASK_COOLDOWN_MS = 2 * 60 * 60 * 1000;
       const selectedNailSymbols = new Set();
@@ -8223,7 +8223,7 @@
                 path: CONFIG.NAILS_PATH,
               });
               nailItems = nailState.nails || [];
-              applyNailBrowseMaskFromState(nailState.browseMaskAt);
+              applyNailBrowseState(nailState);
             } catch (error) {
               console.warn(error);
               nailItems = [];
@@ -11356,7 +11356,7 @@
           momNoteItems = noteState.notes || [];
           blacklistItems = blackState.blacklist || [];
           nailItems = nailState.nails || [];
-          applyNailBrowseMaskFromState(nailState.browseMaskAt);
+          applyNailBrowseState(nailState);
           renderNailDrawer();
           syncNailInMarks();
         } catch (error) {
@@ -13967,6 +13967,41 @@
         else if (browseMaskAt === 0) nailBrowseMaskAt = 0;
       }
 
+      function applyNailBrowseRevealedFromState(browseRevealed) {
+        if (!Array.isArray(browseRevealed)) return;
+        nailBrowseRevealed.clear();
+        browseRevealed.forEach((item) => {
+          const key = String(item || "")
+            .trim()
+            .toUpperCase();
+          if (key) nailBrowseRevealed.add(key);
+        });
+      }
+
+      function applyNailBrowseState(state) {
+        if (!state) return;
+        if (state.browseMaskAt != null) {
+          applyNailBrowseMaskFromState(state.browseMaskAt);
+        }
+        if (state.browseRevealed != null) {
+          applyNailBrowseRevealedFromState(state.browseRevealed);
+        }
+      }
+
+      async function refreshNailBrowseMeta() {
+        try {
+          const nailState = await WatchFavorites.loadNailsRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.NAILS_PATH,
+          });
+          applyNailBrowseState(nailState);
+          return nailState;
+        } catch (error) {
+          console.warn("refresh nail browse meta failed", error);
+          return null;
+        }
+      }
+
       async function stampNailBrowseMaskAt(at) {
         const stamp = Number(at) || Date.now();
         try {
@@ -13975,14 +14010,34 @@
             path: CONFIG.NAILS_PATH,
             message: "Stamp nail browse mask",
             browseMaskAt: stamp,
+            browseRevealed: [],
             mutate: (list) => list,
           });
-          applyNailBrowseMaskFromState(result && result.browseMaskAt);
+          applyNailBrowseState(result);
           if (result && Array.isArray(result.nails)) {
             nailItems = result.nails;
           }
         } catch (error) {
           console.warn("stamp nail browseMaskAt failed", error);
+        }
+      }
+
+      async function persistNailBrowseRevealed() {
+        const list = [...nailBrowseRevealed];
+        try {
+          const result = await WatchFavorites.patchNails({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.NAILS_PATH,
+            message: "Update nail browse revealed",
+            browseRevealed: list,
+            mutate: (nails) => nails,
+          });
+          applyNailBrowseState(result);
+          if (result && Array.isArray(result.nails)) {
+            nailItems = result.nails;
+          }
+        } catch (error) {
+          console.warn("persist nail browseRevealed failed", error);
         }
       }
 
@@ -13995,10 +14050,9 @@
       }
 
       /**
-       * 蒙蔽窗口 = stamp 后的 2 小时内。
-       * - 窗口外打开：新一轮全部蒙蔽并 stamp（冷却）
-       * - 窗口内再开：继续蒙蔽，不 stamp；本页已双击揭开的保持可见
-       * 关抽屉不结束窗口，否则关一下再开会变成「全部可见」。
+       * 蒙蔽窗口 = stamp 后的 2 小时内（browseMaskAt / browseRevealed 存 GitHub）。
+       * - 窗口外打开：新一轮全部蒙蔽、清空揭开列表并 stamp
+       * - 窗口内再开：继续蒙蔽，保留已揭开（跨浏览器一致）
        */
       function beginNailBrowseMaskSessionIfDue() {
         const now = Date.now();
@@ -14013,6 +14067,17 @@
         return true;
       }
 
+      async function openNailDrawerWithBrowse() {
+        await refreshNailBrowseMeta();
+        beginNailBrowseMaskSessionIfDue();
+        renderNailDrawer();
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            void paintNailKlines();
+          });
+        });
+      }
+
       function setNailDrawerOpen(open) {
         const drawer = document.getElementById("nailDrawer");
         const tab = document.getElementById("nailTab");
@@ -14024,14 +14089,17 @@
         if (tab) tab.setAttribute("aria-expanded", open ? "true" : "false");
         syncBodyScrollLock();
         if (open) {
-          // 仅从关闭→打开时判定；已打开时再定位/刷新不打断蒙蔽
-          if (!wasOpen) beginNailBrowseMaskSessionIfDue();
-          renderNailDrawer();
-          requestAnimationFrame(() => {
+          // 仅从关闭→打开时拉 GitHub 蒙蔽/揭开状态；已打开时再定位不打断
+          if (!wasOpen) {
+            void openNailDrawerWithBrowse();
+          } else {
+            renderNailDrawer();
             requestAnimationFrame(() => {
-              void paintNailKlines();
+              requestAnimationFrame(() => {
+                void paintNailKlines();
+              });
             });
-          });
+          }
         } else {
           abortNailKlines();
           clearNailFocusSelection();
@@ -14741,7 +14809,7 @@
             path: CONFIG.NAILS_PATH,
           });
           nailItems = nailState.nails || [];
-          applyNailBrowseMaskFromState(nailState.browseMaskAt);
+          applyNailBrowseState(nailState);
           renderNailDrawer();
           syncNailInMarks();
           syncNailPriceRows();
@@ -14842,9 +14910,13 @@
               options && options.browseMaskAt != null
                 ? options.browseMaskAt
                 : undefined,
+            browseRevealed:
+              options && options.browseRevealed != null
+                ? options.browseRevealed
+                : undefined,
           });
           nailItems = result.nails || [];
-          applyNailBrowseMaskFromState(result && result.browseMaskAt);
+          applyNailBrowseState(result);
           if (!skipRender) {
             renderNailDrawer();
             syncNailInMarks();
@@ -14960,9 +15032,11 @@
         const card = document.querySelector(
           `#nailList .nail-kcard[data-nail-symbol="${key}"]`,
         );
-        if (!card) return;
-        const veil = card.querySelector(".nail-kline-veil");
-        if (veil) veil.remove();
+        if (card) {
+          const veil = card.querySelector(".nail-kline-veil");
+          if (veil) veil.remove();
+        }
+        void persistNailBrowseRevealed();
       }
 
       async function toggleNailPinned(symbol) {
@@ -15179,17 +15253,29 @@
       async function addNailForSymbol(symbol) {
         const key = WatchFavorites.nailSymbolKey
           ? WatchFavorites.nailSymbolKey(symbol)
-          : String(symbol || "").trim().toUpperCase();
+          : String(symbol || "")
+              .trim()
+              .toUpperCase();
         if (!key) return;
-        if (!hasNailForSymbol(key)) {
-          await persistNails(
-            (list) => WatchFavorites.upsertNail(list, key, ""),
-            `Add nail ${key.replace(/USDT$/i, "")}`,
-            { loadingText: `添加 ${key.replace(/USDT$/i, "")} 到钉子…` },
-          );
+        if (hasNailForSymbol(key)) {
+          await openNailDrawerAtSymbol(key);
+          showToast(`${key.replace(/USDT$/i, "")} 已在钉子抽屉中`);
+          return;
         }
+        const price = Number(marketMap[key]?.price);
+        const note =
+          Number.isFinite(price) && price > 0 ? formatPinPrice(price) : "";
+        await persistNails(
+          (list) => WatchFavorites.upsertNail(list, key, note),
+          `Add nail ${key.replace(/USDT$/i, "")}`,
+          { loadingText: `添加 ${key.replace(/USDT$/i, "")} 到钉子…` },
+        );
         await openNailDrawerAtSymbol(key);
-        showToast(`${key.replace(/USDT$/i, "")} 已在钉子抽屉中`);
+        showToast(
+          note
+            ? `${key.replace(/USDT$/i, "")} 已钉入 · 便签 ${note}`
+            : `${key.replace(/USDT$/i, "")} 已在钉子抽屉中`,
+        );
       }
 
       async function deleteNail(symbol) {
