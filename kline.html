@@ -13699,14 +13699,24 @@
         }
       }
 
+      function isNailBrowseMaskWindowActive(now) {
+        const t = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+        return (
+          !!nailBrowseMaskAt &&
+          t - nailBrowseMaskAt < NAIL_BROWSE_MASK_COOLDOWN_MS
+        );
+      }
+
+      /**
+       * 蒙蔽窗口 = stamp 后的 2 小时内。
+       * - 窗口外打开：新一轮全部蒙蔽并 stamp（冷却）
+       * - 窗口内再开：继续蒙蔽，不 stamp；本页已双击揭开的保持可见
+       * 关抽屉不结束窗口，否则关一下再开会变成「全部可见」。
+       */
       function beginNailBrowseMaskSessionIfDue() {
         const now = Date.now();
-        const due =
-          !nailBrowseMaskAt ||
-          now - nailBrowseMaskAt >= NAIL_BROWSE_MASK_COOLDOWN_MS;
-        if (!due) {
-          nailBrowseMaskSession = false;
-          nailBrowseRevealed.clear();
+        if (isNailBrowseMaskWindowActive(now)) {
+          nailBrowseMaskSession = true;
           return false;
         }
         nailBrowseMaskSession = true;
@@ -13714,11 +13724,6 @@
         nailBrowseMaskAt = now;
         void stampNailBrowseMaskAt(now);
         return true;
-      }
-
-      function endNailBrowseMaskSession() {
-        nailBrowseMaskSession = false;
-        nailBrowseRevealed.clear();
       }
 
       function setNailDrawerOpen(open) {
@@ -13732,7 +13737,7 @@
         if (tab) tab.setAttribute("aria-expanded", open ? "true" : "false");
         syncBodyScrollLock();
         if (open) {
-          // 仅从关闭→打开时判定冷却；已打开时再定位/刷新不打断蒙蔽会话
+          // 仅从关闭→打开时判定；已打开时再定位/刷新不打断蒙蔽
           if (!wasOpen) beginNailBrowseMaskSessionIfDue();
           renderNailDrawer();
           requestAnimationFrame(() => {
@@ -13744,7 +13749,6 @@
           abortNailKlines();
           clearNailFocusSelection();
           setNailSelectMode(false);
-          endNailBrowseMaskSession();
         }
       }
 
