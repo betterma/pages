@@ -1122,6 +1122,26 @@
     );
   }
 
+  function setNailNote(list, symbol, note) {
+    const key = nailSymbolKey(symbol);
+    if (!key) return normalizeNails(list);
+    const text = String(note || "")
+      .trim()
+      .slice(0, 40);
+    const next = normalizeNails(list);
+    const item = next.find((row) => row.symbol === key);
+    if (!item) return next;
+    if (item.note === text) return next;
+    return next.map((row) =>
+      row.symbol === key ? { ...row, note: text } : row,
+    );
+  }
+
+  function normalizeBrowseMaskAt(raw) {
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
   async function loadNailsRaw(options) {
     const repo = (options && options.repo) || DEFAULT_REPO;
     const path = (options && options.path) || NAILS_PATH;
@@ -1137,6 +1157,7 @@
           nailsUpdatedAt: Number.isFinite(Number(current.data.nailsUpdatedAt))
             ? Number(current.data.nailsUpdatedAt)
             : null,
+          browseMaskAt: normalizeBrowseMaskAt(current.data.browseMaskAt),
           source: "api",
         };
       }
@@ -1160,13 +1181,19 @@
           nailsUpdatedAt: Number.isFinite(Number(data.nailsUpdatedAt))
             ? Number(data.nailsUpdatedAt)
             : null,
+          browseMaskAt: normalizeBrowseMaskAt(data.browseMaskAt),
           source: "raw-commit",
         };
       }
     } catch (error) {
       console.warn("loadNails via commit-raw failed", error);
     }
-    return { nails: [], nailsUpdatedAt: null, source: "empty" };
+    return {
+      nails: [],
+      nailsUpdatedAt: null,
+      browseMaskAt: 0,
+      source: "empty",
+    };
   }
 
   async function patchNails(options) {
@@ -1181,22 +1208,43 @@
           path,
           token: options && options.token,
         });
-        const base = current.data || { nails: [], nailsUpdatedAt: null };
+        const base = current.data || {
+          nails: [],
+          nailsUpdatedAt: null,
+          browseMaskAt: 0,
+        };
         const nails = normalizeNails(base.nails);
         let nextList = nails;
+        let nextBrowseMaskAt = normalizeBrowseMaskAt(base.browseMaskAt);
         if (typeof options.mutate === "function") {
-          const result = options.mutate(nails.slice());
+          const result = options.mutate(nails.slice(), {
+            browseMaskAt: nextBrowseMaskAt,
+          });
           nextList = Array.isArray(result)
             ? result
             : result && result.list
               ? result.list
               : nails;
+          if (
+            result &&
+            !Array.isArray(result) &&
+            result.browseMaskAt != null
+          ) {
+            nextBrowseMaskAt = normalizeBrowseMaskAt(result.browseMaskAt);
+          }
+        }
+        if (
+          options.browseMaskAt != null &&
+          Number.isFinite(Number(options.browseMaskAt))
+        ) {
+          nextBrowseMaskAt = normalizeBrowseMaskAt(options.browseMaskAt);
         }
         const nextNails = serializeNails(nextList).slice(0, NAILS_MAX);
         const nextData = {
           nails: nextNails,
           nailsUpdatedAt: Date.now(),
           updatedAt: Date.now(),
+          browseMaskAt: nextBrowseMaskAt,
         };
         await writeJsonFile({
           repo,
@@ -1209,6 +1257,7 @@
         return {
           nails: nextNails,
           nailsUpdatedAt: nextData.nailsUpdatedAt,
+          browseMaskAt: nextBrowseMaskAt,
         };
       } catch (error) {
         lastError = error;
@@ -2614,6 +2663,7 @@
     setNailsPinnedBatch,
     reorderNails,
     markNailsExited,
+    setNailNote,
     loadNailsRaw,
     patchNails,
     NOTES_RANK_SNAPS_PATH,
