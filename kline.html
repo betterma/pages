@@ -15477,14 +15477,19 @@
         }
       }
 
+      /** 触底/自动退出：从钉子抽屉删除（不再只打 exitedAt 标签）。 */
       async function markNailsExitedForSymbols(symbols) {
-        const keys = (symbols || [])
-          .map((symbol) =>
-            WatchFavorites.nailSymbolKey
-              ? WatchFavorites.nailSymbolKey(symbol)
-              : String(symbol || "").toUpperCase(),
-          )
-          .filter(Boolean);
+        const keys = [
+          ...new Set(
+            (symbols || [])
+              .map((symbol) =>
+                WatchFavorites.nailSymbolKey
+                  ? WatchFavorites.nailSymbolKey(symbol)
+                  : String(symbol || "").toUpperCase(),
+              )
+              .filter(Boolean),
+          ),
+        ];
         if (!keys.length) return;
         const hit = (nailItems || []).some((item) =>
           keys.includes(String(item.symbol || "").toUpperCase()),
@@ -15492,11 +15497,18 @@
         if (!hit) return;
         try {
           await persistNails(
-            (list) => WatchFavorites.markNailsExited(list, keys),
-            `Nail exit ${keys.length}`,
+            (list) =>
+              typeof WatchFavorites.removeNailsBatch === "function"
+                ? WatchFavorites.removeNailsBatch(list, keys)
+                : keys.reduce(
+                    (acc, symbol) => WatchFavorites.removeNail(acc, symbol),
+                    list,
+                  ),
+            `Remove nails on period-low exit x${keys.length}`,
+            { loadingText: "钉子同步删除…" },
           );
         } catch (error) {
-          console.warn("mark nails exited failed", error);
+          console.warn("remove nails on exit failed", error);
         }
       }
 
