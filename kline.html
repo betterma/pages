@@ -4597,7 +4597,7 @@
             id="nailSortSwitch"
             role="group"
             aria-label="钉子排序"
-            title="默认：置顶/拖拽顺序；荧光绿：相对绿占比从大到小（仅展示）"
+            title="默认：置顶/拖拽顺序；荧光绿：染绿窗口数从多到少（仅展示）"
           >
             <button type="button" data-nail-sort="order" class="is-active">
               默认
@@ -4605,7 +4605,7 @@
             <button
               type="button"
               data-nail-sort="alertGreen"
-              title="按相对绿占比从大到小"
+              title="按染绿窗口数从多到少"
             >
               荧光绿
             </button>
@@ -5126,7 +5126,7 @@
         nailRisingFilterOn = true;
       }
       const NAIL_SORT_KEY = "kline-nail-sort-v1";
-      /** order = 置顶/拖拽；alertGreen = 相对绿占比（仅展示）。 */
+      /** order = 置顶/拖拽；alertGreen = 染绿窗口数（仅展示）。 */
       let nailSortMode = "order";
       try {
         const savedNailSort = localStorage.getItem(NAIL_SORT_KEY);
@@ -5136,7 +5136,7 @@
       } catch (_) {
         nailSortMode = "order";
       }
-      /** symbol -> 相对绿占比 0~1；无阈值为 null。 */
+      /** symbol -> 染绿窗口数；无阈值为 null。 */
       const nailAlertGreenScores = new Map();
       let positionItems = [];
       let lastPinPrices = {};
@@ -12212,8 +12212,7 @@
       }
 
       /**
-       * 荧光绿相对占比：便签生效后
-       * sum(绿高) / sum(整柱高低差)，与小图缩放无关，贴近肉眼「绿了多少」。
+       * 荧光绿窗口数：便签生效后，有几根柱被染绿（high > 阈值）。
        */
       function computeNailAlertGreenScore(candles, alertMark) {
         if (!alertMark || !Array.isArray(candles) || !candles.length) return null;
@@ -12225,22 +12224,15 @@
           const idx = findCandleIndexAt(candles, fromAt);
           fromIndex = idx >= 0 ? idx : 0;
         }
-        let green = 0;
-        let total = 0;
+        let count = 0;
         for (let i = fromIndex; i < candles.length; i += 1) {
           const candle = candles[i];
           if (!candle) continue;
           const high = Number(candle.high);
-          const low = Number(candle.low);
-          if (!Number.isFinite(high) || !Number.isFinite(low)) continue;
-          const span = Math.max(0, high - low);
-          total += span;
-          if (high > alertPrice) {
-            green += high - Math.max(alertPrice, low);
-          }
+          if (!Number.isFinite(high)) continue;
+          if (high > alertPrice) count += 1;
         }
-        if (!(total > 0)) return 0;
-        return green / total;
+        return count;
       }
 
       function rememberNailAlertGreenScore(symbol, candles) {
@@ -14696,6 +14688,10 @@
           : all.slice();
         if (nailSortMode === "alertGreen") {
           items = items.slice().sort((a, b) => {
+            // 置顶始终压在最前（与默认排序一致）
+            const ap = a.pinned ? 0 : 1;
+            const bp = b.pinned ? 0 : 1;
+            if (ap !== bp) return ap - bp;
             const ka = String(a.symbol || "").toUpperCase();
             const kb = String(b.symbol || "").toUpperCase();
             const hasA = nailAlertGreenScores.has(ka);
@@ -14777,7 +14773,7 @@
         if (meta) {
           const sortHint =
             nailSortMode === "alertGreen"
-              ? "相对绿占比排序"
+              ? "染绿窗口数排序"
               : "置顶 / 长按拖动排序";
           if (!total) {
             meta.textContent = `复制名称后新增 · ${sortHint}`;

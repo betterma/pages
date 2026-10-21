@@ -75,6 +75,7 @@ const CONFIG = {
   ),
   MOM_NOTES_PATH: process.env.MOM_NOTES_PATH || 'watch-mom-notes.json',
   MOM_NOTES_MAX: Number(process.env.MOM_NOTES_MAX || 200),
+  NAILS_PATH: process.env.NAILS_PATH || 'watch-nails.json',
   PRICE_ALERTS_PATH: process.env.PRICE_ALERTS_PATH || 'watch-price-alerts.json',
   PRICE_ALERT_SEND_MAX: Number(process.env.PRICE_ALERT_SEND_MAX || 10),
   PRICE_ALERT_SEND_GAP_MS: Number(
@@ -662,6 +663,93 @@ function buildAutoPinMomNote(symbol, now, pins) {
   };
 }
 
+
+function formatNailNotePrice(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || !(n > 0)) return '';
+  if (n >= 1000) return n.toFixed(2);
+  if (n >= 1) return n.toFixed(4);
+  if (n >= 0.01) return n.toFixed(5);
+  return n.toPrecision(4);
+}
+
+/** Auto-pin newcomers: add to nails with current pin price as note (skip existing). */
+async function saveAutoPinNails(now, newcomers, pins) {
+  const symbols = [
+    ...new Set(
+      (newcomers || [])
+        .map((symbol) => String(symbol || '').trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  ];
+  if (!symbols.length) return [];
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const file = await loadJson(CONFIG.NAILS_PATH);
+    const prev = Array.isArray(file.data && file.data.nails) ? file.data.nails : [];
+    const existing = new Set(
+      prev
+        .map((item) =>
+          String((item && item.symbol) || '')
+            .trim()
+            .toUpperCase(),
+        )
+        .filter(Boolean),
+    );
+    const fresh = symbols.filter((symbol) => !existing.has(symbol));
+    if (!fresh.length) return [];
+    const added = fresh.map((symbol, index) => {
+      const price = pinPriceOf(pins, symbol);
+      const note = formatNailNotePrice(price);
+      return {
+        id: now.toString(36) + Math.random().toString(36).slice(2, 6),
+        at: now,
+        symbol,
+        label: labelOf(symbol),
+        note,
+        noteAt: note ? now : 0,
+        exitedAt: 0,
+        pinned: false,
+        pinnedAt: 0,
+        order: index,
+      };
+    });
+    const rest = prev.map((item, order) => ({
+      ...item,
+      order: order + added.length,
+    }));
+    const nails = [...added, ...rest];
+    const browseMaskAt = Number(file.data && file.data.browseMaskAt) || 0;
+    const browseRevealed = Array.isArray(file.data && file.data.browseRevealed)
+      ? file.data.browseRevealed
+      : [];
+    try {
+      await saveJson(
+        CONFIG.NAILS_PATH,
+        {
+          nails,
+          nailsUpdatedAt: now,
+          updatedAt: Date.now(),
+          browseMaskAt,
+          browseRevealed,
+        },
+        file.sha,
+        'Auto-pin nails ' + added.length,
+      );
+      return added;
+    } catch (error) {
+      lastError = error;
+      const message = error && error.message ? error.message : String(error);
+      if (!/409|conflict|sha/i.test(message)) break;
+    }
+  }
+  console.warn(
+    'save auto-pin nails failed',
+    lastError && lastError.message ? lastError.message : lastError,
+  );
+  return [];
+}
+
 async function saveAutoPinMomNotes(now, newcomers, pins) {
   const symbols = (newcomers || [])
     .map((symbol) => String(symbol || '').trim().toUpperCase())
@@ -1034,6 +1122,7 @@ async function main() {
   }
 
   let autoPinMomNotes = [];
+  let autoPinNails = [];
   if (autoPinned.length) {
     try {
       autoPinMomNotes = await saveAutoPinMomNotes(now, autoPinned, pins);
@@ -1043,6 +1132,15 @@ async function main() {
         error && error.message ? error.message : error,
       );
       autoPinMomNotes = [];
+    }
+    try {
+      autoPinNails = await saveAutoPinNails(now, autoPinned, pins);
+    } catch (error) {
+      console.warn(
+        'auto-pin nails failed',
+        error && error.message ? error.message : error,
+      );
+      autoPinNails = [];
     }
   }
 
