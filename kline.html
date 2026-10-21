@@ -5078,6 +5078,8 @@
       let nailSelectMode = false;
       /** 长按拖排序进行中：禁用抽屉左滑关闭。 */
       let nailReorderDragging = false;
+      /** 钉子蒙蔽 + 双击揭开：暂时关闭，抽屉默认直接可见 K 线。 */
+      const NAIL_BROWSE_MASK_ENABLED = false;
       /** 上次进入蒙蔽会话的时间（GitHub watch-nails.browseMaskAt）。 */
       let nailBrowseMaskAt = 0;
       /** 本次打开抽屉是否处于蒙蔽浏览会话。 */
@@ -14053,8 +14055,13 @@
        * 蒙蔽窗口 = stamp 后的 2 小时内（browseMaskAt / browseRevealed 存 GitHub）。
        * - 窗口外打开：新一轮全部蒙蔽、清空揭开列表并 stamp
        * - 窗口内再开：继续蒙蔽，保留已揭开（跨浏览器一致）
+       * NAIL_BROWSE_MASK_ENABLED=false 时整段跳过，不 stamp、不蒙蔽。
        */
       function beginNailBrowseMaskSessionIfDue() {
+        if (!NAIL_BROWSE_MASK_ENABLED) {
+          nailBrowseMaskSession = false;
+          return false;
+        }
         const now = Date.now();
         if (isNailBrowseMaskWindowActive(now)) {
           nailBrowseMaskSession = true;
@@ -14068,6 +14075,17 @@
       }
 
       async function openNailDrawerWithBrowse() {
+        // 蒙蔽关闭时：不拉 browse 元数据、不 stamp，直接渲染可见 K 线
+        if (!NAIL_BROWSE_MASK_ENABLED) {
+          nailBrowseMaskSession = false;
+          renderNailDrawer();
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              void paintNailKlines();
+            });
+          });
+          return;
+        }
         await refreshNailBrowseMeta();
         beginNailBrowseMaskSessionIfDue();
         renderNailDrawer();
@@ -14660,8 +14678,11 @@
             const check = nailSelectMode
               ? `<input type="checkbox" class="nail-check" data-nail-select="${symbol}" ${selectedNailSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
               : "";
+            // 蒙蔽双击揭开暂时关闭（NAIL_BROWSE_MASK_ENABLED）
             const veiled =
-              nailBrowseMaskSession && !nailBrowseRevealed.has(key);
+              NAIL_BROWSE_MASK_ENABLED &&
+              nailBrowseMaskSession &&
+              !nailBrowseRevealed.has(key);
             const veil = veiled
               ? `<div class="nail-kline-veil" data-nail-unveil="${symbol}">双击查看</div>`
               : "";
@@ -15023,7 +15044,7 @@
       }
 
       function unveilNailBrowseCard(symbol) {
-        if (!nailBrowseMaskSession) return;
+        if (!NAIL_BROWSE_MASK_ENABLED || !nailBrowseMaskSession) return;
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
@@ -17225,8 +17246,9 @@
             jumpNailToSymbol(jumpBtn.getAttribute("data-nail-jump"));
           }
         });
+        // 蒙蔽双击揭开暂时关闭；恢复时把 NAIL_BROWSE_MASK_ENABLED 改回 true 即可
         nailDrawer.addEventListener("dblclick", (event) => {
-          if (!nailBrowseMaskSession) return;
+          if (!NAIL_BROWSE_MASK_ENABLED || !nailBrowseMaskSession) return;
           if (
             event.target.closest(
               "button, input, textarea, a, select, .nail-check, .nail-form, .nail-head, .nail-rising-row, #nailBatchBar",

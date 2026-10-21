@@ -46,7 +46,8 @@
     "mom-note",
     "period-low-exit",
   ]);
-  const NAILS_MAX = 80;
+  /** 钉子数量不设上限（历史曾为 80）。 */
+  const NAILS_MAX = Infinity;
   const NOTES_RANK_SNAPS_TTL_MS = 24 * 60 * 60 * 1000;
   const NOTES_RANK_SNAPS_MAX = 48;
   /** Cloud + browser share this sort for 排序动态 snaps. */
@@ -950,9 +951,10 @@
   }
 
   function reindexNails(list) {
-    return (Array.isArray(list) ? list : [])
-      .slice(0, NAILS_MAX)
-      .map((item, order) => ({ ...item, order }));
+    return (Array.isArray(list) ? list : []).map((item, order) => ({
+      ...item,
+      order,
+    }));
   }
 
   function normalizeNails(raw) {
@@ -1066,7 +1068,7 @@
         order: 0,
       };
     });
-    return reindexNails([...added, ...rest]).slice(0, NAILS_MAX);
+    return reindexNails([...added, ...rest]);
   }
 
   function removeNailsBatch(list, symbols) {
@@ -1287,7 +1289,7 @@
         if (options.browseRevealed != null) {
           nextBrowseRevealed = normalizeBrowseRevealed(options.browseRevealed);
         }
-        const nextNails = serializeNails(nextList).slice(0, NAILS_MAX);
+        const nextNails = serializeNails(nextList);
         const nextData = {
           nails: nextNails,
           nailsUpdatedAt: Date.now(),
