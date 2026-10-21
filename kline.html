@@ -1881,6 +1881,13 @@
         font-weight: 650;
         color: var(--label);
       }
+      .nail-sort-row .pin-sort-switch {
+        margin-left: 0;
+      }
+      .nail-sort-row .mode-switch button {
+        padding: 5px 9px;
+        font-size: 12px;
+      }
       .nail-switch {
         position: relative;
         width: 46px;
@@ -4583,6 +4590,27 @@
             aria-label="当前窗口上涨"
           ></button>
         </div>
+        <div class="nail-rising-row nail-sort-row">
+          <span>排序</span>
+          <div
+            class="mode-switch pin-sort-switch"
+            id="nailSortSwitch"
+            role="group"
+            aria-label="钉子排序"
+            title="默认：置顶/拖拽顺序；荧光绿：阈值以上绿色价幅从大到小（仅展示）"
+          >
+            <button type="button" data-nail-sort="order" class="is-active">
+              默认
+            </button>
+            <button
+              type="button"
+              data-nail-sort="alertGreen"
+              title="按荧光绿面积从大到小"
+            >
+              荧光绿
+            </button>
+          </div>
+        </div>
         <form class="nail-form" id="nailForm" hidden>
           <input
             id="nailNameInput"
@@ -5097,6 +5125,19 @@
       } catch (_) {
         nailRisingFilterOn = true;
       }
+      const NAIL_SORT_KEY = "kline-nail-sort-v1";
+      /** order = 置顶/拖拽；alertGreen = 荧光绿面积（仅展示）。 */
+      let nailSortMode = "order";
+      try {
+        const savedNailSort = localStorage.getItem(NAIL_SORT_KEY);
+        if (savedNailSort === "order" || savedNailSort === "alertGreen") {
+          nailSortMode = savedNailSort;
+        }
+      } catch (_) {
+        nailSortMode = "order";
+      }
+      /** symbol -> 荧光绿价幅总和；无阈值为 null。 */
+      const nailAlertGreenScores = new Map();
       let positionItems = [];
       let lastPinPrices = {};
       let lastPinNotify = null;
@@ -12170,6 +12211,46 @@
         };
       }
 
+      /** 荧光绿面积：便签生效后各柱 max(0, high - max(alert, low)) 之和。 */
+      function computeNailAlertGreenScore(candles, alertMark) {
+        if (!alertMark || !Array.isArray(candles) || !candles.length) return null;
+        const alertPrice = Number(alertMark.price);
+        if (!Number.isFinite(alertPrice) || alertPrice <= 0) return null;
+        const fromAt = Number(alertMark.fromAt) || 0;
+        let fromIndex = 0;
+        if (fromAt > 0) {
+          const idx = findCandleIndexAt(candles, fromAt);
+          fromIndex = idx >= 0 ? idx : 0;
+        }
+        let area = 0;
+        for (let i = fromIndex; i < candles.length; i += 1) {
+          const candle = candles[i];
+          if (!candle) continue;
+          const high = Number(candle.high);
+          const low = Number(candle.low);
+          if (!Number.isFinite(high) || !Number.isFinite(low)) continue;
+          if (high <= alertPrice) continue;
+          area += high - Math.max(alertPrice, low);
+        }
+        return area;
+      }
+
+      function rememberNailAlertGreenScore(symbol, candles) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        const alertMark = nailAlertMarkForSymbol(key);
+        if (!alertMark) {
+          nailAlertGreenScores.set(key, null);
+          return;
+        }
+        nailAlertGreenScores.set(
+          key,
+          computeNailAlertGreenScore(candles, alertMark),
+        );
+      }
+
       const NAIL_ALERT_GREEN = "#3ecf8e";
 
       function strokeCandleWick(ctx, x, high, low, alertPrice, yOf, below, above) {
@@ -14600,10 +14681,70 @@
       }
 
       function nailDrawerVisibleItems() {
-        const items = Array.isArray(nailItems) ? nailItems : [];
-        if (!nailRisingFilterOn) return items.slice();
+        const all = Array.isArray(nailItems) ? nailItems : [];
         const interval = CONFIG.KLINE_INTERVAL || "4h";
-        return items.filter((item) => hasWindowGain(item.symbol, interval));
+        let items = nailRisingFilterOn
+          ? all.filter((item) => hasWindowGain(item.symbol, interval))
+          : all.slice();
+        if (nailSortMode === "alertGreen") {
+          items = items.slice().sort((a, b) => {
+            const ka = String(a.symbol || "").toUpperCase();
+            const kb = String(b.symbol || "").toUpperCase();
+            const hasA = nailAlertGreenScores.has(ka);
+            const hasB = nailAlertGreenScores.has(kb);
+            const sa = hasA ? nailAlertGreenScores.get(ka) : undefined;
+            const sb = hasB ? nailAlertGreenScores.get(kb) : undefined;
+            const scoreA = Number.isFinite(sa) ? sa : null;
+            const scoreB = Number.isFinite(sb) ? sb : null;
+            if (scoreA == null && scoreB == null) {
+              return (a.order || 0) - (b.order || 0);
+            }
+            if (scoreA == null) return 1;
+            if (scoreB == null) return -1;
+            if (scoreB !== scoreA) return scoreB - scoreA;
+            return (a.order || 0) - (b.order || 0);
+          });
+        }
+        return items;
+      }
+
+      function syncNailSortUi() {
+        document
+          .querySelectorAll("#nailSortSwitch [data-nail-sort]")
+          .forEach((btn) => {
+            btn.classList.toggle(
+              "is-active",
+              btn.dataset.nailSort === nailSortMode,
+            );
+          });
+      }
+
+      function setNailSortMode(mode) {
+        const next = mode === "alertGreen" ? "alertGreen" : "order";
+        if (next === nailSortMode) return;
+        nailSortMode = next;
+        try {
+          localStorage.setItem(NAIL_SORT_KEY, nailSortMode);
+        } catch (_) {
+          /* ignore */
+        }
+        syncNailSortUi();
+        renderNailDrawer();
+      }
+
+      /** 荧光绿模式下只挪 DOM，避免整表重绘打断已画好的 K 线。 */
+      function applyNailListOrderByAlertGreen() {
+        if (nailSortMode !== "alertGreen") return;
+        const grid = document.querySelector("#nailList .nail-grid");
+        if (!grid) return;
+        nailDrawerVisibleItems().forEach((item) => {
+          const key = String(item.symbol || "").toUpperCase();
+          if (!key) return;
+          const card = grid.querySelector(
+            `.nail-kcard[data-nail-symbol="${key}"]`,
+          );
+          if (card) grid.appendChild(card);
+        });
       }
 
       function renderNailDrawer() {
@@ -14612,6 +14753,7 @@
         const badge = document.getElementById("nailTabCount");
         const meta = document.getElementById("nailMeta");
         syncNailRisingFilterUi();
+        syncNailSortUi();
         const allItems = Array.isArray(nailItems) ? nailItems : [];
         const items = nailDrawerVisibleItems();
         const n = items.length;
@@ -14625,12 +14767,16 @@
         if (tab) tab.dataset.count = String(n);
         if (badge) badge.textContent = String(n);
         if (meta) {
+          const sortHint =
+            nailSortMode === "alertGreen"
+              ? "荧光绿面积排序"
+              : "置顶 / 长按拖动排序";
           if (!total) {
-            meta.textContent = "复制名称后新增 · 置顶 / 长按拖动排序";
+            meta.textContent = `复制名称后新增 · ${sortHint}`;
           } else if (nailRisingFilterOn) {
-            meta.textContent = `窗口上涨 ${n}/${total} · 置顶 / 长按拖动排序`;
+            meta.textContent = `窗口上涨 ${n}/${total} · ${sortHint}`;
           } else {
-            meta.textContent = `${n} 个钉子 · 置顶 / 长按拖动排序`;
+            meta.textContent = `${n} 个钉子 · ${sortHint}`;
           }
         }
         if (!listEl) return;
@@ -14739,6 +14885,7 @@
         syncNailPriceRows();
         const candles = await fetchKlines(key, chartInterval());
         const pin = pinItemBySymbol(key);
+        rememberNailAlertGreenScore(key, candles);
         drawKline(
           canvas,
           candles,
@@ -14747,6 +14894,7 @@
           notesMarksForSymbol(key),
           nailAlertMarkForSymbol(key),
         );
+        if (nailSortMode === "alertGreen") applyNailListOrderByAlertGreen();
         return true;
       }
 
@@ -14869,6 +15017,7 @@
             );
             if (nailKlineAbort !== controller) return;
             const pin = pinItemBySymbol(symbol);
+            rememberNailAlertGreenScore(symbol, candles);
             drawKline(
               canvas,
               candles,
@@ -14896,6 +15045,9 @@
         await Promise.all(workers);
         if (nailKlineAbort === controller) {
           nailKlineAbort = null;
+          if (nailSortMode === "alertGreen") {
+            applyNailListOrderByAlertGreen();
+          }
         }
       }
 
@@ -15163,6 +15315,8 @@
           "pointerdown",
           (event) => {
             if (nailSaving || nailSelectMode) return;
+            // 荧光绿展示排序下不改 GitHub 顺序
+            if (nailSortMode === "alertGreen") return;
             // 只认鼠标左键 / 触屏主触点；避免滚轮键等
             if (event.pointerType === "mouse" && event.button !== 0) return;
             // 按钮 / K 线 canvas（长按读价）不进入拖排序
@@ -17308,6 +17462,15 @@
         syncNailRisingFilterUi();
         nailRisingFilter.addEventListener("click", () => {
           setNailRisingFilter(!nailRisingFilterOn);
+        });
+      }
+      const nailSortSwitch = document.getElementById("nailSortSwitch");
+      if (nailSortSwitch) {
+        syncNailSortUi();
+        nailSortSwitch.addEventListener("click", (event) => {
+          const btn = event.target.closest("button[data-nail-sort]");
+          if (!btn || nailSaving) return;
+          setNailSortMode(btn.dataset.nailSort);
         });
       }
       const nailSelectBtn = document.getElementById("nailSelectBtn");
