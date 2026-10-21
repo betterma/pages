@@ -900,6 +900,42 @@
         color: var(--secondary);
         line-height: 1.35;
       }
+      .rank-panel-title-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .rank-panel-title-row h3 {
+        flex: 1;
+        min-width: 0;
+      }
+      .rank-panel-collapse {
+        flex: 0 0 auto;
+        width: 28px;
+        height: 28px;
+        border: 0.5px solid var(--separator);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--grouped) 88%, transparent);
+        color: var(--secondary);
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.15s ease, color 0.15s ease;
+      }
+      .rank-panel-collapse:hover {
+        color: var(--text);
+      }
+      .rank-panel.is-collapsed .rank-panel-collapse {
+        transform: rotate(-90deg);
+      }
+      .rank-panel.is-collapsed .rank-panel-actions,
+      .rank-panel.is-collapsed .rank-panel-body {
+        display: none;
+      }
       .rank-panel-actions {
         display: flex;
         flex-wrap: wrap;
@@ -4018,7 +4054,7 @@
               type="button"
               class="notes-rank-select"
               id="notesRankSelectBtn"
-              title="上下一起多选，再加入钉子"
+              title="三个模块一起多选，再加入钉子"
               aria-pressed="false"
             >
               多选
@@ -4041,7 +4077,7 @@
             type="button"
             class="is-primary"
             id="notesRankAddNailsBtn"
-            title="把上下已选币加入钉子抽屉"
+            title="把已选币加入钉子抽屉"
           >
             加入钉子
           </button>
@@ -4052,7 +4088,19 @@
         <section class="rank-panel" id="capturePickPanel" aria-label="捕捉精选">
           <div class="rank-panel-head">
             <div class="rank-panel-head-text">
-              <h3>捕捉精选</h3>
+              <div class="rank-panel-title-row">
+                <button
+                  type="button"
+                  class="rank-panel-collapse"
+                  data-rank-collapse="capturePickPanel"
+                  aria-expanded="true"
+                  title="折叠 / 展开"
+                  aria-label="折叠或展开捕捉精选"
+                >
+                  ▾
+                </button>
+                <h3>捕捉精选</h3>
+              </div>
             </div>
             <div class="rank-panel-actions">
               <button
@@ -4080,7 +4128,19 @@
         <section class="rank-panel" id="notesRankPanel" aria-label="记一笔排序">
           <div class="rank-panel-head">
             <div class="rank-panel-head-text">
-              <h3>记一笔排序</h3>
+              <div class="rank-panel-title-row">
+                <button
+                  type="button"
+                  class="rank-panel-collapse"
+                  data-rank-collapse="notesRankPanel"
+                  aria-expanded="true"
+                  title="折叠 / 展开"
+                  aria-label="折叠或展开记一笔排序"
+                >
+                  ▾
+                </button>
+                <h3>记一笔排序</h3>
+              </div>
               <p id="notesRankMeta">此刻热度</p>
             </div>
             <div class="rank-panel-actions">
@@ -4103,6 +4163,53 @@
             </div>
           </div>
           <div class="rank-panel-body" id="notesRankBody">
+            <div class="notes-rank-loading">加载中…</div>
+          </div>
+        </section>
+        <section
+          class="rank-panel"
+          id="breakthrough24hPanel"
+          aria-label="突破24h正涨"
+        >
+          <div class="rank-panel-head">
+            <div class="rank-panel-head-text">
+              <div class="rank-panel-title-row">
+                <button
+                  type="button"
+                  class="rank-panel-collapse"
+                  data-rank-collapse="breakthrough24hPanel"
+                  aria-expanded="true"
+                  title="折叠 / 展开"
+                  aria-label="折叠或展开突破24h正涨"
+                >
+                  ▾
+                </button>
+                <h3>突破24h正涨</h3>
+              </div>
+              <p id="breakthrough24hMeta">
+                瘦身池 · 本窗涨 · 此刻24h&gt;0 · 翻正距今≤3窗 · 最多25
+              </p>
+            </div>
+            <div class="rank-panel-actions">
+              <button
+                type="button"
+                class="notes-rank-view"
+                id="breakthrough24hViewBtn"
+                title="列表与 K 线互斥显示"
+              >
+                切换K线
+              </button>
+              <button
+                type="button"
+                class="notes-rank-refresh"
+                id="breakthrough24hRefresh"
+                title="重算当前窗是否终于翻正24h"
+              >
+                刷新
+              </button>
+            </div>
+          </div>
+          <div class="rank-panel-body" id="breakthrough24hBody">
             <div class="notes-rank-loading">加载中…</div>
           </div>
         </section>
@@ -5098,6 +5205,7 @@
       }
       let notesRankRows = [];
       let capturePickRows = [];
+      let breakthrough24hRows = [];
       let notesRankBusy = false;
       let capturePickBusy = false;
       let notesRankAbort = null;
@@ -5106,16 +5214,25 @@
       let notesRankScoresAt = 0;
       let notesRankLoadedAt = 0;
       let capturePickLoadedAt = 0;
+      let breakthrough24hLoadedAt = 0;
       let notesRankFocusSymbol = "";
       let notesRankKlineAbort = null;
       let notesRankSelectMode = false;
       let capturePickKlineView = false;
+      let breakthrough24hKlineView = false;
       try {
         capturePickKlineView =
           localStorage.getItem("kline-capture-pick-view-v1") === "kline";
       } catch (error) {
         capturePickKlineView = false;
       }
+      try {
+        breakthrough24hKlineView =
+          localStorage.getItem("kline-breakthrough-24h-view-v1") === "kline";
+      } catch (error) {
+        breakthrough24hKlineView = false;
+      }
+      const RANK_PANEL_COLLAPSE_KEY = "kline-rank-panel-collapse-v1";
       const selectedNotesRankSymbols = new Set();
       const NOTES_RANK_KLINE_TOP = 10;
       const NOTES_RANK_CACHE_MS = 3 * 60 * 1000;
@@ -5933,6 +6050,53 @@
 
       function capturePickSymbolList() {
         return listCapturePickPins().map((item) => item.symbol);
+      }
+
+      /** 突破24h：翻正须落在最近 maxWindows 个窗口内 */
+      const BREAKTHROUGH_24H = {
+        maxWindows: 3,
+        windowGainMin: 0, // 本窗涨幅 > 此值（0 即 >0）
+        maxList: 25,
+      };
+
+      /**
+       * 突破24h正涨：候选 = GitHub 瘦身快照本窗有基准价的币，
+       * 不要求盯住。条件：本窗涨、此刻24h>0、翻正距今≤3窗，最多 25。
+       */
+      function listBreakthrough24hSymbols() {
+        const iv = CONFIG.KLINE_INTERVAL;
+        const blocked = blacklistSymbols();
+        const baseline = comparison(iv)?.prices || {};
+        const seen = new Set();
+        const list = [];
+        for (const raw of Object.keys(baseline)) {
+          const symbol = String(raw || "")
+            .trim()
+            .toUpperCase();
+          if (!symbol || seen.has(symbol) || blocked.has(symbol)) continue;
+          if (!marketMap[symbol]) continue;
+          if (!isBreakthrough24hPositive(symbol, iv)) continue;
+          seen.add(symbol);
+          const pin = pinItemBySymbol(symbol);
+          list.push({
+            symbol,
+            pinnedAt: Number(pin && pin.pinnedAt) || 0,
+          });
+        }
+        list.sort((a, b) => {
+          const ca = Number(marketMap[a.symbol]?.change24h);
+          const cb = Number(marketMap[b.symbol]?.change24h);
+          const ha = Number.isFinite(ca);
+          const hb = Number.isFinite(cb);
+          if (ha && hb && ca !== cb) return ca - cb;
+          if (ha !== hb) return ha ? -1 : 1;
+          return (b.pinnedAt || 0) - (a.pinnedAt || 0);
+        });
+        return list.slice(0, BREAKTHROUGH_24H.maxList);
+      }
+
+      function breakthrough24hSymbolList() {
+        return listBreakthrough24hSymbols().map((item) => item.symbol);
       }
 
       /** Same universe as 币安观察 盯一下区 / 近2h·1h 浮窗：未拉黑且当前窗口上涨. */
@@ -6880,6 +7044,94 @@
       function hasWindowGain(symbol, interval) {
         const change = windowPriceChange(symbol, interval);
         return Number.isFinite(change) && change > 0;
+      }
+
+      /**
+       * 用当前 ticker 反推「约 24h 前价」，再估某价位当时的 24h 涨幅。
+       * 用于判断本窗起点时 24h 是否仍 ≤0。
+       */
+      function estimatedChange24hAtPrice(symbol, priceAt) {
+        const m = marketMap[symbol];
+        const priceNow = Number(m?.price);
+        const changeNow = Number(m?.change24h);
+        if (!Number.isFinite(priceNow) || !(priceNow > 0)) return null;
+        if (!Number.isFinite(changeNow)) return null;
+        if (!Number.isFinite(priceAt) || !(priceAt > 0)) return null;
+        const factor = 1 + changeNow / 100;
+        if (!(factor > 0)) return null;
+        const price24hAgo = priceNow / factor;
+        if (!(price24hAgo > 0)) return null;
+        return ((priceAt - price24hAgo) / price24hAgo) * 100;
+      }
+
+      /**
+       * 在 [fromTs, toTs] 内取该币最早一条有效价（用于「N 窗前」边界）。
+       */
+      function earliestPriceSince(symbol, fromTs, toTs) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return null;
+        let best = null;
+        let bestTs = Infinity;
+        for (const snap of history || []) {
+          const ts = Number(snap && snap.timestamp);
+          if (!Number.isFinite(ts)) continue;
+          if (ts < fromTs) continue;
+          if (Number.isFinite(toTs) && ts > toTs) continue;
+          const price = Number(snap.prices && snap.prices[key]);
+          if (!Number.isFinite(price) || !(price > 0)) continue;
+          if (ts < bestTs) {
+            bestTs = ts;
+            best = price;
+          }
+        }
+        return best;
+      }
+
+      /**
+       * 24h 翻正是否发生在最近 maxWindows 个窗口内：
+       * 此刻 24h>0，且「当前窗起点往前第 maxWindows 个窗」边界处估 24h 仍 ≤0
+       * （若三窗前已为正，说明翻正更早，不显示）。
+       */
+      function isBreakthrough24hWithinWindows(symbol, interval, maxWindows) {
+        const iv = interval || CONFIG.KLINE_INTERVAL;
+        const duration = DURATION_MS[iv];
+        const windows = Math.max(1, Number(maxWindows) || 3);
+        if (!duration) return false;
+        const changeNow = Number(marketMap[symbol]?.change24h);
+        if (!(Number.isFinite(changeNow) && changeNow > 0)) return false;
+
+        const currentWindowStart = getWindowStart(Date.now(), duration);
+        const lookbackStart = currentWindowStart - windows * duration;
+        const lookbackEnd = lookbackStart + duration;
+        const priceAtBoundary = earliestPriceSince(
+          symbol,
+          lookbackStart,
+          lookbackEnd + (CONFIG.WINDOW_TOLERANCE_MS || 0),
+        );
+        if (!Number.isFinite(priceAtBoundary)) return false;
+        const changeThen = estimatedChange24hAtPrice(symbol, priceAtBoundary);
+        if (!Number.isFinite(changeThen)) return false;
+        return changeThen <= 0;
+      }
+
+      /**
+       * 本窗上涨 + 此刻 24h>0 + 翻正距今不超过 3 个窗口（与是否盯住无关）。
+       */
+      function isBreakthrough24hPositive(symbol, interval) {
+        const iv = interval || CONFIG.KLINE_INTERVAL;
+        const cfg = BREAKTHROUGH_24H;
+        const windowGain = windowPriceChange(symbol, iv);
+        if (
+          !(
+            Number.isFinite(windowGain) &&
+            windowGain > cfg.windowGainMin
+          )
+        ) {
+          return false;
+        }
+        return isBreakthrough24hWithinWindows(symbol, iv, cfg.maxWindows);
       }
 
       function updateWatchPool() {
@@ -9893,6 +10145,22 @@
         });
       }
 
+      /** 刚翻正优先：24h 升序 */
+      function sortBreakthrough24hRows(rows) {
+        return (rows || []).slice().sort((a, b) => {
+          const ca = Number(a.change24h);
+          const cb = Number(b.change24h);
+          const ha = Number.isFinite(ca);
+          const hb = Number.isFinite(cb);
+          if (ha && hb && ca !== cb) return ca - cb;
+          if (ha !== hb) return ha ? -1 : 1;
+          const ta = Number(a.pinAt) || Number(a.nameAt) || 0;
+          const tb = Number(b.pinAt) || Number(b.nameAt) || 0;
+          if (tb !== ta) return tb - ta;
+          return String(a.symbol || "").localeCompare(String(b.symbol || ""));
+        });
+      }
+
       function notesRankValueField(key) {
         return key === "noteAt" ? "nameAt" : key;
       }
@@ -9989,6 +10257,11 @@
           captureBtn.disabled = capturePickBusy;
           captureBtn.textContent = capturePickBusy ? "…" : "刷新";
         }
+        const breakthroughBtn = document.getElementById("breakthrough24hRefresh");
+        if (breakthroughBtn) {
+          breakthroughBtn.disabled = capturePickBusy;
+          breakthroughBtn.textContent = capturePickBusy ? "…" : "刷新";
+        }
       }
 
       function persistNotesRankView() {
@@ -10067,6 +10340,45 @@
         }
       }
 
+      const BREAKTHROUGH_24H_VIEW_KEY = "kline-breakthrough-24h-view-v1";
+
+      function persistBreakthrough24hView() {
+        try {
+          localStorage.setItem(
+            BREAKTHROUGH_24H_VIEW_KEY,
+            breakthrough24hKlineView ? "kline" : "list",
+          );
+        } catch (error) {
+          /* ignore */
+        }
+      }
+
+      function syncBreakthrough24hViewUi() {
+        const body = document.getElementById("breakthrough24hBody");
+        if (body) {
+          body.classList.toggle("is-kline-view", !!breakthrough24hKlineView);
+        }
+        const btn = document.getElementById("breakthrough24hViewBtn");
+        if (btn) {
+          btn.textContent = breakthrough24hKlineView ? "切换列表" : "切换K线";
+          btn.classList.toggle("is-on", !!breakthrough24hKlineView);
+          btn.title = breakthrough24hKlineView ? "回到列表" : "切换 K 线";
+        }
+      }
+
+      function toggleBreakthrough24hView() {
+        breakthrough24hKlineView = !breakthrough24hKlineView;
+        persistBreakthrough24hView();
+        syncBreakthrough24hViewUi();
+        if (breakthrough24hKlineView) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              void paintNotesRankKlines();
+            });
+          });
+        }
+      }
+
       function notesRankDataAgeText() {
         const at = notesRankLoadedAt || notesRankScoresAt;
         if (!(at > 0)) return "";
@@ -10094,13 +10406,60 @@
       function notesRankDomIsReady() {
         const notesBody = document.getElementById("notesRankBody");
         const captureBody = document.getElementById("capturePickBody");
-        if (!notesBody || !captureBody) return false;
+        const breakthroughBody = document.getElementById("breakthrough24hBody");
+        if (!notesBody || !captureBody || !breakthroughBody) return false;
         const ready = (el) =>
           !!(
             el.querySelector(".notes-rank-table") ||
             el.querySelector(".notes-rank-empty")
           );
-        return ready(notesBody) && ready(captureBody);
+        return (
+          ready(notesBody) && ready(captureBody) && ready(breakthroughBody)
+        );
+      }
+
+      function loadRankPanelCollapseState() {
+        try {
+          const raw = localStorage.getItem(RANK_PANEL_COLLAPSE_KEY);
+          if (!raw) return {};
+          const parsed = JSON.parse(raw);
+          return parsed && typeof parsed === "object" ? parsed : {};
+        } catch (error) {
+          return {};
+        }
+      }
+
+      function saveRankPanelCollapseState(state) {
+        try {
+          localStorage.setItem(RANK_PANEL_COLLAPSE_KEY, JSON.stringify(state || {}));
+        } catch (error) {
+          /* ignore */
+        }
+      }
+
+      function syncRankPanelCollapseUi() {
+        const state = loadRankPanelCollapseState();
+        document.querySelectorAll(".rank-panel[id]").forEach((panel) => {
+          const id = panel.id;
+          if (!id) return;
+          const collapsed = !!state[id];
+          panel.classList.toggle("is-collapsed", collapsed);
+          const btn = panel.querySelector("[data-rank-collapse]");
+          if (btn) {
+            btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+            btn.title = collapsed ? "展开" : "折叠";
+          }
+        });
+      }
+
+      function toggleRankPanelCollapse(panelId) {
+        const id = String(panelId || "").trim();
+        if (!id) return;
+        const state = loadRankPanelCollapseState();
+        state[id] = !state[id];
+        if (!state[id]) delete state[id];
+        saveRankPanelCollapseState(state);
+        syncRankPanelCollapseUi();
       }
 
       function syncNotesRankHeadUi() {
@@ -10110,11 +10469,20 @@
         if (pickTab) {
           pickTab.classList.toggle("is-active", isNotesRankOpen());
         }
+        syncRankPanelCollapseUi();
       }
 
       function syncNotesRankMeta() {
         const meta = document.getElementById("notesRankMeta");
         if (meta) meta.textContent = "此刻热度";
+      }
+
+      function syncBreakthrough24hMeta() {
+        const meta = document.getElementById("breakthrough24hMeta");
+        if (meta) {
+          meta.textContent =
+            "瘦身池 · 本窗涨 · 此刻24h>0 · 翻正距今≤3窗 · 最多25";
+        }
       }
 
       function syncCapturePickMeta() {
@@ -10433,10 +10801,133 @@
         }
       }
 
+      function renderBreakthrough24hPanel(options) {
+        const body = document.getElementById("breakthrough24hBody");
+        if (!body) return;
+        const loading = !!(options && options.loading);
+        const rows = sortBreakthrough24hRows(breakthrough24hRows);
+        syncBreakthrough24hMeta(options);
+        syncNotesRankRefreshBtn();
+        if (loading) {
+          body.innerHTML =
+            '<div class="notes-rank-loading">加载中…</div>';
+          body.classList.toggle("is-kline-view", !!breakthrough24hKlineView);
+          body.classList.toggle("is-selecting", notesRankSelectMode);
+          syncBreakthrough24hViewUi();
+          syncNotesRankSelectUi();
+          return;
+        }
+        if (!rows.length) {
+          body.innerHTML =
+            '<div class="notes-rank-empty">暂无 · 需：瘦身池有窗基准价、未拉黑、本窗涨、此刻24h&gt;0、翻正距今不超过 3 个窗口</div>';
+          body.classList.toggle("is-kline-view", !!breakthrough24hKlineView);
+          body.classList.toggle("is-selecting", notesRankSelectMode);
+          syncBreakthrough24hViewUi();
+          syncNotesRankSelectUi();
+          return;
+        }
+        const pctCell = (value) => {
+          const cls = hourClass(value);
+          return `<td class="${cls}">${escapeHtml(formatPercent(value))}</td>`;
+        };
+        const focusKey = String(notesRankFocusSymbol || "").toUpperCase();
+        const klineCards = rows
+          .map((row, index) => {
+            const key = String(row.symbol || "").toUpperCase();
+            const focused =
+              focusKey && key === focusKey ? " is-focus" : "";
+            const selected =
+              notesRankSelectMode && selectedNotesRankSymbols.has(key)
+                ? " is-selected"
+                : "";
+            const check = notesRankSelectMode
+              ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
+              : "";
+            const pinAge = notesRankAgeLabel(row.pinAt || row.nameAt);
+            const nailMark = hasNailForSymbol(key)
+              ? `<button type="button" class="nail-in-mark" data-open-nail="${escapeHtml(key)}" title="打开钉子抽屉并定位" aria-label="打开钉子抽屉并定位到 ${escapeHtml(key)}">钉</button>`
+              : "";
+            const nailClass = nailMark ? " has-nail" : "";
+            return [
+              `<article class="notes-rank-kcard${focused}${selected}${nailClass}" data-jump="${escapeHtml(row.symbol)}" data-symbol="${escapeHtml(key)}">`,
+              `<div class="notes-rank-kcard-head">`,
+              check,
+              `<span class="notes-rank-kcard-rank">${index + 1}</span>`,
+              `<button type="button" class="notes-rank-sym" data-copy="${escapeHtml(row.label)}" data-jump="${escapeHtml(row.symbol)}" title="点击复制">${escapeHtml(row.label)}</button>`,
+              nailMark,
+              `<span class="notes-rank-kcard-metric" title="盯时">${escapeHtml(pinAge)}</span>`,
+              notesRankSelectMode
+                ? ""
+                : `<button type="button" class="notes-rank-zoom" data-kline-zoom="${escapeHtml(row.symbol)}" title="放大 K 线" aria-label="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button>`,
+              `</div>`,
+              `<canvas class="notes-rank-kline" data-kline="${escapeHtml(row.symbol)}"></canvas>`,
+              `<div class="notes-rank-kcard-stats">`,
+              `<span class="${hourClass(row.gain)}">${escapeHtml(formatPercent(row.gain))}</span>`,
+              `<span class="${hourClass(row.change2h)}">2h ${escapeHtml(formatPercent(row.change2h))}</span>`,
+              `<span class="${hourClass(row.change1h)}">1h ${escapeHtml(formatPercent(row.change1h))}</span>`,
+              `<span class="${hourClass(row.change24h)}">24h ${escapeHtml(formatPercent(row.change24h))}</span>`,
+              `</div>`,
+              `</article>`,
+            ].join("");
+          })
+          .join("");
+        const tableRows = rows
+          .map((row) => {
+            const key = String(row.symbol || "").toUpperCase();
+            const focused =
+              focusKey && key === focusKey ? " is-focus" : "";
+            const selected =
+              notesRankSelectMode && selectedNotesRankSymbols.has(key)
+                ? " is-selected"
+                : "";
+            const nailMark = hasNailForSymbol(key)
+              ? `<button type="button" class="nail-in-mark is-inline" data-open-nail="${escapeHtml(key)}" title="打开钉子抽屉并定位" aria-label="打开钉子抽屉并定位到 ${escapeHtml(key)}">钉</button>`
+              : "";
+            const check = notesRankSelectMode
+              ? `<input type="checkbox" class="notes-rank-check" data-notes-select="${escapeHtml(key)}" ${selectedNotesRankSymbols.has(key) ? "checked" : ""} aria-label="选择 ${escapeHtml(row.label)}" />`
+              : "";
+            return [
+              `<tr class="${focused.trim()}${selected}" data-symbol="${escapeHtml(key)}">`,
+              `<td>${check}<button type="button" class="notes-rank-sym" data-jump="${escapeHtml(row.symbol)}">${escapeHtml(row.label)}</button>${nailMark}</td>`,
+              pctCell(row.gain),
+              pctCell(row.change2h),
+              pctCell(row.change1h),
+              pctCell(row.change24h),
+              `</tr>`,
+            ].join("");
+          })
+          .join("");
+        body.innerHTML = [
+          `<div class="notes-rank-klines">${klineCards}</div>`,
+          `<table class="notes-rank-table">`,
+          `<thead><tr>`,
+          `<th>名称</th>`,
+          `<th>涨幅</th>`,
+          `<th>2h</th>`,
+          `<th>1h</th>`,
+          `<th>24h</th>`,
+          `</tr></thead>`,
+          `<tbody>${tableRows}</tbody>`,
+          `</table>`,
+        ].join("");
+        body.classList.toggle("is-selecting", notesRankSelectMode);
+        syncBreakthrough24hViewUi();
+        syncNotesRankSelectUi();
+        if (breakthrough24hKlineView) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              void paintNotesRankKlines();
+            });
+          });
+        }
+      }
+
       function renderCombinedRankPanels(options) {
         const opts = options || {};
         const section =
-          opts.section === "capture" || opts.section === "notes"
+          opts.section === "capture" ||
+          opts.section === "notes" ||
+          opts.section === "breakthrough"
             ? opts.section
             : "all";
         if (section === "all" || section === "capture") {
@@ -10444,6 +10935,13 @@
         }
         if (section === "all" || section === "notes") {
           renderNotesRankTable(opts);
+        }
+        if (
+          section === "all" ||
+          section === "capture" ||
+          section === "breakthrough"
+        ) {
+          renderBreakthrough24hPanel(opts);
         }
       }
 
@@ -10459,6 +10957,12 @@
 
       function capturePickVisibleSymbols() {
         return sortCapturePickRows(capturePickRows)
+          .map((row) => String(row.symbol || "").trim().toUpperCase())
+          .filter(Boolean);
+      }
+
+      function breakthrough24hVisibleSymbols() {
+        return sortBreakthrough24hRows(breakthrough24hRows)
           .map((row) => String(row.symbol || "").trim().toUpperCase())
           .filter(Boolean);
       }
@@ -10479,6 +10983,7 @@
         const bar = document.getElementById("notesRankBatchBar");
         const notesBody = document.getElementById("notesRankBody");
         const captureBody = document.getElementById("capturePickBody");
+        const breakthroughBody = document.getElementById("breakthrough24hBody");
         if (btn) {
           btn.classList.toggle("is-active", notesRankSelectMode);
           btn.setAttribute(
@@ -10491,6 +10996,12 @@
         if (notesBody) notesBody.classList.toggle("is-selecting", notesRankSelectMode);
         if (captureBody) {
           captureBody.classList.toggle("is-selecting", notesRankSelectMode);
+        }
+        if (breakthroughBody) {
+          breakthroughBody.classList.toggle(
+            "is-selecting",
+            notesRankSelectMode,
+          );
         }
         syncSharedNailBatchCounts();
       }
@@ -10520,7 +11031,7 @@
         else selectedNotesRankSymbols.add(key);
         document
           .querySelectorAll(
-            `#capturePickBody [data-symbol="${key}"], #capturePickBody [data-notes-select="${key}"], #notesRankBody [data-symbol="${key}"], #notesRankBody [data-notes-select="${key}"]`,
+            `#capturePickBody [data-symbol="${key}"], #capturePickBody [data-notes-select="${key}"], #notesRankBody [data-symbol="${key}"], #notesRankBody [data-notes-select="${key}"], #breakthrough24hBody [data-symbol="${key}"], #breakthrough24hBody [data-notes-select="${key}"]`,
           )
           .forEach((el) => {
             if (el.matches("input.notes-rank-check")) {
@@ -10720,11 +11231,17 @@
         const opts = options || {};
         const force = !!opts.force;
         const section =
-          opts.section === "capture" || opts.section === "notes"
+          opts.section === "capture" ||
+          opts.section === "notes" ||
+          opts.section === "breakthrough"
             ? opts.section
             : "all";
         const wantCapture = section === "all" || section === "capture";
         const wantNotes = section === "all" || section === "notes";
+        const wantBreakthrough =
+          section === "all" ||
+          section === "capture" ||
+          section === "breakthrough";
         const gate = document.getElementById("notesRankGate");
         if (!gate) return;
         closeAllFloatPanels();
@@ -10734,27 +11251,33 @@
         if (!force) {
           if (
             (wantNotes && notesRankBusy) ||
-            (wantCapture && capturePickBusy)
+            (wantCapture && capturePickBusy) ||
+            (wantBreakthrough && capturePickBusy)
           ) {
             if (wantNotes) syncNotesRankMeta({ loading: true });
             if (wantCapture) syncCapturePickMeta({ loading: true });
+            if (wantBreakthrough) syncBreakthrough24hMeta({ loading: true });
             syncNotesRankRefreshBtn();
             syncNotesRankViewUi();
             syncCapturePickViewUi();
+            syncBreakthrough24hViewUi();
             return;
           }
           if (notesRankDomIsReady()) {
             if (wantNotes) syncNotesRankMeta({ fromCache: true });
             if (wantCapture) syncCapturePickMeta({ fromCache: true });
+            if (wantBreakthrough) syncBreakthrough24hMeta({ fromCache: true });
             syncNotesRankRefreshBtn();
             syncNotesRankViewUi();
             syncCapturePickViewUi();
+            syncBreakthrough24hViewUi();
             return;
           }
         }
         if (force) {
           if (wantNotes) syncNotesRankMeta({ loading: true });
           if (wantCapture) syncCapturePickMeta({ loading: true });
+          if (wantBreakthrough) syncBreakthrough24hMeta({ loading: true });
           await reloadNotesRankSharedState();
           try {
             await loadBinanceTicker();
@@ -10765,13 +11288,21 @@
 
         let captureSymbols = wantCapture ? capturePickSymbolList() : [];
         let notesSymbols = wantNotes ? notesRankSymbolList() : [];
+        let breakthroughSymbols = wantBreakthrough
+          ? breakthrough24hSymbolList()
+          : [];
         let fetchSymbols = [
-          ...new Set([...(wantCapture ? captureSymbols : []), ...(wantNotes ? notesSymbols : [])]),
+          ...new Set([
+            ...(wantCapture ? captureSymbols : []),
+            ...(wantNotes ? notesSymbols : []),
+            ...(wantBreakthrough ? breakthroughSymbols : []),
+          ]),
         ];
 
         if (!fetchSymbols.length) {
           if (wantCapture) capturePickRows = [];
           if (wantNotes) notesRankRows = [];
+          if (wantBreakthrough) breakthrough24hRows = [];
           renderCombinedRankPanels({ section });
           return;
         }
@@ -10783,6 +11314,12 @@
         if (wantNotes) {
           notesRankRows = buildNotesRankRows(notesSymbols, notesRankScoreMap);
         }
+        if (wantBreakthrough) {
+          breakthrough24hRows = buildNotesRankRows(
+            breakthroughSymbols,
+            notesRankScoreMap,
+          );
+        }
 
         if (
           !force &&
@@ -10791,12 +11328,16 @@
         ) {
           if (wantNotes) syncNotesRankMeta({ fromCache: true });
           if (wantCapture) syncCapturePickMeta({ fromCache: true });
+          if (wantBreakthrough) syncBreakthrough24hMeta({ fromCache: true });
           return;
         }
         if (!force && notesRankCacheUsable(fetchSymbols)) {
           const now = notesRankScoresAt || Date.now();
           if (wantNotes && !notesRankLoadedAt) notesRankLoadedAt = now;
           if (wantCapture && !capturePickLoadedAt) capturePickLoadedAt = now;
+          if (wantBreakthrough && !breakthrough24hLoadedAt) {
+            breakthrough24hLoadedAt = now;
+          }
           renderCombinedRankPanels({ fromCache: true, section });
           return;
         }
@@ -10810,6 +11351,9 @@
           const now = notesRankScoresAt || Date.now();
           if (wantNotes && !notesRankLoadedAt) notesRankLoadedAt = now;
           if (wantCapture && !capturePickLoadedAt) capturePickLoadedAt = now;
+          if (wantBreakthrough && !breakthrough24hLoadedAt) {
+            breakthrough24hLoadedAt = now;
+          }
           renderCombinedRankPanels({ fromCache: true, section });
           return;
         }
@@ -10832,9 +11376,9 @@
         }
         const controller = new AbortController();
         if (wantNotes) notesRankAbort = controller;
-        if (wantCapture) capturePickAbort = controller;
+        if (wantCapture || wantBreakthrough) capturePickAbort = controller;
         if (wantNotes) notesRankBusy = true;
-        if (wantCapture) capturePickBusy = true;
+        if (wantCapture || wantBreakthrough) capturePickBusy = true;
         syncNotesRankRefreshBtn();
         try {
           const scoreMap = await loadPinHourScores(
@@ -10858,6 +11402,14 @@
             notesRankRows = buildNotesRankRows(notesSymbols, notesRankScoreMap);
             notesRankLoadedAt = now;
           }
+          if (wantBreakthrough) {
+            breakthroughSymbols = breakthrough24hSymbolList();
+            breakthrough24hRows = buildNotesRankRows(
+              breakthroughSymbols,
+              notesRankScoreMap,
+            );
+            breakthrough24hLoadedAt = now;
+          }
           renderCombinedRankPanels({ section });
         } catch (error) {
           if (error && error.name === "AbortError") return;
@@ -10874,6 +11426,12 @@
               notesRankScoreMap,
             );
           }
+          if (wantBreakthrough) {
+            breakthrough24hRows = buildNotesRankRows(
+              breakthrough24hSymbolList(),
+              notesRankScoreMap,
+            );
+          }
           renderCombinedRankPanels({
             fromCache: notesRankScoreMap.size > 0,
             section,
@@ -10884,7 +11442,10 @@
             notesRankAbort = null;
             notesRankBusy = false;
           }
-          if (wantCapture && capturePickAbort === controller) {
+          if (
+            (wantCapture || wantBreakthrough) &&
+            capturePickAbort === controller
+          ) {
             capturePickAbort = null;
             capturePickBusy = false;
           }
@@ -10902,6 +11463,10 @@
 
       function refreshCapturePickPanel() {
         void openNotesRankOverlay({ force: true, section: "capture" });
+      }
+
+      function refreshBreakthrough24hPanel() {
+        void openNotesRankOverlay({ force: true, section: "breakthrough" });
       }
 
       function setNotesRankSortKey(key) {
@@ -16406,6 +16971,7 @@
             ...new Set([
               ...capturePickVisibleSymbols(),
               ...notesRankVisibleSymbols(),
+              ...breakthrough24hVisibleSymbols(),
             ]),
           ];
           const allOn =
@@ -16459,9 +17025,34 @@
           refreshCapturePickPanel();
         });
       }
+      const breakthrough24hViewBtn = document.getElementById(
+        "breakthrough24hViewBtn",
+      );
+      if (breakthrough24hViewBtn) {
+        breakthrough24hViewBtn.addEventListener("click", () => {
+          toggleBreakthrough24hView();
+        });
+      }
+      const breakthrough24hRefreshBtn = document.getElementById(
+        "breakthrough24hRefresh",
+      );
+      if (breakthrough24hRefreshBtn) {
+        breakthrough24hRefreshBtn.addEventListener("click", () => {
+          refreshBreakthrough24hPanel();
+        });
+      }
       const notesRankScrollEl = document.getElementById("notesRankScroll");
       if (notesRankScrollEl) {
         notesRankScrollEl.addEventListener("click", (event) => {
+          const collapseBtn = event.target.closest("[data-rank-collapse]");
+          if (collapseBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleRankPanelCollapse(
+              collapseBtn.getAttribute("data-rank-collapse"),
+            );
+            return;
+          }
           const sortBtn = event.target.closest(
             "#notesRankBody [data-notes-sort]",
           );
@@ -16470,7 +17061,7 @@
             return;
           }
           const inPanel = event.target.closest(
-            "#capturePickBody, #notesRankBody",
+            "#capturePickBody, #notesRankBody, #breakthrough24hBody",
           );
           const selectArmed = notesRankSelectMode && inPanel;
           if (selectArmed) {

@@ -170,15 +170,43 @@
         font-size: 11px;
         font-weight: 600;
       }
-      .filters {
+      .chain-tabs {
         display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-        margin-bottom: 8px;
+        gap: 0;
+        margin: 0 0 12px;
+        border: 1px solid #d8ddda;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #fbfcfa;
       }
-      .filters button.active {
+      .chain-tabs button {
+        flex: 1;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        padding: 10px 14px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #5a6a68;
+      }
+      .chain-tabs button + button {
+        border-left: 1px solid #d8ddda;
+      }
+      .chain-tabs button:hover {
+        background: #eef1ee;
+      }
+      .chain-tabs button.active {
         background: #dfe8e4;
-        border-color: #9eb0aa;
+        color: #28323a;
+      }
+      .chain-tabs .tab-count {
+        margin-left: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        color: #78817f;
+      }
+      .chain-tabs button.active .tab-count {
+        color: #5a6a68;
       }
       .interval-bar {
         display: flex;
@@ -357,7 +385,7 @@
         <span id="statusText">等待启动...</span>
       </div>
       <p class="hint">
-        自选 = 全部卡片 · 按当前周期涨跌分区 · 点名称复制合约 · ⊖ 移出自选 ·
+        自选按 Solana / Robinhood 分 tab · 按当前周期涨跌分区 · 点名称复制合约 · ⊖ 移出自选 ·
         K 线由定时云函数写入缓存（新加币 / 新周期需等下一轮）
       </p>
 
@@ -419,15 +447,26 @@
         </div>
       </div>
 
-      <div class="filters">
-        <button type="button" class="filter-btn active" data-filter="all">
-          全部
+      <div class="chain-tabs" role="tablist" aria-label="链分类">
+        <button
+          type="button"
+          class="chain-tab active"
+          role="tab"
+          aria-selected="true"
+          data-chain="501"
+          id="tabSol"
+        >
+          Solana<span class="tab-count" id="tabSolCount">(0)</span>
         </button>
-        <button type="button" class="filter-btn" data-filter="501">
-          Solana
-        </button>
-        <button type="button" class="filter-btn" data-filter="4663">
-          Robinhood
+        <button
+          type="button"
+          class="chain-tab"
+          role="tab"
+          aria-selected="false"
+          data-chain="4663"
+          id="tabRh"
+        >
+          Robinhood<span class="tab-count" id="tabRhCount">(0)</span>
         </button>
       </div>
 
@@ -466,7 +505,11 @@
 
       let items = [];
       let candleCache = new Map();
-      let chainFilter = "all";
+      const CHAIN_TABS = ["501", "4663"];
+      let chainFilter = (() => {
+        const saved = localStorage.getItem("okxChainTab");
+        return CHAIN_TABS.includes(saved) ? saved : "501";
+      })();
       let activeBar =
         localStorage.getItem("okxKlineBar") || CONFIG.DEFAULT_BAR;
       let loading = false;
@@ -736,8 +779,39 @@
       }
 
       function filteredItems() {
-        if (chainFilter === "all") return items.slice();
         return items.filter((item) => item.chainIndex === chainFilter);
+      }
+
+      function countByChain(chainIndex) {
+        return items.filter((item) => item.chainIndex === chainIndex).length;
+      }
+
+      function syncChainTabs() {
+        document.querySelectorAll(".chain-tab").forEach((btn) => {
+          const on = btn.dataset.chain === chainFilter;
+          btn.classList.toggle("active", on);
+          btn.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        const solCount = document.getElementById("tabSolCount");
+        const rhCount = document.getElementById("tabRhCount");
+        if (solCount) solCount.textContent = `(${countByChain("501")})`;
+        if (rhCount) rhCount.textContent = `(${countByChain("4663")})`;
+        const chainSelect = document.getElementById("chainSelect");
+        if (chainSelect && CHAIN_TABS.includes(chainFilter)) {
+          chainSelect.value = chainFilter;
+        }
+      }
+
+      function setChainTab(chainIndex) {
+        const next = String(chainIndex || "");
+        if (!CHAIN_TABS.includes(next) || next === chainFilter) {
+          syncChainTabs();
+          return;
+        }
+        chainFilter = next;
+        localStorage.setItem("okxChainTab", chainFilter);
+        syncChainTabs();
+        renderAll();
       }
 
       function splitByWindow(list) {
@@ -863,15 +937,17 @@
       }
 
       async function renderAll() {
+        syncChainTabs();
         const list = filteredItems();
         const { rising, falling } = splitByWindow(list);
         const barLabel = barMeta(activeBar).label;
+        const chainLabel = chainCode(chainFilter);
         document.getElementById("risingMeta").textContent = rising.length
-          ? `上涨 ${rising.length} · 周期 ${barLabel}`
-          : `当前没有 ${barLabel} 上涨的自选`;
+          ? `${chainLabel} 上涨 ${rising.length} · 周期 ${barLabel}`
+          : `当前没有 ${chainLabel} ${barLabel} 上涨的自选`;
         document.getElementById("fallingMeta").textContent = falling.length
-          ? `下跌/持平 ${falling.length} · 周期 ${barLabel}`
-          : `当前没有 ${barLabel} 下跌的自选`;
+          ? `${chainLabel} 下跌/持平 ${falling.length} · 周期 ${barLabel}`
+          : `当前没有 ${chainLabel} ${barLabel} 下跌的自选`;
         await fillGrid(
           document.getElementById("risingGrid"),
           rising,
@@ -1043,14 +1119,9 @@
         });
       });
 
-      document.querySelectorAll(".filter-btn").forEach((btn) => {
+      document.querySelectorAll(".chain-tab").forEach((btn) => {
         btn.addEventListener("click", () => {
-          document
-            .querySelectorAll(".filter-btn")
-            .forEach((node) => node.classList.remove("active"));
-          btn.classList.add("active");
-          chainFilter = btn.dataset.filter;
-          renderAll();
+          setChainTab(btn.dataset.chain);
         });
       });
 
@@ -1059,6 +1130,7 @@
       }
       syncAddPanel(localStorage.getItem("okxAddPanelOpen") === "1");
       syncIntervalButtons();
+      syncChainTabs();
       loadAndRender();
     </script>
   </body>
