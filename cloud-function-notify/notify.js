@@ -687,38 +687,63 @@ async function saveAutoPinNails(now, newcomers, pins) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const file = await loadJson(CONFIG.NAILS_PATH);
     const prev = Array.isArray(file.data && file.data.nails) ? file.data.nails : [];
-    const existing = new Set(
-      prev
-        .map((item) =>
-          String((item && item.symbol) || '')
-            .trim()
-            .toUpperCase(),
-        )
-        .filter(Boolean),
-    );
-    const fresh = symbols.filter((symbol) => !existing.has(symbol));
-    if (!fresh.length) return [];
-    const added = fresh.map((symbol, index) => {
+    const bySymbol = new Map();
+    prev.forEach((item) => {
+      const key = String((item && item.symbol) || '')
+        .trim()
+        .toUpperCase();
+      if (key) bySymbol.set(key, item);
+    });
+    const added = [];
+    const updated = [];
+    for (const symbol of symbols) {
       const price = pinPriceOf(pins, symbol);
       const note = formatNailNotePrice(price);
-      return {
-        id: now.toString(36) + Math.random().toString(36).slice(2, 6),
-        at: now,
-        symbol,
-        label: labelOf(symbol),
-        note,
-        noteAt: note ? now : 0,
-        exitedAt: 0,
-        pinned: false,
-        pinnedAt: 0,
-        order: index,
-      };
+      const existing = bySymbol.get(symbol) || null;
+      if (existing) {
+        updated.push({
+          ...existing,
+          symbol,
+          label: existing.label || labelOf(symbol),
+          note,
+          noteAt: note ? now : 0,
+          exitedAt: 0,
+          at: now,
+        });
+      } else {
+        added.push({
+          id: now.toString(36) + Math.random().toString(36).slice(2, 6),
+          at: now,
+          symbol,
+          label: labelOf(symbol),
+          note,
+          noteAt: note ? now : 0,
+          exitedAt: 0,
+          pinned: false,
+          pinnedAt: 0,
+          order: 0,
+        });
+      }
+    }
+    if (!added.length && !updated.length) return [];
+    const updatedMap = new Map(updated.map((item) => [item.symbol, item]));
+    const rest = prev.map((item) => {
+      const key = String((item && item.symbol) || '')
+        .trim()
+        .toUpperCase();
+      return updatedMap.get(key) || item;
     });
-    const rest = prev.map((item, order) => ({
+    const addedKeys = new Set(added.map((row) => row.symbol));
+    const restWithoutDup = rest.filter((item) => {
+      const key = String((item && item.symbol) || '')
+        .trim()
+        .toUpperCase();
+      return !addedKeys.has(key);
+    });
+    const nails = [...added, ...restWithoutDup].map((item, order) => ({
       ...item,
-      order: order + added.length,
+      order,
     }));
-    const nails = [...added, ...rest];
     const browseMaskAt = Number(file.data && file.data.browseMaskAt) || 0;
     const browseRevealed = Array.isArray(file.data && file.data.browseRevealed)
       ? file.data.browseRevealed
@@ -734,9 +759,9 @@ async function saveAutoPinNails(now, newcomers, pins) {
           browseRevealed,
         },
         file.sha,
-        'Auto-pin nails ' + added.length,
+        'Auto-pin nails +' + added.length + ' ~' + updated.length,
       );
-      return added;
+      return [...added, ...updated];
     } catch (error) {
       lastError = error;
       const message = error && error.message ? error.message : String(error);
