@@ -4309,10 +4309,17 @@
                 id="pinSortSwitch"
                 role="group"
                 aria-label="盯一下排序"
-                title="盯幅：按相对盯住价；爬升：按近2h/1h信号"
+                title="盯幅：相对盯住价；爬升：近2h/1h信号；24h：24小时涨幅降序"
               >
                 <button type="button" data-pin-sort="pin" class="is-active">盯幅</button>
                 <button type="button" data-pin-sort="momentum">爬升</button>
+                <button
+                  type="button"
+                  data-pin-sort="change24h"
+                  title="按 24h 涨幅从高到低"
+                >
+                  24h
+                </button>
               </div>
             </div>
           </div>
@@ -5365,6 +5372,15 @@
       const periodLowExitQueued = new Set();
       let periodLowExitFlushing = false;
       let pinSortMode = "pin";
+      try {
+        const savedPinSort = localStorage.getItem(PIN_SORT_KEY);
+        // 默认盯幅；不恢复「爬升」，避免一进页就后台算动量。
+        if (savedPinSort === "pin" || savedPinSort === "change24h") {
+          pinSortMode = savedPinSort;
+        }
+      } catch (error) {
+        /* ignore */
+      }
       const RECENT_AUTO_SORT_KEY = "kline-recent-auto-sort-v2";
       // time-asc = 更早在前；time-desc = 最新在前；pin = 盯幅
       let recentAutoSortMode = "time-asc";
@@ -5385,7 +5401,6 @@
       } catch (error) {
         /* ignore */
       }
-      // 默认盯幅；不恢复「爬升」，避免一进页就后台算动量。
       let notifyPollTimer = null;
       let klineAbort = null;
       let loading = false;
@@ -8524,7 +8539,9 @@
       let sortRailLastScrollY = window.scrollY || 0;
 
       function pinSortLabel() {
-        return pinSortMode === "momentum" ? "爬升" : "盯幅";
+        if (pinSortMode === "momentum") return "爬升";
+        if (pinSortMode === "change24h") return "24h";
+        return "盯幅";
       }
 
       function recentSortLabel() {
@@ -8712,7 +8729,12 @@
       }
 
       function setPinSortMode(mode) {
-        const next = mode === "momentum" ? "momentum" : "pin";
+        const next =
+          mode === "momentum"
+            ? "momentum"
+            : mode === "change24h"
+              ? "change24h"
+              : "pin";
         if (next === pinSortMode) return;
         pinSortMode = next;
         try {
@@ -8724,6 +8746,8 @@
         if (loading) return;
         if (next === "momentum") {
           void ensureMomentumThenReorder({ force: !lastMomentumSnapshot });
+        } else if (next === "change24h") {
+          reorderPinGridByChange24h();
         } else {
           reorderPinGridByPinChange();
         }
@@ -9530,6 +9554,28 @@
             (symbol) => !recentAutoSet.has(symbol) && !resumeSet.has(symbol),
           ),
         );
+      }
+
+      function reorderPinGridByChange24h() {
+        const recentAutoSet = new Set(
+          listRecentAutoPins().map((item) => item.symbol),
+        );
+        const resumeSet = resumePinSymbolSet();
+        const list = listWindowUpPinSymbols()
+          .filter(
+            (symbol) => !recentAutoSet.has(symbol) && !resumeSet.has(symbol),
+          )
+          .slice()
+          .sort((a, b) => {
+            const changeA = Number(marketMap[a]?.change24h);
+            const changeB = Number(marketMap[b]?.change24h);
+            const hasA = Number.isFinite(changeA);
+            const hasB = Number.isFinite(changeB);
+            if (hasA && hasB && changeB !== changeA) return changeB - changeA;
+            if (hasA !== hasB) return hasA ? -1 : 1;
+            return String(a).localeCompare(String(b));
+          });
+        applyPinGridOrder(list);
       }
 
       async function schedulePinMomentum(symbols, options) {
@@ -15394,7 +15440,11 @@
           const parts = [
             `盯一下 ${pinItems.length}`,
             `窗口上涨展示 ${pinShownWindow}`,
-            pinSortMode === "momentum" ? "排序爬升" : "排序盯幅",
+            pinSortMode === "momentum"
+              ? "排序爬升"
+              : pinSortMode === "change24h"
+                ? "排序24h"
+                : "排序盯幅",
           ];
           if (recentAutoList.length) {
             parts.push(`新自动盯 ${recentAutoList.length}`);
@@ -15527,6 +15577,9 @@
             pinMap,
             bumpKline,
           );
+          if (pinSortMode === "change24h") {
+            reorderPinGridByChange24h();
+          }
         } else if (pinGridEl) {
           pinGridEl.innerHTML = "";
         }
