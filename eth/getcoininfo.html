@@ -288,6 +288,16 @@
             font-size: 16px;
             font-weight: 600;
             color: #7c3aed;
+            display: inline-flex;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .watch-updated-at {
+            font-size: 12px;
+            font-weight: 500;
+            color: #7c3aed;
+            opacity: 0.85;
         }
         .close-watch-btn {
             background: none;
@@ -302,37 +312,50 @@
         .watch-items {
             max-height: 600px;
             overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
         }
-        .watch-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px;
+        .watch-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
             background: white;
             border-radius: 8px;
-            border: 1px solid #e9d5ff;
+            overflow: hidden;
         }
-        .watch-item input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-            flex-shrink: 0;
+        .watch-table th,
+        .watch-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #ede9fe;
+            text-align: left;
+            vertical-align: middle;
         }
-        .watch-item-address {
-            flex: 1;
+        .watch-table th {
+            background: #f5f3ff;
+            color: #5b21b6;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .watch-table th.numeric,
+        .watch-table td.numeric {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .watch-table .address-cell {
             font-family: 'SF Mono', monospace;
-            font-size: 13px;
+            font-size: 12px;
             color: #4b5563;
             cursor: pointer;
             word-break: break-all;
-            padding: 4px 8px;
-            border-radius: 4px;
+            max-width: 220px;
         }
-        .watch-item-address:hover {
+        .watch-table .address-cell:hover {
             background-color: #f0f2f5;
+        }
+        .watch-table input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
         }
         .watch-empty {
             text-align: center;
@@ -427,7 +450,10 @@
 
     <div class="watch-list-area" id="watchListArea">
         <div class="watch-list-header">
-            <span class="watch-list-title">📝 Watch 列表 <span id="watchCount">(0)</span></span>
+            <span class="watch-list-title">
+              📝 Watch 列表 <span id="watchCount">(0)</span>
+              <span id="watchUpdatedAt" class="watch-updated-at"></span>
+            </span>
             <button class="close-watch-btn" id="closeWatchBtn">×</button>
         </div>
         <div class="watch-items" id="watchItems">
@@ -439,7 +465,7 @@
         📘 流程说明：<br>
         - 粘贴前两步得到的新地址 → 点击查询 → DexScreener（Robinhood）拉市值。<br>
         - <strong>市值 &lt; $5M</strong>：直接丢弃，不展示、不进入导出。<br>
-        - <strong>市值 ≥ $5M</strong>：按市值降序展示；<strong>To Watch</strong> 覆盖写入本次列表；<strong>To All</strong> 与历史合并去重。<br>
+        - <strong>市值 ≥ $5M</strong>：按市值降序展示；<strong>To Watch</strong> 覆盖写入本次完整信息（符号/市值等）；剪贴板仍复制地址数组；<strong>To All</strong> 与历史合并去重。<br>
         - 查询失败的地址单独标红，不进入导出。
     </div>
 
@@ -485,6 +511,55 @@
         const closeWatchBtn = document.getElementById('closeWatchBtn');
         const watchItems = document.getElementById('watchItems');
         const watchCount = document.getElementById('watchCount');
+        const watchUpdatedAtEl = document.getElementById('watchUpdatedAt');
+
+        function formatWatchTime(ts) {
+            const n = Number(ts);
+            if (!Number.isFinite(n) || n <= 0) return '';
+            try {
+                return new Date(n).toLocaleString('zh-CN', {
+                    hour12: false,
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                });
+            } catch (_) {
+                return '';
+            }
+        }
+
+        function setWatchUpdatedAt(ts) {
+            if (!watchUpdatedAtEl) return;
+            const text = formatWatchTime(ts);
+            watchUpdatedAtEl.textContent = text ? `更新于 ${text}` : '';
+        }
+
+        function buildWatchPayload(items) {
+            return {
+                updatedAt: Date.now(),
+                items: Array.isArray(items) ? items : [],
+            };
+        }
+
+        function parseWatchFile(raw) {
+            if (Array.isArray(raw)) {
+                let updatedAt = 0;
+                for (const item of raw) {
+                    const t = Number(item && item.updatedAt);
+                    if (Number.isFinite(t) && t > updatedAt) updatedAt = t;
+                }
+                return { items: raw, updatedAt: updatedAt || null };
+            }
+            if (raw && typeof raw === 'object' && Array.isArray(raw.items)) {
+                return {
+                    items: raw.items,
+                    updatedAt: Number(raw.updatedAt) || null,
+                };
+            }
+            return { items: [], updatedAt: null };
+        }
 
         // ---------- 工具函数 ----------
         function showStatus(message, type = 'info') {
@@ -758,10 +833,20 @@
             );
             filtered.sort((a, b) => b.market_cap - a.market_cap);
 
-            // 仅 ≥5M 进入导出池（To Watch / To All）
+            // 仅 ≥5M 进入导出池（To Watch 存完整行；To All 仍用地址）
             for (const item of filtered) {
                 L1.push(item.address);
-                L2.push(item.address);
+                L2.push({
+                    address: item.address,
+                    symbol: item.symbol || '-',
+                    market_cap: item.market_cap,
+                    price: item.price,
+                    fdv: item.fdv,
+                    liquidity: item.liquidity,
+                    volume_24h: item.volume_24h,
+                    holders: item.holders,
+                    updatedAt: Date.now(),
+                });
             }
 
             let rows = '';
@@ -828,20 +913,28 @@
                 showToast('❌ L2 数据为空');
                 return;
             }
-            const json = JSON.stringify(L2, null, 4);
-            navigator.clipboard.writeText(json).then(() => {
-                showToast(`✅ 已复制 ${L2.length} 个地址到剪贴板 (to Watch)`);
+            const payload = buildWatchPayload(L2);
+            const richJson = JSON.stringify(payload, null, 4);
+            const addressJson = JSON.stringify(
+                L2.map((item) =>
+                    typeof item === 'string' ? item : item.address,
+                ),
+                null,
+                4,
+            );
+            navigator.clipboard.writeText(addressJson).then(() => {
+                showToast(`✅ 已复制 ${L2.length} 个地址；Watch 写入符号/市值等`);
             }).catch(() => {
                 const textarea = document.createElement('textarea');
-                textarea.value = json;
+                textarea.value = addressJson;
                 document.body.appendChild(textarea);
                 textarea.select();
                 document.execCommand('copy');
                 document.body.removeChild(textarea);
-                showToast(`✅ 已复制 ${L2.length} 个地址到剪贴板 (to Watch)`);
+                showToast(`✅ 已复制 ${L2.length} 个地址；Watch 写入符号/市值等`);
             });
-            // 更新 GitHub 文件
-            updateGitHubFile(WATCH_PATH, json);
+            displayWatchList(payload.items, payload.updatedAt);
+            updateGitHubFile(WATCH_PATH, richJson);
         });
 
         toAllBtn.addEventListener('click', () => {
@@ -867,75 +960,147 @@
         clearWatchBtn.addEventListener('click', () => {
             const confirmClear = confirm('确定要清除 Watch 列表中的所有数据吗？此操作不可撤销。');
             if (!confirmClear) return;
-            const emptyJson = '[]';
-            // 更新 GitHub 文件
+            const payload = buildWatchPayload([]);
+            const emptyJson = JSON.stringify(payload, null, 4);
             updateGitHubFile(WATCH_PATH, emptyJson);
-            // 同时更新本地显示
             L2 = [];
-            watchItems.innerHTML = '<div class="watch-empty">Watch 列表为空</div>';
-            watchCount.textContent = '(0)';
+            displayWatchList([], payload.updatedAt);
         });
+
+        function normalizeWatchItem(item) {
+            if (typeof item === 'string') {
+                return {
+                    address: item,
+                    symbol: '-',
+                    market_cap: null,
+                    price: null,
+                    fdv: null,
+                    liquidity: null,
+                    volume_24h: null,
+                    holders: null,
+                };
+            }
+            return {
+                address: item && item.address ? String(item.address) : '',
+                symbol: (item && item.symbol) || '-',
+                market_cap: item && item.market_cap,
+                price: item && item.price,
+                fdv: item && item.fdv,
+                liquidity: item && item.liquidity,
+                volume_24h: item && item.volume_24h,
+                holders: item && item.holders,
+            };
+        }
+
+        function bindWatchTableActions(root) {
+            root.querySelectorAll('.address-cell').forEach((cell) => {
+                cell.addEventListener('click', () => {
+                    const address = cell.getAttribute('data-address');
+                    if (!address) return;
+                    navigator.clipboard.writeText(address).then(() => {
+                        showToast('✅ 地址已复制');
+                    }).catch(() => {
+                        const textarea = document.createElement('textarea');
+                        textarea.value = address;
+                        document.body.appendChild(textarea);
+                        textarea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textarea);
+                        showToast('✅ 地址已复制');
+                    });
+                });
+            });
+            root.querySelectorAll('.watch-checkbox').forEach((checkbox) => {
+                checkbox.addEventListener('change', (e) => {
+                    const row = e.target.closest('tr');
+                    if (!row) return;
+                    row.style.opacity = e.target.checked ? '0.55' : '1';
+                });
+            });
+        }
+
+        function displayWatchList(watchData, updatedAt) {
+            const list = Array.isArray(watchData) ? watchData : [];
+            if (!list.length) {
+                watchItems.innerHTML = '<div class="watch-empty">Watch 列表为空</div>';
+                watchCount.textContent = '(0)';
+                setWatchUpdatedAt(updatedAt);
+                return;
+            }
+
+            const rows = list.map(normalizeWatchItem).filter((item) => item.address);
+            rows.sort((a, b) => {
+                const ma = Number(a.market_cap);
+                const mb = Number(b.market_cap);
+                const ha = Number.isFinite(ma);
+                const hb = Number.isFinite(mb);
+                if (ha && hb && mb !== ma) return mb - ma;
+                if (ha !== hb) return ha ? -1 : 1;
+                return String(a.address).localeCompare(String(b.address));
+            });
+
+            let stamp = Number(updatedAt) || 0;
+            if (!stamp) {
+                for (const item of list) {
+                    const t = Number(item && item.updatedAt);
+                    if (Number.isFinite(t) && t > stamp) stamp = t;
+                }
+            }
+
+            let body = '';
+            for (const item of rows) {
+                body += `<tr>
+                        <td><input type="checkbox" class="watch-checkbox" data-address="${item.address}"></td>
+                        <td class="address-cell" data-address="${item.address}" title="点击复制地址"><span>${item.address}</span></td>
+                        <td>${item.symbol || '-'}</td>
+                        <td class="numeric">${Number.isFinite(Number(item.market_cap)) ? '$' + formatNumber(item.market_cap) : '-'}</td>
+                        <td class="numeric">${item.price != null && item.price !== '' ? '$' + Number(item.price).toFixed(6) : '-'}</td>
+                        <td class="numeric">${item.fdv != null && item.fdv !== '' ? '$' + formatNumber(item.fdv) : '-'}</td>
+                        <td class="numeric">${item.liquidity != null && item.liquidity !== '' ? '$' + formatNumber(item.liquidity) : '-'}</td>
+                        <td class="numeric">${item.volume_24h != null && item.volume_24h !== '' ? '$' + formatNumber(item.volume_24h) : '-'}</td>
+                        <td class="numeric">${item.holders ?? '-'}</td>
+                    </tr>`;
+            }
+
+            watchItems.innerHTML = `
+                    <table class="watch-table">
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th>合约地址</th>
+                                <th>符号</th>
+                                <th class="numeric">市值</th>
+                                <th class="numeric">价格</th>
+                                <th class="numeric">FDV</th>
+                                <th class="numeric">流动性</th>
+                                <th class="numeric">24h 量</th>
+                                <th class="numeric">持有者</th>
+                            </tr>
+                        </thead>
+                        <tbody>${body}</tbody>
+                    </table>`;
+            watchCount.textContent = `(${rows.length})`;
+            setWatchUpdatedAt(stamp || null);
+            bindWatchTableActions(watchItems);
+        }
 
         // ---------- 查看 Watch 列表功能 ----------
         async function loadAndDisplayWatch() {
             try {
-                const response = await fetch('./toWatch.json');
+                const response = await fetch(`./toWatch.json?t=${Date.now()}`, {
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        Pragma: 'no-cache',
+                    },
+                });
                 if (!response.ok) throw new Error('无法读取 toWatch.json');
-                const watchData = await response.json();
-                
-                if (!Array.isArray(watchData) || watchData.length === 0) {
-                    watchItems.innerHTML = '<div class="watch-empty">Watch 列表为空</div>';
-                    watchCount.textContent = '(0)';
-                    return;
-                }
-
-                // 构建 HTML
-                let html = '';
-                for (const address of watchData) {
-                    html += `<div class="watch-item">
-                        <input type="checkbox" class="watch-checkbox" data-address="${address}">
-                        <span class="watch-item-address" data-address="${address}" title="点击复制地址">${address}</span>
-                    </div>`;
-                }
-                
-                watchItems.innerHTML = html;
-                watchCount.textContent = `(${watchData.length})`;
-
-                // 绑定地址点击复制事件
-                const addressSpans = watchItems.querySelectorAll('.watch-item-address');
-                addressSpans.forEach(span => {
-                    span.addEventListener('click', (e) => {
-                        const address = span.getAttribute('data-address');
-                        if (address) {
-                            navigator.clipboard.writeText(address).then(() => {
-                                showToast('✅ 地址已复制');
-                            }).catch(() => {
-                                const textarea = document.createElement('textarea');
-                                textarea.value = address;
-                                document.body.appendChild(textarea);
-                                textarea.select();
-                                document.execCommand('copy');
-                                document.body.removeChild(textarea);
-                                showToast('✅ 地址已复制');
-                            });
-                        }
-                    });
-                });
-
-                // 绑定勾选框事件（仅用于标记，不做额外处理）
-                const checkboxes = watchItems.querySelectorAll('.watch-checkbox');
-                checkboxes.forEach(checkbox => {
-                    checkbox.addEventListener('change', (e) => {
-                        // 可选：在这里添加逻辑，比如保存勾选状态
-                        if (e.target.checked) {
-                            e.target.parentElement.style.opacity = '0.6';
-                        } else {
-                            e.target.parentElement.style.opacity = '1';
-                        }
-                    });
-                });
+                const raw = await response.json();
+                const parsed = parseWatchFile(raw);
+                displayWatchList(parsed.items, parsed.updatedAt);
             } catch (err) {
                 watchItems.innerHTML = `<div class="watch-empty">❌ 无法加载 Watch 列表: ${err.message}</div>`;
+                setWatchUpdatedAt(null);
                 console.error(err);
             }
         }

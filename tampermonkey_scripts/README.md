@@ -12,7 +12,7 @@
 | `.options.json` | 启用状态、匹配 URL、列表位置等 Tampermonkey 设置 |
 | `.storage.json` | `GM_setValue` 持久化数据（多数为空） |
 
-当前共 **7 个脚本 → 约 21 个文件**。
+当前共 **8 个脚本**（含 Ave 热搜）。
 
 ---
 
@@ -20,6 +20,7 @@
 
 | 脚本 | 站点 | 触发方式 | 输出 |
 |------|------|----------|------|
+| ave hot | Ave.ai 热搜 | 「提取热搜合约」 | 剪贴板，多行地址 |
 | okx hot | OKX Web3 | 开关后点页面 | 剪贴板，多行地址 |
 | DexScreener API 合约提取器 | DexScreener | 面板「提取合约」 | 剪贴板（成功项） |
 | dextools hot | Dextools hot-pairs | 开关后点页面 | 剪贴板，表格内合约 |
@@ -27,6 +28,18 @@
 | GeckoTerminal代币ID提取器 | GeckoTerminal | 自动拉 API + 复制 | 剪贴板，热门池 base token |
 | 悬浮式元素复制助手 | gmgn.ai trend | 开始复制 / 复制全部 | 剪贴板 |
 | Transit Finance 市场页批量复制 | Transit Finance | 一键批量点复制 | 剪贴板 |
+
+---
+
+## 0. ave hot
+
+- **文件**：`ave hot.user.js`（v1.1）
+- **匹配**：`https://ave.ai/*`、`https://pro.ave.ai/*`、`https://pc.ave.ai/*` 等
+- **适用页**：
+  - Solana：`https://ave.ai/markets?chain=solana&tab=hot`
+  - Robinhood：`https://ave.ai/markets?chain=robinhood&tab=hot`
+- **作用**：把 `fetch`/XHR 钩子**注入页面主世界**（避免油猴沙箱截不到请求），再扫 DOM；仍空时尝试点页内复制按钮。点「提取热搜合约」写入剪贴板。
+- **注意**：更新脚本后请**硬刷新**热搜页（让钩子在请求发出前挂上）；链名从 `chain=` 读取。
 
 ---
 
@@ -44,14 +57,15 @@
 
 ## 2. DexScreener API 合约提取器
 
-- **文件**：`DexScreener API 合约提取器.user.js`
+- **文件**：`DexScreener API 合约提取器.user.js`（v1.2）
 - **匹配**：`https://dexscreener.com/*` 等
 - **作用**：右侧固定触发按钮打开面板；选链（Solana / ETH / BSC / Base / Arbitrum / Robinhood）后：
-  1. 从表格行 `.ds-dex-table-row` 的 `href` 解析路由 ID
-  2. 走 DexScreener 官方 API 查真实合约
+  1. 从页面收集 `/{chain}/{pair}` 链接（兼容旧 `.ds-dex-table-row` 与新版任意 `a[href]`）
+  2. 优先 `latest/dex/pairs/{chain}/{pair}` 解析 `baseToken.address`，失败再 search 兜底
   3. 分「成功 / 失败」列表，可「复制成功项」
-- **权限**：`GM_xmlhttpRequest`、`GM_setClipboard`
-- **改时注意**：表格 DOM class、链路径正则、API 响应字段。
+- **权限**：`GM_xmlhttpRequest`、`GM_setClipboard`、`@connect api.dexscreener.com`
+- **改时注意**：榜单页要等表格加载完再点提取；若仍为 0，多半是链接 DOM 又变了。
+- **已知问题（已修）**：旧版只认 `.ds-dex-table-row`，页面改版后会提示「未提取到合约地址」。
 
 ---
 
