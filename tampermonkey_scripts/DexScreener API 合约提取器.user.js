@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         DexScreener API 合约提取器
 // @namespace    http://tampermonkey.net/
-// @version      1.2
-// @description  从当前榜单页链接提取 pair，再经 DexScreener API 解析 baseToken 合约
+// @version      1.3
+// @description  从当前榜单页链接提取 pair，再经 DexScreener API 解析 baseToken 合约（RH 支持 0x/v4）
 // @author       YourName
 // @match        https://dexscreener.com/*
 // @match        https://app.dexscreener.com/*
@@ -301,6 +301,21 @@
 
   let currentChain = "solana";
 
+  function detectChainFromUrl() {
+    const m = window.location.pathname.match(
+      /^\/(solana|ethereum|bsc|base|arbitrum|robinhood)(?:\/|$)/i,
+    );
+    return m ? m[1].toLowerCase() : null;
+  }
+
+  function setActiveChain(chain) {
+    if (!chain) return;
+    currentChain = chain;
+    panel.querySelectorAll(".chain-btn").forEach((b) => {
+      b.classList.toggle("active", b.dataset.chain === chain);
+    });
+  }
+
   function showNotif(msg, isError = false) {
     notification.textContent = msg;
     notification.classList.add("show");
@@ -310,6 +325,8 @@
   }
 
   triggerBtn.addEventListener("click", () => {
+    const fromUrl = detectChainFromUrl();
+    if (fromUrl) setActiveChain(fromUrl);
     panel.classList.toggle("active");
     triggerBtn.textContent = panel.classList.contains("active")
       ? "📋 收起面板"
@@ -379,10 +396,41 @@
 
   function isLikelyPairId(id, chain) {
     if (!id) return false;
-    if (chain === "solana" || chain === "robinhood") {
-      return /^[1-9A-HJ-NP-Za-km-z]{32,48}$/.test(id);
+    const s = String(id);
+    if (chain === "solana") {
+      return /^[1-9A-HJ-NP-Za-km-z]{32,48}$/.test(s);
     }
-    return /^0x[a-fA-F0-9]{40}$/.test(id);
+    // Robinhood / EVM：标准 0x+40，以及 Uniswap v4 poolId（0x+64）
+    if (chain === "robinhood") {
+      return /^0x[a-fA-F0-9]{40}$/.test(s) || /^0x[a-fA-F0-9]{64}$/.test(s);
+    }
+    return /^0x[a-fA-F0-9]{40}$/.test(s);
+  }
+
+  function isEvmTokenAddress(id) {
+    return /^0x[a-fA-F0-9]{40}$/.test(String(id || ""));
+  }
+
+  function pickBestPair(pairs) {
+    const list = Array.isArray(pairs) ? pairs.filter(Boolean) : [];
+    if (!list.length) return null;
+    return list.slice().sort((a, b) => {
+      const la = Number(a?.liquidity?.usd) || 0;
+      const lb = Number(b?.liquidity?.usd) || 0;
+      if (lb !== la) return lb - la;
+      const va = Number(a?.volume?.h24) || 0;
+      const vb = Number(b?.volume?.h24) || 0;
+      return vb - va;
+    })[0];
+  }
+
+  function fromPair(pair, fallbackRouteId) {
+    if (!pair?.baseToken?.address) return null;
+    return {
+      contract: pair.baseToken.address,
+      name: pair.baseToken.symbol || pair.baseToken.name || "",
+      pairAddress: pair.pairAddress || fallbackRouteId || "",
+    };
   }
 
   function readTokenName(el) {
@@ -459,44 +507,73 @@
   }
 
   async function resolveContract(chain, routeId) {
-    // 1) pair 直查（榜单 href 通常是 pair address）
+    // 1) pair 直查（榜单 href 通常是 pair / v4 poolId）
     try {
       const pairData = await gmGetJson(
         `https://api.dexscreener.com/latest/dex/pairs/${encodeURIComponent(chain)}/${encodeURIComponent(routeId)}`,
       );
       const pair = Array.isArray(pairData?.pairs)
-        ? pairData.pairs[0]
+        ? pickBestPair(pairData.pairs)
         : pairData?.pair;
-      if (pair?.baseToken?.address) {
-        return {
-          contract: pair.baseToken.address,
-          name: pair.baseToken.symbol || pair.baseToken.name || "",
-          pairAddress: pair.pairAddress || routeId,
-        };
-      }
+      const hit = fromPair(pair, routeId);
+      if (hit) return hit;
     } catch (_) {
       /* fall through */
     }
 
-    // 2) 搜索兜底
+    // 2) 若路由是代币地址（RH 推广/画像页常见），走 tokens / token-pairs
+    if (isEvmTokenAddress(routeId)) {
+      try {
+        const tokenPairs = await gmGetJson(
+          `https://api.dexscreener.com/token-pairs/v1/${encodeURIComponent(chain)}/${encodeURIComponent(routeId)}`,
+        );
+        const hit = fromPair(pickBestPair(tokenPairs), routeId);
+        if (hit) return hit;
+      } catch (_) {
+        /* fall through */
+      }
+      try {
+        const tokensData = await gmGetJson(
+          `https://api.dexscreener.com/tokens/v1/${encodeURIComponent(chain)}/${encodeURIComponent(routeId)}`,
+        );
+        const hit = fromPair(pickBestPair(tokensData), routeId);
+        if (hit) {
+          // tokens 接口已确认是该链上的代币，合约即 routeId
+          return {
+            contract: routeId,
+            name: hit.name,
+            pairAddress: hit.pairAddress,
+          };
+        }
+        // 无池子时仍可返回代币地址本身（RH 榜单偶发只挂 token 链接）
+        return {
+          contract: routeId,
+          name: "",
+          pairAddress: "",
+        };
+      } catch (_) {
+        /* fall through */
+      }
+    }
+
+    // 3) 搜索兜底
     const searchData = await gmGetJson(
       `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(routeId)}`,
     );
     const chainPairs = (searchData?.pairs || []).filter(
       (p) => String(p.chainId || "").toLowerCase() === chain.toLowerCase(),
     );
-    const hit =
-      chainPairs.find(
-        (p) =>
-          String(p.pairAddress || "").toLowerCase() === routeId.toLowerCase(),
-      ) || chainPairs[0];
-    if (hit?.baseToken?.address) {
-      return {
-        contract: hit.baseToken.address,
-        name: hit.baseToken.symbol || hit.baseToken.name || "",
-        pairAddress: hit.pairAddress || "",
-      };
-    }
+    const byPair = chainPairs.find(
+      (p) =>
+        String(p.pairAddress || "").toLowerCase() === routeId.toLowerCase(),
+    );
+    const byToken = chainPairs.find(
+      (p) =>
+        String(p.baseToken?.address || "").toLowerCase() ===
+        routeId.toLowerCase(),
+    );
+    const hit = fromPair(byPair || byToken || pickBestPair(chainPairs), routeId);
+    if (hit) return hit;
     throw new Error("API 未返回 baseToken");
   }
 
@@ -598,11 +675,16 @@
   }
 
   document.getElementById("extractBtn").addEventListener("click", () => {
+    const fromUrl = detectChainFromUrl();
+    if (fromUrl) setActiveChain(fromUrl);
     extractContracts().catch((error) => {
       console.error(error);
       showNotif(error.message || "提取失败", true);
     });
   });
+
+  // 进入 /robinhood 等页面时自动对齐链按钮
+  setActiveChain(detectChainFromUrl() || currentChain);
 
   document.getElementById("copyBtn").addEventListener("click", () => {
     const contracts = [];

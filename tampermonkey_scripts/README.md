@@ -57,15 +57,18 @@
 
 ## 2. DexScreener API 合约提取器
 
-- **文件**：`DexScreener API 合约提取器.user.js`（v1.2）
+- **文件**：`DexScreener API 合约提取器.user.js`（v1.3）
 - **匹配**：`https://dexscreener.com/*` 等
+- **适用页**：含 `https://dexscreener.com/robinhood?rankBy=trendingScoreH24&order=desc`
 - **作用**：右侧固定触发按钮打开面板；选链（Solana / ETH / BSC / Base / Arbitrum / Robinhood）后：
-  1. 从页面收集 `/{chain}/{pair}` 链接（兼容旧 `.ds-dex-table-row` 与新版任意 `a[href]`）
-  2. 优先 `latest/dex/pairs/{chain}/{pair}` 解析 `baseToken.address`，失败再 search 兜底
+  1. 从页面收集 `/{chain}/{pair}` 链接（兼容旧 `.ds-dex-table-row` 与新版任意 `a[href]`）；打开面板/提取时按 URL 自动选链
+  2. 优先 `latest/dex/pairs/{chain}/{pair}` 解析 `baseToken.address`；代币地址再试 `token-pairs` / `tokens`；最后 search 兜底
   3. 分「成功 / 失败」列表，可「复制成功项」
 - **权限**：`GM_xmlhttpRequest`、`GM_setClipboard`、`@connect api.dexscreener.com`
 - **改时注意**：榜单页要等表格加载完再点提取；若仍为 0，多半是链接 DOM 又变了。
-- **已知问题（已修）**：旧版只认 `.ds-dex-table-row`，页面改版后会提示「未提取到合约地址」。
+- **已知问题（已修）**：
+  - 旧版只认 `.ds-dex-table-row`，页面改版后会提示「未提取到合约地址」
+  - v1.2 把 Robinhood 当 Solana（base58）过滤，RH 的 `0x` / v4 `0x+64` 链接会被全部丢掉 → v1.3 已按 EVM 校验
 
 ---
 
