@@ -4943,6 +4943,13 @@
       </button>
       <button
         type="button"
+        id="pinBatchNailBtn"
+        title="加入钉子，便签自动备注当前价"
+      >
+        钉
+      </button>
+      <button
+        type="button"
         id="pinBatchUnpinBtn"
         class="is-danger"
         title="取消盯住"
@@ -11146,47 +11153,100 @@
         syncCapturePickSelectUi();
       }
 
+      function nailSymbolKeyOf(symbol) {
+        return WatchFavorites.nailSymbolKey
+          ? WatchFavorites.nailSymbolKey(symbol)
+          : String(symbol || "")
+              .trim()
+              .toUpperCase();
+      }
+
+      function existingNailSymbolSet() {
+        return new Set(
+          (nailItems || []).map((item) =>
+            String(item.symbol || "").toUpperCase(),
+          ),
+        );
+      }
+
+      /** 批量钉入：已在抽屉中的掠过；新币便签=现价。 */
+      async function addFreshNailsWithPriceNotes(symbols, options) {
+        const opts = options || {};
+        const raw = [...new Set((symbols || []).map(nailSymbolKeyOf).filter(Boolean))];
+        if (!raw.length) {
+          showToast(opts.emptyText || "先选中要加入的币");
+          return null;
+        }
+        if (nailSaving) {
+          showToast("钉子保存中…");
+          return null;
+        }
+        const before = existingNailSymbolSet();
+        const fresh = raw.filter((symbol) => !before.has(symbol));
+        const skipped = raw.length - fresh.length;
+        if (!fresh.length) {
+          showToast(
+            skipped > 0
+              ? `选中 ${raw.length} 个均已在钉子中，已掠过`
+              : opts.emptyText || "没有可加入钉子的币",
+          );
+          return { added: 0, skipped, withPrice: 0, noPrice: 0 };
+        }
+        const notesBySymbol = {};
+        let withPrice = 0;
+        let noPrice = 0;
+        for (const key of fresh) {
+          const price = Number(marketMap[key]?.price);
+          if (Number.isFinite(price) && price > 0) {
+            notesBySymbol[key] = formatPinPrice(price);
+            withPrice += 1;
+          } else {
+            notesBySymbol[key] = "";
+            noPrice += 1;
+          }
+        }
+        await persistNails(
+          (list) => WatchFavorites.upsertNailsBatch(list, fresh, notesBySymbol),
+          opts.message || `Add nails x${fresh.length} with price notes`,
+          {
+            loadingText:
+              opts.loadingText || `加入钉子 ${fresh.length}…`,
+          },
+        );
+        return { added: fresh.length, skipped, withPrice, noPrice };
+      }
+
+      function toastNailAddResult(result) {
+        if (!result) return;
+        const parts = [];
+        if (result.added > 0) {
+          parts.push(`已加入钉子 ${result.added} 个`);
+          if (result.withPrice > 0) parts.push(`便签现价 ${result.withPrice}`);
+          if (result.noPrice > 0) parts.push(`无价 ${result.noPrice}`);
+        }
+        if (result.skipped > 0) parts.push(`掠过已有 ${result.skipped}`);
+        showToast(parts.join(" · ") || "完成");
+      }
+
       async function addSelectedNotesRankToNails() {
         const symbols = [...selectedNotesRankSymbols];
         if (!symbols.length) {
           showToast("先选中要加入的币");
           return;
         }
-        if (nailSaving) {
-          showToast("钉子保存中…");
-          return;
-        }
-        const before = new Set(
-          (nailItems || []).map((item) =>
-            String(item.symbol || "").toUpperCase(),
-          ),
-        );
-        const fresh = symbols.filter((symbol) => !before.has(symbol));
         try {
-          await persistNails(
-            (list) =>
-              typeof WatchFavorites.upsertNailsBatch === "function"
-                ? WatchFavorites.upsertNailsBatch(list, symbols)
-                : symbols.reduce(
-                    (acc, symbol) => WatchFavorites.upsertNail(acc, symbol, ""),
-                    list,
-                  ),
-            `Add nails x${symbols.length}`,
-            { loadingText: `加入钉子 ${symbols.length}…` },
-          );
+          const result = await addFreshNailsWithPriceNotes(symbols, {
+            emptyText: "先选中要加入的币",
+            message: `Capture/rank nails x${symbols.length}`,
+            loadingText: `加入钉子…`,
+          });
+          if (!result) return;
           notesRankSelectMode = false;
           selectedNotesRankSymbols.clear();
           renderCombinedRankPanels({ fromCache: true });
           syncNotesRankSelectUi();
           syncCapturePickSelectUi();
-          showToast(
-            fresh.length
-              ? `已加入钉子 ${fresh.length} 个` +
-                  (fresh.length < symbols.length
-                    ? ` · 已有 ${symbols.length - fresh.length}`
-                    : "")
-              : `已在钉子中 ${symbols.length} 个（已更新）`,
-          );
+          toastNailAddResult(result);
         } catch (error) {
           console.warn(error);
           showToast(error.message || "加入钉子失败");
@@ -12080,7 +12140,103 @@
           }));
       }
 
-      function drawKline(canvas, candles, pinPrice, pinnedAt, noteMarks) {
+      /** 从钉子便签里提取价格阈值，如「注意 0.0558」「注意  0.98」。 */
+      function parseNailNoteAlertPrice(note) {
+        const text = String(note || "").trim();
+        if (!text) return null;
+        const match = text.match(/(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/);
+        if (!match) return null;
+        const n = Number(match[1]);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      }
+
+      function nailAlertMarkForSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return null;
+        const nail = (nailItems || []).find(
+          (item) => String(item.symbol || "").toUpperCase() === key,
+        );
+        if (!nail) return null;
+        const price = parseNailNoteAlertPrice(nail.note);
+        if (!Number.isFinite(price) || price <= 0) return null;
+        return {
+          price,
+          // 无 noteAt 的旧便签：整段可见 K 线都生效
+          fromAt: Number(nail.noteAt) > 0 ? Number(nail.noteAt) : 0,
+        };
+      }
+
+      const NAIL_ALERT_GREEN = "#0a5c3a";
+
+      function strokeCandleWick(ctx, x, high, low, alertPrice, yOf, below, above) {
+        const yH = yOf(high);
+        const yL = yOf(low);
+        if (!Number.isFinite(alertPrice) || high <= alertPrice) {
+          ctx.strokeStyle = below;
+          ctx.beginPath();
+          ctx.moveTo(x, yH);
+          ctx.lineTo(x, yL);
+          ctx.stroke();
+          return;
+        }
+        if (low >= alertPrice) {
+          ctx.strokeStyle = above;
+          ctx.beginPath();
+          ctx.moveTo(x, yH);
+          ctx.lineTo(x, yL);
+          ctx.stroke();
+          return;
+        }
+        const yA = yOf(alertPrice);
+        ctx.strokeStyle = above;
+        ctx.beginPath();
+        ctx.moveTo(x, yH);
+        ctx.lineTo(x, yA);
+        ctx.stroke();
+        ctx.strokeStyle = below;
+        ctx.beginPath();
+        ctx.moveTo(x, yA);
+        ctx.lineTo(x, yL);
+        ctx.stroke();
+      }
+
+      function fillCandleBody(ctx, x, bodyW, open, close, alertPrice, yOf, below, above) {
+        const lo = Math.min(open, close);
+        const hi = Math.max(open, close);
+        const yOpen = yOf(open);
+        const yClose = yOf(close);
+        if (!Number.isFinite(alertPrice) || hi <= alertPrice) {
+          ctx.fillStyle = below;
+          ctx.fillRect(
+            x - bodyW / 2,
+            Math.min(yOpen, yClose),
+            bodyW,
+            Math.max(1, Math.abs(yClose - yOpen)),
+          );
+          return;
+        }
+        if (lo >= alertPrice) {
+          ctx.fillStyle = above;
+          ctx.fillRect(
+            x - bodyW / 2,
+            Math.min(yOpen, yClose),
+            bodyW,
+            Math.max(1, Math.abs(yClose - yOpen)),
+          );
+          return;
+        }
+        const yA = yOf(alertPrice);
+        const yLo = yOf(lo);
+        const yHi = yOf(hi);
+        ctx.fillStyle = below;
+        ctx.fillRect(x - bodyW / 2, yA, bodyW, Math.max(1, yLo - yA));
+        ctx.fillStyle = above;
+        ctx.fillRect(x - bodyW / 2, yHi, bodyW, Math.max(1, yA - yHi));
+      }
+
+      function drawKline(canvas, candles, pinPrice, pinnedAt, noteMarks, alertMark) {
         const rect = canvas.getBoundingClientRect();
         const width = Math.max(1, Math.floor(rect.width));
         const height = Math.max(1, Math.floor(rect.height));
@@ -12113,12 +12269,25 @@
             min = Math.min(min, price);
           }
         });
+        const alertPrice = Number(alertMark && alertMark.price);
+        const hasAlert = Number.isFinite(alertPrice) && alertPrice > 0;
+        if (hasAlert) {
+          max = Math.max(max, alertPrice);
+          min = Math.min(min, alertPrice);
+        }
         const range = max - min || max * 0.01 || 1;
         const slot = chartW / candles.length;
         const bodyW = Math.max(1, slot * 0.62);
         const yOf = (price) => pad.top + ((max - price) / range) * chartH;
 
         const pinIndex = hasPin ? findCandleIndexAt(candles, pinnedAt) : -1;
+        const alertFromAt = Number(alertMark && alertMark.fromAt) || 0;
+        const alertFromIndex =
+          hasAlert && alertFromAt > 0
+            ? findCandleIndexAt(candles, alertFromAt)
+            : hasAlert
+              ? 0
+              : -1;
 
         if (hasPin) {
           const y = yOf(pin);
@@ -12132,19 +12301,48 @@
           ctx.restore();
         }
 
+        if (hasAlert) {
+          const y = yOf(alertPrice);
+          ctx.save();
+          ctx.strokeStyle = "rgba(10, 92, 58, 0.55)";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          ctx.moveTo(pad.left, y);
+          ctx.lineTo(pad.left + chartW, y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+
         candles.forEach((candle, index) => {
           const x = pad.left + slot * index + slot / 2;
           const up = candle.close >= candle.open;
-          ctx.strokeStyle = up ? "#8a9a96" : "#9a8e88";
-          ctx.fillStyle = up ? "#8a9a96" : "#9a8e88";
-          ctx.beginPath();
-          ctx.moveTo(x, yOf(candle.high));
-          ctx.lineTo(x, yOf(candle.low));
-          ctx.stroke();
-          const y1 = yOf(candle.open);
-          const y2 = yOf(candle.close);
-          const bodyH = Math.max(1, Math.abs(y2 - y1));
-          ctx.fillRect(x - bodyW / 2, Math.min(y1, y2), bodyW, bodyH);
+          const base = up ? "#8a9a96" : "#9a8e88";
+          const useAlert =
+            hasAlert && alertFromIndex >= 0 && index >= alertFromIndex;
+          const splitAt = useAlert ? alertPrice : NaN;
+          strokeCandleWick(
+            ctx,
+            x,
+            candle.high,
+            candle.low,
+            splitAt,
+            yOf,
+            base,
+            NAIL_ALERT_GREEN,
+          );
+          fillCandleBody(
+            ctx,
+            x,
+            bodyW,
+            candle.open,
+            candle.close,
+            splitAt,
+            yOf,
+            base,
+            NAIL_ALERT_GREEN,
+          );
         });
 
         // 盯住：竖虚线 + 白心绿边点。
@@ -13060,12 +13258,13 @@
           countEl.textContent = String(selectedPinSymbols.size);
         }
         const renewBtn = document.getElementById("pinBatchRenewBtn");
+        const nailBtn = document.getElementById("pinBatchNailBtn");
         const unpinBtn = document.getElementById("pinBatchUnpinBtn");
         const clearEggFireBtn = document.getElementById("pinBatchClearEggFireBtn");
         const clearEggNewBtn = document.getElementById("pinBatchClearEggNewBtn");
         const clearBtn = document.getElementById("pinBatchClearBtn");
         const selectAllBtn = document.getElementById("pinBatchSelectAllBtn");
-        const busy = pinSaving;
+        const busy = pinSaving || nailSaving;
         const disabled = busy || selectedPinSymbols.size === 0;
         const eggFireCount = [...selectedPinSymbols].filter((symbol) =>
           hasPeriodHighEgg(symbol),
@@ -13076,6 +13275,14 @@
         if (renewBtn) {
           renewBtn.hidden = false;
           renewBtn.disabled = disabled;
+        }
+        if (nailBtn) {
+          nailBtn.hidden = false;
+          nailBtn.disabled = disabled;
+          nailBtn.title =
+            selectedPinSymbols.size > 0
+              ? `加入钉子 ${selectedPinSymbols.size} 个（便签=现价）`
+              : "加入钉子，便签自动备注当前价";
         }
         if (unpinBtn) {
           unpinBtn.disabled = disabled;
@@ -13327,6 +13534,31 @@
           window.alert(error.message || "批量取消记一笔失败");
         } finally {
           momNotesSaving = false;
+          updatePinSelectUi();
+        }
+      }
+
+      async function batchNailSelected() {
+        if (pinSaving || nailSaving || !selectedPinSymbols.size) return;
+        const symbols = [...selectedPinSymbols];
+        try {
+          updatePinSelectUi();
+          const result = await addFreshNailsWithPriceNotes(symbols, {
+            emptyText: "没有可加入钉子的币",
+            message: `Batch nail with price notes`,
+            loadingText: `钉入…`,
+          });
+          if (!result) {
+            updatePinSelectUi();
+            return;
+          }
+          selectedPinSymbols.clear();
+          applyPinSelectChrome();
+          updatePinSelectUi();
+          toastNailAddResult(result);
+        } catch (error) {
+          console.warn(error);
+          showToast(error.message || "批量钉入失败");
           updatePinSelectUi();
         }
       }
@@ -14424,6 +14656,7 @@
           pin ? pin.pinPrice : null,
           pin ? pin.pinnedAt : null,
           notesMarksForSymbol(key),
+          nailAlertMarkForSymbol(key),
         );
         return true;
       }
@@ -14553,6 +14786,7 @@
               pin ? pin.pinPrice : null,
               pin ? pin.pinnedAt : null,
               notesMarksForSymbol(symbol),
+              nailAlertMarkForSymbol(symbol),
             );
           } catch (error) {
             if (error && error.name === "AbortError") return;
@@ -14707,6 +14941,9 @@
             `Update nail note ${key.replace(/USDT$/i, "")}`,
             { quiet: true, loadingText: "保存便签…" },
           );
+          if (isNailDrawerOpen()) {
+            void refreshSingleNailKline(key);
+          }
         } catch (error) {
           console.warn(error);
           showToast(error.message || "便签保存失败");
@@ -16826,6 +17063,12 @@
         .addEventListener("click", () => {
           batchRenewSelected();
         });
+      const pinBatchNailBtn = document.getElementById("pinBatchNailBtn");
+      if (pinBatchNailBtn) {
+        pinBatchNailBtn.addEventListener("click", () => {
+          void batchNailSelected();
+        });
+      }
       document
         .getElementById("pinBatchClearEggFireBtn")
         .addEventListener("click", () => {

@@ -930,6 +930,7 @@
     const at = Number(item.at);
     const exitedAt = Number(item.exitedAt);
     const pinnedAt = Number(item.pinnedAt);
+    const noteAt = Number(item.noteAt);
     const order = Number(item.order);
     const note = String(item.note || item.remark || "").trim();
     return {
@@ -940,6 +941,7 @@
         ? String(item.label).trim()
         : symbol.replace(/USDT$/i, ""),
       note,
+      noteAt: note && Number.isFinite(noteAt) && noteAt > 0 ? noteAt : 0,
       exitedAt: Number.isFinite(exitedAt) && exitedAt > 0 ? exitedAt : 0,
       pinned: !!item.pinned,
       pinnedAt: Number.isFinite(pinnedAt) && pinnedAt > 0 ? pinnedAt : 0,
@@ -983,6 +985,7 @@
       symbol: item.symbol,
       label: item.label,
       note: item.note,
+      noteAt: item.noteAt || 0,
       exitedAt: item.exitedAt || 0,
       pinned: !!item.pinned,
       pinnedAt: item.pinnedAt || 0,
@@ -996,12 +999,19 @@
     const prev = normalizeNails(list);
     const existing = prev.find((item) => item.symbol === key) || null;
     const next = prev.filter((item) => item.symbol !== key);
+    const text = String(note || "").trim();
+    const now = Date.now();
+    let noteAt = (existing && existing.noteAt) || 0;
+    if (text !== String((existing && existing.note) || "").trim()) {
+      noteAt = text ? now : 0;
+    }
     next.unshift({
-      id: (existing && existing.id) || `${Date.now().toString(36)}`,
-      at: Date.now(),
+      id: (existing && existing.id) || `${now.toString(36)}`,
+      at: now,
       symbol: key,
       label: key.replace(/USDT$/i, ""),
-      note: String(note || "").trim(),
+      note: text,
+      noteAt,
       exitedAt: 0,
       pinned: !!(existing && existing.pinned),
       pinnedAt: (existing && existing.pinnedAt) || 0,
@@ -1017,7 +1027,7 @@
     );
   }
 
-  function upsertNailsBatch(list, symbols) {
+  function upsertNailsBatch(list, symbols, notesBySymbol) {
     const keys = [
       ...new Set(
         (symbols || [])
@@ -1030,14 +1040,26 @@
     const existingMap = new Map(prev.map((item) => [item.symbol, item]));
     const rest = prev.filter((item) => !keys.includes(item.symbol));
     const now = Date.now();
+    const notes =
+      notesBySymbol && typeof notesBySymbol === "object" ? notesBySymbol : null;
     const added = keys.map((key, index) => {
       const existing = existingMap.get(key) || null;
+      const hasMapped =
+        !!notes && Object.prototype.hasOwnProperty.call(notes, key);
+      const mappedNote = hasMapped ? String(notes[key] || "").trim() : null;
+      const prevNote = (existing && existing.note) || "";
+      const note = mappedNote != null ? mappedNote : prevNote;
+      let noteAt = (existing && existing.noteAt) || 0;
+      if (mappedNote != null && mappedNote !== prevNote) {
+        noteAt = mappedNote ? now : 0;
+      }
       return {
         id: (existing && existing.id) || `${now.toString(36)}-${index}`,
         at: now,
         symbol: key,
         label: key.replace(/USDT$/i, ""),
-        note: (existing && existing.note) || "",
+        note,
+        noteAt,
         exitedAt: 0,
         pinned: !!(existing && existing.pinned),
         pinnedAt: (existing && existing.pinnedAt) || 0,
@@ -1132,8 +1154,9 @@
     const item = next.find((row) => row.symbol === key);
     if (!item) return next;
     if (item.note === text) return next;
+    const noteAt = text ? Date.now() : 0;
     return next.map((row) =>
-      row.symbol === key ? { ...row, note: text } : row,
+      row.symbol === key ? { ...row, note: text, noteAt } : row,
     );
   }
 
