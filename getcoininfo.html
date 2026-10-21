@@ -346,8 +346,18 @@
             font-size: 12px;
             color: #4b5563;
             cursor: pointer;
+            max-width: none;
+            min-width: 28em;
+            white-space: normal;
             word-break: break-all;
-            max-width: 220px;
+        }
+        .watch-table .address-cell span {
+            display: inline;
+            max-width: none;
+            overflow: visible;
+            text-overflow: clip;
+            white-space: normal;
+            word-break: break-all;
         }
         .watch-table .address-cell:hover {
             background-color: #f0f2f5;
@@ -998,7 +1008,7 @@
             for (const item of rows) {
                 body += `<tr>
                         <td><input type="checkbox" class="watch-checkbox" data-address="${item.address}"></td>
-                        <td class="address-cell" data-address="${item.address}" title="点击复制地址"><span>${item.address}</span></td>
+                        <td class="address-cell" data-address="${item.address}" title="点击复制地址">${item.address}</td>
                         <td>${item.symbol || '-'}</td>
                         <td class="numeric">${Number.isFinite(Number(item.market_cap)) ? '$' + formatNumber(item.market_cap) : '-'}</td>
                         <td class="numeric">${item.price != null && item.price !== '' ? '$' + Number(item.price).toFixed(6) : '-'}</td>
