@@ -4597,7 +4597,7 @@
             id="nailSortSwitch"
             role="group"
             aria-label="钉子排序"
-            title="默认：置顶/拖拽顺序；荧光绿：阈值以上绿色价幅从大到小（仅展示）"
+            title="默认：置顶/拖拽顺序；荧光绿：相对绿占比从大到小（仅展示）"
           >
             <button type="button" data-nail-sort="order" class="is-active">
               默认
@@ -4605,7 +4605,7 @@
             <button
               type="button"
               data-nail-sort="alertGreen"
-              title="按荧光绿面积从大到小"
+              title="按相对绿占比从大到小"
             >
               荧光绿
             </button>
@@ -5126,7 +5126,7 @@
         nailRisingFilterOn = true;
       }
       const NAIL_SORT_KEY = "kline-nail-sort-v1";
-      /** order = 置顶/拖拽；alertGreen = 荧光绿面积（仅展示）。 */
+      /** order = 置顶/拖拽；alertGreen = 相对绿占比（仅展示）。 */
       let nailSortMode = "order";
       try {
         const savedNailSort = localStorage.getItem(NAIL_SORT_KEY);
@@ -5136,7 +5136,7 @@
       } catch (_) {
         nailSortMode = "order";
       }
-      /** symbol -> 荧光绿价幅总和；无阈值为 null。 */
+      /** symbol -> 相对绿占比 0~1；无阈值为 null。 */
       const nailAlertGreenScores = new Map();
       let positionItems = [];
       let lastPinPrices = {};
@@ -12211,7 +12211,10 @@
         };
       }
 
-      /** 荧光绿面积：便签生效后各柱 max(0, high - max(alert, low)) 之和。 */
+      /**
+       * 荧光绿相对占比：便签生效后
+       * sum(绿高) / sum(整柱高低差)，与小图缩放无关，贴近肉眼「绿了多少」。
+       */
       function computeNailAlertGreenScore(candles, alertMark) {
         if (!alertMark || !Array.isArray(candles) || !candles.length) return null;
         const alertPrice = Number(alertMark.price);
@@ -12222,17 +12225,22 @@
           const idx = findCandleIndexAt(candles, fromAt);
           fromIndex = idx >= 0 ? idx : 0;
         }
-        let area = 0;
+        let green = 0;
+        let total = 0;
         for (let i = fromIndex; i < candles.length; i += 1) {
           const candle = candles[i];
           if (!candle) continue;
           const high = Number(candle.high);
           const low = Number(candle.low);
           if (!Number.isFinite(high) || !Number.isFinite(low)) continue;
-          if (high <= alertPrice) continue;
-          area += high - Math.max(alertPrice, low);
+          const span = Math.max(0, high - low);
+          total += span;
+          if (high > alertPrice) {
+            green += high - Math.max(alertPrice, low);
+          }
         }
-        return area;
+        if (!(total > 0)) return 0;
+        return green / total;
       }
 
       function rememberNailAlertGreenScore(symbol, candles) {
@@ -14769,7 +14777,7 @@
         if (meta) {
           const sortHint =
             nailSortMode === "alertGreen"
-              ? "荧光绿面积排序"
+              ? "相对绿占比排序"
               : "置顶 / 长按拖动排序";
           if (!total) {
             meta.textContent = `复制名称后新增 · ${sortHint}`;
