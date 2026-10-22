@@ -13,8 +13,14 @@
           } else {
             document.documentElement.setAttribute("data-theme", "terminal");
           }
+          var uiStyle = localStorage.getItem("kline-ui-style-v1");
+          document.documentElement.setAttribute(
+            "data-ui-style",
+            uiStyle === "ios" ? "ios" : "classic",
+          );
         } catch (e) {
           document.documentElement.setAttribute("data-theme", "terminal");
+          document.documentElement.setAttribute("data-ui-style", "classic");
         }
       })();
     </script>
@@ -757,6 +763,154 @@
         background: var(--ios-elevated);
         color: var(--ios-label);
         box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.2);
+      }
+      .ui-style-switch {
+        display: inline-flex;
+        align-items: stretch;
+        gap: 2px;
+        padding: 2px;
+        border-radius: 9px;
+        background: var(--ios-fill);
+        flex-shrink: 0;
+      }
+      .ui-style-switch button {
+        border: none;
+        border-radius: 7px;
+        padding: 5px 7px;
+        background: transparent;
+        color: var(--ios-secondary);
+        font-size: 11px;
+        font-weight: 650;
+        line-height: 1.2;
+        cursor: pointer;
+      }
+      .ui-style-switch button.is-active {
+        background: var(--ios-elevated);
+        color: var(--ios-label);
+        box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.2);
+      }
+      html[data-ui-style="ios"] {
+        --ios-radius: 16px;
+        --ios-radius-lg: 22px;
+        --ios-surface-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+        --ios-control-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+      }
+      html[data-ui-style="ios"] body {
+        letter-spacing: -0.01em;
+      }
+      html[data-ui-style="ios"] .app-chrome {
+        border-bottom-color: color-mix(in srgb, var(--ios-separator) 68%, transparent);
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+      }
+      html[data-ui-style="ios"] .page-header {
+        margin-bottom: 12px;
+      }
+      html[data-ui-style="ios"] .page-header h1 {
+        font-size: 23px;
+        letter-spacing: -0.035em;
+      }
+      html[data-ui-style="ios"] .kline-card {
+        padding: 10px 11px 12px;
+        border-radius: 18px;
+        border-color: color-mix(in srgb, var(--ios-separator) 75%, transparent);
+        box-shadow: var(--ios-surface-shadow);
+      }
+      html[data-ui-style="ios"] .kline-card.is-pressed {
+        transform: scale(0.985);
+      }
+      html[data-ui-style="ios"] .recent-auto-pin,
+      html[data-ui-style="ios"] .resume-pin,
+      html[data-ui-style="ios"] #pinGrid {
+        border-radius: 22px;
+        box-shadow: var(--ios-surface-shadow);
+      }
+      html[data-ui-style="ios"] .section-jump button,
+      html[data-ui-style="ios"] .app-chrome .sort-rail-toggle {
+        box-shadow: var(--ios-control-shadow);
+      }
+      html[data-ui-style="ios"] .app-chrome .chrome-btn {
+        min-height: 34px;
+        border-radius: 999px;
+        padding: 7px 13px;
+        box-shadow: var(--ios-control-shadow);
+      }
+      html[data-ui-style="ios"] .app-chrome .mode-switch {
+        border-radius: 999px;
+        padding: 3px;
+      }
+      html[data-ui-style="ios"] .app-chrome .mode-switch button {
+        border-radius: 999px;
+        padding: 6px 10px;
+      }
+      html[data-ui-style="ios"] .theme-switch,
+      html[data-ui-style="ios"] .ui-style-switch {
+        border-radius: 999px;
+        padding: 3px;
+      }
+      html[data-ui-style="ios"] .theme-switch button,
+      html[data-ui-style="ios"] .ui-style-switch button {
+        border-radius: 999px;
+        padding: 6px 8px;
+      }
+      html[data-ui-style="ios"] .nail-panel {
+        border-radius: 0 24px 24px 0;
+        box-shadow: 14px 0 44px rgba(0, 0, 0, 0.28);
+      }
+      html[data-ui-style="ios"] .nail-head {
+        padding: 18px 16px 12px;
+        background: color-mix(in srgb, var(--grouped) 88%, transparent);
+      }
+      html[data-ui-style="ios"] .nail-head-actions button,
+      html[data-ui-style="ios"] .nail-form button,
+      html[data-ui-style="ios"] .nail-del,
+      html[data-ui-style="ios"] .nail-batch-bar button {
+        min-height: 36px;
+        border-radius: 999px;
+        padding-inline: 13px;
+      }
+      html[data-ui-style="ios"] .nail-controls {
+        border-bottom-color: color-mix(in srgb, var(--separator) 70%, transparent);
+      }
+      html[data-ui-style="ios"] .nail-controls > summary {
+        padding-block: 12px;
+      }
+      html[data-ui-style="ios"] .nail-rising-row {
+        padding: 11px 16px;
+      }
+      html[data-ui-style="ios"] .nail-kcard {
+        padding: 10px 10px 8px;
+        border-radius: 16px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+      }
+      html[data-ui-style="ios"] .nail-switch {
+        box-shadow: var(--ios-control-shadow);
+      }
+      html[data-ui-style="ios"] button:focus-visible,
+      html[data-ui-style="ios"] summary:focus-visible {
+        outline: 2px solid color-mix(in srgb, var(--accent) 75%, white);
+        outline-offset: 2px;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        html[data-ui-style="ios"] .kline-card,
+        html[data-ui-style="ios"] .nail-kcard,
+        html[data-ui-style="ios"] button {
+          transition-duration: 180ms;
+        }
+      }
+      @media (max-width: 520px) {
+        .page-header-actions {
+          gap: 4px;
+        }
+        .theme-switch button,
+        .ui-style-switch button {
+          padding-inline: 5px;
+        }
+        .friend-links > summary {
+          font-size: 12px;
+        }
+        html[data-ui-style="ios"] .page-header h1 {
+          font-size: 18px;
+        }
       }
       .mode-progress {
         position: fixed;
@@ -4665,6 +4819,22 @@
             </button>
             <button type="button" data-theme="night" title="03 高对比夜盘">
               夜
+            </button>
+          </div>
+          <div
+            class="ui-style-switch"
+            id="uiStyleSwitch"
+            role="group"
+            aria-label="界面风格"
+            title="切换经典或 iOS 风格"
+          >
+            <button
+              type="button"
+              data-ui-style="classic"
+              aria-pressed="false"
+            >经典</button>
+            <button type="button" data-ui-style="ios" aria-pressed="false">
+              iOS
             </button>
           </div>
           <details class="friend-links">
@@ -18978,6 +19148,36 @@
           const btn = event.target.closest("[data-theme]");
           if (!btn) return;
           applyTheme(btn.getAttribute("data-theme"));
+        });
+      }
+      const uiStyleSwitch = document.getElementById("uiStyleSwitch");
+      const UI_STYLE_KEY = "kline-ui-style-v1";
+      function syncUiStyleSwitch(style) {
+        if (!uiStyleSwitch) return;
+        uiStyleSwitch.querySelectorAll("[data-ui-style]").forEach((btn) => {
+          const active = btn.getAttribute("data-ui-style") === style;
+          btn.classList.toggle("is-active", active);
+          btn.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+      }
+      function applyUiStyle(style) {
+        const next = style === "ios" ? "ios" : "classic";
+        document.documentElement.setAttribute("data-ui-style", next);
+        try {
+          localStorage.setItem(UI_STYLE_KEY, next);
+        } catch (_) {
+          /* ignore */
+        }
+        syncUiStyleSwitch(next);
+      }
+      syncUiStyleSwitch(
+        document.documentElement.getAttribute("data-ui-style") || "classic",
+      );
+      if (uiStyleSwitch) {
+        uiStyleSwitch.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-ui-style]");
+          if (!btn) return;
+          applyUiStyle(btn.getAttribute("data-ui-style"));
         });
       }
 
