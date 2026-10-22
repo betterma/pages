@@ -12368,6 +12368,45 @@
       }
 
       /**
+       * 荧光绿区间 [from, until)：便签价为水位。
+       * - 未跌破：从便签一直染到最新
+       * - 收盘跌破、尚未重新站上：保留跌破前的绿（until=首根跌破），破位后的不染
+       * - 再次站上（高点>水位）：清掉前面的绿，只从该根染到最新
+       * 例：0.1→0.2 绿 → 跌到 0.05 时旧绿仍在 → 再涨过 0.1 时旧绿消失，只从再站上这根起绿。
+       */
+      function nailAlertGreenActiveRange(candles, alertPrice, fromIndex) {
+        const empty = { from: -1, until: -1 };
+        if (!Array.isArray(candles) || !candles.length) return empty;
+        if (!Number.isFinite(alertPrice) || alertPrice <= 0) return empty;
+        const start = Math.max(0, Number(fromIndex) || 0);
+        if (start >= candles.length) return empty;
+        let below = false;
+        let greenFrom = start;
+        let greenUntil = candles.length;
+        for (let i = start; i < candles.length; i += 1) {
+          const candle = candles[i];
+          if (!candle) continue;
+          const close = Number(candle.close);
+          const high = Number(candle.high);
+          if (!Number.isFinite(close) || !Number.isFinite(high)) continue;
+          if (close < alertPrice) {
+            if (!below) {
+              below = true;
+              greenUntil = i;
+            }
+            continue;
+          }
+          if (below && high > alertPrice) {
+            below = false;
+            greenFrom = i;
+            greenUntil = candles.length;
+          }
+        }
+        if (greenFrom < 0 || greenUntil <= greenFrom) return empty;
+        return { from: greenFrom, until: greenUntil };
+      }
+
+      /**
        * 累计实际画出的绿色实体与影线面积，按图表纵轴缩放换算为 CSS 像素平方。
        */
       function computeNailAlertGreenAreaScore(
@@ -12401,8 +12440,14 @@
         const fromIndex =
           fromAt > 0 ? findCandleIndexAt(candles, fromAt) : 0;
         if (fromIndex < 0) return 0;
+        const greenRange = nailAlertGreenActiveRange(
+          candles,
+          alertPrice,
+          fromIndex,
+        );
+        if (greenRange.from < 0) return 0;
         let area = 0;
-        for (let i = fromIndex; i < candles.length; i += 1) {
+        for (let i = greenRange.from; i < greenRange.until; i += 1) {
           const candle = candles[i];
           if (!candle) continue;
           const open = Number(candle.open);
@@ -12579,6 +12624,10 @@
             : hasAlert
               ? 0
               : -1;
+        const alertGreenRange =
+          hasAlert && alertFromIndex >= 0
+            ? nailAlertGreenActiveRange(candles, alertPrice, alertFromIndex)
+            : { from: -1, until: -1 };
 
         if (hasPin) {
           const y = yOf(pin);
@@ -12613,8 +12662,9 @@
           const useAlert =
             hasAlert &&
             up &&
-            alertFromIndex >= 0 &&
-            index >= alertFromIndex;
+            alertGreenRange.from >= 0 &&
+            index >= alertGreenRange.from &&
+            index < alertGreenRange.until;
           const splitAt = useAlert ? alertPrice : NaN;
           strokeCandleWick(
             ctx,
