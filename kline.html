@@ -12370,9 +12370,9 @@
       /**
        * 荧光绿区间 [from, until)：便签价为水位。
        * - 未跌破：从便签一直染到最新
-       * - 收盘跌破、尚未重新站上：保留跌破前的绿（until=首根跌破），破位后的不染
-       * - 再次站上（高点>水位）：清掉前面的绿，只从该根染到最新
-       * 例：0.1→0.2 绿 → 跌到 0.05 时旧绿仍在 → 再涨过 0.1 时旧绿消失，只从再站上这根起绿。
+       * - 收盘已跌破、尚未重新站上：旧绿也清掉（整段不染）
+       * - 再次站上（高点>水位）：只从该根染到最新（只染超过水位部分）
+       * 例：0.1→0.2 绿 → 跌到 0.05 时绿全消失 → 再涨过 0.1 只从再站上这根起绿。
        */
       function nailAlertGreenActiveRange(candles, alertPrice, fromIndex) {
         const empty = { from: -1, until: -1 };
@@ -12390,10 +12390,9 @@
           const high = Number(candle.high);
           if (!Number.isFinite(close) || !Number.isFinite(high)) continue;
           if (close < alertPrice) {
-            if (!below) {
-              below = true;
-              greenUntil = i;
-            }
+            below = true;
+            greenFrom = -1;
+            greenUntil = -1;
             continue;
           }
           if (below && high > alertPrice) {
@@ -12402,7 +12401,7 @@
             greenUntil = candles.length;
           }
         }
-        if (greenFrom < 0 || greenUntil <= greenFrom) return empty;
+        if (below || greenFrom < 0 || greenUntil <= greenFrom) return empty;
         return { from: greenFrom, until: greenUntil };
       }
 
