@@ -2004,6 +2004,21 @@
         color: var(--secondary);
         text-align: right;
       }
+      .nail-controls {
+        flex: 0 0 auto;
+        border-bottom: 0.5px solid var(--separator);
+      }
+      .nail-controls > summary {
+        padding: 10px 14px;
+        color: var(--label);
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+        list-style-position: inside;
+      }
+      .nail-controls[open] > summary {
+        border-bottom: 0.5px solid var(--separator);
+      }
       .nail-switch {
         position: relative;
         width: 46px;
@@ -4822,59 +4837,62 @@
             <button type="button" data-close-nails>关闭</button>
           </div>
         </div>
-        <div class="nail-rising-row">
-          <span>当前窗口上涨</span>
-          <button
-            type="button"
-            class="nail-switch"
-            id="nailRisingFilter"
-            role="switch"
-            aria-checked="true"
-            title="只显示当前窗口上涨的钉子"
-            aria-label="当前窗口上涨"
-          ></button>
-        </div>
-        <div class="nail-rising-row nail-sort-row">
-          <span>排序</span>
-          <div
-            class="mode-switch pin-sort-switch"
-            id="nailSortSwitch"
-            role="group"
-            aria-label="钉子排序"
-            title="默认：置顶/拖拽顺序；荧光绿：置顶仍在最上，其余按绿色K线面积从大到小"
-          >
-            <button type="button" data-nail-sort="order" class="is-active">
-              默认
-            </button>
+        <details class="nail-controls">
+          <summary>筛选、排序与定时刷新</summary>
+          <div class="nail-rising-row">
+            <span>当前窗口上涨</span>
             <button
               type="button"
-              data-nail-sort="alertGreen"
-              title="置顶仍在最上；其余按绿色K线占用面积从大到小"
+              class="nail-switch"
+              id="nailRisingFilter"
+              role="switch"
+              aria-checked="true"
+              title="只显示当前窗口上涨的钉子"
+              aria-label="当前窗口上涨"
+            ></button>
+          </div>
+          <div class="nail-rising-row nail-sort-row">
+            <span>排序</span>
+            <div
+              class="mode-switch pin-sort-switch"
+              id="nailSortSwitch"
+              role="group"
+              aria-label="钉子排序"
+              title="默认：置顶/拖拽顺序；荧光绿：置顶仍在最上，其余按绿色K线面积从大到小"
             >
-              荧光绿
-            </button>
+              <button type="button" data-nail-sort="order" class="is-active">
+                默认
+              </button>
+              <button
+                type="button"
+                data-nail-sort="alertGreen"
+                title="置顶仍在最上；其余按绿色K线占用面积从大到小"
+              >
+                荧光绿
+              </button>
+            </div>
           </div>
-        </div>
-        <div class="nail-rising-row">
-          <div class="nail-auto-refresh-label">
-            <span>定时刷新</span>
-            <small>每5秒更新当前排行前10价格</small>
+          <div class="nail-rising-row">
+            <div class="nail-auto-refresh-label">
+              <span>定时刷新</span>
+              <small>每5秒更新当前排行前10价格</small>
+            </div>
+            <span
+              id="nailAutoRefreshStatus"
+              class="nail-auto-refresh-status"
+              aria-live="polite"
+            >已关闭</span>
+            <button
+              type="button"
+              class="nail-switch"
+              id="nailAutoRefresh"
+              role="switch"
+              aria-checked="false"
+              title="每5秒刷新当前排行前10项的现价和24h涨跌"
+              aria-label="定时刷新"
+            ></button>
           </div>
-          <span
-            id="nailAutoRefreshStatus"
-            class="nail-auto-refresh-status"
-            aria-live="polite"
-          >已关闭</span>
-          <button
-            type="button"
-            class="nail-switch"
-            id="nailAutoRefresh"
-            role="switch"
-            aria-checked="false"
-            title="每5秒刷新当前排行前10项的现价和24h涨跌"
-            aria-label="定时刷新"
-          ></button>
-        </div>
+        </details>
         <form class="nail-form" id="nailForm" hidden>
           <input
             id="nailNameInput"
