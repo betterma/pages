@@ -193,8 +193,6 @@
           Accept: "application/vnd.github+json",
           Authorization: `Bearer ${token}`,
           "X-GitHub-Api-Version": "2022-11-28",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
         },
       },
     );
@@ -220,8 +218,6 @@
             Accept: "application/vnd.github+json",
             Authorization: `Bearer ${token}`,
             "X-GitHub-Api-Version": "2022-11-28",
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-            Pragma: "no-cache",
           },
         },
       );
@@ -288,8 +284,6 @@
           Accept: "application/vnd.github+json",
           Authorization: `Bearer ${token}`,
           "X-GitHub-Api-Version": "2022-11-28",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
         },
       },
     );
@@ -309,10 +303,6 @@
     const url = `https://raw.githubusercontent.com/${repo}/${commitSha}/${path}?t=${Date.now()}`;
     const response = await fetch(url, {
       cache: "no-store",
-      headers: {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        Pragma: "no-cache",
-      },
     });
     return response;
   }
