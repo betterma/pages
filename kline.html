@@ -4597,7 +4597,7 @@
             id="nailSortSwitch"
             role="group"
             aria-label="钉子排序"
-            title="默认：置顶/拖拽顺序；荧光绿：染绿窗口数从多到少（仅展示）"
+            title="默认：置顶/拖拽顺序；荧光绿：绿色K线占用面积从大到小"
           >
             <button type="button" data-nail-sort="order" class="is-active">
               默认
@@ -4605,7 +4605,7 @@
             <button
               type="button"
               data-nail-sort="alertGreen"
-              title="按染绿窗口数从多到少"
+              title="按绿色K线占用面积从大到小"
             >
               荧光绿
             </button>
@@ -5126,7 +5126,7 @@
         nailRisingFilterOn = true;
       }
       const NAIL_SORT_KEY = "kline-nail-sort-v1";
-      /** order = 置顶/拖拽；alertGreen = 染绿窗口数（仅展示）。 */
+      /** order = 置顶/拖拽；alertGreen = 绿色K线占用面积（仅展示）。 */
       let nailSortMode = "order";
       try {
         const savedNailSort = localStorage.getItem(NAIL_SORT_KEY);
@@ -5136,7 +5136,7 @@
       } catch (_) {
         nailSortMode = "order";
       }
-      /** symbol -> 染绿窗口数；无阈值为 null。 */
+      /** symbol -> 绿色K线占用面积（canvas CSS 像素平方）；无阈值为 null。 */
       const nailAlertGreenScores = new Map();
       let positionItems = [];
       let lastPinPrices = {};
@@ -12211,52 +12211,132 @@
         };
       }
 
+      function klinePriceBounds(candles, pinPrice, noteMarks, alertPrice) {
+        const highs = candles.map((item) => item.high);
+        const lows = candles.map((item) => item.low);
+        let max = Math.max(...highs);
+        let min = Math.min(...lows);
+        const pin = Number(pinPrice);
+        if (Number.isFinite(pin) && pin > 0) {
+          max = Math.max(max, pin);
+          min = Math.min(min, pin);
+        }
+        (Array.isArray(noteMarks) ? noteMarks : []).forEach((note) => {
+          const price = Number(note && note.price);
+          if (Number.isFinite(price) && price > 0) {
+            max = Math.max(max, price);
+            min = Math.min(min, price);
+          }
+        });
+        if (Number.isFinite(alertPrice) && alertPrice > 0) {
+          max = Math.max(max, alertPrice);
+          min = Math.min(min, alertPrice);
+        }
+        return { min, max };
+      }
+
       /**
-       * 荧光绿窗口数：便签生效后，收涨且 high > 阈值的 K 线根数。
+       * 累计实际画出的绿色实体与影线面积，按图表纵轴缩放换算为 CSS 像素平方。
        */
-      function computeNailAlertGreenScore(candles, alertMark) {
+      function computeNailAlertGreenAreaScore(
+        canvas,
+        candles,
+        pinPrice,
+        noteMarks,
+        alertMark,
+      ) {
         if (!alertMark || !Array.isArray(candles) || !candles.length) return null;
         const alertPrice = Number(alertMark.price);
         if (!Number.isFinite(alertPrice) || alertPrice <= 0) return null;
+        const rect = canvas.getBoundingClientRect();
+        const width = Math.max(1, Math.floor(rect.width));
+        const height = Math.max(1, Math.floor(rect.height));
+        const pad = { top: 6, right: 4, bottom: 6, left: 4 };
+        const chartW = width - pad.left - pad.right;
+        const chartH = height - pad.top - pad.bottom;
+        const { min, max } = klinePriceBounds(
+          candles,
+          pinPrice,
+          noteMarks,
+          alertPrice,
+        );
+        const range = max - min || max * 0.01 || 1;
+        const yOf = (price) => pad.top + ((max - price) / range) * chartH;
+        const slot = chartW / candles.length;
+        const bodyW = Math.max(1, slot * 0.62);
+        const wickW = 1;
         const fromAt = Number(alertMark.fromAt) || 0;
-        let fromIndex = 0;
-        if (fromAt > 0) {
-          const idx = findCandleIndexAt(candles, fromAt);
-          fromIndex = idx >= 0 ? idx : 0;
-        }
-        let count = 0;
+        const fromIndex =
+          fromAt > 0 ? findCandleIndexAt(candles, fromAt) : 0;
+        if (fromIndex < 0) return 0;
+        let area = 0;
         for (let i = fromIndex; i < candles.length; i += 1) {
           const candle = candles[i];
           if (!candle) continue;
           const open = Number(candle.open);
           const close = Number(candle.close);
           const high = Number(candle.high);
+          const low = Number(candle.low);
           if (
             !Number.isFinite(open) ||
             !Number.isFinite(close) ||
             !Number.isFinite(high) ||
+            !Number.isFinite(low) ||
             close < open
           ) {
             continue;
           }
-          if (high > alertPrice) count += 1;
+          if (high <= alertPrice) continue;
+
+          const wickTop = yOf(high);
+          const wickBottom = yOf(low >= alertPrice ? low : alertPrice);
+          const wickHeight = Math.max(0, wickBottom - wickTop);
+          const bodyHigh = Math.max(open, close);
+          const bodyLow = Math.min(open, close);
+          if (bodyHigh <= alertPrice) {
+            area += wickW * wickHeight;
+            continue;
+          }
+          const bodyTop = yOf(bodyHigh);
+          const bodyBottom = yOf(bodyLow >= alertPrice ? bodyLow : alertPrice);
+          const bodyHeight = Math.max(1, bodyBottom - bodyTop);
+          const overlapHeight = Math.max(
+            0,
+            Math.min(wickBottom, bodyBottom) - Math.max(wickTop, bodyTop),
+          );
+          area +=
+            bodyW * bodyHeight +
+            wickW * wickHeight -
+            Math.min(bodyW, wickW) * overlapHeight;
         }
-        return count;
+        return area;
       }
 
-      function rememberNailAlertGreenScore(symbol, candles) {
+      function rememberNailAlertGreenScore(
+        symbol,
+        canvas,
+        candles,
+        pinPrice,
+        noteMarks,
+        alertMark,
+      ) {
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
         if (!key) return;
-        const alertMark = nailAlertMarkForSymbol(key);
         if (!alertMark) {
           nailAlertGreenScores.set(key, null);
           return;
         }
         nailAlertGreenScores.set(
           key,
-          computeNailAlertGreenScore(candles, alertMark),
+          computeNailAlertGreenAreaScore(
+            canvas,
+            candles,
+            pinPrice,
+            noteMarks,
+            alertMark,
+          ),
         );
       }
 
@@ -12343,30 +12423,17 @@
         const pad = { top: 6, right: 4, bottom: 6, left: 4 };
         const chartW = width - pad.left - pad.right;
         const chartH = height - pad.top - pad.bottom;
-        const highs = candles.map((item) => item.high);
-        const lows = candles.map((item) => item.low);
-        let max = Math.max(...highs);
-        let min = Math.min(...lows);
         const pin = Number(pinPrice);
         const hasPin = Number.isFinite(pin) && pin > 0;
-        if (hasPin) {
-          max = Math.max(max, pin);
-          min = Math.min(min, pin);
-        }
         const notes = Array.isArray(noteMarks) ? noteMarks : [];
-        notes.forEach((note) => {
-          const price = Number(note && note.price);
-          if (Number.isFinite(price) && price > 0) {
-            max = Math.max(max, price);
-            min = Math.min(min, price);
-          }
-        });
         const alertPrice = Number(alertMark && alertMark.price);
         const hasAlert = Number.isFinite(alertPrice) && alertPrice > 0;
-        if (hasAlert) {
-          max = Math.max(max, alertPrice);
-          min = Math.min(min, alertPrice);
-        }
+        const { min, max } = klinePriceBounds(
+          candles,
+          hasPin ? pin : null,
+          notes,
+          hasAlert ? alertPrice : null,
+        );
         const range = max - min || max * 0.01 || 1;
         const slot = chartW / candles.length;
         const bodyW = Math.max(1, slot * 0.62);
@@ -14700,10 +14767,6 @@
           : all.slice();
         if (nailSortMode === "alertGreen") {
           items = items.slice().sort((a, b) => {
-            // 置顶始终压在最前（与默认排序一致）
-            const ap = a.pinned ? 0 : 1;
-            const bp = b.pinned ? 0 : 1;
-            if (ap !== bp) return ap - bp;
             const ka = String(a.symbol || "").toUpperCase();
             const kb = String(b.symbol || "").toUpperCase();
             const hasA = nailAlertGreenScores.has(ka);
@@ -14785,7 +14848,7 @@
         if (meta) {
           const sortHint =
             nailSortMode === "alertGreen"
-              ? "染绿窗口数排序"
+              ? "绿色面积排序"
               : "置顶 / 长按拖动排序";
           if (!total) {
             meta.textContent = `复制名称后新增 · ${sortHint}`;
@@ -14901,14 +14964,23 @@
         syncNailPriceRows();
         const candles = await fetchKlines(key, chartInterval());
         const pin = pinItemBySymbol(key);
-        rememberNailAlertGreenScore(key, candles);
+        const notes = notesMarksForSymbol(key);
+        const alertMark = nailAlertMarkForSymbol(key);
+        rememberNailAlertGreenScore(
+          key,
+          canvas,
+          candles,
+          pin ? pin.pinPrice : null,
+          notes,
+          alertMark,
+        );
         drawKline(
           canvas,
           candles,
           pin ? pin.pinPrice : null,
           pin ? pin.pinnedAt : null,
-          notesMarksForSymbol(key),
-          nailAlertMarkForSymbol(key),
+          notes,
+          alertMark,
         );
         if (nailSortMode === "alertGreen") applyNailListOrderByAlertGreen();
         return true;
@@ -15033,14 +15105,23 @@
             );
             if (nailKlineAbort !== controller) return;
             const pin = pinItemBySymbol(symbol);
-            rememberNailAlertGreenScore(symbol, candles);
+            const notes = notesMarksForSymbol(symbol);
+            const alertMark = nailAlertMarkForSymbol(symbol);
+            rememberNailAlertGreenScore(
+              symbol,
+              canvas,
+              candles,
+              pin ? pin.pinPrice : null,
+              notes,
+              alertMark,
+            );
             drawKline(
               canvas,
               candles,
               pin ? pin.pinPrice : null,
               pin ? pin.pinnedAt : null,
-              notesMarksForSymbol(symbol),
-              nailAlertMarkForSymbol(symbol),
+              notes,
+              alertMark,
             );
           } catch (error) {
             if (error && error.name === "AbortError") return;
