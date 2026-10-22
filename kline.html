@@ -3182,6 +3182,85 @@
         color: var(--ios-secondary);
         font-size: 12px;
       }
+      .notify-stoploss {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 0.5px solid var(--ios-separator);
+        white-space: normal;
+      }
+      .notify-stoploss-title {
+        font-size: 11px;
+        font-weight: 650;
+        color: var(--ios-secondary);
+        letter-spacing: 0.04em;
+        margin: 0 0 8px;
+      }
+      .notify-stoploss-row {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .notify-stoploss-row input {
+        flex: 1;
+        min-width: 0;
+        height: 30px;
+        padding: 0 8px;
+        border: 0.5px solid var(--ios-separator);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--elevated) 55%, transparent);
+        color: var(--ios-label);
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+      .notify-stoploss-row input:focus {
+        outline: none;
+        border-color: color-mix(in srgb, var(--up) 55%, var(--ios-separator));
+      }
+      .notify-stoploss-row button,
+      .notify-stoploss-from-pos button,
+      .notify-stoploss-copy {
+        height: 30px;
+        padding: 0 10px;
+        border: 0.5px solid var(--ios-separator);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--elevated) 70%, transparent);
+        color: var(--ios-label);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .notify-stoploss-row button:active,
+      .notify-stoploss-from-pos button:active,
+      .notify-stoploss-copy:active {
+        opacity: 0.75;
+      }
+      .notify-stoploss-from-pos {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .notify-stoploss-from-pos[hidden] {
+        display: none;
+      }
+      .notify-stoploss-out {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .notify-stoploss-out[hidden] {
+        display: none;
+      }
+      .notify-stoploss-copy {
+        font-variant-numeric: tabular-nums;
+        color: var(--warn);
+      }
+      .notify-stoploss-copy span {
+        color: var(--ios-label);
+        font-weight: 650;
+      }
       .break-high-row {
         display: flex;
         flex-wrap: wrap;
@@ -4727,7 +4806,46 @@
         <div class="notify-col">
           <div class="notify-col-title">持仓</div>
           <div id="notifyFloatPositions"></div>
-    </div>
+          <div class="notify-stoploss" id="notifyStopLoss">
+            <div class="notify-stoploss-title">止损价</div>
+            <div class="notify-stoploss-row">
+              <input
+                type="text"
+                inputmode="decimal"
+                id="notifyStopLossInput"
+                placeholder="输入价格"
+                autocomplete="off"
+                aria-label="止损基准价"
+              />
+              <button type="button" id="notifyStopLossCalc" title="按输入价算 -3% / -5%">
+                计算
+              </button>
+            </div>
+            <div
+              class="notify-stoploss-from-pos"
+              id="notifyStopLossFromPos"
+              hidden
+            ></div>
+            <div class="notify-stoploss-out" id="notifyStopLossOut" hidden>
+              <button
+                type="button"
+                class="notify-stoploss-copy"
+                data-sl-pct="3"
+                title="复制 -3% 止损价"
+              >
+                -3% <span data-sl-val="3">--</span>
+              </button>
+              <button
+                type="button"
+                class="notify-stoploss-copy"
+                data-sl-pct="5"
+                title="复制 -5% 止损价"
+              >
+                -5% <span data-sl-val="5">--</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -15831,6 +15949,65 @@
         return dismissed === at;
       }
 
+      function livePositionNotify() {
+        // 无持仓记录时不展示上次企微持仓文案（云函数清空前的兜底）。
+        if (!(positionItems || []).length) return null;
+        return lastPositionNotify;
+      }
+
+      function parseStopLossPrice(raw) {
+        const n = Number(String(raw == null ? "" : raw).trim().replace(/,/g, ""));
+        return Number.isFinite(n) && n > 0 ? n : null;
+      }
+
+      function applyNotifyStopLoss(price) {
+        const base = parseStopLossPrice(price);
+        const out = document.getElementById("notifyStopLossOut");
+        const input = document.getElementById("notifyStopLossInput");
+        if (!out) return;
+        if (base == null) {
+          out.hidden = true;
+          showToast("请输入有效价格");
+          return;
+        }
+        if (input && String(input.value || "").trim() !== String(base)) {
+          input.value = formatPinPrice(base);
+        }
+        const sl3 = base * 0.97;
+        const sl5 = base * 0.95;
+        const el3 = out.querySelector('[data-sl-val="3"]');
+        const el5 = out.querySelector('[data-sl-val="5"]');
+        if (el3) el3.textContent = formatPinPrice(sl3);
+        if (el5) el5.textContent = formatPinPrice(sl5);
+        out.hidden = false;
+        out.dataset.sl3 = String(sl3);
+        out.dataset.sl5 = String(sl5);
+      }
+
+      function syncNotifyStopLossFromPos() {
+        const host = document.getElementById("notifyStopLossFromPos");
+        if (!host) return;
+        const rows = (positionItems || []).filter(
+          (item) =>
+            item &&
+            Number.isFinite(Number(item.buyPrice)) &&
+            Number(item.buyPrice) > 0,
+        );
+        if (!rows.length) {
+          host.hidden = true;
+          host.innerHTML = "";
+          return;
+        }
+        host.hidden = false;
+        host.innerHTML = rows
+          .map((item) => {
+            const label = String(item.symbol || "").replace(/USDT$/i, "");
+            const px = Number(item.buyPrice);
+            return `<button type="button" data-sl-buy="${escapeHtml(String(px))}" title="按 ${escapeHtml(label)} 买入价计算">${escapeHtml(label)} 买入价</button>`;
+          })
+          .join("");
+      }
+
       function updateNotifyFloatPanel() {
         const panel = document.getElementById("notifyFloat");
         const tab = document.getElementById("notifyFloatTab");
@@ -15839,7 +16016,8 @@
         const timeEl = document.getElementById("notifyFloatTime");
         if (!panel || !tab || !pinsEl || !posEl) return;
 
-        const hasContent = hasNotifyContent(lastPinNotify, lastPositionNotify);
+        const posNotify = livePositionNotify();
+        const hasContent = hasNotifyContent(lastPinNotify, posNotify);
         tab.hidden = false;
         tab.disabled = !hasContent;
 
@@ -15849,6 +16027,7 @@
           pinsEl.innerHTML = `<div class="notify-col-empty">暂无盯一下推送</div>`;
           posEl.innerHTML = `<div class="notify-col-empty">暂无持仓推送</div>`;
           if (timeEl) timeEl.textContent = "";
+          syncNotifyStopLossFromPos();
           return;
         }
 
@@ -15861,7 +16040,7 @@
 
         if (timeEl) {
           const label = formatNotifyAt(
-            notifyContentAt({ lastPinNotify, lastPositionNotify }),
+            notifyContentAt({ lastPinNotify, lastPositionNotify: posNotify }),
           );
           timeEl.textContent = label ? ` · ${label}` : "";
         }
@@ -15871,16 +16050,17 @@
             ? lastPinNotify.markdown.trim()
             : "";
         const posText =
-          lastPositionNotify && typeof lastPositionNotify.text === "string"
-            ? lastPositionNotify.text.trim()
+          posNotify && typeof posNotify.text === "string"
+            ? posNotify.text.trim()
             : "";
 
         pinsEl.innerHTML = pinMd
           ? renderWecomNotifyHtml(pinMd, lastPinNotify.symbols || [])
           : `<div class="notify-col-empty">暂无盯一下推送</div>`;
         posEl.innerHTML = posText
-          ? renderPlainNotifyHtml(posText, lastPositionNotify.symbols || [])
+          ? renderPlainNotifyHtml(posText, posNotify.symbols || [])
           : `<div class="notify-col-empty">暂无持仓推送</div>`;
+        syncNotifyStopLossFromPos();
       }
 
       function dismissNotifyFloat() {
@@ -17081,9 +17261,46 @@
         .getElementById("notifyFloatBody")
         .addEventListener("click", (event) => {
           const link = event.target.closest(".notify-coin");
-          if (!link) return;
+          if (link) {
+            event.preventDefault();
+            jumpToNotifySymbol(link.dataset.jump);
+            return;
+          }
+          const calcBtn = event.target.closest("#notifyStopLossCalc");
+          if (calcBtn) {
+            const input = document.getElementById("notifyStopLossInput");
+            applyNotifyStopLoss(input && input.value);
+            return;
+          }
+          const fromPos = event.target.closest("[data-sl-buy]");
+          if (fromPos) {
+            applyNotifyStopLoss(fromPos.getAttribute("data-sl-buy"));
+            return;
+          }
+          const copyBtn = event.target.closest(".notify-stoploss-copy");
+          if (copyBtn) {
+            const out = document.getElementById("notifyStopLossOut");
+            const pct = copyBtn.getAttribute("data-sl-pct");
+            const raw =
+              out && pct === "3"
+                ? out.dataset.sl3
+                : out && pct === "5"
+                  ? out.dataset.sl5
+                  : "";
+            const n = Number(raw);
+            if (!Number.isFinite(n) || n <= 0) {
+              showToast("请先计算止损价");
+              return;
+            }
+            void copyName(formatPinPrice(n));
+          }
+        });
+      document
+        .getElementById("notifyStopLossInput")
+        ?.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") return;
           event.preventDefault();
-          jumpToNotifySymbol(link.dataset.jump);
+          applyNotifyStopLoss(event.target.value);
         });
       document
         .getElementById("momentumFloatClose")

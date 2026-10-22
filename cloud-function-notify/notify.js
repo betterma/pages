@@ -1427,13 +1427,14 @@ async function main() {
         symbols: pinRows.map((row) => row.symbol),
       }
     : prevNotify;
+  // 无持仓时清空，避免网页企微 tab 一直显示上次文案。
   const lastPositionNotify = positionText
     ? {
         at: now,
         text: positionText,
         symbols: positions.map((item) => item.symbol),
       }
-    : prevPositionNotify;
+    : null;
   // 网页持仓文案更新时同步推进跌破冷却（不再依赖企微发送成功）。
   const dropAlertsToSave = positionText ? nextDropAlerts : dropAlerts;
   const stateChanged =
