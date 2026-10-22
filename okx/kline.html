@@ -352,6 +352,56 @@
         background: rgba(141, 119, 113, 0.16);
         color: #8d7771;
       }
+      .confirm-gate {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(40, 50, 58, 0.45);
+        box-sizing: border-box;
+      }
+      .confirm-gate[hidden] {
+        display: none !important;
+      }
+      .confirm-panel {
+        width: min(360px, 100%);
+        padding: 16px 16px 12px;
+        border-radius: 12px;
+        border: 1px solid #d8ddda;
+        background: #fbfcfa;
+        box-shadow: 0 10px 28px rgba(40, 50, 48, 0.22);
+      }
+      .confirm-panel p {
+        margin: 0 0 14px;
+        font-size: 14px;
+        line-height: 1.45;
+        color: #28323a;
+        word-break: break-word;
+      }
+      .confirm-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+      .confirm-actions button {
+        min-width: 72px;
+        height: 34px;
+        padding: 0 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .confirm-actions .is-danger {
+        background: #8d7771;
+        border-color: #8d7771;
+        color: #f7f8f6;
+      }
+      .confirm-actions .is-danger:hover {
+        background: #7a6661;
+      }
       .kline-card-head .symbol-left {
         display: inline-flex;
         align-items: center;
@@ -603,6 +653,25 @@
       >
       <button type="button" id="cardFocusCopy">复制</button>
       <button type="button" class="is-danger" id="cardFocusRemove">移出</button>
+    </div>
+
+    <div
+      id="confirmGate"
+      class="confirm-gate"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirmGateText"
+    >
+      <div class="confirm-panel">
+        <p id="confirmGateText">确定移出？</p>
+        <div class="confirm-actions">
+          <button type="button" id="confirmGateCancel">取消</button>
+          <button type="button" class="is-danger" id="confirmGateOk">
+            确定移出
+          </button>
+        </div>
+      </div>
     </div>
 
     <script src="./favorites.js"></script>
@@ -1357,6 +1426,41 @@
         );
       }
 
+      function askConfirm(message) {
+        const gate = document.getElementById("confirmGate");
+        const textEl = document.getElementById("confirmGateText");
+        const okBtn = document.getElementById("confirmGateOk");
+        const cancelBtn = document.getElementById("confirmGateCancel");
+        if (!gate || !textEl || !okBtn || !cancelBtn) {
+          return Promise.resolve(window.confirm(String(message || "确定？")));
+        }
+        textEl.textContent = String(message || "确定？");
+        gate.hidden = false;
+        return new Promise((resolve) => {
+          const finish = (ok) => {
+            gate.hidden = true;
+            okBtn.removeEventListener("click", onOk);
+            cancelBtn.removeEventListener("click", onCancel);
+            gate.removeEventListener("click", onBackdrop);
+            document.removeEventListener("keydown", onKey);
+            resolve(!!ok);
+          };
+          const onOk = () => finish(true);
+          const onCancel = () => finish(false);
+          const onBackdrop = (event) => {
+            if (event.target === gate) finish(false);
+          };
+          const onKey = (event) => {
+            if (event.key === "Escape") finish(false);
+          };
+          okBtn.addEventListener("click", onOk);
+          cancelBtn.addEventListener("click", onCancel);
+          gate.addEventListener("click", onBackdrop);
+          document.addEventListener("keydown", onKey);
+          okBtn.focus();
+        });
+      }
+
       async function removeToken(chainIndex, address) {
         const key = OkxFavorites.tokenKey(chainIndex, address);
         const hit = (items || []).find(
@@ -1368,7 +1472,8 @@
           (hit && hit.symbol) ||
           OkxFavorites.shortLabel(address) ||
           String(address || "").slice(0, 8);
-        if (!window.confirm(`确定移出自选「${label}」？`)) return false;
+        const ok = await askConfirm(`确定移出自选「${label}」？`);
+        if (!ok) return false;
         const next = OkxFavorites.removeItem(items, chainIndex, address);
         await persist(next, "Remove OKX watch token");
         return true;
