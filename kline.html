@@ -1986,6 +1986,24 @@
         padding: 5px 9px;
         font-size: 12px;
       }
+      .nail-auto-refresh-label {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .nail-auto-refresh-label small {
+        font-size: 10px;
+        font-weight: 400;
+        color: var(--secondary);
+      }
+      .nail-rising-row .nail-auto-refresh-status {
+        max-width: 132px;
+        font-size: 10px;
+        font-weight: 400;
+        color: var(--secondary);
+        text-align: right;
+      }
       .nail-switch {
         position: relative;
         width: 46px;
@@ -4837,6 +4855,26 @@
             </button>
           </div>
         </div>
+        <div class="nail-rising-row">
+          <div class="nail-auto-refresh-label">
+            <span>定时刷新</span>
+            <small>每5秒更新当前排行前10价格</small>
+          </div>
+          <span
+            id="nailAutoRefreshStatus"
+            class="nail-auto-refresh-status"
+            aria-live="polite"
+          >已关闭</span>
+          <button
+            type="button"
+            class="nail-switch"
+            id="nailAutoRefresh"
+            role="switch"
+            aria-checked="false"
+            title="每5秒刷新当前排行前10项的现价和24h涨跌"
+            aria-label="定时刷新"
+          ></button>
+        </div>
         <form class="nail-form" id="nailForm" hidden>
           <input
             id="nailNameInput"
@@ -5400,6 +5438,16 @@
       const NAIL_SORT_KEY = "kline-nail-sort-v1";
       /** order = 置顶/拖拽；alertGreen = 绿色K线占用面积（仅展示）。 */
       let nailSortMode = "order";
+      const NAIL_AUTO_REFRESH_KEY = "kline-nail-auto-refresh-v1";
+      let nailAutoRefreshEnabled = false;
+      try {
+        nailAutoRefreshEnabled =
+          localStorage.getItem(NAIL_AUTO_REFRESH_KEY) === "1";
+      } catch (_) {
+        nailAutoRefreshEnabled = false;
+      }
+      let nailAutoRefreshTimer = null;
+      let nailAutoRefreshBusy = false;
       try {
         const savedNailSort = localStorage.getItem(NAIL_SORT_KEY);
         if (savedNailSort === "order" || savedNailSort === "alertGreen") {
@@ -8543,6 +8591,7 @@
               console.warn(error);
               nailItems = [];
             }
+            syncNailAutoRefreshUi();
             renderNailDrawer();
             syncNailInMarks();
           }),
@@ -14577,6 +14626,7 @@
         if (!NAIL_BROWSE_MASK_ENABLED) {
           nailBrowseMaskSession = false;
           renderNailDrawer();
+          startNailAutoRefresh();
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               void paintNailKlines();
@@ -14587,6 +14637,7 @@
         await refreshNailBrowseMeta();
         beginNailBrowseMaskSessionIfDue();
         renderNailDrawer();
+        startNailAutoRefresh();
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             void paintNailKlines();
@@ -14610,6 +14661,7 @@
             void openNailDrawerWithBrowse();
           } else {
             renderNailDrawer();
+            startNailAutoRefresh();
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
                 void paintNailKlines();
@@ -14618,6 +14670,7 @@
           }
         } else {
           abortNailKlines();
+          stopNailAutoRefresh();
           clearNailFocusSelection();
           setNailSelectMode(false);
         }
@@ -15464,6 +15517,120 @@
         if (!btn) return;
         btn.disabled = !!busy;
         btn.textContent = busy ? "…" : "刷新";
+      }
+
+      function syncNailAutoRefreshUi(status) {
+        const toggle = document.getElementById("nailAutoRefresh");
+        const statusEl = document.getElementById("nailAutoRefreshStatus");
+        if (toggle) {
+          toggle.setAttribute(
+            "aria-checked",
+            nailAutoRefreshEnabled ? "true" : "false",
+          );
+        }
+        if (statusEl && status) statusEl.textContent = status;
+        else if (statusEl && !nailAutoRefreshEnabled) {
+          statusEl.textContent = "已关闭";
+        } else if (statusEl && !nailAutoRefreshTimer) {
+          statusEl.textContent = "抽屉打开时运行";
+        }
+      }
+
+      function stopNailAutoRefresh() {
+        if (nailAutoRefreshTimer) {
+          window.clearInterval(nailAutoRefreshTimer);
+          nailAutoRefreshTimer = null;
+        }
+        syncNailAutoRefreshUi();
+      }
+
+      function startNailAutoRefresh() {
+        if (
+          !nailAutoRefreshEnabled ||
+          !isNailDrawerOpen() ||
+          document.visibilityState === "hidden" ||
+          nailAutoRefreshTimer
+        ) {
+          return;
+        }
+        syncNailAutoRefreshUi();
+        void refreshNailTopPrices();
+        nailAutoRefreshTimer = window.setInterval(() => {
+          void refreshNailTopPrices();
+        }, 5000);
+      }
+
+      function setNailAutoRefreshEnabled(enabled) {
+        nailAutoRefreshEnabled = !!enabled;
+        try {
+          localStorage.setItem(
+            NAIL_AUTO_REFRESH_KEY,
+            nailAutoRefreshEnabled ? "1" : "0",
+          );
+        } catch (_) {
+          /* ignore */
+        }
+        syncNailAutoRefreshUi();
+        if (nailAutoRefreshEnabled) startNailAutoRefresh();
+        else stopNailAutoRefresh();
+      }
+
+      async function refreshNailTopPrices() {
+        if (
+          !nailAutoRefreshEnabled ||
+          !isNailDrawerOpen() ||
+          document.visibilityState === "hidden" ||
+          nailAutoRefreshBusy
+        ) {
+          return;
+        }
+        const symbols = nailDrawerVisibleItems()
+          .slice(0, 10)
+          .map((item) => String(item.symbol || "").trim().toUpperCase())
+          .filter(Boolean);
+        if (!symbols.length) {
+          syncNailAutoRefreshUi("当前排行无项目");
+          return;
+        }
+        nailAutoRefreshBusy = true;
+        syncNailAutoRefreshUi("刷新中…");
+        const errors = [];
+        let cursor = 0;
+        const workers = Array.from(
+          { length: Math.min(4, symbols.length) },
+          async () => {
+            while (cursor < symbols.length) {
+              const symbol = symbols[cursor];
+              cursor += 1;
+              try {
+                await fetchBinanceTickerForSymbol(symbol);
+              } catch (error) {
+                errors.push({ symbol, error });
+              }
+            }
+          },
+        );
+        await Promise.all(workers);
+        nailAutoRefreshBusy = false;
+        if (!nailAutoRefreshEnabled) {
+          syncNailAutoRefreshUi();
+          return;
+        }
+        if (!isNailDrawerOpen() || document.visibilityState === "hidden") {
+          syncNailAutoRefreshUi();
+          return;
+        }
+        syncNailPriceRows();
+        if (errors.length) {
+          console.warn("定时刷新钉子价格失败", errors);
+          syncNailAutoRefreshUi(`刷新失败 ${errors.length}/${symbols.length}`);
+          return;
+        }
+        syncNailAutoRefreshUi(
+          `更新于 ${new Date().toLocaleTimeString("zh-CN", {
+            hour12: false,
+          })}`,
+        );
       }
 
       async function refreshNailDrawer() {
@@ -17733,10 +17900,12 @@
         });
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "hidden") {
+          stopNailAutoRefresh();
           markEggChromeSeenFromDom();
           return;
         }
         if (document.visibilityState === "visible") {
+          startNailAutoRefresh();
           refreshNotifyFloat({ silent: true });
           maybeRefreshDataOnFocus();
           scheduleBreakHighTick();
@@ -18227,6 +18396,12 @@
       if (nailRefreshBtn) {
         nailRefreshBtn.addEventListener("click", () => {
           void refreshNailDrawer();
+        });
+      }
+      const nailAutoRefresh = document.getElementById("nailAutoRefresh");
+      if (nailAutoRefresh) {
+        nailAutoRefresh.addEventListener("click", () => {
+          setNailAutoRefreshEnabled(!nailAutoRefreshEnabled);
         });
       }
       const nailAddBtn = document.getElementById("nailAddBtn");
