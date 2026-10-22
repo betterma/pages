@@ -673,16 +673,32 @@ function formatNailNotePrice(value) {
   return n.toPrecision(4);
 }
 
-/** Auto-pin newcomers: add to nails with current pin price as note (skip existing). */
+function isAutoPinSource(source) {
+  return /^auto/i.test(String(source || '').trim());
+}
+
+function pinRowOf(pins, symbol) {
+  const key = String(symbol || '')
+    .trim()
+    .toUpperCase();
+  if (!key) return null;
+  return (
+    (pins || []).find(
+      (item) => item && String(item.symbol || '').toUpperCase() === key,
+    ) || null
+  );
+}
+
+/**
+ * 新自动盯：写入/更新钉子便签价。
+ * 已自动盯但缺钉子的：按盯住价补钉（noteAt 用 pinnedAt，便于荧光绿从盯住起算）。
+ */
 async function saveAutoPinNails(now, newcomers, pins) {
-  const symbols = [
-    ...new Set(
-      (newcomers || [])
-        .map((symbol) => String(symbol || '').trim().toUpperCase())
-        .filter(Boolean),
-    ),
-  ];
-  if (!symbols.length) return [];
+  const newcomerSet = new Set(
+    (newcomers || [])
+      .map((symbol) => String(symbol || '').trim().toUpperCase())
+      .filter(Boolean),
+  );
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const file = await loadJson(CONFIG.NAILS_PATH);
@@ -694,13 +710,23 @@ async function saveAutoPinNails(now, newcomers, pins) {
         .toUpperCase();
       if (key) bySymbol.set(key, item);
     });
+    const missingAuto = (pins || [])
+      .filter((item) => item && isAutoPinSource(item.source))
+      .map((item) => String(item.symbol || '').trim().toUpperCase())
+      .filter((symbol) => symbol && !bySymbol.has(symbol));
+    const symbols = [...new Set([...newcomerSet, ...missingAuto])];
+    if (!symbols.length) return [];
     const added = [];
     const updated = [];
     for (const symbol of symbols) {
+      const pinRow = pinRowOf(pins, symbol);
       const price = pinPriceOf(pins, symbol);
       const note = formatNailNotePrice(price);
       const existing = bySymbol.get(symbol) || null;
+      const pinnedAt = Number(pinRow && pinRow.pinnedAt) || 0;
       if (existing) {
+        // 仅「本轮新自动盯」刷新已有钉子便签；补缺不加改已有。
+        if (!newcomerSet.has(symbol)) continue;
         updated.push({
           ...existing,
           symbol,
@@ -711,13 +737,20 @@ async function saveAutoPinNails(now, newcomers, pins) {
           at: now,
         });
       } else {
+        const noteAt = note
+          ? newcomerSet.has(symbol)
+            ? now
+            : pinnedAt > 0
+              ? pinnedAt
+              : now
+          : 0;
         added.push({
           id: now.toString(36) + Math.random().toString(36).slice(2, 6),
-          at: now,
+          at: pinnedAt > 0 ? pinnedAt : now,
           symbol,
           label: labelOf(symbol),
           note,
-          noteAt: note ? now : 0,
+          noteAt,
           exitedAt: 0,
           pinned: false,
           pinnedAt: 0,
@@ -1158,15 +1191,25 @@ async function main() {
       );
       autoPinMomNotes = [];
     }
-    try {
-      autoPinNails = await saveAutoPinNails(now, autoPinned, pins);
-    } catch (error) {
-      console.warn(
-        'auto-pin nails failed',
-        error && error.message ? error.message : error,
+  }
+  // 每轮都跑：新自动盯写便签；已自动盯缺钉子的补钉（含历史漏写）。
+  try {
+    autoPinNails = await saveAutoPinNails(now, autoPinned, pins);
+    if (autoPinNails.length) {
+      console.log(
+        'auto-pin nails',
+        JSON.stringify({
+          count: autoPinNails.length,
+          sample: autoPinNails.slice(0, 8).map((row) => row.symbol),
+        }),
       );
-      autoPinNails = [];
     }
+  } catch (error) {
+    console.warn(
+      'auto-pin nails failed',
+      error && error.message ? error.message : error,
+    );
+    autoPinNails = [];
   }
 
   function buildAutoPinAlert() {
