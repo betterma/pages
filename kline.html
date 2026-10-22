@@ -11388,7 +11388,13 @@
           }
         }
         await persistNails(
-          (list) => WatchFavorites.upsertNailsBatch(list, fresh, notesBySymbol),
+          (list, meta) => ({
+            list: WatchFavorites.upsertNailsBatch(list, fresh, notesBySymbol),
+            dismissedNails: WatchFavorites.removeDismissedNails(
+              (meta && meta.dismissedNails) || [],
+              fresh,
+            ),
+          }),
           opts.message || `Add nails x${fresh.length} with price notes`,
           {
             loadingText:
@@ -15002,13 +15008,19 @@
         }
         try {
           await persistNails(
-            (list) =>
-              typeof WatchFavorites.removeNailsBatch === "function"
-                ? WatchFavorites.removeNailsBatch(list, symbols)
-                : symbols.reduce(
-                    (acc, symbol) => WatchFavorites.removeNail(acc, symbol),
-                    list,
-                  ),
+            (list, meta) => ({
+              list:
+                typeof WatchFavorites.removeNailsBatch === "function"
+                  ? WatchFavorites.removeNailsBatch(list, symbols)
+                  : symbols.reduce(
+                      (acc, symbol) => WatchFavorites.removeNail(acc, symbol),
+                      list,
+                    ),
+              dismissedNails: WatchFavorites.addDismissedNails(
+                (meta && meta.dismissedNails) || [],
+                symbols,
+              ),
+            }),
             `Remove nails x${symbols.length}`,
             { loadingText: `删除 ${symbols.length}…` },
           );
@@ -15786,7 +15798,13 @@
         const note = noteInput ? noteInput.value : "";
         try {
           await persistNails(
-            (list) => WatchFavorites.upsertNail(list, key, note),
+            (list, meta) => ({
+              list: WatchFavorites.upsertNail(list, key, note),
+              dismissedNails: WatchFavorites.removeDismissedNails(
+                (meta && meta.dismissedNails) || [],
+                [key],
+              ),
+            }),
             `Add nail ${key.replace(/USDT$/i, "")}`,
           );
           setNailFormOpen(false);
@@ -15813,7 +15831,13 @@
         const note =
           Number.isFinite(price) && price > 0 ? formatPinPrice(price) : "";
         await persistNails(
-          (list) => WatchFavorites.upsertNail(list, key, note),
+          (list, meta) => ({
+            list: WatchFavorites.upsertNail(list, key, note),
+            dismissedNails: WatchFavorites.removeDismissedNails(
+              (meta && meta.dismissedNails) || [],
+              [key],
+            ),
+          }),
           `Add nail ${key.replace(/USDT$/i, "")}`,
           { loadingText: `添加 ${key.replace(/USDT$/i, "")} 到钉子…` },
         );
@@ -15838,7 +15862,13 @@
         if (!confirmDestructive(`确定删除钉子 ${label}？`)) return;
         try {
           await persistNails(
-            (list) => WatchFavorites.removeNail(list, key),
+            (list, meta) => ({
+              list: WatchFavorites.removeNail(list, key),
+              dismissedNails: WatchFavorites.addDismissedNails(
+                (meta && meta.dismissedNails) || [],
+                [key],
+              ),
+            }),
             `Remove nail ${label}`,
             { loadingText: `删除 ${label}…` },
           );

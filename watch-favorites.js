@@ -1180,6 +1180,28 @@
     return out;
   }
 
+  /** 用户手动删除的钉子：云函数补钉时跳过，直到再次手动钉入或新自动盯。 */
+  function normalizeDismissedNails(raw) {
+    return normalizeBrowseRevealed(raw);
+  }
+
+  function addDismissedNails(list, symbols) {
+    const next = new Set(normalizeDismissedNails(list));
+    (symbols || []).forEach((symbol) => {
+      const key = nailSymbolKey(symbol);
+      if (key) next.add(key);
+    });
+    return [...next];
+  }
+
+  function removeDismissedNails(list, symbols) {
+    const drop = new Set(
+      (symbols || []).map((symbol) => nailSymbolKey(symbol)).filter(Boolean),
+    );
+    if (!drop.size) return normalizeDismissedNails(list);
+    return normalizeDismissedNails(list).filter((symbol) => !drop.has(symbol));
+  }
+
   async function loadNailsRaw(options) {
     const repo = (options && options.repo) || DEFAULT_REPO;
     const path = (options && options.path) || NAILS_PATH;
@@ -1197,6 +1219,7 @@
             : null,
           browseMaskAt: normalizeBrowseMaskAt(current.data.browseMaskAt),
           browseRevealed: normalizeBrowseRevealed(current.data.browseRevealed),
+          dismissedNails: normalizeDismissedNails(current.data.dismissedNails),
           source: "api",
         };
       }
@@ -1222,6 +1245,7 @@
             : null,
           browseMaskAt: normalizeBrowseMaskAt(data.browseMaskAt),
           browseRevealed: normalizeBrowseRevealed(data.browseRevealed),
+          dismissedNails: normalizeDismissedNails(data.dismissedNails),
           source: "raw-commit",
         };
       }
@@ -1233,6 +1257,7 @@
       nailsUpdatedAt: null,
       browseMaskAt: 0,
       browseRevealed: [],
+      dismissedNails: [],
       source: "empty",
     };
   }
@@ -1254,15 +1279,18 @@
           nailsUpdatedAt: null,
           browseMaskAt: 0,
           browseRevealed: [],
+          dismissedNails: [],
         };
         const nails = normalizeNails(base.nails);
         let nextList = nails;
         let nextBrowseMaskAt = normalizeBrowseMaskAt(base.browseMaskAt);
         let nextBrowseRevealed = normalizeBrowseRevealed(base.browseRevealed);
+        let nextDismissedNails = normalizeDismissedNails(base.dismissedNails);
         if (typeof options.mutate === "function") {
           const result = options.mutate(nails.slice(), {
             browseMaskAt: nextBrowseMaskAt,
             browseRevealed: nextBrowseRevealed.slice(),
+            dismissedNails: nextDismissedNails.slice(),
           });
           nextList = Array.isArray(result)
             ? result
@@ -1278,6 +1306,11 @@
                 result.browseRevealed,
               );
             }
+            if (result.dismissedNails != null) {
+              nextDismissedNails = normalizeDismissedNails(
+                result.dismissedNails,
+              );
+            }
           }
         }
         if (
@@ -1289,6 +1322,9 @@
         if (options.browseRevealed != null) {
           nextBrowseRevealed = normalizeBrowseRevealed(options.browseRevealed);
         }
+        if (options.dismissedNails != null) {
+          nextDismissedNails = normalizeDismissedNails(options.dismissedNails);
+        }
         const nextNails = serializeNails(nextList);
         const nextData = {
           nails: nextNails,
@@ -1296,6 +1332,7 @@
           updatedAt: Date.now(),
           browseMaskAt: nextBrowseMaskAt,
           browseRevealed: nextBrowseRevealed,
+          dismissedNails: nextDismissedNails,
         };
         await writeJsonFile({
           repo,
@@ -1310,6 +1347,7 @@
           nailsUpdatedAt: nextData.nailsUpdatedAt,
           browseMaskAt: nextBrowseMaskAt,
           browseRevealed: nextBrowseRevealed,
+          dismissedNails: nextDismissedNails,
         };
       } catch (error) {
         lastError = error;
@@ -2716,6 +2754,9 @@
     reorderNails,
     markNailsExited,
     setNailNote,
+    normalizeDismissedNails,
+    addDismissedNails,
+    removeDismissedNails,
     loadNailsRaw,
     patchNails,
     NOTES_RANK_SNAPS_PATH,
