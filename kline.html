@@ -2162,8 +2162,22 @@
         color: var(--secondary);
       }
       .nail-price .nail-px {
+        margin: 0;
+        padding: 0;
+        border: none;
+        background: none;
+        font: inherit;
         font-weight: 700;
         color: var(--label);
+        cursor: pointer;
+        text-decoration: underline;
+        text-decoration-style: dotted;
+        text-underline-offset: 2px;
+      }
+      .nail-price .nail-px:disabled {
+        cursor: default;
+        text-decoration: none;
+        opacity: 0.7;
       }
       .nail-price .nail-chg {
         font-weight: 650;
@@ -14659,6 +14673,10 @@
         })();
       }
 
+      function nailPriceCopyText(price) {
+        return Number.isFinite(price) && price > 0 ? formatPinPrice(price) : "";
+      }
+
       function nailPriceRowHtml(symbol) {
         const key = String(symbol || "")
           .trim()
@@ -14672,9 +14690,10 @@
               ? "is-up"
               : "is-down"
             : "";
+        const pxText = nailPriceCopyText(price);
         return [
           `<div class="nail-price${cls ? ` ${cls}` : ""}" data-nail-price="${escapeHtml(key)}">`,
-          `<span class="nail-px">现价 ${escapeHtml(Number.isFinite(price) ? formatPinPrice(price) : "--")}</span>`,
+          `<button type="button" class="nail-px" data-nail-copy-price="${escapeHtml(pxText)}" title="${pxText ? "点击复制现价" : "暂无现价"}"${pxText ? "" : " disabled"}>现价 ${escapeHtml(pxText || "--")}</button>`,
           `<span class="nail-chg">24h ${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</span>`,
           pinItem
             ? `<span class="nail-pin-chg">盯幅 ${escapeHtml(formatPercent(pinChangePercent(pinItem)))}</span>`
@@ -14698,7 +14717,11 @@
             const chEl = el.querySelector(".nail-chg");
             let pinChangeEl = el.querySelector(".nail-pin-chg");
             if (pxEl) {
-              pxEl.textContent = `现价 ${Number.isFinite(price) ? formatPinPrice(price) : "--"}`;
+              const pxText = nailPriceCopyText(price);
+              pxEl.textContent = `现价 ${pxText || "--"}`;
+              pxEl.setAttribute("data-nail-copy-price", pxText);
+              pxEl.title = pxText ? "点击复制现价" : "暂无现价";
+              pxEl.disabled = !pxText;
             }
             el.classList.remove("is-up", "is-down");
             if (Number.isFinite(change) && change !== 0) {
@@ -17689,6 +17712,20 @@
         nailDrawer.addEventListener("click", (event) => {
           if (event.target && event.target.hasAttribute("data-close-nails")) {
             setNailDrawerOpen(false);
+            return;
+          }
+          const copyPxBtn = event.target.closest("[data-nail-copy-price]");
+          if (copyPxBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            const text = String(
+              copyPxBtn.getAttribute("data-nail-copy-price") || "",
+            ).trim();
+            if (!text) {
+              showToast("暂无现价");
+              return;
+            }
+            void copyName(text);
             return;
           }
           if (nailSelectMode) {
