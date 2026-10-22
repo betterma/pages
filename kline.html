@@ -4743,6 +4743,13 @@
           </button>
           <button
             type="button"
+            id="nailBatchNotePriceBtn"
+            title="以当前现价写入便签（荧光绿从此刻起算）"
+          >
+            便签现价
+          </button>
+          <button
+            type="button"
             class="is-danger"
             id="nailBatchDeleteBtn"
             title="删除选中的钉子"
@@ -14822,6 +14829,7 @@
         const countEl = document.getElementById("nailBatchCount");
         const pinBtn = document.getElementById("nailBatchPinBtn");
         const unpinBtn = document.getElementById("nailBatchUnpinBtn");
+        const notePriceBtn = document.getElementById("nailBatchNotePriceBtn");
         const delBtn = document.getElementById("nailBatchDeleteBtn");
         const listEl = document.getElementById("nailList");
         const n = selectedNailSymbols.size;
@@ -14841,6 +14849,10 @@
         if (unpinBtn) {
           unpinBtn.disabled = n === 0 || busy;
           unpinBtn.textContent = n > 0 ? `取消置顶 (${n})` : "取消置顶";
+        }
+        if (notePriceBtn) {
+          notePriceBtn.disabled = n === 0 || busy;
+          notePriceBtn.textContent = n > 0 ? `便签现价 (${n})` : "便签现价";
         }
         if (delBtn) {
           delBtn.disabled = n === 0 || busy;
@@ -14876,6 +14888,64 @@
             if (check) check.checked = selectedNailSymbols.has(key);
           });
         syncNailSelectUi();
+      }
+
+      async function applyCurrentPriceNotesToSelectedNails() {
+        const symbols = [...selectedNailSymbols];
+        if (!symbols.length) {
+          showToast("先选中要改便签的钉子");
+          return;
+        }
+        if (nailSaving) {
+          showToast("钉子保存中…");
+          return;
+        }
+        try {
+          try {
+            await loadBinanceTicker();
+          } catch (error) {
+            console.warn("nail note-price ticker refresh failed", error);
+          }
+          const notesBySymbol = {};
+          let withPrice = 0;
+          let noPrice = 0;
+          for (const symbol of symbols) {
+            const key = String(symbol || "")
+              .trim()
+              .toUpperCase();
+            if (!key) continue;
+            const price = Number(marketMap[key]?.price);
+            if (Number.isFinite(price) && price > 0) {
+              notesBySymbol[key] = formatPinPrice(price);
+              withPrice += 1;
+            } else {
+              noPrice += 1;
+            }
+          }
+          const toUpdate = Object.keys(notesBySymbol);
+          if (!toUpdate.length) {
+            showToast("选中币种暂无现价");
+            return;
+          }
+          await persistNails(
+            (list) =>
+              toUpdate.reduce(
+                (acc, key) =>
+                  WatchFavorites.setNailNote(acc, key, notesBySymbol[key]),
+                list,
+              ),
+            `Nail notes to live price x${toUpdate.length}`,
+            { loadingText: `便签现价 ${toUpdate.length}…` },
+          );
+          setNailSelectMode(false);
+          const parts = [`已写便签现价 ${withPrice} 个`];
+          if (noPrice > 0) parts.push(`无现价掠过 ${noPrice}`);
+          showToast(parts.join(" · "));
+          if (isNailDrawerOpen()) void paintNailKlines();
+        } catch (error) {
+          console.warn(error);
+          showToast(error.message || "批量便签现价失败");
+        }
       }
 
       async function setPinnedSelectedNails(pinned) {
@@ -17935,6 +18005,14 @@
       if (nailBatchUnpinBtn) {
         nailBatchUnpinBtn.addEventListener("click", () => {
           void setPinnedSelectedNails(false);
+        });
+      }
+      const nailBatchNotePriceBtn = document.getElementById(
+        "nailBatchNotePriceBtn",
+      );
+      if (nailBatchNotePriceBtn) {
+        nailBatchNotePriceBtn.addEventListener("click", () => {
+          void applyCurrentPriceNotesToSelectedNails();
         });
       }
       const nailBatchDeleteBtn = document.getElementById("nailBatchDeleteBtn");
