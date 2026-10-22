@@ -1358,8 +1358,20 @@
       }
 
       async function removeToken(chainIndex, address) {
+        const key = OkxFavorites.tokenKey(chainIndex, address);
+        const hit = (items || []).find(
+          (item) =>
+            OkxFavorites.tokenKey(item.chainIndex, item.tokenContractAddress) ===
+            key,
+        );
+        const label =
+          (hit && hit.symbol) ||
+          OkxFavorites.shortLabel(address) ||
+          String(address || "").slice(0, 8);
+        if (!window.confirm(`确定移出自选「${label}」？`)) return false;
         const next = OkxFavorites.removeItem(items, chainIndex, address);
         await persist(next, "Remove OKX watch token");
+        return true;
       }
 
       function syncAddPanel(open) {
