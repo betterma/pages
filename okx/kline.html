@@ -1045,7 +1045,14 @@
         for (const base of urls) {
           const url = `${base}${base.includes("?") ? "&" : "?"}t=${Date.now()}`;
           try {
-            const response = await fetch(url, { signal, cache: "no-store" });
+            const response = await fetch(url, {
+              signal,
+              cache: "no-store",
+              headers: {
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                Pragma: "no-cache",
+              },
+            });
             if (!response.ok) {
               lastError = new Error(`OBS ${response.status}（${base}）`);
               continue;

@@ -193,6 +193,8 @@
           Accept: "application/vnd.github+json",
           Authorization: `Bearer ${token}`,
           "X-GitHub-Api-Version": "2022-11-28",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
         },
       },
     );
@@ -211,13 +213,15 @@
       raw = decodeBase64Utf8(file.content);
     } else if (file.sha) {
       const blobResponse = await fetch(
-        `https://api.github.com/repos/${repo}/git/blobs/${file.sha}`,
+        `https://api.github.com/repos/${repo}/git/blobs/${file.sha}?t=${Date.now()}`,
         {
           cache: "no-store",
           headers: {
             Accept: "application/vnd.github+json",
             Authorization: `Bearer ${token}`,
             "X-GitHub-Api-Version": "2022-11-28",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
           },
         },
       );
@@ -284,6 +288,8 @@
           Accept: "application/vnd.github+json",
           Authorization: `Bearer ${token}`,
           "X-GitHub-Api-Version": "2022-11-28",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
         },
       },
     );
@@ -300,11 +306,11 @@
     const path = options.path;
     const commitSha = options.commitSha;
     // Pin to commit sha so CDN key is unique per revision (avoids stale /main cache).
-    const url = `https://raw.githubusercontent.com/${repo}/${commitSha}/${path}`;
+    const url = `https://raw.githubusercontent.com/${repo}/${commitSha}/${path}?t=${Date.now()}`;
     const response = await fetch(url, {
       cache: "no-store",
       headers: {
-        "Cache-Control": "no-cache",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
         Pragma: "no-cache",
       },
     });
