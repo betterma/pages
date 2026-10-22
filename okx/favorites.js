@@ -45,6 +45,16 @@
     return `${chain}:${addr}`;
   }
 
+  /** DexTools DEXT Score：0–99；无评分返回 null。 */
+  function normalizeDextScore(raw) {
+    if (raw == null || raw === "") return null;
+    const n = Number(String(raw).trim());
+    if (!Number.isFinite(n)) return null;
+    const rounded = Math.round(n);
+    if (rounded < 0 || rounded > 99) return null;
+    return rounded;
+  }
+
   function normalizeItem(item) {
     if (!item || typeof item !== "object") return null;
     const chainIndex = String(item.chainIndex || "").trim();
@@ -57,6 +67,9 @@
     const symbol = String(item.symbol || "")
       .trim()
       .slice(0, 32);
+    const dextScore = normalizeDextScore(
+      item.dextScore != null ? item.dextScore : item.score,
+    );
     return {
       chainIndex,
       tokenContractAddress,
@@ -65,6 +78,7 @@
         ? Number(item.addedAt)
         : 0,
       source: item.source ? String(item.source) : "manual",
+      dextScore,
     };
   }
 
@@ -90,7 +104,7 @@
         : [];
     const map = new Map();
     list.forEach((item) => {
-      const normalized = normalizeItem(item);
+      let normalized = normalizeItem(item);
       if (!normalized) return;
       const key = tokenKey(
         normalized.chainIndex,
@@ -98,6 +112,13 @@
       );
       const prev = map.get(key);
       if (!prev || normalized.addedAt >= prev.addedAt) {
+        if (
+          prev &&
+          normalized.dextScore == null &&
+          prev.dextScore != null
+        ) {
+          normalized = { ...normalized, dextScore: prev.dextScore };
+        }
         map.set(key, normalized);
       }
     });
@@ -112,14 +133,30 @@
   function serializeList(list) {
     return {
       updatedAt: Date.now(),
-      items: normalizeList(list).map((item) => ({
-        chainIndex: item.chainIndex,
-        tokenContractAddress: item.tokenContractAddress,
-        symbol: item.symbol,
-        addedAt: item.addedAt,
-        source: item.source || "manual",
-      })),
+      items: normalizeList(list).map((item) => {
+        const row = {
+          chainIndex: item.chainIndex,
+          tokenContractAddress: item.tokenContractAddress,
+          symbol: item.symbol,
+          addedAt: item.addedAt,
+          source: item.source || "manual",
+        };
+        if (item.dextScore != null) row.dextScore = item.dextScore;
+        return row;
+      }),
     };
+  }
+
+  function setItemScore(list, chainIndex, address, score) {
+    const key = tokenKey(chainIndex, address);
+    if (!key) return normalizeList(list);
+    const nextScore = normalizeDextScore(score);
+    return normalizeList(list).map((item) => {
+      if (tokenKey(item.chainIndex, item.tokenContractAddress) !== key) {
+        return item;
+      }
+      return { ...item, dextScore: nextScore };
+    });
   }
 
   function decodeBase64Utf8(content) {
@@ -353,6 +390,8 @@
     normalizeAddress,
     normalizeList,
     serializeList,
+    setItemScore,
+    normalizeDextScore,
     loadFavorites,
     saveFavorites,
     addItems,

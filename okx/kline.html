@@ -170,6 +170,47 @@
         font-size: 11px;
         font-weight: 600;
       }
+      .dext-score {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 5px;
+        min-width: 22px;
+        height: 18px;
+        padding: 0 5px;
+        border: 1px solid #c9d0d0;
+        border-radius: 4px;
+        background: #eef1ee;
+        color: #5a6a68;
+        font-size: 11px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        cursor: pointer;
+        line-height: 1;
+        vertical-align: middle;
+      }
+      .dext-score:hover {
+        filter: brightness(0.97);
+      }
+      .dext-score.is-empty {
+        color: #9aa3a0;
+        font-weight: 600;
+      }
+      .dext-score.is-high {
+        background: #dfece6;
+        border-color: #9ebdb0;
+        color: #3d6b5c;
+      }
+      .dext-score.is-mid {
+        background: #f3ecd8;
+        border-color: #d4c49a;
+        color: #7a6540;
+      }
+      .dext-score.is-low {
+        background: #f0e4e0;
+        border-color: #d0b5ae;
+        color: #8d5f56;
+      }
       .chain-tabs {
         display: flex;
         gap: 0;
@@ -528,7 +569,7 @@
         <span id="statusText">等待启动...</span>
       </div>
       <p class="hint">
-        自选按 Solana / Robinhood 分 tab · 按当前周期涨跌分区 · 点名称复制合约 · 点 K 线出操作栏（OKX/Dex）· ⊖ 移出自选 ·
+        自选按 Solana / Robinhood 分 tab · 按当前周期涨跌分区 · 点名称复制合约 · 点评分角标/操作栏「评分」填 DexTools 分 · 点 K 线出操作栏 · ⊖ 移出自选 ·
         K 线由定时云函数写入缓存（新加币 / 新周期需等下一轮）
       </p>
 
@@ -651,6 +692,9 @@
         hidden
         >Dex</a
       >
+      <button type="button" id="cardFocusScore" title="填写 DexTools 评分">
+        评分
+      </button>
       <button type="button" id="cardFocusCopy">复制</button>
       <button type="button" class="is-danger" id="cardFocusRemove">移出</button>
     </div>
@@ -1203,7 +1247,73 @@
           : "";
         const focused =
           focusCardKey && focusCardKey === packed.key ? " is-focus" : "";
-        return `<div class="kline-card${focused}" data-key="${packed.key}" data-chain="${item.chainIndex}" data-address="${item.tokenContractAddress}"><div class="kline-card-head"><span class="symbol-left">${logoHtml}<button type="button" class="symbol-copy" data-copy="${item.tokenContractAddress}" title="点击复制合约">${label}<span class="chain-tag">${chain}</span></button></span><span style="display:inline-flex;align-items:center;gap:6px"><span class="meta-right"><span class="price" title="最新价（USD）">$${priceText}</span><span class="mcap" title="市值（USD）">${mcapText}</span><span data-kline-status class="change-line ${changeClass}">${changeText} · ${barLabel}</span></span><button type="button" class="remove-card-btn" title="移出自选" aria-label="移出自选">⊖</button></span></div><canvas></canvas></div>`;
+        const score = Number(item.dextScore);
+        const hasScore = Number.isFinite(score);
+        const scoreClass = !hasScore
+          ? "is-empty"
+          : score >= 80
+            ? "is-high"
+            : score >= 50
+              ? "is-mid"
+              : "is-low";
+        const scoreLabel = hasScore ? String(score) : "+";
+        const scoreTitle = hasScore
+          ? `DexTools 评分 ${score}（点击修改）`
+          : "点击填写 DexTools 评分";
+        return `<div class="kline-card${focused}" data-key="${packed.key}" data-chain="${item.chainIndex}" data-address="${item.tokenContractAddress}"><div class="kline-card-head"><span class="symbol-left">${logoHtml}<button type="button" class="symbol-copy" data-copy="${item.tokenContractAddress}" title="点击复制合约">${label}<span class="chain-tag">${chain}</span></button><button type="button" class="dext-score ${scoreClass}" data-score-edit title="${scoreTitle}">${scoreLabel}</button></span><span style="display:inline-flex;align-items:center;gap:6px"><span class="meta-right"><span class="price" title="最新价（USD）">$${priceText}</span><span class="mcap" title="市值（USD）">${mcapText}</span><span data-kline-status class="change-line ${changeClass}">${changeText} · ${barLabel}</span></span><button type="button" class="remove-card-btn" title="移出自选" aria-label="移出自选">⊖</button></span></div><canvas></canvas></div>`;
+      }
+
+      async function editTokenScore(chainIndex, address) {
+        const key = OkxFavorites.tokenKey(chainIndex, address);
+        const hit = (items || []).find(
+          (item) =>
+            OkxFavorites.tokenKey(item.chainIndex, item.tokenContractAddress) ===
+            key,
+        );
+        const label =
+          (hit && hit.symbol) ||
+          OkxFavorites.shortLabel(address) ||
+          String(address || "").slice(0, 8);
+        const current =
+          hit && hit.dextScore != null ? String(hit.dextScore) : "";
+        const input = window.prompt(
+          `${label} · DexTools 评分（0–99，留空清除）`,
+          current,
+        );
+        if (input == null) return false;
+        const text = String(input).trim();
+        let nextScore = null;
+        if (text) {
+          nextScore = OkxFavorites.normalizeDextScore(text);
+          if (nextScore == null) {
+            showToast("请输入 0–99 的整数");
+            return false;
+          }
+        }
+        if (
+          (hit && hit.dextScore == null && nextScore == null) ||
+          (hit && hit.dextScore === nextScore)
+        ) {
+          return false;
+        }
+        const next = OkxFavorites.setItemScore(
+          items,
+          chainIndex,
+          address,
+          nextScore,
+        );
+        await persist(
+          next,
+          nextScore != null
+            ? `OKX score ${label} ${nextScore}`
+            : `Clear OKX score ${label}`,
+        );
+        showToast(
+          nextScore != null
+            ? `${label} 评分 ${nextScore}`
+            : `${label} 已清除评分`,
+        );
+        return true;
       }
 
       function bindCardInteractions(root) {
@@ -1211,6 +1321,14 @@
           btn.addEventListener("click", (event) => {
             event.stopPropagation();
             copyText(btn.dataset.copy);
+          });
+        });
+        root.querySelectorAll("[data-score-edit]").forEach((btn) => {
+          btn.addEventListener("click", async (event) => {
+            event.stopPropagation();
+            const card = btn.closest(".kline-card");
+            if (!card) return;
+            await editTokenScore(card.dataset.chain, card.dataset.address);
           });
         });
         root.querySelectorAll(".remove-card-btn").forEach((btn) => {
@@ -1224,7 +1342,11 @@
         });
         root.querySelectorAll(".kline-card").forEach((card) => {
           card.addEventListener("click", (event) => {
-            if (event.target.closest(".symbol-copy, .remove-card-btn, a, button")) {
+            if (
+              event.target.closest(
+                ".symbol-copy, .remove-card-btn, [data-score-edit], a, button",
+              )
+            ) {
               return;
             }
             toggleCardFocus(card);
@@ -1526,6 +1648,14 @@
       const cardFocusClose = document.getElementById("cardFocusClose");
       if (cardFocusClose) {
         cardFocusClose.addEventListener("click", () => clearCardFocus());
+      }
+      const cardFocusScore = document.getElementById("cardFocusScore");
+      if (cardFocusScore) {
+        cardFocusScore.addEventListener("click", async () => {
+          const card = document.querySelector(".kline-card.is-focus");
+          if (!card) return;
+          await editTokenScore(card.dataset.chain, card.dataset.address);
+        });
       }
       const cardFocusCopy = document.getElementById("cardFocusCopy");
       if (cardFocusCopy) {

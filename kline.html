@@ -1405,6 +1405,104 @@
       body.is-stop-loss-locked {
         overflow: hidden;
       }
+      .buy-sl-gate {
+        position: fixed;
+        inset: 0;
+        z-index: 115;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(40, 50, 48, 0.42);
+        backdrop-filter: blur(5px);
+        -webkit-backdrop-filter: blur(5px);
+        box-sizing: border-box;
+      }
+      .buy-sl-gate[hidden] {
+        display: none !important;
+      }
+      .buy-sl-panel {
+        width: min(360px, 100%);
+        padding: 18px 16px 14px;
+        border-radius: 14px;
+        border: 1px solid var(--separator, #d8ddda);
+        background: color-mix(in srgb, var(--elevated, #fbfcfa) 96%, transparent);
+        box-shadow: 0 14px 36px rgba(40, 50, 48, 0.22);
+        color: var(--label, #28323a);
+      }
+      .buy-sl-panel h2 {
+        margin: 0 0 6px;
+        font-size: 17px;
+        font-weight: 700;
+      }
+      .buy-sl-lead {
+        margin: 0 0 14px;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--secondary, #5a6864);
+      }
+      .buy-sl-rows {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+      .buy-sl-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 0.5px solid var(--separator, #d8ddda);
+        background: color-mix(in srgb, var(--fill, rgba(90, 106, 104, 0.08)) 80%, transparent);
+      }
+      .buy-sl-row .buy-sl-label {
+        font-size: 13px;
+        font-weight: 650;
+        color: var(--warn, #b07030);
+        white-space: nowrap;
+      }
+      .buy-sl-row .buy-sl-price {
+        flex: 1;
+        min-width: 0;
+        text-align: right;
+        font-size: 15px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        word-break: break-all;
+      }
+      .buy-sl-row button {
+        flex: 0 0 auto;
+        height: 30px;
+        padding: 0 12px;
+        border: 0.5px solid var(--separator, #d8ddda);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--elevated, #fff) 70%, transparent);
+        color: var(--label, #28323a);
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .buy-sl-row button:active {
+        opacity: 0.75;
+      }
+      .buy-sl-actions {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .buy-sl-actions button {
+        min-width: 88px;
+        height: 36px;
+        padding: 0 14px;
+        border: none;
+        border-radius: 8px;
+        background: var(--accent, #2f8f6e);
+        color: #fff;
+        font-size: 14px;
+        font-weight: 650;
+        cursor: pointer;
+      }
       @keyframes mode-progress-slide {
         0% {
           transform: translateX(-120%);
@@ -4178,6 +4276,41 @@
         <p class="stop-loss-hint">
           无关闭按钮。处理完跌破项后自动解锁。
         </p>
+      </div>
+    </div>
+    <div
+      id="buyStopLossGate"
+      class="buy-sl-gate"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="buyStopLossTitle"
+      aria-describedby="buyStopLossLead"
+    >
+      <div class="buy-sl-panel">
+        <h2 id="buyStopLossTitle">买入止损价</h2>
+        <p class="buy-sl-lead" id="buyStopLossLead">
+          买入已记录。可复制 -3% / -5% 止损价。
+        </p>
+        <div class="buy-sl-rows">
+          <div class="buy-sl-row">
+            <span class="buy-sl-label">-3%</span>
+            <span class="buy-sl-price" id="buyStopLoss3">--</span>
+            <button type="button" data-buy-sl-copy="3" title="复制 -3% 止损价">
+              复制
+            </button>
+          </div>
+          <div class="buy-sl-row">
+            <span class="buy-sl-label">-5%</span>
+            <span class="buy-sl-price" id="buyStopLoss5">--</span>
+            <button type="button" data-buy-sl-copy="5" title="复制 -5% 止损价">
+              复制
+            </button>
+          </div>
+        </div>
+        <div class="buy-sl-actions">
+          <button type="button" id="buyStopLossOk">知道了</button>
+        </div>
       </div>
     </div>
     <div
@@ -14552,7 +14685,7 @@
             target &&
             target.closest &&
             target.closest(
-              'input, textarea, select, [contenteditable="true"], button, a, .notes-rank-gate, .kline-zoom-gate, .stop-loss-gate, .boot-init-gate, .card-actions, .notify-float, .momentum-float, .float-tabs, .app-chrome, .nail-tab, .hidden-pin-tab',
+              'input, textarea, select, [contenteditable="true"], button, a, .notes-rank-gate, .kline-zoom-gate, .stop-loss-gate, .buy-sl-gate, .boot-init-gate, .card-actions, .notify-float, .momentum-float, .float-tabs, .app-chrome, .nail-tab, .hidden-pin-tab',
             )
           );
         }
@@ -16895,6 +17028,39 @@
         }
       }
 
+      function closeBuyStopLossTip() {
+        const gate = document.getElementById("buyStopLossGate");
+        if (gate) gate.hidden = true;
+      }
+
+      function showBuyStopLossTip(symbol, buyPrice) {
+        const gate = document.getElementById("buyStopLossGate");
+        const lead = document.getElementById("buyStopLossLead");
+        const el3 = document.getElementById("buyStopLoss3");
+        const el5 = document.getElementById("buyStopLoss5");
+        const price = Number(buyPrice);
+        if (
+          !gate ||
+          !Number.isFinite(price) ||
+          price <= 0
+        ) {
+          return;
+        }
+        const label = String(symbol || "").replace(/USDT$/i, "") || "—";
+        const sl3 = price * 0.97;
+        const sl5 = price * 0.95;
+        if (lead) {
+          lead.textContent = `${label} 买入 ${formatPinPrice(price)} 已记录。可复制 -3% / -5% 止损价。`;
+        }
+        if (el3) el3.textContent = formatPinPrice(sl3);
+        if (el5) el5.textContent = formatPinPrice(sl5);
+        gate.dataset.sl3 = String(sl3);
+        gate.dataset.sl5 = String(sl5);
+        gate.hidden = false;
+        const okBtn = document.getElementById("buyStopLossOk");
+        if (okBtn) okBtn.focus();
+      }
+
       async function buyPositionForSymbol(symbol, options) {
         if (!symbol || positionSaving) return false;
         const label = symbol.replace("USDT", "");
@@ -16953,6 +17119,7 @@
           await renderKlines();
           syncStopLossGate();
           setStatus(true, `${label} 持仓已同步`);
+          showBuyStopLossTip(symbol, buyPrice);
           return true;
         } catch (error) {
           console.error(error);
@@ -18343,7 +18510,7 @@
         }
         if (
           event.target.closest(
-            "button, a, input, select, textarea, label, .card-actions, summary, .mode-switch, .stop-loss-gate, .notify-float, .float-tabs, .app-chrome, .nail-drawer, .nail-tab, .hidden-pin-drawer, .hidden-pin-tab",
+            "button, a, input, select, textarea, label, .card-actions, summary, .mode-switch, .stop-loss-gate, .buy-sl-gate, .notify-float, .float-tabs, .app-chrome, .nail-drawer, .nail-tab, .hidden-pin-drawer, .hidden-pin-tab",
           )
         ) {
           return;
@@ -18520,6 +18687,42 @@
             syncStopLossGate();
           }
         });
+      {
+        const buySlGate = document.getElementById("buyStopLossGate");
+        if (buySlGate) {
+          buySlGate.addEventListener("click", (event) => {
+            if (event.target === buySlGate) {
+              closeBuyStopLossTip();
+              return;
+            }
+            const copyBtn = event.target.closest("[data-buy-sl-copy]");
+            if (copyBtn) {
+              const pct = copyBtn.getAttribute("data-buy-sl-copy");
+              const raw =
+                pct === "3"
+                  ? buySlGate.dataset.sl3
+                  : pct === "5"
+                    ? buySlGate.dataset.sl5
+                    : "";
+              const n = Number(raw);
+              if (!Number.isFinite(n) || n <= 0) {
+                showToast("止损价无效");
+                return;
+              }
+              void copyName(formatPinPrice(n));
+              return;
+            }
+            if (event.target.closest("#buyStopLossOk")) {
+              closeBuyStopLossTip();
+            }
+          });
+          document.addEventListener("keydown", (event) => {
+            if (event.key !== "Escape") return;
+            if (buySlGate.hidden) return;
+            closeBuyStopLossTip();
+          });
+        }
+      }
       document
         .getElementById("stopLossSellAllBtn")
         .addEventListener("click", () => {
