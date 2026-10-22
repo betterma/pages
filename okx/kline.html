@@ -463,6 +463,60 @@
       .confirm-actions .is-danger:hover {
         background: #7a6661;
       }
+      .busy-gate {
+        position: fixed;
+        inset: 0;
+        z-index: 95;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(40, 50, 48, 0.4);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        box-sizing: border-box;
+      }
+      .busy-gate[hidden] {
+        display: none !important;
+      }
+      .busy-panel {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        min-width: 160px;
+        padding: 20px 24px;
+        border-radius: 12px;
+        border: 1px solid #d8ddda;
+        background: #fbfcfa;
+        box-shadow: 0 10px 28px rgba(40, 50, 48, 0.2);
+      }
+      .busy-spinner {
+        width: 28px;
+        height: 28px;
+        border: 2.5px solid #d8ddda;
+        border-top-color: #718b88;
+        border-radius: 50%;
+        animation: okx-busy-spin 0.7s linear infinite;
+      }
+      @keyframes okx-busy-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .busy-panel p {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 650;
+        color: #28323a;
+      }
+      body.is-page-busy {
+        overflow: hidden;
+      }
+      body.is-page-busy .card-focus-bar {
+        pointer-events: none;
+        opacity: 0.55;
+      }
       .kline-card-head .symbol-left {
         display: inline-flex;
         align-items: center;
@@ -734,6 +788,20 @@
       </div>
     </div>
 
+    <div
+      id="busyGate"
+      class="busy-gate"
+      hidden
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <div class="busy-panel">
+        <div class="busy-spinner" aria-hidden="true"></div>
+        <p id="busyGateText">处理中…</p>
+      </div>
+    </div>
+
     <script src="./favorites.js"></script>
     <script>
       "use strict";
@@ -769,6 +837,7 @@
         localStorage.getItem("okxKlineBar") || CONFIG.DEFAULT_BAR;
       let loading = false;
       let saving = false;
+      let busyDepth = 0;
       let klineAbort = null;
       let focusCardKey = null;
 
@@ -783,6 +852,46 @@
         document.getElementById("statusDot").className =
           `dot ${ok ? "online" : "offline"}`;
         document.getElementById("statusText").textContent = text;
+      }
+
+      function setPageBusy(on, label) {
+        const gate = document.getElementById("busyGate");
+        const textEl = document.getElementById("busyGateText");
+        const refreshBtn = document.getElementById("refreshBtn");
+        const addOneBtn = document.getElementById("addOneBtn");
+        const addBatchBtn = document.getElementById("addBatchBtn");
+        if (on) {
+          busyDepth += 1;
+          if (textEl && label) textEl.textContent = String(label);
+          if (gate) {
+            gate.hidden = false;
+            gate.setAttribute("aria-busy", "true");
+          }
+          document.body.classList.add("is-page-busy");
+        } else {
+          busyDepth = Math.max(0, busyDepth - 1);
+          if (busyDepth === 0) {
+            if (gate) {
+              gate.hidden = true;
+              gate.setAttribute("aria-busy", "false");
+            }
+            document.body.classList.remove("is-page-busy");
+            if (textEl) textEl.textContent = "处理中…";
+          }
+        }
+        const blocked = busyDepth > 0 || loading || saving;
+        if (refreshBtn) refreshBtn.disabled = blocked;
+        if (addOneBtn) addOneBtn.disabled = blocked;
+        if (addBatchBtn) addBatchBtn.disabled = blocked;
+      }
+
+      async function withPageBusy(label, fn) {
+        setPageBusy(true, label || "处理中…");
+        try {
+          return await fn();
+        } finally {
+          setPageBusy(false);
+        }
       }
 
       function showToast(message) {
@@ -1292,6 +1401,7 @@
       }
 
       async function editTokenScore(chainIndex, address) {
+        if (saving || loading || busyDepth > 0) return false;
         const key = OkxFavorites.tokenKey(chainIndex, address);
         const hit = (items || []).find(
           (item) =>
@@ -1335,6 +1445,7 @@
           nextScore != null
             ? `OKX score ${label} ${nextScore}`
             : `Clear OKX score ${label}`,
+          nextScore != null ? "保存评分…" : "清除评分…",
         );
         showToast(
           nextScore != null
@@ -1459,10 +1570,19 @@
         }
       }
 
-      async function loadAndRender() {
+      async function loadAndRender(options) {
         if (loading) return;
         loading = true;
-        document.getElementById("refreshBtn").disabled = true;
+        const opts = options || {};
+        const ownBusy = !opts.quiet;
+        const busyLabel = opts.busyLabel || "加载中…";
+        if (ownBusy) {
+          setPageBusy(true, busyLabel);
+        } else {
+          // Parent (persist) already holds the overlay — only refresh the label.
+          const textEl = document.getElementById("busyGateText");
+          if (textEl) textEl.textContent = busyLabel;
+        }
         try {
           setStatus(true, "读取自选…");
           const state = await OkxFavorites.loadFavorites({
@@ -1517,13 +1637,14 @@
           await renderAll();
         } finally {
           loading = false;
-          document.getElementById("refreshBtn").disabled = false;
+          if (ownBusy) setPageBusy(false);
         }
       }
 
-      async function persist(nextItems, message) {
-        if (saving) return;
+      async function persist(nextItems, message, busyLabel) {
+        if (saving || loading) return;
         saving = true;
+        setPageBusy(true, busyLabel || "保存中…");
         try {
           await OkxFavorites.saveFavorites(nextItems, {
             repo: CONFIG.GITHUB_REPO,
@@ -1532,17 +1653,19 @@
           });
           items = OkxFavorites.normalizeList(nextItems);
           showToast("自选已保存");
-          await loadAndRender();
+          await loadAndRender({ quiet: true, busyLabel: "刷新列表…" });
         } catch (error) {
           console.error(error);
           setStatus(false, error.message || "保存失败");
           showToast(error.message || "保存失败");
         } finally {
           saving = false;
+          setPageBusy(false);
         }
       }
 
       async function addOne() {
+        if (saving || loading || busyDepth > 0) return;
         const chainIndex = document.getElementById("chainSelect").value;
         const address = document.getElementById("addressInput").value;
         const symbol = document.getElementById("symbolInput").value;
@@ -1557,10 +1680,11 @@
         }
         document.getElementById("addressInput").value = "";
         document.getElementById("symbolInput").value = "";
-        await persist(result.items, "Add OKX watch token");
+        await persist(result.items, "Add OKX watch token", "添加自选…");
       }
 
       async function addBatch() {
+        if (saving || loading || busyDepth > 0) return;
         const defaultChain = document.getElementById("chainSelect").value;
         const text = document.getElementById("batchInput").value;
         const parsed = OkxFavorites.parseBatchText(text, defaultChain);
@@ -1580,6 +1704,7 @@
         await persist(
           result.items,
           `Add ${result.added.length} OKX watch tokens`,
+          `批量添加 ${result.added.length}…`,
         );
       }
 
@@ -1629,10 +1754,11 @@
           (hit && hit.symbol) ||
           OkxFavorites.shortLabel(address) ||
           String(address || "").slice(0, 8);
+        if (saving || loading || busyDepth > 0) return false;
         const ok = await askConfirm(`确定移出自选「${label}」？`);
         if (!ok) return false;
         const next = OkxFavorites.removeItem(items, chainIndex, address);
-        await persist(next, "Remove OKX watch token");
+        await persist(next, "Remove OKX watch token", `移出 ${label}…`);
         return true;
       }
 

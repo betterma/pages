@@ -9,6 +9,12 @@
 - 自选：`okx/favorites.json`（GitHub，页面可写）
 - K 线：OBS `okx-candles-cache.json`（定时云函数写）
 
+## UI 规范：异步操作要有 loading
+
+- 刷新 / 添加 / 批量添加 / 移出 / 改评分等网络写入或读取，必须用全屏 `busyGate`（`setPageBusy`）提示「处理中」，并禁用相关按钮，防止连点。
+- 保存后再刷新列表时复用同一层 loading（内层 `quiet`），只更新文案。
+- Cursor 规则：`.cursor/rules/okx-loading.mdc`
+
 ## 部署（仅定时触发器）
 
 1. 申请 [OKX Onchain OS](https://web3.okx.com/onchain-os/dev-portal) API Key  

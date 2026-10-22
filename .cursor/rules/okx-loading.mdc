@@ -1,0 +1,18 @@
+---
+description: OKX page async actions must show loading and block double-submit
+globs: okx/**
+alwaysApply: false
+---
+
+# OKX 操作必须有 loading
+
+For `okx/` pages (especially `okx/kline.html`):
+
+- Any async user action that talks to GitHub / OBS / network (刷新、添加、批量添加、移出、改评分、保存自选) **must** show a visible loading state for the whole wait.
+- Use the shared `busyGate` + `setPageBusy` / `withPageBusy` pattern (full-screen spinner + label). Do not rely on toast alone.
+- While busy: disable 刷新 / 添加 / 批量添加, block repeat clicks (`saving` / `loading` / `busyDepth` guards), and keep the focus bar non-interactive.
+- Nested work (e.g. save then reload) should reuse one overlay: outer call owns `setPageBusy`, inner reload uses `{ quiet: true }` and only updates the label.
+- Labels should say what is happening: `加载中…` / `保存中…` / `添加自选…` / `移出 xxx…` / `保存评分…`.
+- Confirm dialogs come **before** loading; loading starts only after the user confirms.
+
+Do not ship new OKX write/load paths without this feedback.
