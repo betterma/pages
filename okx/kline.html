@@ -237,47 +237,12 @@
         background: #fbfcfa;
         border: 1px solid #d8ddda;
         border-radius: 8px;
+        cursor: pointer;
       }
-      .ext-jump {
-        position: absolute;
-        top: 0;
-        right: 0;
-        z-index: 2;
-        display: flex;
-        gap: 0;
-        border-radius: 0 8px 0 6px;
-        overflow: hidden;
-        box-shadow: 0 1px 2px rgba(40, 50, 58, 0.08);
-      }
-      .ext-jump a {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 28px;
-        height: 20px;
-        padding: 0 6px;
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.02em;
-        text-decoration: none;
-        color: #f7f8f6;
-        background: #5a6a68;
-        border: 0;
-        line-height: 1;
-      }
-      .ext-jump a + a {
-        border-left: 1px solid rgba(247, 248, 246, 0.22);
-      }
-      .ext-jump a.is-okx {
-        background: #1a1a1a;
-        color: #f0b90b;
-      }
-      .ext-jump a.is-dt {
-        background: #05a3c7;
-        color: #fff;
-      }
-      .ext-jump a:hover {
-        filter: brightness(1.1);
+      .kline-card.is-focus {
+        outline: 2px solid #718b88;
+        outline-offset: 1px;
+        box-shadow: 0 0 0 1px rgba(113, 139, 136, 0.28);
       }
       .remove-card-btn {
         border: 0;
@@ -298,8 +263,94 @@
         justify-content: space-between;
         gap: 8px;
         margin-bottom: 6px;
-        padding-right: 58px;
         font-size: 13px;
+      }
+      .card-focus-bar {
+        position: fixed;
+        left: 50%;
+        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        transform: translateX(-50%);
+        z-index: 40;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: min(520px, calc(100vw - 16px));
+        min-height: 52px;
+        padding: 8px 28px 8px 10px;
+        border-radius: 12px;
+        border: 1px solid #d8ddda;
+        background: rgba(251, 252, 250, 0.96);
+        color: #5a6a68;
+        box-shadow: 0 6px 18px rgba(40, 50, 48, 0.14);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        box-sizing: border-box;
+      }
+      .card-focus-bar[hidden] {
+        display: none !important;
+      }
+      .card-focus-close {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: none;
+        border-radius: 6px;
+        background: transparent;
+        color: #8a9692;
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .card-focus-close:hover {
+        color: #5a6a68;
+        background: rgba(90, 106, 104, 0.12);
+      }
+      .card-focus-label {
+        flex: 0 1 auto;
+        min-width: 3em;
+        max-width: 7em;
+        padding: 0 4px;
+        font-size: 14px;
+        font-weight: 700;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .card-focus-bar button,
+      .card-focus-bar a.card-focus-link {
+        flex: 1 1 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: rgba(90, 106, 104, 0.1);
+        color: inherit;
+        height: 36px;
+        padding: 0 10px;
+        border-radius: 9px;
+        font-size: 13px;
+        font-weight: 650;
+        cursor: pointer;
+        white-space: nowrap;
+        text-decoration: none;
+        box-sizing: border-box;
+      }
+      .card-focus-bar button.is-okx,
+      .card-focus-bar a.is-okx {
+        background: #1a1a1a;
+        color: #f0b90b;
+      }
+      .card-focus-bar button.is-dt,
+      .card-focus-bar a.is-dt {
+        background: #05a3c7;
+        color: #fff;
+      }
+      .card-focus-bar button.is-danger {
+        background: rgba(141, 119, 113, 0.16);
+        color: #8d7771;
       }
       .kline-card-head .symbol-left {
         display: inline-flex;
@@ -427,7 +478,7 @@
         <span id="statusText">等待启动...</span>
       </div>
       <p class="hint">
-        自选按 Solana / Robinhood 分 tab · 按当前周期涨跌分区 · 点名称复制合约 · 右上角 OKX/DEX 跳转 · ⊖ 移出自选 ·
+        自选按 Solana / Robinhood 分 tab · 按当前周期涨跌分区 · 点名称复制合约 · 点 K 线出操作栏（OKX/Dex）· ⊖ 移出自选 ·
         K 线由定时云函数写入缓存（新加币 / 新周期需等下一轮）
       </p>
 
@@ -521,6 +572,39 @@
       <div id="fallingGrid" class="kline-grid"></div>
     </div>
 
+    <div id="cardFocusBar" class="card-focus-bar" hidden>
+      <button
+        type="button"
+        class="card-focus-close"
+        id="cardFocusClose"
+        title="关闭"
+        aria-label="关闭操作栏"
+      >
+        ×
+      </button>
+      <span class="card-focus-label" id="cardFocusLabel">—</span>
+      <a
+        class="card-focus-link is-okx"
+        id="cardFocusOkx"
+        href="#"
+        target="_blank"
+        rel="noopener noreferrer"
+        hidden
+        >OKX</a
+      >
+      <a
+        class="card-focus-link is-dt"
+        id="cardFocusDex"
+        href="#"
+        target="_blank"
+        rel="noopener noreferrer"
+        hidden
+        >Dex</a
+      >
+      <button type="button" id="cardFocusCopy">复制</button>
+      <button type="button" class="is-danger" id="cardFocusRemove">移出</button>
+    </div>
+
     <script src="./favorites.js"></script>
     <script>
       "use strict";
@@ -557,6 +641,7 @@
       let loading = false;
       let saving = false;
       let klineAbort = null;
+      let focusCardKey = null;
 
       function barMeta(barId) {
         return (
@@ -705,15 +790,80 @@
         return [];
       }
 
-      function extJumpHtml(chainIndex, address) {
-        const links = externalTokenLinks(chainIndex, address);
-        if (!links.length) return "";
-        return `<div class="ext-jump">${links
-          .map(
-            (link) =>
-              `<a class="${link.className}" href="${link.href}" target="_blank" rel="noopener noreferrer" title="${link.title}" data-ext-jump="${link.key}">${link.label}</a>`,
-          )
-          .join("")}</div>`;
+      function clearCardFocus() {
+        focusCardKey = null;
+        document
+          .querySelectorAll(".kline-card.is-focus")
+          .forEach((card) => card.classList.remove("is-focus"));
+        const bar = document.getElementById("cardFocusBar");
+        if (bar) bar.hidden = true;
+      }
+
+      function showFocusBarForCard(card) {
+        if (!card) {
+          clearCardFocus();
+          return;
+        }
+        const key = String(card.dataset.key || "");
+        focusCardKey = key;
+        document
+          .querySelectorAll(".kline-card.is-focus")
+          .forEach((el) => el.classList.remove("is-focus"));
+        card.classList.add("is-focus");
+
+        const chain = card.dataset.chain || "";
+        const address = card.dataset.address || "";
+        const labelBtn = card.querySelector(".symbol-copy");
+        const labelEl = document.getElementById("cardFocusLabel");
+        const bar = document.getElementById("cardFocusBar");
+        const okxLink = document.getElementById("cardFocusOkx");
+        const dexLink = document.getElementById("cardFocusDex");
+        if (labelEl) {
+          const raw = labelBtn
+            ? Array.from(labelBtn.childNodes)
+                .filter((node) => node.nodeType === 3)
+                .map((node) => node.textContent)
+                .join("")
+                .trim()
+            : "";
+          labelEl.textContent = raw || OkxFavorites.shortLabel(address);
+        }
+        const links = externalTokenLinks(chain, address);
+        const byKey = Object.fromEntries(links.map((link) => [link.key, link]));
+        if (okxLink) {
+          if (byKey.okx) {
+            okxLink.hidden = false;
+            okxLink.href = byKey.okx.href;
+            okxLink.title = byKey.okx.title;
+            okxLink.textContent = byKey.okx.label;
+          } else {
+            okxLink.hidden = true;
+            okxLink.removeAttribute("href");
+          }
+        }
+        if (dexLink) {
+          const dex = byKey.dt;
+          if (dex) {
+            dexLink.hidden = false;
+            dexLink.href = dex.href;
+            dexLink.title = dex.title;
+            dexLink.textContent = dex.label === "DT" ? "DexTools" : dex.label;
+          } else {
+            dexLink.hidden = true;
+            dexLink.removeAttribute("href");
+          }
+        }
+        if (bar) bar.hidden = false;
+      }
+
+      function toggleCardFocus(card) {
+        if (!card) return;
+        const key = String(card.dataset.key || "");
+        if (focusCardKey && focusCardKey === key) {
+          clearCardFocus();
+          return;
+        }
+        showFocusBarForCard(card);
       }
 
       function syncIntervalButtons() {
@@ -975,11 +1125,9 @@
         const logoHtml = logoAttr
           ? `<img class="token-logo" src="${logoAttr}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">`
           : "";
-        const jump = extJumpHtml(
-          item.chainIndex,
-          item.tokenContractAddress,
-        );
-        return `<div class="kline-card" data-key="${packed.key}" data-chain="${item.chainIndex}" data-address="${item.tokenContractAddress}">${jump}<div class="kline-card-head"><span class="symbol-left">${logoHtml}<button type="button" class="symbol-copy" data-copy="${item.tokenContractAddress}" title="点击复制合约">${label}<span class="chain-tag">${chain}</span></button></span><span style="display:inline-flex;align-items:center;gap:6px"><span class="meta-right"><span class="price" title="最新价（USD）">$${priceText}</span><span class="mcap" title="市值（USD）">${mcapText}</span><span data-kline-status class="change-line ${changeClass}">${changeText} · ${barLabel}</span></span><button type="button" class="remove-card-btn" title="移出自选" aria-label="移出自选">⊖</button></span></div><canvas></canvas></div>`;
+        const focused =
+          focusCardKey && focusCardKey === packed.key ? " is-focus" : "";
+        return `<div class="kline-card${focused}" data-key="${packed.key}" data-chain="${item.chainIndex}" data-address="${item.tokenContractAddress}"><div class="kline-card-head"><span class="symbol-left">${logoHtml}<button type="button" class="symbol-copy" data-copy="${item.tokenContractAddress}" title="点击复制合约">${label}<span class="chain-tag">${chain}</span></button></span><span style="display:inline-flex;align-items:center;gap:6px"><span class="meta-right"><span class="price" title="最新价（USD）">$${priceText}</span><span class="mcap" title="市值（USD）">${mcapText}</span><span data-kline-status class="change-line ${changeClass}">${changeText} · ${barLabel}</span></span><button type="button" class="remove-card-btn" title="移出自选" aria-label="移出自选">⊖</button></span></div><canvas></canvas></div>`;
       }
 
       function bindCardInteractions(root) {
@@ -989,17 +1137,21 @@
             copyText(btn.dataset.copy);
           });
         });
-        root.querySelectorAll(".ext-jump a").forEach((link) => {
-          link.addEventListener("click", (event) => {
-            event.stopPropagation();
-          });
-        });
         root.querySelectorAll(".remove-card-btn").forEach((btn) => {
           btn.addEventListener("click", async (event) => {
             event.stopPropagation();
             const card = btn.closest(".kline-card");
             if (!card) return;
+            clearCardFocus();
             await removeToken(card.dataset.chain, card.dataset.address);
+          });
+        });
+        root.querySelectorAll(".kline-card").forEach((card) => {
+          card.addEventListener("click", (event) => {
+            if (event.target.closest(".symbol-copy, .remove-card-btn, a, button")) {
+              return;
+            }
+            toggleCardFocus(card);
           });
         });
       }
@@ -1072,6 +1224,13 @@
           falling,
           "暂无下跌",
         );
+        if (focusCardKey) {
+          const card = document.querySelector(
+            `.kline-card[data-key="${CSS.escape(focusCardKey)}"]`,
+          );
+          if (card) showFocusBarForCard(card);
+          else clearCardFocus();
+        }
       }
 
       async function loadAndRender() {
@@ -1235,8 +1394,36 @@
 
       document.querySelectorAll(".chain-tab").forEach((btn) => {
         btn.addEventListener("click", () => {
+          clearCardFocus();
           setChainTab(btn.dataset.chain);
         });
+      });
+
+      const cardFocusClose = document.getElementById("cardFocusClose");
+      if (cardFocusClose) {
+        cardFocusClose.addEventListener("click", () => clearCardFocus());
+      }
+      const cardFocusCopy = document.getElementById("cardFocusCopy");
+      if (cardFocusCopy) {
+        cardFocusCopy.addEventListener("click", () => {
+          const card = document.querySelector(".kline-card.is-focus");
+          if (!card) return;
+          copyText(card.dataset.address);
+        });
+      }
+      const cardFocusRemove = document.getElementById("cardFocusRemove");
+      if (cardFocusRemove) {
+        cardFocusRemove.addEventListener("click", async () => {
+          const card = document.querySelector(".kline-card.is-focus");
+          if (!card) return;
+          const chain = card.dataset.chain;
+          const address = card.dataset.address;
+          clearCardFocus();
+          await removeToken(chain, address);
+        });
+      }
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") clearCardFocus();
       });
 
       if (!CONFIG.BARS.some((item) => item.id === activeBar)) {
