@@ -173,40 +173,46 @@
       .dext-score {
         display: inline-flex;
         align-items: center;
+        gap: 4px;
+        margin: 0;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: #5a6a68;
+        font-size: 12px;
+        font-weight: 650;
+        font-variant-numeric: tabular-nums;
+        cursor: pointer;
+        line-height: 1.35;
+        text-align: left;
+      }
+      .dext-score:hover {
+        opacity: 0.8;
+      }
+      .dext-score .dext-score-val {
+        display: inline-flex;
+        align-items: center;
         justify-content: center;
-        margin-left: 5px;
         min-width: 22px;
         height: 18px;
         padding: 0 5px;
         border: 1px solid #c9d0d0;
         border-radius: 4px;
         background: #eef1ee;
-        color: #5a6a68;
-        font-size: 11px;
         font-weight: 700;
-        font-variant-numeric: tabular-nums;
-        cursor: pointer;
-        line-height: 1;
-        vertical-align: middle;
+        font-size: 11px;
       }
-      .dext-score:hover {
-        filter: brightness(0.97);
-      }
-      .dext-score.is-empty {
-        color: #9aa3a0;
-        font-weight: 600;
-      }
-      .dext-score.is-high {
+      .dext-score.is-high .dext-score-val {
         background: #dfece6;
         border-color: #9ebdb0;
         color: #3d6b5c;
       }
-      .dext-score.is-mid {
+      .dext-score.is-mid .dext-score-val {
         background: #f3ecd8;
         border-color: #d4c49a;
         color: #7a6540;
       }
-      .dext-score.is-low {
+      .dext-score.is-low .dext-score-val {
         background: #f0e4e0;
         border-color: #d0b5ae;
         color: #8d5f56;
@@ -300,11 +306,25 @@
       }
       .kline-card-head {
         display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+        margin-bottom: 8px;
+        font-size: 13px;
+      }
+      .kline-card-title {
+        display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 8px;
-        margin-bottom: 6px;
-        font-size: 13px;
+        min-width: 0;
+      }
+      .kline-card-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        min-width: 0;
       }
       .card-focus-bar {
         position: fixed;
@@ -467,26 +487,22 @@
         font: inherit;
         text-align: left;
       }
-      .kline-card-head .meta-right {
-        display: inline-flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 2px;
-        min-width: 0;
-      }
       .kline-card-head .price {
         font-weight: 600;
         font-variant-numeric: tabular-nums;
         color: #28323a;
         font-size: 12px;
+        line-height: 1.35;
       }
       .kline-card-head .mcap {
         font-variant-numeric: tabular-nums;
         color: #6a6360;
-        font-size: 11px;
+        font-size: 12px;
+        line-height: 1.35;
       }
       .kline-card-head .change-line {
         font-size: 12px;
+        line-height: 1.35;
         white-space: nowrap;
       }
       .kline-card canvas {
@@ -569,7 +585,7 @@
         <span id="statusText">等待启动...</span>
       </div>
       <p class="hint">
-        自选按 Solana / Robinhood 分 tab · 按当前周期涨跌分区 · 点名称复制合约 · 点评分角标/操作栏「评分」填 DexTools 分 · 点 K 线出操作栏 · ⊖ 移出自选 ·
+        自选按 Solana / Robinhood 分 tab · 按当前周期涨跌分区 · 点名称复制合约 · 操作栏「评分」填 DexTools 分（有分才显示）· 点 K 线出操作栏 · ⊖ 移出自选 ·
         K 线由定时云函数写入缓存（新加币 / 新周期需等下一轮）
       </p>
 
@@ -1243,20 +1259,36 @@
           : "";
         const focused =
           focusCardKey && focusCardKey === packed.key ? " is-focus" : "";
-        const score = Number(item.dextScore);
-        const hasScore = Number.isFinite(score);
-        const scoreClass = !hasScore
-          ? "is-empty"
-          : score >= 80
-            ? "is-high"
-            : score >= 50
-              ? "is-mid"
-              : "is-low";
-        const scoreLabel = hasScore ? String(score) : "+";
-        const scoreTitle = hasScore
-          ? `DexTools 评分 ${score}（点击修改）`
-          : "点击填写 DexTools 评分";
-        return `<div class="kline-card${focused}" data-key="${packed.key}" data-chain="${item.chainIndex}" data-address="${item.tokenContractAddress}"><div class="kline-card-head"><span class="symbol-left">${logoHtml}<button type="button" class="symbol-copy" data-copy="${item.tokenContractAddress}" title="点击复制合约">${label}<span class="chain-tag">${chain}</span></button><button type="button" class="dext-score ${scoreClass}" data-score-edit title="${scoreTitle}">${scoreLabel}</button></span><span style="display:inline-flex;align-items:center;gap:6px"><span class="meta-right"><span class="price" title="最新价（USD）">$${priceText}</span><span class="mcap" title="市值（USD）">${mcapText}</span><span data-kline-status class="change-line ${changeClass}">${changeText} · ${barLabel}</span></span><button type="button" class="remove-card-btn" title="移出自选" aria-label="移出自选">⊖</button></span></div><canvas></canvas></div>`;
+        const score = OkxFavorites.normalizeDextScore(item.dextScore);
+        const hasScore = score != null;
+        const scoreClass =
+          !hasScore
+            ? ""
+            : score >= 80
+              ? "is-high"
+              : score >= 50
+                ? "is-mid"
+                : "is-low";
+        const scoreHtml = hasScore
+          ? `<button type="button" class="dext-score ${scoreClass}" data-score-edit title="DexTools 评分 ${score}（点击修改）">评分 <span class="dext-score-val">${score}</span></button>`
+          : "";
+        return [
+          `<div class="kline-card${focused}" data-key="${packed.key}" data-chain="${item.chainIndex}" data-address="${item.tokenContractAddress}">`,
+          `<div class="kline-card-head">`,
+          `<div class="kline-card-title">`,
+          `<span class="symbol-left">${logoHtml}<button type="button" class="symbol-copy" data-copy="${item.tokenContractAddress}" title="点击复制合约">${label}<span class="chain-tag">${chain}</span></button></span>`,
+          `<button type="button" class="remove-card-btn" title="移出自选" aria-label="移出自选">⊖</button>`,
+          `</div>`,
+          `<div class="kline-card-meta">`,
+          `<span class="price" title="最新价（USD）">$${priceText}</span>`,
+          `<span class="mcap" title="市值（USD）">市值 ${mcapText}</span>`,
+          `<span data-kline-status class="change-line ${changeClass}">${changeText} · ${barLabel}</span>`,
+          scoreHtml,
+          `</div>`,
+          `</div>`,
+          `<canvas></canvas>`,
+          `</div>`,
+        ].join("");
       }
 
       async function editTokenScore(chainIndex, address) {

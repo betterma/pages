@@ -4823,7 +4823,7 @@
             id="nailSortSwitch"
             role="group"
             aria-label="钉子排序"
-            title="默认：置顶/拖拽顺序；荧光绿：绿色K线占用面积从大到小"
+            title="默认：置顶/拖拽顺序；荧光绿：置顶仍在最上，其余按绿色K线面积从大到小"
           >
             <button type="button" data-nail-sort="order" class="is-active">
               默认
@@ -4831,7 +4831,7 @@
             <button
               type="button"
               data-nail-sort="alertGreen"
-              title="按绿色K线占用面积从大到小"
+              title="置顶仍在最上；其余按绿色K线占用面积从大到小"
             >
               荧光绿
             </button>
@@ -15183,6 +15183,9 @@
           : all.slice();
         if (nailSortMode === "alertGreen") {
           items = items.slice().sort((a, b) => {
+            const ap = a.pinned ? 0 : 1;
+            const bp = b.pinned ? 0 : 1;
+            if (ap !== bp) return ap - bp;
             const ka = String(a.symbol || "").toUpperCase();
             const kb = String(b.symbol || "").toUpperCase();
             const hasA = nailAlertGreenScores.has(ka);
@@ -15264,7 +15267,7 @@
         if (meta) {
           const sortHint =
             nailSortMode === "alertGreen"
-              ? "绿色面积排序"
+              ? "置顶优先 · 绿色面积排序"
               : "置顶 / 长按拖动排序";
           if (!total) {
             meta.textContent = `复制名称后新增 · ${sortHint}`;
