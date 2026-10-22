@@ -238,6 +238,47 @@
         border: 1px solid #d8ddda;
         border-radius: 8px;
       }
+      .ext-jump {
+        position: absolute;
+        top: 0;
+        right: 0;
+        z-index: 2;
+        display: flex;
+        gap: 0;
+        border-radius: 0 8px 0 6px;
+        overflow: hidden;
+        box-shadow: 0 1px 2px rgba(40, 50, 58, 0.08);
+      }
+      .ext-jump a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 28px;
+        height: 20px;
+        padding: 0 6px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-decoration: none;
+        color: #f7f8f6;
+        background: #5a6a68;
+        border: 0;
+        line-height: 1;
+      }
+      .ext-jump a + a {
+        border-left: 1px solid rgba(247, 248, 246, 0.22);
+      }
+      .ext-jump a.is-okx {
+        background: #1a1a1a;
+        color: #f0b90b;
+      }
+      .ext-jump a.is-dt {
+        background: #05a3c7;
+        color: #fff;
+      }
+      .ext-jump a:hover {
+        filter: brightness(1.1);
+      }
       .remove-card-btn {
         border: 0;
         background: transparent;
@@ -257,6 +298,7 @@
         justify-content: space-between;
         gap: 8px;
         margin-bottom: 6px;
+        padding-right: 58px;
         font-size: 13px;
       }
       .kline-card-head .symbol-left {
@@ -385,7 +427,7 @@
         <span id="statusText">等待启动...</span>
       </div>
       <p class="hint">
-        自选按 Solana / Robinhood 分 tab · 按当前周期涨跌分区 · 点名称复制合约 · ⊖ 移出自选 ·
+        自选按 Solana / Robinhood 分 tab · 按当前周期涨跌分区 · 点名称复制合约 · 右上角 OKX/DEX 跳转 · ⊖ 移出自选 ·
         K 线由定时云函数写入缓存（新加币 / 新周期需等下一轮）
       </p>
 
@@ -609,6 +651,69 @@
 
       function chainCode(chainIndex) {
         return (OkxFavorites.CHAINS[chainIndex] || {}).code || chainIndex;
+      }
+
+      /**
+       * 外部跳转：OKX Web3 按「链 + 合约/mint」；
+       * DexTools 的 pair-explorer 路径理想是 pair 地址，但用 mint/合约塞进去
+       * 多数情况下也能解析到主交易对（与常见书签一致）。
+       * Robinhood：OKX 搜索 + DexScreener（DexTools 对 RH 不稳）。
+       */
+      function externalTokenLinks(chainIndex, address) {
+        const chain = String(chainIndex || "").trim();
+        const addr = String(address || "").trim();
+        if (!addr) return [];
+        const enc = encodeURIComponent(addr);
+        if (chain === "501") {
+          return [
+            {
+              key: "okx",
+              label: "OKX",
+              className: "is-okx",
+              title: "OKX Web3 · 按合约打开",
+              href: `https://web3.okx.com/zh-hans/token/solana/${enc}`,
+            },
+            {
+              key: "dt",
+              label: "DT",
+              className: "is-dt",
+              title:
+                "DexTools · 用合约打开（页面 pair-explorer 更常用 pair 地址，mint 多数可解析）",
+              href: `https://www.dextools.io/app/en/solana/pair-explorer/${enc}`,
+            },
+          ];
+        }
+        if (chain === "4663") {
+          // Robinhood：OKX 详情页链 slug 与 Solana 不同；DexScreener 对 0x 合约更稳。
+          return [
+            {
+              key: "okx",
+              label: "OKX",
+              className: "is-okx",
+              title: "OKX Web3 搜索该合约",
+              href: `https://web3.okx.com/zh-hans/token?q=${enc}`,
+            },
+            {
+              key: "dt",
+              label: "DEX",
+              className: "is-dt",
+              title: "DexScreener · Robinhood 合约",
+              href: `https://dexscreener.com/robinhood/${enc}`,
+            },
+          ];
+        }
+        return [];
+      }
+
+      function extJumpHtml(chainIndex, address) {
+        const links = externalTokenLinks(chainIndex, address);
+        if (!links.length) return "";
+        return `<div class="ext-jump">${links
+          .map(
+            (link) =>
+              `<a class="${link.className}" href="${link.href}" target="_blank" rel="noopener noreferrer" title="${link.title}" data-ext-jump="${link.key}">${link.label}</a>`,
+          )
+          .join("")}</div>`;
       }
 
       function syncIntervalButtons() {
@@ -870,7 +975,11 @@
         const logoHtml = logoAttr
           ? `<img class="token-logo" src="${logoAttr}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">`
           : "";
-        return `<div class="kline-card" data-key="${packed.key}" data-chain="${item.chainIndex}" data-address="${item.tokenContractAddress}"><div class="kline-card-head"><span class="symbol-left">${logoHtml}<button type="button" class="symbol-copy" data-copy="${item.tokenContractAddress}" title="点击复制合约">${label}<span class="chain-tag">${chain}</span></button></span><span style="display:inline-flex;align-items:center;gap:6px"><span class="meta-right"><span class="price" title="最新价（USD）">$${priceText}</span><span class="mcap" title="市值（USD）">${mcapText}</span><span data-kline-status class="change-line ${changeClass}">${changeText} · ${barLabel}</span></span><button type="button" class="remove-card-btn" title="移出自选" aria-label="移出自选">⊖</button></span></div><canvas></canvas></div>`;
+        const jump = extJumpHtml(
+          item.chainIndex,
+          item.tokenContractAddress,
+        );
+        return `<div class="kline-card" data-key="${packed.key}" data-chain="${item.chainIndex}" data-address="${item.tokenContractAddress}">${jump}<div class="kline-card-head"><span class="symbol-left">${logoHtml}<button type="button" class="symbol-copy" data-copy="${item.tokenContractAddress}" title="点击复制合约">${label}<span class="chain-tag">${chain}</span></button></span><span style="display:inline-flex;align-items:center;gap:6px"><span class="meta-right"><span class="price" title="最新价（USD）">$${priceText}</span><span class="mcap" title="市值（USD）">${mcapText}</span><span data-kline-status class="change-line ${changeClass}">${changeText} · ${barLabel}</span></span><button type="button" class="remove-card-btn" title="移出自选" aria-label="移出自选">⊖</button></span></div><canvas></canvas></div>`;
       }
 
       function bindCardInteractions(root) {
@@ -878,6 +987,11 @@
           btn.addEventListener("click", (event) => {
             event.stopPropagation();
             copyText(btn.dataset.copy);
+          });
+        });
+        root.querySelectorAll(".ext-jump a").forEach((link) => {
+          link.addEventListener("click", (event) => {
+            event.stopPropagation();
           });
         });
         root.querySelectorAll(".remove-card-btn").forEach((btn) => {
