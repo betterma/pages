@@ -12367,12 +12367,14 @@
         return { min, max };
       }
 
+      /** 连续阴线达到该根数 → 清空此前荧光绿（与跌破便签价同等清绿）。 */
+      const NAIL_ALERT_GREEN_DOWN_STREAK = 4;
+
       /**
        * 荧光绿区间 [from, until)：便签价为水位。
        * - 未跌破：从便签一直染到最新
-       * - 收盘已跌破、尚未重新站上：旧绿也清掉（整段不染）
+       * - 收盘跌破便签价，或连续 4 根阴线：旧绿全部清掉
        * - 再次站上（高点>水位）：只从该根染到最新（只染超过水位部分）
-       * 例：0.1→0.2 绿 → 跌到 0.05 时绿全消失 → 再涨过 0.1 只从再站上这根起绿。
        */
       function nailAlertGreenActiveRange(candles, alertPrice, fromIndex) {
         const empty = { from: -1, until: -1 };
@@ -12380,28 +12382,41 @@
         if (!Number.isFinite(alertPrice) || alertPrice <= 0) return empty;
         const start = Math.max(0, Number(fromIndex) || 0);
         if (start >= candles.length) return empty;
-        let below = false;
+        let cleared = false;
+        let downStreak = 0;
         let greenFrom = start;
         let greenUntil = candles.length;
         for (let i = start; i < candles.length; i += 1) {
           const candle = candles[i];
           if (!candle) continue;
+          const open = Number(candle.open);
           const close = Number(candle.close);
           const high = Number(candle.high);
           if (!Number.isFinite(close) || !Number.isFinite(high)) continue;
-          if (close < alertPrice) {
-            below = true;
+          if (Number.isFinite(open) && close < open) downStreak += 1;
+          else downStreak = 0;
+
+          let clearedThisBar = false;
+          if (downStreak >= NAIL_ALERT_GREEN_DOWN_STREAK) {
+            cleared = true;
             greenFrom = -1;
             greenUntil = -1;
+            clearedThisBar = true;
+          }
+          if (close < alertPrice) {
+            cleared = true;
+            greenFrom = -1;
+            greenUntil = -1;
+            clearedThisBar = true;
             continue;
           }
-          if (below && high > alertPrice) {
-            below = false;
+          if (!clearedThisBar && cleared && high > alertPrice) {
+            cleared = false;
             greenFrom = i;
             greenUntil = candles.length;
           }
         }
-        if (below || greenFrom < 0 || greenUntil <= greenFrom) return empty;
+        if (cleared || greenFrom < 0 || greenUntil <= greenFrom) return empty;
         return { from: greenFrom, until: greenUntil };
       }
 
