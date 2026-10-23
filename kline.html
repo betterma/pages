@@ -15561,7 +15561,7 @@
             const openTime = Number(canvas.getAttribute("data-notice-open"));
             if (!symbol || !(alertPrice > 0)) continue;
             try {
-              const candles = await fetchKlines(symbol, "4h", null, 42);
+              const candles = await fetchKlines(symbol, "4h", null, 18);
               const latestClose =
                 candles.length > 0
                   ? Number(candles[candles.length - 1].close)

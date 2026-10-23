@@ -1419,8 +1419,9 @@
       .filter((item) => item && item.at >= cutoff)
       .sort((a, b) => (b.at || 0) - (a.at || 0))
       .forEach((item) => {
-        const key = `${item.symbol}:${item.openTime}`;
-        if (seen.has(key)) return;
+        // 同一币只留最新一条（已按 at 降序）。
+        const key = String(item.symbol || "").toUpperCase();
+        if (!key || seen.has(key)) return;
         seen.add(key);
         out.push(item);
       });

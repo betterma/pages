@@ -509,9 +509,9 @@ function trimNoticeItems(list, now) {
         .toUpperCase();
       const openTime = Number(item.openTime) || 0;
       if (!symbol || !openTime) return;
-      const key = `${symbol}:${openTime}`;
-      if (seen.has(key)) return;
-      seen.add(key);
+      // 同一币只留最新一条通知（列表已按 at 降序）。
+      if (seen.has(symbol)) return;
+      seen.add(symbol);
       out.push({
         id: item.id || `${symbol}:${openTime}:${Number(item.at) || 0}`,
         symbol,
