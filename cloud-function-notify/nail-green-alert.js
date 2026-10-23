@@ -323,6 +323,8 @@ function evaluateNail(candles, nail, now) {
     currentGreen: true,
     priorGreen,
     alertPrice,
+    // 通知时价格（当前 4h 收盘），页面红蓝相对此线，而非水位。
+    notifyPrice: Number(current.close),
   };
 }
 
@@ -427,6 +429,7 @@ async function runNailGreenAlerts(options) {
       at: now,
       openTime: verdict.openTime,
       alertPrice: verdict.alertPrice,
+      notifyPrice: Number(verdict.notifyPrice) || 0,
       noteAt: Number(nail.noteAt) || 0,
       interval: INTERVAL,
     });
@@ -512,6 +515,8 @@ function trimNoticeItems(list, now) {
       // 同一币只留最新一条通知（列表已按 at 降序）。
       if (seen.has(symbol)) return;
       seen.add(symbol);
+      const alertPrice = Number(item.alertPrice);
+      const notifyPrice = Number(item.notifyPrice);
       out.push({
         id: item.id || `${symbol}:${openTime}:${Number(item.at) || 0}`,
         symbol,
@@ -520,7 +525,9 @@ function trimNoticeItems(list, now) {
           : labelOf(symbol),
         at: Number(item.at) || 0,
         openTime,
-        alertPrice: Number(item.alertPrice),
+        alertPrice,
+        notifyPrice:
+          Number.isFinite(notifyPrice) && notifyPrice > 0 ? notifyPrice : 0,
         noteAt: Number(item.noteAt) || 0,
         interval: item.interval ? String(item.interval) : INTERVAL,
       });

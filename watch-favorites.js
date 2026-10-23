@@ -1393,6 +1393,7 @@
     const label = item.label
       ? String(item.label).trim().slice(0, 32)
       : symbol.replace(/USDT$/i, "");
+    const notifyPrice = Number(item.notifyPrice);
     return {
       id: item.id ? String(item.id) : nailGreenNoticeId({ symbol, openTime, at }),
       symbol,
@@ -1400,6 +1401,8 @@
       at,
       openTime,
       alertPrice,
+      notifyPrice:
+        Number.isFinite(notifyPrice) && notifyPrice > 0 ? notifyPrice : 0,
       noteAt: Number(item.noteAt) || 0,
       interval: item.interval ? String(item.interval) : "4h",
     };

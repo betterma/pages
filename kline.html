@@ -5500,7 +5500,7 @@
               id="nailNoticeDeltaFilter"
               role="group"
               aria-label="按涨跌筛选"
-              title="相对快照水位：全部 / 蓝涨 / 红跌"
+              title="相对通知线：全部 / 蓝涨 / 红跌"
             >
               <button
                 type="button"
@@ -5509,10 +5509,10 @@
               >
                 全部
               </button>
-              <button type="button" data-notice-delta-filter="up" title="相对水位上涨（蓝）">
+              <button type="button" data-notice-delta-filter="up" title="相对通知线上涨（蓝）">
                 蓝
               </button>
-              <button type="button" data-notice-delta-filter="down" title="相对水位下跌（红）">
+              <button type="button" data-notice-delta-filter="down" title="相对通知线下跌（红）">
                 红
               </button>
             </div>
@@ -13186,7 +13186,7 @@
         };
       }
 
-      function klinePriceBounds(candles, pinPrice, noteMarks, alertPrice) {
+      function klinePriceBounds(candles, pinPrice, noteMarks, alertPrice, extraPrice) {
         const highs = candles.map((item) => item.high);
         const lows = candles.map((item) => item.low);
         let max = Math.max(...highs);
@@ -13206,6 +13206,11 @@
         if (Number.isFinite(alertPrice) && alertPrice > 0) {
           max = Math.max(max, alertPrice);
           min = Math.min(min, alertPrice);
+        }
+        const extra = Number(extraPrice);
+        if (Number.isFinite(extra) && extra > 0) {
+          max = Math.max(max, extra);
+          min = Math.min(min, extra);
         }
         return { min, max };
       }
@@ -13710,11 +13715,27 @@
         const notes = Array.isArray(noteMarks) ? noteMarks : [];
         const alertPrice = Number(alertMark && alertMark.price);
         const hasAlert = Number.isFinite(alertPrice) && alertPrice > 0;
+        // 通知线：推送时价格；红蓝相对此线。缺省时用 openTime 那根收盘兜底。
+        let notifyPrice = Number(deltaMark && deltaMark.notifyPrice);
+        const deltaFromOpen = Number(deltaMark && deltaMark.fromOpenTime) || 0;
+        if (
+          deltaMark &&
+          !(Number.isFinite(notifyPrice) && notifyPrice > 0) &&
+          deltaFromOpen > 0
+        ) {
+          const atIdx = findCandleIndexAt(candles, deltaFromOpen);
+          if (atIdx >= 0) {
+            notifyPrice = Number(candles[atIdx].close);
+          }
+        }
+        const hasNotify =
+          !!deltaMark && Number.isFinite(notifyPrice) && notifyPrice > 0;
         const { min, max } = klinePriceBounds(
           candles,
           hasPin ? pin : null,
           notes,
           hasAlert ? alertPrice : null,
+          hasNotify ? notifyPrice : null,
         );
         const range = max - min || max * 0.01 || 1;
         const slot = chartW / candles.length;
@@ -13737,24 +13758,18 @@
               })
             : { from: -1, until: -1 };
 
-        // 通知：快照→此刻，对 openTime 起每根 K 做蓝/红切割染色（同荧光绿机制）。
-        const deltaBase = Number(
-          (deltaMark && deltaMark.alertPrice) || alertPrice,
-        );
-        const deltaFromOpen = Number(deltaMark && deltaMark.fromOpenTime) || 0;
+        // 红蓝：相对通知线（非水位）；从推送那根画到最新。
         const latestClose = Number(candles[candles.length - 1].close);
         const deltaFromIndex =
-          deltaMark &&
-          Number.isFinite(deltaBase) &&
-          deltaBase > 0 &&
+          hasNotify &&
           Number.isFinite(latestClose) &&
           latestClose > 0 &&
           deltaFromOpen > 0 &&
-          latestClose !== deltaBase
+          latestClose !== notifyPrice
             ? findCandleIndexAt(candles, deltaFromOpen)
             : -1;
         const deltaUp =
-          deltaFromIndex >= 0 ? latestClose > deltaBase : false;
+          deltaFromIndex >= 0 ? latestClose > notifyPrice : false;
 
         if (hasPin) {
           const y = yOf(pin);
@@ -13782,6 +13797,20 @@
           ctx.restore();
         }
 
+        if (hasNotify) {
+          const y = yOf(notifyPrice);
+          ctx.save();
+          ctx.strokeStyle = "rgba(58, 127, 196, 0.85)";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 3]);
+          ctx.beginPath();
+          ctx.moveTo(pad.left, y);
+          ctx.lineTo(pad.left + chartW, y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+
         candles.forEach((candle, index) => {
           const x = pad.left + slot * index + slot / 2;
           const up = candle.close >= candle.open;
@@ -13793,37 +13822,17 @@
             index >= alertGreenRange.from &&
             index < alertGreenRange.until;
           const inDelta = deltaFromIndex >= 0 && index >= deltaFromIndex;
-          let splitAt = NaN;
-          let belowColor = base;
-          let aboveColor = base;
-          if (useAlert && inDelta) {
-            // 同根叠色：水位上荧光绿，水位下蓝/红（相对快照涨跌）。
-            splitAt = alertPrice;
-            aboveColor = NAIL_ALERT_GREEN;
-            belowColor = deltaUp ? NAIL_DELTA_BLUE : NAIL_DELTA_RED;
-          } else if (useAlert) {
-            splitAt = alertPrice;
-            belowColor = base;
-            aboveColor = NAIL_ALERT_GREEN;
-          } else if (inDelta) {
-            splitAt = deltaBase;
-            if (deltaUp) {
-              belowColor = base;
-              aboveColor = NAIL_DELTA_BLUE;
-            } else {
-              belowColor = NAIL_DELTA_RED;
-              aboveColor = base;
-            }
-          }
+
+          // 先灰底；再按通知线染蓝/红；荧光绿叠在水位以上（可同根并存）。
           strokeCandleWick(
             ctx,
             x,
             candle.high,
             candle.low,
-            splitAt,
+            NaN,
             yOf,
-            belowColor,
-            aboveColor,
+            base,
+            base,
           );
           fillCandleBody(
             ctx,
@@ -13831,11 +13840,65 @@
             bodyW,
             candle.open,
             candle.close,
-            splitAt,
+            NaN,
             yOf,
-            belowColor,
-            aboveColor,
+            base,
+            base,
           );
+
+          if (inDelta) {
+            const belowColor = deltaUp ? base : NAIL_DELTA_RED;
+            const aboveColor = deltaUp ? NAIL_DELTA_BLUE : base;
+            strokeCandleWick(
+              ctx,
+              x,
+              candle.high,
+              candle.low,
+              notifyPrice,
+              yOf,
+              belowColor,
+              aboveColor,
+            );
+            fillCandleBody(
+              ctx,
+              x,
+              bodyW,
+              candle.open,
+              candle.close,
+              notifyPrice,
+              yOf,
+              belowColor,
+              aboveColor,
+            );
+          }
+
+          if (useAlert) {
+            if (candle.high > alertPrice) {
+              ctx.save();
+              ctx.strokeStyle = NAIL_ALERT_GREEN;
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo(x, yOf(candle.high));
+              ctx.lineTo(x, yOf(Math.max(candle.low, alertPrice)));
+              ctx.stroke();
+              ctx.restore();
+            }
+            const bodyLo = Math.min(candle.open, candle.close);
+            const bodyHi = Math.max(candle.open, candle.close);
+            if (bodyHi > alertPrice) {
+              const yTop = yOf(bodyHi);
+              const yBot = yOf(Math.max(bodyLo, alertPrice));
+              ctx.save();
+              ctx.fillStyle = NAIL_ALERT_GREEN;
+              ctx.fillRect(
+                x - bodyW / 2,
+                yTop,
+                bodyW,
+                Math.max(1, yBot - yTop),
+              );
+              ctx.restore();
+            }
+          }
         });
 
         // 盯住：竖虚线 + 白心绿边点。
@@ -15569,6 +15632,7 @@
               item.label || String(item.symbol || "").replace(/USDT$/i, ""),
             );
             const id = escapeHtml(item.id || `${item.symbol}:${item.openTime}`);
+            const notifyPrice = Number(item.notifyPrice) || 0;
             return [
               `<article class="nail-notice-card" data-notice-id="${id}" data-notice-symbol="${symbol}">`,
               `<div class="nail-notice-card-top">`,
@@ -15576,10 +15640,10 @@
               `<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span>`,
               `</div>`,
               `<div class="nail-notice-meta">`,
-              `<span>水位 ${escapeHtml(formatPinPrice(item.alertPrice))} · ${escapeHtml(item.interval || "4h")}</span>`,
+              `<span>水位 ${escapeHtml(formatPinPrice(item.alertPrice))}${notifyPrice > 0 ? ` · 通知 ${escapeHtml(formatPinPrice(notifyPrice))}` : ""} · ${escapeHtml(item.interval || "4h")}</span>`,
               `<span class="nail-notice-delta" data-notice-delta></span>`,
               `</div>`,
-              `<canvas width="640" height="160" data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${Number(item.alertPrice) || 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
+              `<canvas width="640" height="160" data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${Number(item.alertPrice) || 0}" data-notice-notify="${notifyPrice}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
               `</article>`,
             ].join("");
           })
@@ -15596,8 +15660,8 @@
         void paintNailNoticeCharts();
       }
 
-      function formatNoticeDeltaPct(alertPrice, latestClose) {
-        const base = Number(alertPrice);
+      function formatNoticeDeltaPct(notifyPrice, latestClose) {
+        const base = Number(notifyPrice);
         const last = Number(latestClose);
         if (!(base > 0) || !(last > 0) || last === base) return null;
         const pct = ((last - base) / base) * 100;
@@ -15684,11 +15748,21 @@
             const alertPrice = Number(
               canvas.getAttribute("data-notice-price"),
             );
+            let notifyPrice = Number(
+              canvas.getAttribute("data-notice-notify"),
+            );
             const noteAt = Number(canvas.getAttribute("data-notice-note-at"));
             const openTime = Number(canvas.getAttribute("data-notice-open"));
             if (!symbol || !(alertPrice > 0)) return;
             try {
               const candles = await fetchKlines(symbol, "4h", null, 18);
+              // 旧通知无 notifyPrice：用推送那根 4h 收盘作通知线。
+              if (!(notifyPrice > 0) && openTime > 0 && candles.length) {
+                const atIdx = findCandleIndexAt(candles, openTime);
+                if (atIdx >= 0) {
+                  notifyPrice = Number(candles[atIdx].close) || 0;
+                }
+              }
               const latestClose =
                 candles.length > 0
                   ? Number(candles[candles.length - 1].close)
@@ -15697,7 +15771,7 @@
                 .closest(".nail-notice-card")
                 ?.querySelector("[data-notice-delta]");
               const card = canvas.closest(".nail-notice-card");
-              const delta = formatNoticeDeltaPct(alertPrice, latestClose);
+              const delta = formatNoticeDeltaPct(notifyPrice, latestClose);
               if (deltaEl) {
                 if (delta) {
                   deltaEl.textContent = delta.text;
@@ -15726,7 +15800,10 @@
                   fromAt: noteAt > 0 ? noteAt : 0,
                 },
                 openTime > 0
-                  ? { fromOpenTime: openTime, alertPrice }
+                  ? {
+                      fromOpenTime: openTime,
+                      notifyPrice: notifyPrice > 0 ? notifyPrice : 0,
+                    }
                   : null,
               );
             } catch (error) {
