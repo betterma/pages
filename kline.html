@@ -13560,6 +13560,8 @@
       }
 
       const NAIL_ALERT_GREEN = "#3ecf8e";
+      const NAIL_DELTA_BLUE = "#3a7fc4";
+      const NAIL_DELTA_RED = "#c45c5c";
 
       function strokeCandleWick(ctx, x, high, low, alertPrice, yOf, below, above) {
         const yH = yOf(high);
@@ -13682,33 +13684,24 @@
               })
             : { from: -1, until: -1 };
 
-        // 通知：快照→此刻 半透明蓝/红底（涨蓝跌红），画在蜡烛下方。
+        // 通知：快照→此刻，对 openTime 起每根 K 做蓝/红切割染色（同荧光绿机制）。
         const deltaBase = Number(
           (deltaMark && deltaMark.alertPrice) || alertPrice,
         );
         const deltaFromOpen = Number(deltaMark && deltaMark.fromOpenTime) || 0;
         const latestClose = Number(candles[candles.length - 1].close);
-        if (
+        const deltaFromIndex =
           deltaMark &&
           Number.isFinite(deltaBase) &&
           deltaBase > 0 &&
           Number.isFinite(latestClose) &&
           latestClose > 0 &&
-          deltaFromOpen > 0
-        ) {
-          const deltaFromIndex = findCandleIndexAt(candles, deltaFromOpen);
-          if (deltaFromIndex >= 0 && latestClose !== deltaBase) {
-            const up = latestClose > deltaBase;
-            const x0 = pad.left + slot * deltaFromIndex;
-            const x1 = pad.left + chartW;
-            ctx.save();
-            ctx.fillStyle = up
-              ? "rgba(58, 127, 196, 0.18)"
-              : "rgba(196, 92, 92, 0.18)";
-            ctx.fillRect(x0, pad.top, Math.max(0, x1 - x0), chartH);
-            ctx.restore();
-          }
-        }
+          deltaFromOpen > 0 &&
+          latestClose !== deltaBase
+            ? findCandleIndexAt(candles, deltaFromOpen)
+            : -1;
+        const deltaUp =
+          deltaFromIndex >= 0 ? latestClose > deltaBase : false;
 
         if (hasPin) {
           const y = yOf(pin);
@@ -13746,7 +13739,24 @@
             alertGreenRange.from >= 0 &&
             index >= alertGreenRange.from &&
             index < alertGreenRange.until;
-          const splitAt = useAlert ? alertPrice : NaN;
+          const inDelta = deltaFromIndex >= 0 && index >= deltaFromIndex;
+          let splitAt = NaN;
+          let belowColor = base;
+          let aboveColor = base;
+          if (useAlert) {
+            splitAt = alertPrice;
+            belowColor = base;
+            aboveColor = NAIL_ALERT_GREEN;
+          } else if (inDelta) {
+            splitAt = deltaBase;
+            if (deltaUp) {
+              belowColor = base;
+              aboveColor = NAIL_DELTA_BLUE;
+            } else {
+              belowColor = NAIL_DELTA_RED;
+              aboveColor = base;
+            }
+          }
           strokeCandleWick(
             ctx,
             x,
@@ -13754,8 +13764,8 @@
             candle.low,
             splitAt,
             yOf,
-            base,
-            NAIL_ALERT_GREEN,
+            belowColor,
+            aboveColor,
           );
           fillCandleBody(
             ctx,
@@ -13765,8 +13775,8 @@
             candle.close,
             splitAt,
             yOf,
-            base,
-            NAIL_ALERT_GREEN,
+            belowColor,
+            aboveColor,
           );
         });
 
@@ -15544,11 +15554,9 @@
           ),
         ];
         if (!canvases.length) return;
-        // 一次最多重画前 12 张，避免 24h 堆积时手机端卡死。
-        const paintLimit = 12;
         nailNoticeChartsBusy = true;
         try {
-          for (const canvas of canvases.slice(0, paintLimit)) {
+          const paintOne = async (canvas) => {
             const symbol = String(
               canvas.getAttribute("data-notice-chart") || "",
             )
@@ -15559,7 +15567,7 @@
             );
             const noteAt = Number(canvas.getAttribute("data-notice-note-at"));
             const openTime = Number(canvas.getAttribute("data-notice-open"));
-            if (!symbol || !(alertPrice > 0)) continue;
+            if (!symbol || !(alertPrice > 0)) return;
             try {
               const candles = await fetchKlines(symbol, "4h", null, 18);
               const latestClose =
@@ -15597,7 +15605,21 @@
             } catch (error) {
               console.warn("notice chart failed", symbol, error);
             }
-          }
+          };
+          // 并发画全部通知图（限并发，避免串行只画前几张 / 一次打爆限流）。
+          const concurrency = 5;
+          let cursor = 0;
+          const workers = Array.from(
+            { length: Math.min(concurrency, canvases.length) },
+            async () => {
+              while (cursor < canvases.length) {
+                const i = cursor;
+                cursor += 1;
+                await paintOne(canvases[i]);
+              }
+            },
+          );
+          await Promise.all(workers);
         } finally {
           nailNoticeChartsBusy = false;
         }
