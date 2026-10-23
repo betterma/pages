@@ -79,14 +79,6 @@ function parseAlertPrice(note) {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-function formatPrice(value) {
-  if (!Number.isFinite(value)) return '--';
-  if (value >= 1000) return value.toFixed(2);
-  if (value >= 1) return value.toFixed(4);
-  if (value >= 0.01) return value.toFixed(5);
-  return Number(value).toPrecision(4);
-}
-
 function findCandleIndexAt(candles, timestamp) {
   const at = Number(timestamp);
   if (!Array.isArray(candles) || !candles.length) return -1;
@@ -427,13 +419,6 @@ async function runNailGreenAlerts(options) {
   for (const hit of hits) {
     const { nail, candles, verdict } = hit;
     const label = nail.label || labelOf(nail.symbol);
-    const change =
-      candles.length >= 2
-        ? ((Number(candles[candles.length - 1].close) -
-            Number(candles[candles.length - 2].close)) /
-            Number(candles[candles.length - 2].close)) *
-          100
-        : NaN;
     // 先落页面通知 + 去重状态，避免企微失败导致同根每轮重打 K / 重试刷屏。
     noticeRows.push({
       id: `${nail.symbol}:${verdict.openTime}:${now}`,
@@ -454,20 +439,10 @@ async function runNailGreenAlerts(options) {
 
     if (!webhook) continue;
     try {
-      const text = [
-        `【钉子荧光绿】${label}`,
-        `水位 ${formatPrice(verdict.alertPrice)} · ${INTERVAL}`,
-        Number.isFinite(change)
-          ? `相对前一根 ${change > 0 ? '+' : ''}${change.toFixed(2)}%`
-          : '',
-        '当前 4h 窗口染绿（续绿或断绿后再绿）· 本根只提醒一次',
-      ]
-        .filter(Boolean)
-        .join('\n');
-      await sendWecomText(text, webhook);
+      await sendWecomText(label, webhook);
 
       const painted = renderCandlesPng(candles, {
-        title: `${label} ${String(INTERVAL).toUpperCase()} GREEN`,
+        title: label,
         alertPrice: verdict.alertPrice,
         greenFrom: verdict.range.from,
         greenUntil: verdict.range.until,
