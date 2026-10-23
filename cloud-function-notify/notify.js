@@ -31,6 +31,19 @@ try {
   );
 }
 
+let runNailGreenAlerts = async () => ({
+  skipped: true,
+  reason: 'module-missing',
+});
+try {
+  runNailGreenAlerts = require('./nail-green-alert').runNailGreenAlerts;
+} catch (error) {
+  console.warn(
+    'nail-green-alert module missing — 请整包上传 cloud-function-notify',
+    error && error.message ? error.message : error,
+  );
+}
+
 function webhookKeyHint(url) {
   try {
     const key = new URL(String(url || '')).searchParams.get('key') || '';
@@ -1430,6 +1443,25 @@ async function main() {
     console.warn('break-high failed', message);
   }
 
+  let nailGreenAlert = { skipped: true, reason: 'not-run', sent: 0, symbols: [] };
+  try {
+    nailGreenAlert = await runNailGreenAlerts({
+      now,
+      webhook: CONFIG.WECOM_WEBHOOK_PINS || CONFIG.WECOM_WEBHOOK_POSITIONS,
+    });
+    if (nailGreenAlert.sent) {
+      sent.push(`nail-green:${nailGreenAlert.sent}`);
+    }
+    if (nailGreenAlert.errors && nailGreenAlert.errors.length) {
+      sendErrors.push(...nailGreenAlert.errors.slice(0, 5));
+    }
+    console.log('nail-green-alert', JSON.stringify(nailGreenAlert));
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    sendErrors.push(`nail-green:${message}`);
+    console.warn('nail-green-alert failed', message);
+  }
+
   // 网页盯一下文案更新即推进 lastPinPrices（@@@ 相对上次网页公布价）。
   const nextPinPrices = pinText
     ? nextLastPinPrices(lastPinPrices, pinRows)
@@ -1513,6 +1545,7 @@ async function main() {
       autoPinned,
       autoDropped,
       notesRankSnap,
+      nailGreenAlert,
       sendErrors,
     }),
   );
@@ -1530,6 +1563,7 @@ async function main() {
     autoPinned,
     autoDropped,
     notesRankSnap,
+    nailGreenAlert,
     sendErrors,
   };
 }

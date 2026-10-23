@@ -24,6 +24,9 @@
   const CARD_EGGS_PATH = "watch-card-eggs.json";
   const BREAK_HIGH_PATH = "watch-break-high.json";
   const NAILS_PATH = "watch-nails.json";
+  const NAIL_GREEN_NOTICES_PATH = "watch-nail-green-notices.json";
+  const NAIL_GREEN_NOTICES_TTL_MS = 24 * 60 * 60 * 1000;
+  const NAIL_GREEN_NOTICES_MAX = 80;
   const NOTES_RANK_SNAPS_PATH = "watch-notes-rank-snaps.json";
   const NOTES_RANK_PREFS_PATH = "watch-notes-rank-prefs.json";
   const PRICE_ALERTS_PATH = "watch-price-alerts.json";
@@ -1151,13 +1154,24 @@
     const next = normalizeNails(list);
     const item = next.find((row) => row.symbol === key);
     if (!item) return next;
-    if (item.note === text) return next;
     const requestedNoteAt = Number(options.noteAt);
+    const hasExplicitNoteAt =
+      !!options &&
+      Object.prototype.hasOwnProperty.call(options, "noteAt") &&
+      Number.isFinite(requestedNoteAt) &&
+      requestedNoteAt >= 0;
     const noteAt = text
-      ? Number.isFinite(requestedNoteAt) && requestedNoteAt >= 0
+      ? hasExplicitNoteAt
         ? requestedNoteAt
         : Date.now()
       : 0;
+    // 允许「同文案、刷新 noteAt」（自动便签现价 / 重开观察）。
+    if (
+      item.note === text &&
+      (!hasExplicitNoteAt || Number(item.noteAt) === noteAt)
+    ) {
+      return next;
+    }
     return next.map((row) =>
       row.symbol === key ? { ...row, note: text, noteAt } : row,
     );
@@ -1356,6 +1370,180 @@
       }
     }
     throw lastError || new Error("保存钉子失败");
+  }
+
+  function nailGreenNoticeId(item) {
+    const symbol = nailSymbolKey(item && (item.symbol || item.id));
+    const openTime = Number(item && item.openTime) || 0;
+    const at = Number(item && item.at) || 0;
+    if (!symbol || !openTime) return "";
+    return `${symbol}:${openTime}:${at || openTime}`;
+  }
+
+  function normalizeNailGreenNotice(item) {
+    if (!item || typeof item !== "object") return null;
+    const symbol = nailSymbolKey(item.symbol);
+    if (!symbol) return null;
+    const at = Number(item.at) || 0;
+    const openTime = Number(item.openTime) || 0;
+    const alertPrice = Number(item.alertPrice);
+    if (!at || !openTime || !Number.isFinite(alertPrice) || alertPrice <= 0) {
+      return null;
+    }
+    const label = item.label
+      ? String(item.label).trim().slice(0, 32)
+      : symbol.replace(/USDT$/i, "");
+    return {
+      id: item.id ? String(item.id) : nailGreenNoticeId({ symbol, openTime, at }),
+      symbol,
+      label,
+      at,
+      openTime,
+      alertPrice,
+      noteAt: Number(item.noteAt) || 0,
+      interval: item.interval ? String(item.interval) : "4h",
+    };
+  }
+
+  function normalizeNailGreenNotices(raw) {
+    const cutoff = Date.now() - NAIL_GREEN_NOTICES_TTL_MS;
+    const list = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw && raw.items)
+        ? raw.items
+        : [];
+    const seen = new Set();
+    const out = [];
+    list
+      .map(normalizeNailGreenNotice)
+      .filter((item) => item && item.at >= cutoff)
+      .sort((a, b) => (b.at || 0) - (a.at || 0))
+      .forEach((item) => {
+        const key = `${item.symbol}:${item.openTime}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(item);
+      });
+    return out.slice(0, NAIL_GREEN_NOTICES_MAX);
+  }
+
+  function serializeNailGreenNotices(list, readAt) {
+    return {
+      updatedAt: Date.now(),
+      readAt: Number.isFinite(Number(readAt)) && Number(readAt) > 0
+        ? Number(readAt)
+        : 0,
+      items: normalizeNailGreenNotices(list),
+    };
+  }
+
+  function countUnreadNailGreenNotices(list, readAt) {
+    const read = Number(readAt) || 0;
+    return normalizeNailGreenNotices(list).filter((item) => item.at > read)
+      .length;
+  }
+
+  async function loadNailGreenNoticesRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path =
+      (options && options.path) || NAIL_GREEN_NOTICES_PATH;
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          items: normalizeNailGreenNotices(current.data.items || current.data),
+          readAt: Number(current.data.readAt) || 0,
+          updatedAt: Number(current.data.updatedAt) || null,
+          sha: current.sha,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadNailGreenNotices via API failed, trying raw", error);
+    }
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          items: normalizeNailGreenNotices(data.items || data),
+          readAt: Number(data.readAt) || 0,
+          updatedAt: Number(data.updatedAt) || null,
+          sha: null,
+          source: "raw-commit",
+        };
+      }
+    } catch (error) {
+      console.warn("loadNailGreenNotices via commit-raw failed", error);
+    }
+    return {
+      items: [],
+      readAt: 0,
+      updatedAt: null,
+      sha: null,
+      source: "empty",
+    };
+  }
+
+  async function patchNailGreenNotices(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path =
+      (options && options.path) || NAIL_GREEN_NOTICES_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = current.data || { items: [], readAt: 0 };
+        const items = normalizeNailGreenNotices(base.items || base);
+        const readAt = Number(base.readAt) || 0;
+        const mutated =
+          typeof options.mutate === "function"
+            ? options.mutate(items, { readAt })
+            : null;
+        const nextItems = normalizeNailGreenNotices(
+          mutated && mutated.items != null ? mutated.items : items,
+        );
+        const nextReadAt =
+          mutated && mutated.readAt != null
+            ? Number(mutated.readAt) || 0
+            : readAt;
+        const nextData = serializeNailGreenNotices(nextItems, nextReadAt);
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update nail green notices",
+        });
+        return {
+          items: nextData.items,
+          readAt: nextData.readAt,
+          updatedAt: nextData.updatedAt,
+        };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存钉子通知失败");
   }
 
   function normalizeNotesRankSnap(item) {
@@ -2760,6 +2948,13 @@
     removeDismissedNails,
     loadNailsRaw,
     patchNails,
+    NAIL_GREEN_NOTICES_PATH,
+    NAIL_GREEN_NOTICES_TTL_MS,
+    normalizeNailGreenNotices,
+    serializeNailGreenNotices,
+    countUnreadNailGreenNotices,
+    loadNailGreenNoticesRaw,
+    patchNailGreenNotices,
     NOTES_RANK_SNAPS_PATH,
     NOTES_RANK_SNAPS_TTL_MS,
     NOTES_RANK_SNAPS_MAX,

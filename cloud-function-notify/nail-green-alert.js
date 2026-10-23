@@ -1,0 +1,582 @@
+'use strict';
+
+/**
+ * 钉子荧光绿再启动 / 续绿 → 企微文字 + 染绿 4h 图。
+ * 站在 Date.now() 拉当前 4h K，回看 noteAt 之后的窗口；
+ * 同一根 K（同一 openTime）只推一次。
+ */
+
+const { loadJson, saveJson, sendWecomText, sendWecomImage } = require('./github-wecom');
+const { fetchKlines, renderCandlesPng } = require('./kline-chart');
+
+const STATE_PATH =
+  process.env.NAIL_GREEN_ALERT_PATH || 'watch-nail-green-alert.json';
+const NOTICES_PATH =
+  process.env.NAIL_GREEN_NOTICES_PATH || 'watch-nail-green-notices.json';
+const NAILS_PATH = process.env.NAILS_PATH || 'watch-nails.json';
+const INTERVAL = process.env.NAIL_GREEN_INTERVAL || '4h';
+const LIMIT = Math.max(12, Number(process.env.NAIL_GREEN_LIMIT || 42));
+const NOTICES_TTL_MS = 24 * 60 * 60 * 1000;
+const NOTICES_MAX = 80;
+const DURATION_MS = {
+  '15m': 15 * 60 * 1000,
+  '1h': 60 * 60 * 1000,
+  '2h': 2 * 60 * 60 * 1000,
+  '4h': 4 * 60 * 60 * 1000,
+  '1d': 24 * 60 * 60 * 1000,
+};
+const DOWN_STREAK = 4;
+const NO_NEW_HIGH = 4;
+const SEND_MAX = Math.max(1, Number(process.env.NAIL_GREEN_SEND_MAX || 5));
+const CONCURRENCY = Math.max(1, Number(process.env.NAIL_GREEN_CONCURRENCY || 5));
+/** 单轮最多检查多少个尚未对本根报过的钉子；剩余下轮再查（轮询）。0=不限制。 */
+const CHECK_MAX = Math.max(
+  0,
+  Number(
+    process.env.NAIL_GREEN_CHECK_MAX === undefined ||
+      process.env.NAIL_GREEN_CHECK_MAX === ''
+      ? 40
+      : process.env.NAIL_GREEN_CHECK_MAX,
+  ),
+);
+
+function enabled() {
+  return (
+    String(
+      process.env.NAIL_GREEN_ALERT === undefined
+        ? '1'
+        : process.env.NAIL_GREEN_ALERT,
+    ) !== '0'
+  );
+}
+
+function resolveWebhook() {
+  return (
+    String(process.env.WECOM_WEBHOOK_PINS || '').trim() ||
+    String(process.env.WECOM_WEBHOOK_POSITIONS || '').trim() ||
+    String(process.env.WECOM_WEBHOOK_URL || '').trim()
+  );
+}
+
+/** Binance K 线开盘时间（UTC 对齐）。 */
+function candleOpenTimeAt(now, interval) {
+  const dur = DURATION_MS[interval] || DURATION_MS['4h'];
+  const t = Number(now) || Date.now();
+  if (!Number.isFinite(dur) || dur <= 0) return 0;
+  return Math.floor(t / dur) * dur;
+}
+
+function labelOf(symbol) {
+  return String(symbol || '').replace(/USDT$/i, '');
+}
+
+function parseAlertPrice(note) {
+  const text = String(note || '').trim();
+  if (!text) return null;
+  const match = text.match(/(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/);
+  if (!match) return null;
+  const n = Number(match[1]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function formatPrice(value) {
+  if (!Number.isFinite(value)) return '--';
+  if (value >= 1000) return value.toFixed(2);
+  if (value >= 1) return value.toFixed(4);
+  if (value >= 0.01) return value.toFixed(5);
+  return Number(value).toPrecision(4);
+}
+
+function findCandleIndexAt(candles, timestamp) {
+  const at = Number(timestamp);
+  if (!Array.isArray(candles) || !candles.length) return -1;
+  if (!Number.isFinite(at) || at <= 0) return -1;
+  if (at < candles[0].time) return 0;
+  if (at >= candles[candles.length - 1].time) return candles.length - 1;
+  for (let i = 0; i < candles.length; i += 1) {
+    const start = candles[i].time;
+    const end =
+      i + 1 < candles.length
+        ? candles[i + 1].time
+        : Number.POSITIVE_INFINITY;
+    if (at >= start && at < end) return i;
+  }
+  return -1;
+}
+
+function candleIsClosed(candle, index, candles, durationMs, now) {
+  if (index < candles.length - 1) return true;
+  const openAt = Number(candle && candle.time);
+  const dur = Number(durationMs);
+  if (!Number.isFinite(openAt) || !Number.isFinite(dur) || dur <= 0) {
+    return false;
+  }
+  return openAt + dur <= now;
+}
+
+/**
+ * 与页面钉子抽屉同语义的荧光绿会话区间（云侧不做自动便签现价）。
+ */
+function nailAlertGreenActiveRange(candles, alertPrice, fromIndex, options) {
+  const empty = { from: -1, until: -1 };
+  if (!Array.isArray(candles) || !candles.length) return empty;
+  if (!Number.isFinite(alertPrice) || alertPrice <= 0) return empty;
+  const start = Math.max(0, Number(fromIndex) || 0);
+  if (start >= candles.length) return empty;
+  const now = Number(options && options.now) || Date.now();
+  const durationMs =
+    Number(options && options.durationMs) || DURATION_MS[INTERVAL] || 0;
+
+  let active = false;
+  let greenFrom = -1;
+  let greenUntil = -1;
+  let sessionHigh = NaN;
+  let noNewHighCount = 0;
+  let downStreak = 0;
+
+  const clearSession = () => {
+    active = false;
+    greenFrom = -1;
+    greenUntil = -1;
+    sessionHigh = NaN;
+    noNewHighCount = 0;
+    downStreak = 0;
+  };
+
+  for (let i = start; i < candles.length; i += 1) {
+    const candle = candles[i];
+    if (!candle) continue;
+    const open = Number(candle.open);
+    const close = Number(candle.close);
+    const high = Number(candle.high);
+    if (!Number.isFinite(close) || !Number.isFinite(high)) continue;
+    const closed = candleIsClosed(candle, i, candles, durationMs, now);
+
+    if (!active) {
+      if (high > alertPrice) {
+        active = true;
+        greenFrom = i;
+        greenUntil = i + 1;
+        sessionHigh = high;
+        noNewHighCount = 0;
+        downStreak = 0;
+      }
+      continue;
+    }
+
+    if (!closed) {
+      greenUntil = i + 1;
+      continue;
+    }
+
+    if (Number.isFinite(open) && close < open) downStreak += 1;
+    else downStreak = 0;
+
+    if (close < alertPrice) {
+      clearSession();
+      continue;
+    }
+    if (downStreak >= DOWN_STREAK) {
+      clearSession();
+      continue;
+    }
+    if (high > sessionHigh) {
+      sessionHigh = high;
+      noNewHighCount = 0;
+    } else {
+      noNewHighCount += 1;
+      if (noNewHighCount >= NO_NEW_HIGH) {
+        clearSession();
+        continue;
+      }
+    }
+    greenUntil = i + 1;
+  }
+
+  if (!active || greenFrom < 0 || greenUntil <= greenFrom) return empty;
+  return { from: greenFrom, until: greenUntil };
+}
+
+function candleShowsGreen(candle, alertPrice, inRange) {
+  if (!inRange || !candle) return false;
+  const open = Number(candle.open);
+  const close = Number(candle.close);
+  const high = Number(candle.high);
+  if (!Number.isFinite(close) || !Number.isFinite(high)) return false;
+  if (!(close >= open)) return false;
+  return high > alertPrice;
+}
+
+function normalizeNails(raw) {
+  const list = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw && raw.nails)
+      ? raw.nails
+      : [];
+  return list
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      let symbol = String(item.symbol || '')
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, '');
+      if (!symbol) return null;
+      if (!/USDT$/.test(symbol)) symbol += 'USDT';
+      const alertPrice = parseAlertPrice(item.note);
+      if (!Number.isFinite(alertPrice) || alertPrice <= 0) return null;
+      return {
+        symbol,
+        label: item.label
+          ? String(item.label).trim()
+          : labelOf(symbol),
+        note: String(item.note || '').trim(),
+        noteAt: Number(item.noteAt) || 0,
+        alertPrice,
+      };
+    })
+    .filter(Boolean);
+}
+
+function normalizeState(raw) {
+  const bySymbol =
+    raw && raw.bySymbol && typeof raw.bySymbol === 'object'
+      ? raw.bySymbol
+      : {};
+  const next = {};
+  Object.keys(bySymbol).forEach((key) => {
+    const row = bySymbol[key];
+    if (!row || typeof row !== 'object') return;
+    const openTime = Number(row.lastNotifiedOpenTime);
+    if (!Number.isFinite(openTime) || openTime <= 0) return;
+    next[String(key).toUpperCase()] = {
+      lastNotifiedOpenTime: openTime,
+      lastNotifiedAt: Number(row.lastNotifiedAt) || 0,
+    };
+  });
+  return {
+    bySymbol: next,
+    updatedAt: Number(raw && raw.updatedAt) || 0,
+    checkCursor: Number(raw && raw.checkCursor) || 0,
+  };
+}
+
+async function mapPool(items, limit, worker) {
+  const list = Array.isArray(items) ? items : [];
+  const out = new Array(list.length);
+  let cursor = 0;
+  const runners = Array.from(
+    { length: Math.min(limit, Math.max(1, list.length)) },
+    async () => {
+      while (cursor < list.length) {
+        const index = cursor;
+        cursor += 1;
+        out[index] = await worker(list[index], index);
+      }
+    },
+  );
+  await Promise.all(runners);
+  return out;
+}
+
+function evaluateNail(candles, nail, now) {
+  const alertPrice = nail.alertPrice;
+  const fromIndex =
+    nail.noteAt > 0 ? findCandleIndexAt(candles, nail.noteAt) : 0;
+  if (fromIndex < 0 || !candles.length) {
+    return { shouldNotify: false };
+  }
+  const durationMs = DURATION_MS[INTERVAL] || DURATION_MS['4h'];
+  const range = nailAlertGreenActiveRange(candles, alertPrice, fromIndex, {
+    now,
+    durationMs,
+  });
+  const lastIndex = candles.length - 1;
+  const current = candles[lastIndex];
+  const openTime = Number(current && current.time);
+  if (!Number.isFinite(openTime) || openTime <= 0) {
+    return { shouldNotify: false, range };
+  }
+
+  const currentGreen = candleShowsGreen(
+    current,
+    alertPrice,
+    range.from >= 0 && lastIndex >= range.from && lastIndex < range.until,
+  );
+  if (!currentGreen) {
+    return {
+      shouldNotify: false,
+      range,
+      openTime,
+      currentGreen: false,
+    };
+  }
+
+  let priorGreen = false;
+  for (let i = fromIndex; i < lastIndex; i += 1) {
+    // 回看：只要 noteAt 之后、当前根之前出现过「阳线且高点>水位」，就算有过绿。
+    // 续绿（上一根也绿）与断绿再绿都覆盖。
+    const c = candles[i];
+    if (!c) continue;
+    const up = Number(c.close) >= Number(c.open);
+    if (up && Number(c.high) > alertPrice) {
+      priorGreen = true;
+      break;
+    }
+  }
+
+  return {
+    shouldNotify: priorGreen,
+    range,
+    openTime,
+    currentGreen: true,
+    priorGreen,
+    alertPrice,
+  };
+}
+
+async function runNailGreenAlerts(options) {
+  const opts = options || {};
+  const now = Number(opts.now) || Date.now();
+  const webhook = String(opts.webhook || resolveWebhook() || '').trim();
+  const result = {
+    skipped: false,
+    reason: null,
+    checked: 0,
+    hits: 0,
+    sent: 0,
+    symbols: [],
+    errors: [],
+  };
+
+  if (!enabled()) {
+    result.skipped = true;
+    result.reason = 'disabled';
+    return result;
+  }
+  // 无 webhook 仍可检查并写入页面 notices；企微发送跳过。
+  if (!webhook) {
+    console.warn('nail-green-alert: no WeCom webhook — notices only');
+  }
+
+  const [nailsFile, stateFile] = await Promise.all([
+    loadJson(NAILS_PATH),
+    loadJson(STATE_PATH),
+  ]);
+  const nails = normalizeNails(nailsFile && nailsFile.data);
+  let state = normalizeState(stateFile && stateFile.data);
+  let stateDirty = false;
+  if (!nails.length) {
+    result.skipped = true;
+    result.reason = 'no-nails-with-price';
+    return result;
+  }
+
+  const bucketOpen = candleOpenTimeAt(now, INTERVAL);
+  // 本根 4h 已推过的不再拉 K（100 钉场景下显著减负）。
+  const pending = nails.filter((nail) => {
+    const prev = state.bySymbol[nail.symbol];
+    return !(
+      prev &&
+      bucketOpen > 0 &&
+      Number(prev.lastNotifiedOpenTime) === bucketOpen
+    );
+  });
+  // 轮询切片：单轮最多 CHECK_MAX，避免一次 100 路 K 线打满超时。
+  let cursor = Number(state.checkCursor) || 0;
+  if (cursor < 0 || cursor >= pending.length) cursor = 0;
+  let toCheck = pending;
+  if (CHECK_MAX > 0 && pending.length > CHECK_MAX) {
+    toCheck = [];
+    for (let i = 0; i < CHECK_MAX; i += 1) {
+      toCheck.push(pending[(cursor + i) % pending.length]);
+    }
+    state.checkCursor = (cursor + CHECK_MAX) % pending.length;
+    stateDirty = true;
+  } else {
+    state.checkCursor = 0;
+  }
+  result.pending = pending.length;
+  result.checked = toCheck.length;
+  result.bucketOpen = bucketOpen;
+  result.skippedFetch = nails.length - pending.length;
+
+  const evaluated = await mapPool(toCheck, CONCURRENCY, async (nail) => {
+    try {
+      const candles = await fetchKlines(nail.symbol, INTERVAL, LIMIT);
+      const verdict = evaluateNail(candles, nail, now);
+      const prev = state.bySymbol[nail.symbol];
+      const already =
+        prev &&
+        Number(prev.lastNotifiedOpenTime) === Number(verdict.openTime);
+      if (!verdict.shouldNotify || already) {
+        return null;
+      }
+      return { nail, candles, verdict };
+    } catch (error) {
+      result.errors.push(
+        `${nail.symbol}:${error && error.message ? error.message : error}`,
+      );
+      return null;
+    }
+  });
+
+  const hits = evaluated.filter(Boolean).slice(0, SEND_MAX);
+  result.hits = hits.length;
+  const noticeRows = [];
+
+  for (const hit of hits) {
+    const { nail, candles, verdict } = hit;
+    const label = nail.label || labelOf(nail.symbol);
+    const change =
+      candles.length >= 2
+        ? ((Number(candles[candles.length - 1].close) -
+            Number(candles[candles.length - 2].close)) /
+            Number(candles[candles.length - 2].close)) *
+          100
+        : NaN;
+    // 先落页面通知 + 去重状态，避免企微失败导致同根每轮重打 K / 重试刷屏。
+    noticeRows.push({
+      id: `${nail.symbol}:${verdict.openTime}:${now}`,
+      symbol: nail.symbol,
+      label,
+      at: now,
+      openTime: verdict.openTime,
+      alertPrice: verdict.alertPrice,
+      noteAt: Number(nail.noteAt) || 0,
+      interval: INTERVAL,
+    });
+    state.bySymbol[nail.symbol] = {
+      lastNotifiedOpenTime: verdict.openTime,
+      lastNotifiedAt: now,
+    };
+    stateDirty = true;
+    result.symbols.push(nail.symbol);
+
+    if (!webhook) continue;
+    try {
+      const text = [
+        `【钉子荧光绿】${label}`,
+        `水位 ${formatPrice(verdict.alertPrice)} · ${INTERVAL}`,
+        Number.isFinite(change)
+          ? `相对前一根 ${change > 0 ? '+' : ''}${change.toFixed(2)}%`
+          : '',
+        '当前 4h 窗口染绿（续绿或断绿后再绿）· 本根只提醒一次',
+      ]
+        .filter(Boolean)
+        .join('\n');
+      await sendWecomText(text, webhook);
+
+      const painted = renderCandlesPng(candles, {
+        title: `${label} ${String(INTERVAL).toUpperCase()} GREEN`,
+        alertPrice: verdict.alertPrice,
+        greenFrom: verdict.range.from,
+        greenUntil: verdict.range.until,
+        height: 280,
+      });
+      await sendWecomImage(painted, webhook);
+      result.sent += 1;
+    } catch (error) {
+      result.errors.push(
+        `send:${nail.symbol}:${error && error.message ? error.message : error}`,
+      );
+    }
+  }
+
+  // 清理已不在钉子列表里的状态。
+  const keep = new Set(nails.map((n) => n.symbol));
+  Object.keys(state.bySymbol).forEach((key) => {
+    if (!keep.has(key)) {
+      delete state.bySymbol[key];
+      stateDirty = true;
+    }
+  });
+
+  if (stateDirty || result.sent) {
+    state.updatedAt = now;
+    await saveJson(
+      STATE_PATH,
+      {
+        bySymbol: state.bySymbol,
+        checkCursor: Number(state.checkCursor) || 0,
+        updatedAt: now,
+      },
+      stateFile && stateFile.sha,
+      result.sent
+        ? `Nail green alert x${result.sent}`
+        : 'Nail green alert state',
+    );
+  }
+
+  if (noticeRows.length) {
+    try {
+      result.notices = await appendNailGreenNotices(noticeRows, now);
+    } catch (error) {
+      result.errors.push(
+        `notices:${error && error.message ? error.message : error}`,
+      );
+      console.warn('append nail green notices failed', error);
+    }
+  }
+
+  return result;
+}
+
+function trimNoticeItems(list, now) {
+  const cutoff = (Number(now) || Date.now()) - NOTICES_TTL_MS;
+  const seen = new Set();
+  const out = [];
+  (Array.isArray(list) ? list : [])
+    .filter((item) => item && Number(item.at) >= cutoff)
+    .sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0))
+    .forEach((item) => {
+      const symbol = String(item.symbol || '')
+        .trim()
+        .toUpperCase();
+      const openTime = Number(item.openTime) || 0;
+      if (!symbol || !openTime) return;
+      const key = `${symbol}:${openTime}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push({
+        id: item.id || `${symbol}:${openTime}:${Number(item.at) || 0}`,
+        symbol,
+        label: item.label
+          ? String(item.label).trim().slice(0, 32)
+          : labelOf(symbol),
+        at: Number(item.at) || 0,
+        openTime,
+        alertPrice: Number(item.alertPrice),
+        noteAt: Number(item.noteAt) || 0,
+        interval: item.interval ? String(item.interval) : INTERVAL,
+      });
+    });
+  return out.slice(0, NOTICES_MAX);
+}
+
+async function appendNailGreenNotices(rows, now) {
+  const file = await loadJson(NOTICES_PATH);
+  const prev = (file && file.data) || {};
+  const merged = trimNoticeItems(
+    [...(Array.isArray(rows) ? rows : []), ...(prev.items || [])],
+    now,
+  );
+  await saveJson(
+    NOTICES_PATH,
+    {
+      updatedAt: now,
+      readAt: Number(prev.readAt) || 0,
+      items: merged,
+    },
+    file && file.sha,
+    `Nail green notices +${(rows || []).length}`,
+  );
+  return merged.length;
+}
+
+module.exports = {
+  runNailGreenAlerts,
+  evaluateNail,
+  nailAlertGreenActiveRange,
+  parseAlertPrice,
+  candleShowsGreen,
+};

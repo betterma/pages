@@ -2282,6 +2282,209 @@
         opacity: 0.45;
         cursor: wait;
       }
+      .nail-notice-entry {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin: 0;
+        padding: 8px 14px;
+        border: none;
+        border-bottom: 0.5px solid var(--separator);
+        background: color-mix(in srgb, var(--elevated) 70%, transparent);
+        color: var(--label);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 650;
+        cursor: pointer;
+        width: 100%;
+        text-align: left;
+        box-sizing: border-box;
+      }
+      .nail-notice-entry:hover {
+        background: color-mix(in srgb, var(--fill) 55%, transparent);
+      }
+      .nail-notice-entry .nail-notice-entry-meta {
+        color: var(--secondary);
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .nail-notice-entry.has-unread .nail-notice-entry-meta {
+        color: var(--warn, #b07030);
+      }
+      .nail-notice-drawer {
+        position: fixed;
+        inset: 0;
+        z-index: 130;
+        pointer-events: none;
+      }
+      .nail-notice-drawer.is-open,
+      .nail-notice-drawer.is-peek {
+        pointer-events: auto;
+      }
+      .nail-notice-drawer[hidden] {
+        display: none !important;
+      }
+      .nail-notice-mask {
+        position: absolute;
+        inset: 0;
+        background: rgba(28, 34, 32, 0.4);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+      .nail-notice-drawer.is-open .nail-notice-mask {
+        opacity: 1;
+      }
+      .nail-notice-drawer.is-peek .nail-notice-mask {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .nail-notice-panel {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        max-height: min(72vh, 640px);
+        display: flex;
+        flex-direction: column;
+        background: var(--grouped, #f4f5f3);
+        border-bottom: 0.5px solid var(--separator);
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+        transform: translateY(-105%);
+        transition: transform 0.22s ease;
+        color: var(--label);
+        overflow: hidden;
+      }
+      .nail-notice-drawer.is-open .nail-notice-panel {
+        transform: translateY(0);
+      }
+      .nail-notice-drawer.is-peek .nail-notice-panel {
+        transform: translateY(calc(-100% + 44px));
+        max-height: none;
+        height: auto;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+      }
+      .nail-notice-drawer.is-peek .nail-notice-list,
+      .nail-notice-drawer.is-peek .nail-notice-head-actions {
+        visibility: hidden;
+      }
+      .nail-notice-peek-bar {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        height: 44px;
+        padding: 0 12px;
+        border: none;
+        background: color-mix(in srgb, var(--elevated) 92%, transparent);
+        color: var(--label);
+        font-size: 13px;
+        font-weight: 650;
+        cursor: pointer;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .nail-notice-drawer.is-peek .nail-notice-peek-bar {
+        display: flex;
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 2;
+      }
+      .nail-notice-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 14px 8px;
+        border-bottom: 0.5px solid var(--separator);
+        flex: 0 0 auto;
+      }
+      .nail-notice-head h3 {
+        margin: 0;
+        font-size: 16px;
+      }
+      .nail-notice-head p {
+        margin: 4px 0 0;
+        font-size: 12px;
+        color: var(--secondary);
+      }
+      .nail-notice-head-actions {
+        display: flex;
+        gap: 6px;
+      }
+      .nail-notice-head-actions button {
+        border: none;
+        background: var(--fill);
+        color: var(--label);
+        height: 32px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .nail-notice-list {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        padding: 8px 12px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        -webkit-overflow-scrolling: touch;
+      }
+      .nail-notice-empty {
+        padding: 24px 8px;
+        text-align: center;
+        color: var(--secondary);
+        font-size: 13px;
+      }
+      .nail-notice-card {
+        border: 0.5px solid var(--separator);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--elevated) 88%, transparent);
+        padding: 8px 10px 10px;
+      }
+      .nail-notice-card-top {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .nail-notice-name {
+        border: none;
+        background: none;
+        padding: 0;
+        color: var(--accent, #2f8f6e);
+        font-size: 15px;
+        font-weight: 700;
+        cursor: pointer;
+        text-align: left;
+      }
+      .nail-notice-name:hover {
+        text-decoration: underline;
+      }
+      .nail-notice-time {
+        font-size: 11px;
+        color: var(--secondary);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .nail-notice-meta {
+        font-size: 11px;
+        color: var(--secondary);
+        margin-bottom: 6px;
+      }
+      .nail-notice-card canvas {
+        display: block;
+        width: 100%;
+        height: 120px;
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--bg) 80%, transparent);
+      }
       .nail-form {
         padding: 10px 14px;
         border-bottom: 0.5px solid var(--separator);
@@ -5088,6 +5291,15 @@
             <button type="button" data-close-nails>关闭</button>
           </div>
         </div>
+        <button
+          type="button"
+          class="nail-notice-entry"
+          id="nailNoticeEntry"
+          title="近 24h 荧光绿通知"
+        >
+          <span>通知</span>
+          <span class="nail-notice-entry-meta" id="nailNoticeEntryMeta">暂无</span>
+        </button>
         <details class="nail-controls">
           <summary>筛选、排序与定时刷新</summary>
           <div class="nail-rising-row">
@@ -5207,6 +5419,46 @@
         </div>
         <div class="nail-saving" id="nailSaving" hidden>保存中…</div>
       </aside>
+    </div>
+
+    <div
+      id="nailNoticeDrawer"
+      class="nail-notice-drawer"
+      hidden
+      aria-hidden="true"
+    >
+      <div class="nail-notice-mask" id="nailNoticeMask"></div>
+      <div
+        class="nail-notice-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="nailNoticeTitle"
+      >
+        <div class="nail-notice-head">
+          <div>
+            <h3 id="nailNoticeTitle">荧光绿通知</h3>
+            <p id="nailNoticeMeta">近 24 小时 · 最新在上</p>
+          </div>
+          <div class="nail-notice-head-actions">
+            <button type="button" id="nailNoticeRefreshBtn" title="刷新通知列表">
+              刷新
+            </button>
+            <button type="button" id="nailNoticeCloseBtn" title="关闭">
+              关闭
+            </button>
+          </div>
+        </div>
+        <div class="nail-notice-list" id="nailNoticeList"></div>
+        <button
+          type="button"
+          class="nail-notice-peek-bar"
+          id="nailNoticePeekBar"
+          title="展开通知列表"
+        >
+          <span id="nailNoticePeekLabel">通知 · 点此展开</span>
+          <span>展开</span>
+        </button>
+      </div>
     </div>
 
     <button
@@ -12891,25 +13143,70 @@
         return { min, max };
       }
 
-      /** 连续阴线达到该根数 → 清空此前荧光绿（与跌破便签价同等清绿）。 */
+      /** 连续阴线 / 连续未创新高达到该根数 → 清绿（未创新高与四连阴还会自动便签现价）。 */
       const NAIL_ALERT_GREEN_DOWN_STREAK = 4;
+      const NAIL_ALERT_GREEN_NO_NEW_HIGH = 4;
+
+      function nailCandleDurationMs() {
+        return DURATION_MS[chartInterval()] || DURATION_MS["4h"] || 0;
+      }
+
+      function nailCandleIsClosed(candle, index, candles, durationMs, now) {
+        if (!candle || index < 0) return false;
+        if (index < candles.length - 1) return true;
+        const openAt = Number(candle.time);
+        const dur = Number(durationMs);
+        if (!Number.isFinite(openAt) || !Number.isFinite(dur) || dur <= 0) {
+          return false;
+        }
+        return openAt + dur <= now;
+      }
 
       /**
        * 荧光绿区间 [from, until)：便签价为水位。
-       * - 未跌破：从便签一直染到最新
-       * - 收盘跌破便签价，或连续 4 根阴线：旧绿全部清掉
-       * - 再次站上（高点>水位）：只从该根染到最新（只染超过水位部分）
+       * - 高点严格高于水位 → 激活本轮；本轮内跟踪 sessionHigh
+       * - 已收盘且：收盘破水位 → 清绿（不改便签）
+       * - 已收盘且：连续 4 阴 / 连续 4 根未创新高 → 清绿，并建议自动便签现价
+       * - 未收盘最后一根不参与清绿计数
+       * - 清绿后需再次 high>水位 才开新轮（破位后语义）；自动改便签后由新 noteAt 重算
        */
-      function nailAlertGreenActiveRange(candles, alertPrice, fromIndex) {
-        const empty = { from: -1, until: -1 };
+      function nailAlertGreenActiveRange(candles, alertPrice, fromIndex, options) {
+        const empty = {
+          from: -1,
+          until: -1,
+          autoResetNote: false,
+          clearReason: null,
+        };
         if (!Array.isArray(candles) || !candles.length) return empty;
         if (!Number.isFinite(alertPrice) || alertPrice <= 0) return empty;
         const start = Math.max(0, Number(fromIndex) || 0);
         if (start >= candles.length) return empty;
-        let cleared = false;
+        const opts = options || {};
+        const now = Number.isFinite(Number(opts.now))
+          ? Number(opts.now)
+          : Date.now();
+        const durationMs = Number.isFinite(Number(opts.durationMs))
+          ? Number(opts.durationMs)
+          : nailCandleDurationMs();
+
+        let active = false;
+        let greenFrom = -1;
+        let greenUntil = -1;
+        let sessionHigh = NaN;
+        let noNewHighCount = 0;
         let downStreak = 0;
-        let greenFrom = start;
-        let greenUntil = candles.length;
+        let lastClearReason = null;
+
+        const clearSession = (reason) => {
+          active = false;
+          greenFrom = -1;
+          greenUntil = -1;
+          sessionHigh = NaN;
+          noNewHighCount = 0;
+          downStreak = 0;
+          lastClearReason = reason || null;
+        };
+
         for (let i = start; i < candles.length; i += 1) {
           const candle = candles[i];
           if (!candle) continue;
@@ -12917,31 +13214,200 @@
           const close = Number(candle.close);
           const high = Number(candle.high);
           if (!Number.isFinite(close) || !Number.isFinite(high)) continue;
+          const closed = nailCandleIsClosed(
+            candle,
+            i,
+            candles,
+            durationMs,
+            now,
+          );
+
+          if (!active) {
+            if (high > alertPrice) {
+              active = true;
+              greenFrom = i;
+              greenUntil = i + 1;
+              sessionHigh = high;
+              noNewHighCount = 0;
+              downStreak = 0;
+              lastClearReason = null;
+            }
+            continue;
+          }
+
+          // 未收盘：可延伸染色显示，但不触发清绿计数。
+          if (!closed) {
+            greenUntil = i + 1;
+            continue;
+          }
+
           if (Number.isFinite(open) && close < open) downStreak += 1;
           else downStreak = 0;
 
-          let clearedThisBar = false;
-          if (downStreak >= NAIL_ALERT_GREEN_DOWN_STREAK) {
-            cleared = true;
-            greenFrom = -1;
-            greenUntil = -1;
-            clearedThisBar = true;
-          }
           if (close < alertPrice) {
-            cleared = true;
-            greenFrom = -1;
-            greenUntil = -1;
-            clearedThisBar = true;
+            clearSession("break");
             continue;
           }
-          if (!clearedThisBar && cleared && high > alertPrice) {
-            cleared = false;
-            greenFrom = i;
-            greenUntil = candles.length;
+          if (downStreak >= NAIL_ALERT_GREEN_DOWN_STREAK) {
+            clearSession("downStreak");
+            continue;
+          }
+
+          if (high > sessionHigh) {
+            sessionHigh = high;
+            noNewHighCount = 0;
+          } else {
+            noNewHighCount += 1;
+            if (noNewHighCount >= NAIL_ALERT_GREEN_NO_NEW_HIGH) {
+              clearSession("noNewHigh");
+              continue;
+            }
+          }
+          greenUntil = i + 1;
+        }
+
+        const autoResetNote =
+          !active &&
+          (lastClearReason === "downStreak" ||
+            lastClearReason === "noNewHigh");
+        if (!active || greenFrom < 0 || greenUntil <= greenFrom) {
+          return {
+            from: -1,
+            until: -1,
+            autoResetNote,
+            clearReason: lastClearReason,
+          };
+        }
+        return {
+          from: greenFrom,
+          until: greenUntil,
+          autoResetNote: false,
+          clearReason: null,
+        };
+      }
+
+      const nailGreenNoteResetQueue = new Map();
+      const nailGreenNoteResetDone = new Set();
+      let nailGreenNoteResetTimer = null;
+      let nailGreenNoteResetBusy = false;
+
+      function queueNailGreenNoteReset(symbol, price, clearReason) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const px = Number(price);
+        if (!key || !Number.isFinite(px) || px <= 0) return;
+        const nail = (nailItems || []).find(
+          (item) => String(item.symbol || "").toUpperCase() === key,
+        );
+        if (!nail) return;
+        const notePrice = parseNailNoteAlertPrice(nail.note);
+        const noteAt = Number(nail.noteAt) || 0;
+        // 刚写过近价便签则跳过，避免 paint 循环连写。
+        if (
+          Number.isFinite(notePrice) &&
+          notePrice > 0 &&
+          Math.abs(notePrice - px) / Math.max(notePrice, px) < 0.002 &&
+          noteAt > 0 &&
+          Date.now() - noteAt < 90 * 1000
+        ) {
+          return;
+        }
+        const doneKey = `${key}:${clearReason || "reset"}:${noteAt}`;
+        if (nailGreenNoteResetDone.has(doneKey)) return;
+        nailGreenNoteResetQueue.set(key, {
+          price: px,
+          clearReason: clearReason || "",
+          doneKey,
+        });
+        if (nailGreenNoteResetTimer) return;
+        nailGreenNoteResetTimer = setTimeout(() => {
+          nailGreenNoteResetTimer = null;
+          void flushNailGreenNoteResets();
+        }, 400);
+      }
+
+      async function flushNailGreenNoteResets() {
+        if (nailGreenNoteResetBusy) return;
+        if (!nailGreenNoteResetQueue.size) return;
+        if (nailSaving) {
+          nailGreenNoteResetTimer = setTimeout(() => {
+            nailGreenNoteResetTimer = null;
+            void flushNailGreenNoteResets();
+          }, 800);
+          return;
+        }
+        const batch = [...nailGreenNoteResetQueue.entries()];
+        nailGreenNoteResetQueue.clear();
+        const notesBySymbol = {};
+        const doneKeys = [];
+        for (const [symbol, row] of batch) {
+          notesBySymbol[symbol] = formatPinPrice(row.price);
+          doneKeys.push(row.doneKey);
+        }
+        const symbols = Object.keys(notesBySymbol);
+        if (!symbols.length) return;
+        nailGreenNoteResetBusy = true;
+        const noteAt = Date.now();
+        try {
+          await persistNails(
+            (list) =>
+              symbols.reduce(
+                (acc, symbol) =>
+                  WatchFavorites.setNailNote(acc, symbol, notesBySymbol[symbol], {
+                    noteAt,
+                  }),
+                list,
+              ),
+            `Auto nail note reset x${symbols.length}`,
+            {
+              quiet: true,
+              skipRender: true,
+              loadingText: `自动便签现价 ${symbols.length}…`,
+            },
+          );
+          doneKeys.forEach((k) => nailGreenNoteResetDone.add(k));
+          if (nailGreenNoteResetDone.size > 200) {
+            const keep = [...nailGreenNoteResetDone].slice(-80);
+            nailGreenNoteResetDone.clear();
+            keep.forEach((k) => nailGreenNoteResetDone.add(k));
+          }
+          if (isNailDrawerOpen()) {
+            syncNailPriceRows();
+            void paintNailKlines();
+          }
+          showToast(
+            symbols.length === 1
+              ? `${symbols[0].replace(/USDT$/i, "")} 已自动便签现价（重开观察）`
+              : `已自动便签现价 ${symbols.length} 个`,
+          );
+        } catch (error) {
+          console.warn("auto nail note reset failed", error);
+          batch.forEach(([symbol, row]) => {
+            nailGreenNoteResetQueue.set(symbol, row);
+          });
+        } finally {
+          nailGreenNoteResetBusy = false;
+        }
+      }
+
+      function maybeQueueNailGreenNoteReset(symbol, candles, range) {
+        if (!range || !range.autoResetNote) return;
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        let price = Number(marketMap[key]?.price);
+        if (!(Number.isFinite(price) && price > 0) && Array.isArray(candles)) {
+          for (let i = candles.length - 1; i >= 0; i -= 1) {
+            const c = Number(candles[i] && candles[i].close);
+            if (Number.isFinite(c) && c > 0) {
+              price = c;
+              break;
+            }
           }
         }
-        if (cleared || greenFrom < 0 || greenUntil <= greenFrom) return empty;
-        return { from: greenFrom, until: greenUntil };
+        queueNailGreenNoteReset(key, price, range.clearReason);
       }
 
       /**
@@ -12982,6 +13448,10 @@
           candles,
           alertPrice,
           fromIndex,
+          {
+            durationMs: nailCandleDurationMs(),
+            now: Date.now(),
+          },
         );
         if (greenRange.from < 0) return 0;
         let area = 0;
@@ -13042,6 +13512,26 @@
         if (!alertMark) {
           nailAlertGreenScores.set(key, null);
           return;
+        }
+        const alertPrice = Number(alertMark.price);
+        const fromAt = Number(alertMark.fromAt) || 0;
+        const fromIndex =
+          Number.isFinite(alertPrice) && alertPrice > 0
+            ? fromAt > 0
+              ? findCandleIndexAt(candles, fromAt)
+              : 0
+            : -1;
+        if (fromIndex >= 0) {
+          const range = nailAlertGreenActiveRange(
+            candles,
+            alertPrice,
+            fromIndex,
+            {
+              durationMs: nailCandleDurationMs(),
+              now: Date.now(),
+            },
+          );
+          maybeQueueNailGreenNoteReset(key, candles, range);
         }
         nailAlertGreenScores.set(
           key,
@@ -13164,7 +13654,10 @@
               : -1;
         const alertGreenRange =
           hasAlert && alertFromIndex >= 0
-            ? nailAlertGreenActiveRange(candles, alertPrice, alertFromIndex)
+            ? nailAlertGreenActiveRange(candles, alertPrice, alertFromIndex, {
+                durationMs: nailCandleDurationMs(),
+                now: Date.now(),
+              })
             : { from: -1, until: -1 };
 
         if (hasPin) {
@@ -14743,8 +15236,11 @@
         const nailOpen = document
           .getElementById("nailDrawer")
           ?.classList.contains("is-open");
+        const noticeOpen = nailNoticeMode === "open";
         document.body.style.overflow =
-          hiddenOpen || nailOpen || isKlineZoomOpen() ? "hidden" : "";
+          hiddenOpen || nailOpen || noticeOpen || isKlineZoomOpen()
+            ? "hidden"
+            : "";
       }
 
       function isNailDrawerOpen() {
@@ -14863,6 +15359,258 @@
         return true;
       }
 
+      let nailGreenNotices = [];
+      let nailGreenNoticesReadAt = 0;
+      let nailNoticeMode = "closed"; // closed | open | peek
+      let nailNoticeChartsBusy = false;
+
+      function nailGreenUnreadCount() {
+        if (
+          typeof WatchFavorites.countUnreadNailGreenNotices === "function"
+        ) {
+          return WatchFavorites.countUnreadNailGreenNotices(
+            nailGreenNotices,
+            nailGreenNoticesReadAt,
+          );
+        }
+        const read = Number(nailGreenNoticesReadAt) || 0;
+        return (nailGreenNotices || []).filter(
+          (item) => Number(item.at) > read,
+        ).length;
+      }
+
+      function syncNailNoticeEntryUi() {
+        const entry = document.getElementById("nailNoticeEntry");
+        const meta = document.getElementById("nailNoticeEntryMeta");
+        const unread = nailGreenUnreadCount();
+        const total = (nailGreenNotices || []).length;
+        if (entry) entry.classList.toggle("has-unread", unread > 0);
+        if (meta) {
+          if (!total) meta.textContent = "暂无";
+          else if (unread > 0) meta.textContent = `未读 ${unread}`;
+          else meta.textContent = `${total} 条`;
+        }
+        const peek = document.getElementById("nailNoticePeekLabel");
+        if (peek) {
+          peek.textContent =
+            unread > 0 ? `通知 · 未读 ${unread}` : "通知 · 点此展开";
+        }
+      }
+
+      async function refreshNailGreenNotices() {
+        if (
+          !WatchFavorites ||
+          typeof WatchFavorites.loadNailGreenNoticesRaw !== "function"
+        ) {
+          nailGreenNotices = [];
+          nailGreenNoticesReadAt = 0;
+          syncNailNoticeEntryUi();
+          return { items: [], readAt: 0 };
+        }
+        try {
+          const state = await WatchFavorites.loadNailGreenNoticesRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path:
+              WatchFavorites.NAIL_GREEN_NOTICES_PATH ||
+              "watch-nail-green-notices.json",
+          });
+          nailGreenNotices = state.items || [];
+          nailGreenNoticesReadAt = Number(state.readAt) || 0;
+          syncNailNoticeEntryUi();
+          return state;
+        } catch (error) {
+          console.warn("load nail green notices failed", error);
+          syncNailNoticeEntryUi();
+          return { items: nailGreenNotices, readAt: nailGreenNoticesReadAt };
+        }
+      }
+
+      function formatNoticeTime(at) {
+        const n = Number(at);
+        if (!Number.isFinite(n) || n <= 0) return "--";
+        const d = new Date(n);
+        const pad = (v) => String(v).padStart(2, "0");
+        return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      }
+
+      function renderNailNoticeList() {
+        const listEl = document.getElementById("nailNoticeList");
+        const metaEl = document.getElementById("nailNoticeMeta");
+        if (!listEl) return;
+        const items = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
+        if (metaEl) {
+          metaEl.textContent = items.length
+            ? `近 24 小时 · ${items.length} 条 · 最新在上`
+            : "近 24 小时暂无通知";
+        }
+        if (!items.length) {
+          listEl.innerHTML =
+            '<div class="nail-notice-empty">暂无荧光绿通知</div>';
+          return;
+        }
+        listEl.innerHTML = items
+          .map((item) => {
+            const symbol = escapeHtml(item.symbol);
+            const label = escapeHtml(
+              item.label || String(item.symbol || "").replace(/USDT$/i, ""),
+            );
+            const id = escapeHtml(item.id || `${item.symbol}:${item.openTime}`);
+            return [
+              `<article class="nail-notice-card" data-notice-id="${id}" data-notice-symbol="${symbol}">`,
+              `<div class="nail-notice-card-top">`,
+              `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}</button>`,
+              `<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span>`,
+              `</div>`,
+              `<div class="nail-notice-meta">水位 ${escapeHtml(formatPinPrice(item.alertPrice))} · ${escapeHtml(item.interval || "4h")}</div>`,
+              `<canvas width="640" height="160" data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${Number(item.alertPrice) || 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
+              `</article>`,
+            ].join("");
+          })
+          .join("");
+        listEl.querySelectorAll("[data-notice-jump]").forEach((btn) => {
+          btn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            jumpNailNoticeToSymbol(btn.getAttribute("data-notice-jump"));
+          });
+        });
+        void paintNailNoticeCharts();
+      }
+
+      async function paintNailNoticeCharts() {
+        if (nailNoticeChartsBusy) return;
+        const canvases = [
+          ...document.querySelectorAll(
+            "#nailNoticeList canvas[data-notice-chart]",
+          ),
+        ];
+        if (!canvases.length) return;
+        // 一次最多重画前 12 张，避免 24h 堆积时手机端卡死。
+        const paintLimit = 12;
+        nailNoticeChartsBusy = true;
+        try {
+          for (const canvas of canvases.slice(0, paintLimit)) {
+            const symbol = String(
+              canvas.getAttribute("data-notice-chart") || "",
+            )
+              .trim()
+              .toUpperCase();
+            const alertPrice = Number(
+              canvas.getAttribute("data-notice-price"),
+            );
+            const noteAt = Number(canvas.getAttribute("data-notice-note-at"));
+            if (!symbol || !(alertPrice > 0)) continue;
+            try {
+              const candles = await fetchKlines(symbol, "4h", null, 42);
+              drawKline(
+                canvas,
+                candles,
+                null,
+                null,
+                [],
+                {
+                  price: alertPrice,
+                  fromAt: noteAt > 0 ? noteAt : 0,
+                },
+              );
+            } catch (error) {
+              console.warn("notice chart failed", symbol, error);
+            }
+          }
+        } finally {
+          nailNoticeChartsBusy = false;
+        }
+      }
+
+      async function markNailNoticesRead() {
+        const now = Date.now();
+        const latest = (nailGreenNotices || []).reduce(
+          (max, item) => Math.max(max, Number(item.at) || 0),
+          0,
+        );
+        const nextReadAt = Math.max(now, latest, Number(nailGreenNoticesReadAt) || 0);
+        if (nextReadAt <= (Number(nailGreenNoticesReadAt) || 0)) {
+          syncNailNoticeEntryUi();
+          return;
+        }
+        nailGreenNoticesReadAt = nextReadAt;
+        syncNailNoticeEntryUi();
+        if (
+          !WatchFavorites ||
+          typeof WatchFavorites.patchNailGreenNotices !== "function"
+        ) {
+          return;
+        }
+        try {
+          await WatchFavorites.patchNailGreenNotices({
+            repo: CONFIG.GITHUB_REPO,
+            path:
+              WatchFavorites.NAIL_GREEN_NOTICES_PATH ||
+              "watch-nail-green-notices.json",
+            message: "Mark nail green notices read",
+            mutate: (items, meta) => ({
+              items,
+              readAt: Math.max(nextReadAt, Number(meta && meta.readAt) || 0),
+            }),
+          });
+        } catch (error) {
+          console.warn("mark nail notices read failed", error);
+        }
+      }
+
+      function setNailNoticeDrawerMode(mode) {
+        const drawer = document.getElementById("nailNoticeDrawer");
+        if (!drawer) return;
+        const next =
+          mode === "open" || mode === "peek" ? mode : "closed";
+        nailNoticeMode = next;
+        drawer.classList.toggle("is-open", next === "open");
+        drawer.classList.toggle("is-peek", next === "peek");
+        const show = next !== "closed";
+        drawer.hidden = !show;
+        drawer.setAttribute("aria-hidden", show ? "false" : "true");
+        syncBodyScrollLock();
+      }
+
+      async function openNailNoticeDrawer(options) {
+        const opts = options || {};
+        await refreshNailGreenNotices();
+        renderNailNoticeList();
+        setNailNoticeDrawerMode("open");
+        if (!opts.skipMarkRead) {
+          void markNailNoticesRead();
+        }
+      }
+
+      function closeNailNoticeDrawer() {
+        setNailNoticeDrawerMode("closed");
+      }
+
+      function peekNailNoticeDrawer(symbol) {
+        const label = String(symbol || "")
+          .replace(/USDT$/i, "")
+          .trim();
+        const peek = document.getElementById("nailNoticePeekLabel");
+        if (peek) {
+          peek.textContent = label
+            ? `已定位 ${label} · 点此展开通知`
+            : "通知 · 点此展开";
+        }
+        setNailNoticeDrawerMode("peek");
+      }
+
+      function jumpNailNoticeToSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        peekNailNoticeDrawer(key);
+        if (!isNailDrawerOpen()) setNailDrawerOpen(true);
+        requestAnimationFrame(() => {
+          openNailDrawerAtSymbol(key);
+        });
+      }
+
       async function openNailDrawerWithBrowse() {
         // 蒙蔽关闭时：不拉 browse 元数据、不 stamp，直接渲染可见 K 线
         if (!NAIL_BROWSE_MASK_ENABLED) {
@@ -14874,6 +15622,10 @@
               void paintNailKlines();
             });
           });
+          await refreshNailGreenNotices();
+          if (nailGreenUnreadCount() > 0 && nailNoticeMode === "closed") {
+            void openNailNoticeDrawer();
+          }
           return;
         }
         await refreshNailBrowseMeta();
@@ -14885,6 +15637,10 @@
             void paintNailKlines();
           });
         });
+        await refreshNailGreenNotices();
+        if (nailGreenUnreadCount() > 0 && nailNoticeMode === "closed") {
+          void openNailNoticeDrawer();
+        }
       }
 
       function setNailDrawerOpen(open) {
@@ -14915,6 +15671,7 @@
           stopNailAutoRefresh();
           clearNailFocusSelection();
           setNailSelectMode(false);
+          closeNailNoticeDrawer();
         }
       }
 
@@ -18684,6 +19441,40 @@
       if (nailRefreshBtn) {
         nailRefreshBtn.addEventListener("click", () => {
           void refreshNailDrawer();
+        });
+      }
+      const nailNoticeEntry = document.getElementById("nailNoticeEntry");
+      if (nailNoticeEntry) {
+        nailNoticeEntry.addEventListener("click", () => {
+          void openNailNoticeDrawer();
+        });
+      }
+      const nailNoticeCloseBtn = document.getElementById("nailNoticeCloseBtn");
+      if (nailNoticeCloseBtn) {
+        nailNoticeCloseBtn.addEventListener("click", () => {
+          closeNailNoticeDrawer();
+        });
+      }
+      const nailNoticeMask = document.getElementById("nailNoticeMask");
+      if (nailNoticeMask) {
+        nailNoticeMask.addEventListener("click", () => {
+          closeNailNoticeDrawer();
+        });
+      }
+      const nailNoticePeekBar = document.getElementById("nailNoticePeekBar");
+      if (nailNoticePeekBar) {
+        nailNoticePeekBar.addEventListener("click", () => {
+          void openNailNoticeDrawer({ skipMarkRead: true });
+        });
+      }
+      const nailNoticeRefreshBtn = document.getElementById(
+        "nailNoticeRefreshBtn",
+      );
+      if (nailNoticeRefreshBtn) {
+        nailNoticeRefreshBtn.addEventListener("click", async () => {
+          await refreshNailGreenNotices();
+          renderNailNoticeList();
+          showToast("通知已刷新");
         });
       }
       const nailAutoRefresh = document.getElementById("nailAutoRefresh");

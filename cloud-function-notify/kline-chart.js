@@ -26,6 +26,9 @@ const CHART = {
   badgeStreak5Bg: [47, 143, 110, 235],
   badgeHeat15Bg: [196, 122, 58, 235],
   badgeAtBg: [74, 108, 98, 235],
+  // Match kline.html nail drawer fluorescent green.
+  alertGreen: [62, 207, 142, 255],
+  alertLine: [62, 207, 142, 180],
 };
 
 // Minimal 5x7 glyphs for chart titles (A-Z 0-9 . + - % space).
@@ -122,10 +125,12 @@ async function fetchKlines(symbol, interval, limit) {
       }
       const raw = JSON.parse(response.text);
       return raw.map((item) => ({
+        time: Number(item[0]),
         open: Number(item[1]),
         high: Number(item[2]),
         low: Number(item[3]),
         close: Number(item[4]),
+        closeTime: Number(item[6]),
       }));
     } catch (error) {
       lastError = error;
@@ -365,6 +370,10 @@ function renderCandlesPixels(candles, options) {
     return { width, height, pixels };
   }
 
+  const alertPrice = options && Number(options.alertPrice);
+  const hasAlert = Number.isFinite(alertPrice) && alertPrice > 0;
+  const greenFrom = hasAlert ? Number(options && options.greenFrom) : -1;
+  const greenUntil = hasAlert ? Number(options && options.greenUntil) : -1;
   const highs = candles.map((c) => c.high);
   const lows = candles.map((c) => c.low);
   let max = Math.max(...highs);
@@ -372,6 +381,10 @@ function renderCandlesPixels(candles, options) {
   if (Number.isFinite(pinPrice)) {
     max = Math.max(max, pinPrice);
     min = Math.min(min, pinPrice);
+  }
+  if (hasAlert) {
+    max = Math.max(max, alertPrice);
+    min = Math.min(min, alertPrice);
   }
   const range = max - min || max * 0.01 || 1;
   const chartW = width - CHART.padLeft - CHART.padRight;
@@ -409,25 +422,113 @@ function renderCandlesPixels(candles, options) {
     );
   }
 
-  candles.forEach((candle, index) => {
-    const x = CHART.padLeft + slot * index + slot / 2;
-    const up = candle.close >= candle.open;
-    const color = up ? CHART.up : CHART.down;
+  if (hasAlert) {
+    const y = yOf(alertPrice);
     drawLine(
       pixels,
       width,
       height,
-      x,
-      yOf(candle.high),
-      x,
-      yOf(candle.low),
-      color,
+      CHART.padLeft,
+      y,
+      width - CHART.padRight,
+      y,
+      CHART.alertLine,
     );
-    const y1 = yOf(candle.open);
-    const y2 = yOf(candle.close);
-    const top = Math.min(y1, y2);
-    const bodyH = Math.max(1, Math.abs(y2 - y1));
-    fillRect(pixels, width, height, x - bodyW / 2, top, bodyW, bodyH, color);
+  }
+
+  candles.forEach((candle, index) => {
+    const x = CHART.padLeft + slot * index + slot / 2;
+    const up = candle.close >= candle.open;
+    const base = up ? CHART.up : CHART.down;
+    const inGreen =
+      hasAlert &&
+      up &&
+      greenFrom >= 0 &&
+      index >= greenFrom &&
+      index < greenUntil &&
+      candle.high > alertPrice;
+    const splitAt = inGreen ? alertPrice : NaN;
+
+    // Wick (optionally split at waterline).
+    if (Number.isFinite(splitAt) && candle.high > splitAt) {
+      const mid = Math.max(candle.low, splitAt);
+      if (candle.high > mid) {
+        drawLine(
+          pixels,
+          width,
+          height,
+          x,
+          yOf(candle.high),
+          x,
+          yOf(mid),
+          CHART.alertGreen,
+        );
+      }
+      if (mid > candle.low) {
+        drawLine(
+          pixels,
+          width,
+          height,
+          x,
+          yOf(mid),
+          x,
+          yOf(candle.low),
+          base,
+        );
+      }
+    } else {
+      drawLine(
+        pixels,
+        width,
+        height,
+        x,
+        yOf(candle.high),
+        x,
+        yOf(candle.low),
+        base,
+      );
+    }
+
+    const bodyHigh = Math.max(candle.open, candle.close);
+    const bodyLow = Math.min(candle.open, candle.close);
+    if (
+      Number.isFinite(splitAt) &&
+      bodyHigh > splitAt
+    ) {
+      const greenLow = Math.max(bodyLow, splitAt);
+      const yGreenTop = yOf(bodyHigh);
+      const yGreenBot = yOf(greenLow);
+      fillRect(
+        pixels,
+        width,
+        height,
+        x - bodyW / 2,
+        Math.min(yGreenTop, yGreenBot),
+        bodyW,
+        Math.max(1, Math.abs(yGreenBot - yGreenTop)),
+        CHART.alertGreen,
+      );
+      if (bodyLow < splitAt) {
+        const yBaseTop = yOf(splitAt);
+        const yBaseBot = yOf(bodyLow);
+        fillRect(
+          pixels,
+          width,
+          height,
+          x - bodyW / 2,
+          Math.min(yBaseTop, yBaseBot),
+          bodyW,
+          Math.max(1, Math.abs(yBaseBot - yBaseTop)),
+          base,
+        );
+      }
+    } else {
+      const y1 = yOf(candle.open);
+      const y2 = yOf(candle.close);
+      const top = Math.min(y1, y2);
+      const bodyH = Math.max(1, Math.abs(y2 - y1));
+      fillRect(pixels, width, height, x - bodyW / 2, top, bodyW, bodyH, base);
+    }
   });
 
   return { width, height, pixels };
@@ -494,6 +595,10 @@ async function buildSymbolChart(symbol, options) {
     streak5: !!(options && options.streak5),
     heat15: !!(options && options.heat15),
     priceUpVsLast: !!(options && options.priceUpVsLast),
+    alertPrice: options && options.alertPrice,
+    greenFrom: options && options.greenFrom,
+    greenUntil: options && options.greenUntil,
+    height: options && options.height,
   });
 }
 

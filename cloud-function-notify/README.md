@@ -29,6 +29,18 @@
 - `NOTES_RANK_SNAP_ENABLED`：默认 `1`；`0` 关闭。
 - `NOTES_RANK_SNAP_INTERVAL_MS`：默认 `1800000`（30 分钟）。
 
+## 钉子荧光绿（企微 + 图）
+
+定时里读取 `watch-nails.json`：有便签水位的钉子，拉 **4h** K 线，站在当前时刻回看 `noteAt` 之后的窗口。  
+当**当前根已染绿**，且**更早已有过绿**（续绿或断绿后再绿），且该根 `openTime` 尚未推过 → 发企微文字 + 染绿图（与抽屉语义一致）。**同一根 4h 只推一次。**
+
+- 去重状态：`watch-nail-green-alert.json`（按 openTime 同根只推一次）
+- 页面通知列表：`watch-nail-green-notices.json`（24h，含 `readAt`；网页可重画近似图）
+- `NAIL_GREEN_ALERT`：默认 `1`；`0` 关闭
+- Webhook：`WECOM_WEBHOOK_PINS` → 否则 `WECOM_WEBHOOK_POSITIONS` / `WECOM_WEBHOOK_URL`
+- 单次最多推送 `NAIL_GREEN_SEND_MAX`（默认 5）
+- **100 钉减负**：本根已推过的跳过拉 K；单轮最多检查 `NAIL_GREEN_CHECK_MAX`（默认 40，轮询），并发 `NAIL_GREEN_CONCURRENCY`（默认 5）
+
 ## 仅网页、不推微信
 
 1. **持仓** → `lastPositionNotify`（企微浮窗右侧）
@@ -38,7 +50,7 @@
 
 ## 部署
 
-1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js` + `notes-rank-snap.js`）。只更新 `index.js` 会出现 `main is not a function`。
+1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js` + `notes-rank-snap.js` + `nail-green-alert.js`）。只更新 `index.js` 会出现 `main is not a function`。
 2. Handler：`index.handler`，Node.js 18+
 3. **超时建议 ≥ 60～120 秒**
 4. 定时触发器：`0 */5 * * * *`
