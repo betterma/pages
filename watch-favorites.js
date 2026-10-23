@@ -1142,7 +1142,7 @@
     );
   }
 
-  function setNailNote(list, symbol, note) {
+  function setNailNote(list, symbol, note, options = {}) {
     const key = nailSymbolKey(symbol);
     if (!key) return normalizeNails(list);
     const text = String(note || "")
@@ -1152,7 +1152,12 @@
     const item = next.find((row) => row.symbol === key);
     if (!item) return next;
     if (item.note === text) return next;
-    const noteAt = text ? Date.now() : 0;
+    const requestedNoteAt = Number(options.noteAt);
+    const noteAt = text
+      ? Number.isFinite(requestedNoteAt) && requestedNoteAt >= 0
+        ? requestedNoteAt
+        : Date.now()
+      : 0;
     return next.map((row) =>
       row.symbol === key ? { ...row, note: text, noteAt } : row,
     );
@@ -2795,4 +2800,3 @@
     fetchRawJsonByCommit,
   };
 });
-

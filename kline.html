@@ -12715,7 +12715,7 @@
           }));
       }
 
-      /** 从钉子便签里提取价格阈值，如「注意 0.0558」「注意  0.98」。 */
+      /** 取便签中从左到右第一个数字作为价格，后续数字仅作备注文本。 */
       function parseNailNoteAlertPrice(note) {
         const text = String(note || "").trim();
         if (!text) return null;
@@ -15996,9 +15996,20 @@
           }
           return;
         }
+        let noteAt;
+        if (text && String(current.note || "").trim()) {
+          const keepOriginalTime = !window.confirm(
+            "保存此便签修改？\n\n确定：以此刻时间为起点\n取消：保留原时间",
+          );
+          noteAt = keepOriginalTime
+            ? Number(current.noteAt) || 0
+            : Date.now();
+        } else {
+          noteAt = text ? Date.now() : 0;
+        }
         try {
           await persistNails(
-            (list) => WatchFavorites.setNailNote(list, key, text),
+            (list) => WatchFavorites.setNailNote(list, key, text, { noteAt }),
             `Update nail note ${key.replace(/USDT$/i, "")}`,
             { quiet: true, loadingText: "保存便签…" },
           );
@@ -18410,11 +18421,6 @@
           event.preventDefault();
           event.stopPropagation();
           unveilNailBrowseCard(card.getAttribute("data-nail-symbol"));
-        });
-        nailDrawer.addEventListener("change", (event) => {
-          const input = event.target.closest("input[data-nail-note]");
-          if (!input) return;
-          void saveNailNote(input.getAttribute("data-nail-note"), input.value);
         });
         nailDrawer.addEventListener(
           "focusout",
