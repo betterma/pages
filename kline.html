@@ -868,11 +868,8 @@
         border-radius: 999px;
         padding-inline: 13px;
       }
-      html[data-ui-style="ios"] .nail-controls {
-        border-bottom-color: color-mix(in srgb, var(--separator) 70%, transparent);
-      }
-      html[data-ui-style="ios"] .nail-controls > summary {
-        padding-block: 12px;
+      html[data-ui-style="ios"] .nail-settings-panel .nail-rising-row {
+        padding: 11px 16px;
       }
       html[data-ui-style="ios"] .nail-rising-row {
         padding: 11px 16px;
@@ -2158,21 +2155,6 @@
         color: var(--secondary);
         text-align: right;
       }
-      .nail-controls {
-        flex: 0 0 auto;
-        border-bottom: 0.5px solid var(--separator);
-      }
-      .nail-controls > summary {
-        padding: 10px 14px;
-        color: var(--label);
-        font-size: 12px;
-        font-weight: 650;
-        cursor: pointer;
-        list-style-position: inside;
-      }
-      .nail-controls[open] > summary {
-        border-bottom: 0.5px solid var(--separator);
-      }
       .nail-switch {
         position: relative;
         width: 46px;
@@ -2244,12 +2226,19 @@
         left: 0;
       }
       .nail-head {
+        position: relative;
         display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
+        flex-direction: column;
+        align-items: stretch;
         gap: 10px;
         padding: 14px 14px 10px;
         border-bottom: 0.5px solid var(--separator);
+        flex: 0 0 auto;
+      }
+      .nail-head-title-line {
+        display: flex;
+        align-items: center;
+        gap: 6px;
       }
       .nail-head h3 {
         margin: 0;
@@ -2260,8 +2249,51 @@
         font-size: 12px;
         color: var(--secondary);
       }
+      .nail-settings-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: none;
+        border-radius: 8px;
+        background: var(--fill);
+        color: var(--secondary);
+        cursor: pointer;
+        flex: 0 0 auto;
+      }
+      .nail-settings-btn:hover,
+      .nail-settings-btn[aria-expanded="true"] {
+        color: var(--label);
+        background: color-mix(in srgb, var(--fill) 70%, var(--accent, #2f8f6e) 18%);
+      }
+      .nail-settings-btn svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .nail-settings-popover {
+        position: absolute;
+        top: calc(100% - 2px);
+        left: 10px;
+        right: 10px;
+        z-index: 8;
+        border-radius: 12px;
+        border: 0.5px solid var(--separator);
+        background: var(--elevated, var(--grouped));
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+        overflow: hidden;
+      }
+      .nail-settings-popover[hidden] {
+        display: none !important;
+      }
+      .nail-settings-popover .nail-rising-row:last-child {
+        border-bottom: none;
+      }
       .nail-head-actions {
         display: flex;
+        flex-wrap: wrap;
         gap: 6px;
         flex-shrink: 0;
       }
@@ -2283,34 +2315,21 @@
         cursor: wait;
       }
       .nail-notice-entry {
-        display: flex;
+        display: inline-flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        margin: 0;
-        padding: 8px 14px;
-        border: none;
-        border-bottom: 0.5px solid var(--separator);
-        background: color-mix(in srgb, var(--elevated) 70%, transparent);
-        color: var(--label);
-        font: inherit;
-        font-size: 13px;
-        font-weight: 650;
-        cursor: pointer;
-        width: 100%;
-        text-align: left;
-        box-sizing: border-box;
-      }
-      .nail-notice-entry:hover {
-        background: color-mix(in srgb, var(--fill) 55%, transparent);
+        gap: 4px;
       }
       .nail-notice-entry .nail-notice-entry-meta {
         color: var(--secondary);
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 600;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-notice-entry.has-unread {
+        color: var(--warn, #b07030);
       }
       .nail-notice-entry.has-unread .nail-notice-entry-meta {
-        color: var(--warn, #b07030);
+        color: inherit;
       }
       .nail-notice-drawer {
         position: fixed;
@@ -2318,8 +2337,7 @@
         z-index: 130;
         pointer-events: none;
       }
-      .nail-notice-drawer.is-open,
-      .nail-notice-drawer.is-peek {
+      .nail-notice-drawer.is-open {
         pointer-events: auto;
       }
       .nail-notice-drawer[hidden] {
@@ -2328,29 +2346,23 @@
       .nail-notice-mask {
         position: absolute;
         inset: 0;
-        background: rgba(28, 34, 32, 0.4);
+        background: rgba(28, 34, 32, 0.45);
         opacity: 0;
         transition: opacity 0.2s ease;
       }
       .nail-notice-drawer.is-open .nail-notice-mask {
         opacity: 1;
       }
-      .nail-notice-drawer.is-peek .nail-notice-mask {
-        opacity: 0;
-        pointer-events: none;
-      }
       .nail-notice-panel {
         position: absolute;
-        left: 0;
-        right: 0;
-        top: 0;
-        max-height: min(72vh, 640px);
+        inset: 0;
+        max-height: none;
+        height: 100%;
         display: flex;
         flex-direction: column;
         background: var(--grouped, #f4f5f3);
-        border-bottom: 0.5px solid var(--separator);
-        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
-        transform: translateY(-105%);
+        box-shadow: none;
+        transform: translateY(105%);
         transition: transform 0.22s ease;
         color: var(--label);
         overflow: hidden;
@@ -2358,45 +2370,11 @@
       .nail-notice-drawer.is-open .nail-notice-panel {
         transform: translateY(0);
       }
-      .nail-notice-drawer.is-peek .nail-notice-panel {
-        transform: translateY(calc(-100% + 44px));
-        max-height: none;
-        height: auto;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
-      }
-      .nail-notice-drawer.is-peek .nail-notice-list,
-      .nail-notice-drawer.is-peek .nail-notice-head-actions {
-        visibility: hidden;
-      }
-      .nail-notice-peek-bar {
-        display: none;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        height: 44px;
-        padding: 0 12px;
-        border: none;
-        background: color-mix(in srgb, var(--elevated) 92%, transparent);
-        color: var(--label);
-        font-size: 13px;
-        font-weight: 650;
-        cursor: pointer;
-        width: 100%;
-        box-sizing: border-box;
-      }
-      .nail-notice-drawer.is-peek .nail-notice-peek-bar {
-        display: flex;
-        position: absolute;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 2;
-      }
       .nail-notice-head {
         display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 10px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
         padding: 12px 14px 8px;
         border-bottom: 0.5px solid var(--separator);
         flex: 0 0 auto;
@@ -2412,6 +2390,7 @@
       }
       .nail-notice-head-actions {
         display: flex;
+        flex-wrap: wrap;
         gap: 6px;
       }
       .nail-notice-head-actions button {
@@ -2430,12 +2409,14 @@
         min-height: 0;
         overflow: auto;
         padding: 8px 12px 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        align-content: start;
         -webkit-overflow-scrolling: touch;
       }
       .nail-notice-empty {
+        grid-column: 1 / -1;
         padding: 24px 8px;
         text-align: center;
         color: var(--secondary);
@@ -2445,43 +2426,64 @@
         border: 0.5px solid var(--separator);
         border-radius: 10px;
         background: color-mix(in srgb, var(--elevated) 88%, transparent);
-        padding: 8px 10px 10px;
+        padding: 6px 8px 8px;
+        min-width: 0;
       }
       .nail-notice-card-top {
         display: flex;
         align-items: baseline;
         justify-content: space-between;
-        gap: 8px;
-        margin-bottom: 6px;
+        gap: 6px;
+        margin-bottom: 4px;
       }
       .nail-notice-name {
         border: none;
         background: none;
         padding: 0;
         color: var(--accent, #2f8f6e);
-        font-size: 15px;
+        font-size: 13px;
         font-weight: 700;
         cursor: pointer;
         text-align: left;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
       }
       .nail-notice-name:hover {
         text-decoration: underline;
       }
       .nail-notice-time {
-        font-size: 11px;
+        font-size: 10px;
         color: var(--secondary);
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
+        flex-shrink: 0;
       }
       .nail-notice-meta {
-        font-size: 11px;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 6px;
+        font-size: 10px;
         color: var(--secondary);
-        margin-bottom: 6px;
+        margin-bottom: 4px;
+      }
+      .nail-notice-delta {
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .nail-notice-delta.is-up {
+        color: #3a7fc4;
+      }
+      .nail-notice-delta.is-down {
+        color: #c45c5c;
       }
       .nail-notice-card canvas {
         display: block;
         width: 100%;
-        height: 120px;
+        height: 96px;
         border-radius: 6px;
         background: color-mix(in srgb, var(--bg) 80%, transparent);
       }
@@ -5271,8 +5273,24 @@
       <div class="nail-mask" data-close-nails></div>
       <aside class="nail-panel" role="dialog" aria-label="钉子抽屉">
         <div class="nail-head">
-          <div>
-            <h3>钉子抽屉</h3>
+          <div class="nail-head-title-block">
+            <div class="nail-head-title-line">
+              <h3>钉子抽屉</h3>
+              <button
+                type="button"
+                class="nail-settings-btn"
+                id="nailSettingsBtn"
+                title="筛选、排序与定时刷新"
+                aria-label="筛选、排序与定时刷新"
+                aria-expanded="false"
+                aria-controls="nailSettingsPopover"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 3.5v2.2M12 18.3v2.2M4.9 6.4l1.6 1.6M17.5 16l1.6 1.6M3.5 12h2.2M18.3 12h2.2M4.9 17.6l1.6-1.6M17.5 8l1.6-1.6" />
+                </svg>
+              </button>
+            </div>
             <p id="nailMeta">复制名称后新增 · 置顶 / 长按拖动排序</p>
           </div>
           <div class="nail-head-actions">
@@ -5287,82 +5305,87 @@
             <button type="button" id="nailRefreshBtn" title="重新拉取钉子列表和 K 线">
               刷新
             </button>
+            <button
+              type="button"
+              class="nail-notice-entry"
+              id="nailNoticeEntry"
+              title="近 24h 荧光绿通知"
+            >
+              通知
+              <span class="nail-notice-entry-meta" id="nailNoticeEntryMeta"></span>
+            </button>
             <button type="button" id="nailAddBtn">新增</button>
             <button type="button" data-close-nails>关闭</button>
           </div>
+          <div
+            class="nail-settings-popover"
+            id="nailSettingsPopover"
+            hidden
+            role="dialog"
+            aria-label="筛选、排序与定时刷新"
+          >
+            <div class="nail-rising-row">
+              <span>当前窗口上涨</span>
+              <button
+                type="button"
+                class="nail-switch"
+                id="nailRisingFilter"
+                role="switch"
+                aria-checked="true"
+                title="只显示当前窗口上涨的钉子"
+                aria-label="当前窗口上涨"
+              ></button>
+            </div>
+            <div class="nail-rising-row nail-sort-row">
+              <span>排序</span>
+              <div
+                class="mode-switch pin-sort-switch"
+                id="nailSortSwitch"
+                role="group"
+                aria-label="钉子排序"
+                title="默认：置顶/拖拽顺序；荧光绿：置顶仍在最上，其余按绿色K线面积排序；24h：置顶优先后按涨幅降序"
+              >
+                <button type="button" data-nail-sort="order" class="is-active">
+                  默认
+                </button>
+                <button
+                  type="button"
+                  data-nail-sort="alertGreen"
+                  title="置顶仍在最上；其余按绿色K线占用面积从大到小"
+                >
+                  荧光绿
+                </button>
+                <button
+                  type="button"
+                  data-nail-sort="change24h"
+                  title="置顶仍在最上；其余按24小时涨幅从高到低"
+                >
+                  24h
+                </button>
+              </div>
+            </div>
+            <div class="nail-rising-row">
+              <div class="nail-auto-refresh-label">
+                <span>定时刷新</span>
+                <small>每5秒更新当前排行前10价格</small>
+              </div>
+              <span
+                id="nailAutoRefreshStatus"
+                class="nail-auto-refresh-status"
+                aria-live="polite"
+              >已关闭</span>
+              <button
+                type="button"
+                class="nail-switch"
+                id="nailAutoRefresh"
+                role="switch"
+                aria-checked="false"
+                title="每5秒刷新当前排行前10项的现价和24h涨跌"
+                aria-label="定时刷新"
+              ></button>
+            </div>
+          </div>
         </div>
-        <button
-          type="button"
-          class="nail-notice-entry"
-          id="nailNoticeEntry"
-          title="近 24h 荧光绿通知"
-        >
-          <span>通知</span>
-          <span class="nail-notice-entry-meta" id="nailNoticeEntryMeta">暂无</span>
-        </button>
-        <details class="nail-controls">
-          <summary>筛选、排序与定时刷新</summary>
-          <div class="nail-rising-row">
-            <span>当前窗口上涨</span>
-            <button
-              type="button"
-              class="nail-switch"
-              id="nailRisingFilter"
-              role="switch"
-              aria-checked="true"
-              title="只显示当前窗口上涨的钉子"
-              aria-label="当前窗口上涨"
-            ></button>
-          </div>
-          <div class="nail-rising-row nail-sort-row">
-            <span>排序</span>
-            <div
-              class="mode-switch pin-sort-switch"
-              id="nailSortSwitch"
-              role="group"
-              aria-label="钉子排序"
-              title="默认：置顶/拖拽顺序；荧光绿：置顶仍在最上，其余按绿色K线面积排序；24h：置顶优先后按涨幅降序"
-            >
-              <button type="button" data-nail-sort="order" class="is-active">
-                默认
-              </button>
-              <button
-                type="button"
-                data-nail-sort="alertGreen"
-                title="置顶仍在最上；其余按绿色K线占用面积从大到小"
-              >
-                荧光绿
-              </button>
-              <button
-                type="button"
-                data-nail-sort="change24h"
-                title="置顶仍在最上；其余按24小时涨幅从高到低"
-              >
-                24h
-              </button>
-            </div>
-          </div>
-          <div class="nail-rising-row">
-            <div class="nail-auto-refresh-label">
-              <span>定时刷新</span>
-              <small>每5秒更新当前排行前10价格</small>
-            </div>
-            <span
-              id="nailAutoRefreshStatus"
-              class="nail-auto-refresh-status"
-              aria-live="polite"
-            >已关闭</span>
-            <button
-              type="button"
-              class="nail-switch"
-              id="nailAutoRefresh"
-              role="switch"
-              aria-checked="false"
-              title="每5秒刷新当前排行前10项的现价和24h涨跌"
-              aria-label="定时刷新"
-            ></button>
-          </div>
-        </details>
         <form class="nail-form" id="nailForm" hidden>
           <input
             id="nailNameInput"
@@ -5449,15 +5472,6 @@
           </div>
         </div>
         <div class="nail-notice-list" id="nailNoticeList"></div>
-        <button
-          type="button"
-          class="nail-notice-peek-bar"
-          id="nailNoticePeekBar"
-          title="展开通知列表"
-        >
-          <span id="nailNoticePeekLabel">通知 · 点此展开</span>
-          <span>展开</span>
-        </button>
       </div>
     </div>
 
@@ -13613,7 +13627,15 @@
         ctx.fillRect(x - bodyW / 2, yHi, bodyW, Math.max(1, yA - yHi));
       }
 
-      function drawKline(canvas, candles, pinPrice, pinnedAt, noteMarks, alertMark) {
+      function drawKline(
+        canvas,
+        candles,
+        pinPrice,
+        pinnedAt,
+        noteMarks,
+        alertMark,
+        deltaMark,
+      ) {
         const rect = canvas.getBoundingClientRect();
         const width = Math.max(1, Math.floor(rect.width));
         const height = Math.max(1, Math.floor(rect.height));
@@ -13659,6 +13681,34 @@
                 now: Date.now(),
               })
             : { from: -1, until: -1 };
+
+        // 通知：快照→此刻 半透明蓝/红底（涨蓝跌红），画在蜡烛下方。
+        const deltaBase = Number(
+          (deltaMark && deltaMark.alertPrice) || alertPrice,
+        );
+        const deltaFromOpen = Number(deltaMark && deltaMark.fromOpenTime) || 0;
+        const latestClose = Number(candles[candles.length - 1].close);
+        if (
+          deltaMark &&
+          Number.isFinite(deltaBase) &&
+          deltaBase > 0 &&
+          Number.isFinite(latestClose) &&
+          latestClose > 0 &&
+          deltaFromOpen > 0
+        ) {
+          const deltaFromIndex = findCandleIndexAt(candles, deltaFromOpen);
+          if (deltaFromIndex >= 0 && latestClose !== deltaBase) {
+            const up = latestClose > deltaBase;
+            const x0 = pad.left + slot * deltaFromIndex;
+            const x1 = pad.left + chartW;
+            ctx.save();
+            ctx.fillStyle = up
+              ? "rgba(58, 127, 196, 0.18)"
+              : "rgba(196, 92, 92, 0.18)";
+            ctx.fillRect(x0, pad.top, Math.max(0, x1 - x0), chartH);
+            ctx.restore();
+          }
+        }
 
         if (hasPin) {
           const y = yOf(pin);
@@ -15361,7 +15411,7 @@
 
       let nailGreenNotices = [];
       let nailGreenNoticesReadAt = 0;
-      let nailNoticeMode = "closed"; // closed | open | peek
+      let nailNoticeMode = "closed"; // closed | open
       let nailNoticeChartsBusy = false;
 
       function nailGreenUnreadCount() {
@@ -15386,14 +15436,9 @@
         const total = (nailGreenNotices || []).length;
         if (entry) entry.classList.toggle("has-unread", unread > 0);
         if (meta) {
-          if (!total) meta.textContent = "暂无";
-          else if (unread > 0) meta.textContent = `未读 ${unread}`;
-          else meta.textContent = `${total} 条`;
-        }
-        const peek = document.getElementById("nailNoticePeekLabel");
-        if (peek) {
-          peek.textContent =
-            unread > 0 ? `通知 · 未读 ${unread}` : "通知 · 点此展开";
+          if (!total) meta.textContent = "";
+          else if (unread > 0) meta.textContent = String(unread);
+          else meta.textContent = String(total);
         }
       }
 
@@ -15461,7 +15506,10 @@
               `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}</button>`,
               `<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span>`,
               `</div>`,
-              `<div class="nail-notice-meta">水位 ${escapeHtml(formatPinPrice(item.alertPrice))} · ${escapeHtml(item.interval || "4h")}</div>`,
+              `<div class="nail-notice-meta">`,
+              `<span>水位 ${escapeHtml(formatPinPrice(item.alertPrice))} · ${escapeHtml(item.interval || "4h")}</span>`,
+              `<span class="nail-notice-delta" data-notice-delta></span>`,
+              `</div>`,
               `<canvas width="640" height="160" data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${Number(item.alertPrice) || 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
               `</article>`,
             ].join("");
@@ -15475,6 +15523,17 @@
           });
         });
         void paintNailNoticeCharts();
+      }
+
+      function formatNoticeDeltaPct(alertPrice, latestClose) {
+        const base = Number(alertPrice);
+        const last = Number(latestClose);
+        if (!(base > 0) || !(last > 0) || last === base) return null;
+        const pct = ((last - base) / base) * 100;
+        return {
+          up: last > base,
+          text: `${pct > 0 ? "+" : ""}${pct.toFixed(2)}%`,
+        };
       }
 
       async function paintNailNoticeCharts() {
@@ -15499,9 +15558,28 @@
               canvas.getAttribute("data-notice-price"),
             );
             const noteAt = Number(canvas.getAttribute("data-notice-note-at"));
+            const openTime = Number(canvas.getAttribute("data-notice-open"));
             if (!symbol || !(alertPrice > 0)) continue;
             try {
               const candles = await fetchKlines(symbol, "4h", null, 42);
+              const latestClose =
+                candles.length > 0
+                  ? Number(candles[candles.length - 1].close)
+                  : NaN;
+              const deltaEl = canvas
+                .closest(".nail-notice-card")
+                ?.querySelector("[data-notice-delta]");
+              if (deltaEl) {
+                const delta = formatNoticeDeltaPct(alertPrice, latestClose);
+                if (delta) {
+                  deltaEl.textContent = delta.text;
+                  deltaEl.classList.toggle("is-up", delta.up);
+                  deltaEl.classList.toggle("is-down", !delta.up);
+                } else {
+                  deltaEl.textContent = "";
+                  deltaEl.classList.remove("is-up", "is-down");
+                }
+              }
               drawKline(
                 canvas,
                 candles,
@@ -15512,6 +15590,9 @@
                   price: alertPrice,
                   fromAt: noteAt > 0 ? noteAt : 0,
                 },
+                openTime > 0
+                  ? { fromOpenTime: openTime, alertPrice }
+                  : null,
               );
             } catch (error) {
               console.warn("notice chart failed", symbol, error);
@@ -15561,12 +15642,10 @@
       function setNailNoticeDrawerMode(mode) {
         const drawer = document.getElementById("nailNoticeDrawer");
         if (!drawer) return;
-        const next =
-          mode === "open" || mode === "peek" ? mode : "closed";
+        const next = mode === "open" ? "open" : "closed";
         nailNoticeMode = next;
         drawer.classList.toggle("is-open", next === "open");
-        drawer.classList.toggle("is-peek", next === "peek");
-        const show = next !== "closed";
+        const show = next === "open";
         drawer.hidden = !show;
         drawer.setAttribute("aria-hidden", show ? "false" : "true");
         syncBodyScrollLock();
@@ -15586,25 +15665,12 @@
         setNailNoticeDrawerMode("closed");
       }
 
-      function peekNailNoticeDrawer(symbol) {
-        const label = String(symbol || "")
-          .replace(/USDT$/i, "")
-          .trim();
-        const peek = document.getElementById("nailNoticePeekLabel");
-        if (peek) {
-          peek.textContent = label
-            ? `已定位 ${label} · 点此展开通知`
-            : "通知 · 点此展开";
-        }
-        setNailNoticeDrawerMode("peek");
-      }
-
       function jumpNailNoticeToSymbol(symbol) {
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
         if (!key) return;
-        peekNailNoticeDrawer(key);
+        closeNailNoticeDrawer();
         if (!isNailDrawerOpen()) setNailDrawerOpen(true);
         requestAnimationFrame(() => {
           openNailDrawerAtSymbol(key);
@@ -15671,8 +15737,18 @@
           stopNailAutoRefresh();
           clearNailFocusSelection();
           setNailSelectMode(false);
+          setNailSettingsOpen(false);
           closeNailNoticeDrawer();
         }
+      }
+
+      function setNailSettingsOpen(open) {
+        const pop = document.getElementById("nailSettingsPopover");
+        const btn = document.getElementById("nailSettingsBtn");
+        if (!pop) return;
+        const next = !!open;
+        pop.hidden = !next;
+        if (btn) btn.setAttribute("aria-expanded", next ? "true" : "false");
       }
 
       function openNailDrawerAtSymbol(symbol) {
@@ -19231,7 +19307,7 @@
           }
           if (nailSelectMode) {
             const card = event.target.closest(".nail-kcard[data-nail-symbol]");
-            if (card && !event.target.closest("#nailBatchBar, .nail-head, .nail-rising-row, .nail-form")) {
+            if (card && !event.target.closest("#nailBatchBar, .nail-head, .nail-rising-row, .nail-settings-popover, .nail-form")) {
               event.preventDefault();
               event.stopPropagation();
               toggleNailSelectSymbol(card.getAttribute("data-nail-symbol"));
@@ -19269,7 +19345,7 @@
           if (!NAIL_BROWSE_MASK_ENABLED || !nailBrowseMaskSession) return;
           if (
             event.target.closest(
-              "button, input, textarea, a, select, .nail-check, .nail-form, .nail-head, .nail-rising-row, #nailBatchBar",
+              "button, input, textarea, a, select, .nail-check, .nail-form, .nail-head, .nail-rising-row, .nail-settings-popover, #nailBatchBar",
             )
           ) {
             return;
@@ -19364,6 +19440,27 @@
           }
         });
       }
+      const nailSettingsBtn = document.getElementById("nailSettingsBtn");
+      if (nailSettingsBtn) {
+        nailSettingsBtn.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const pop = document.getElementById("nailSettingsPopover");
+          setNailSettingsOpen(!!(pop && pop.hidden));
+        });
+      }
+      document.addEventListener("click", (event) => {
+        const pop = document.getElementById("nailSettingsPopover");
+        if (!pop || pop.hidden) return;
+        if (
+          event.target.closest(
+            "#nailSettingsPopover, #nailSettingsBtn",
+          )
+        ) {
+          return;
+        }
+        setNailSettingsOpen(false);
+      });
       const nailRisingFilter = document.getElementById("nailRisingFilter");
       if (nailRisingFilter) {
         syncNailRisingFilterUi();
@@ -19459,12 +19556,6 @@
       if (nailNoticeMask) {
         nailNoticeMask.addEventListener("click", () => {
           closeNailNoticeDrawer();
-        });
-      }
-      const nailNoticePeekBar = document.getElementById("nailNoticePeekBar");
-      if (nailNoticePeekBar) {
-        nailNoticePeekBar.addEventListener("click", () => {
-          void openNailNoticeDrawer({ skipMarkRead: true });
         });
       }
       const nailNoticeRefreshBtn = document.getElementById(
