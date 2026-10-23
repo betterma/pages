@@ -2404,6 +2404,35 @@
         font-weight: 600;
         cursor: pointer;
       }
+      .nail-notice-delta-filter {
+        display: inline-flex;
+        align-items: center;
+        gap: 0;
+        margin-right: auto;
+        border-radius: 8px;
+        overflow: hidden;
+        background: var(--fill);
+      }
+      .nail-notice-delta-filter button {
+        border: none;
+        background: transparent;
+        color: var(--secondary);
+        height: 32px;
+        padding: 0 10px;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .nail-notice-delta-filter button.is-active {
+        background: color-mix(in srgb, var(--label) 12%, transparent);
+        color: var(--label);
+      }
+      .nail-notice-delta-filter button[data-notice-delta-filter="up"].is-active {
+        color: #3a7fc4;
+      }
+      .nail-notice-delta-filter button[data-notice-delta-filter="down"].is-active {
+        color: #c45c5c;
+      }
       .nail-notice-list {
         flex: 1 1 auto;
         min-height: 0;
@@ -2428,6 +2457,9 @@
         background: color-mix(in srgb, var(--elevated) 88%, transparent);
         padding: 6px 8px 8px;
         min-width: 0;
+      }
+      .nail-notice-card.is-delta-filtered {
+        display: none;
       }
       .nail-notice-card-top {
         display: flex;
@@ -5463,6 +5495,27 @@
             <p id="nailNoticeMeta">近 24 小时 · 最新在上</p>
           </div>
           <div class="nail-notice-head-actions">
+            <div
+              class="nail-notice-delta-filter"
+              id="nailNoticeDeltaFilter"
+              role="group"
+              aria-label="按涨跌筛选"
+              title="相对快照水位：全部 / 蓝涨 / 红跌"
+            >
+              <button
+                type="button"
+                data-notice-delta-filter="all"
+                class="is-active"
+              >
+                全部
+              </button>
+              <button type="button" data-notice-delta-filter="up" title="相对水位上涨（蓝）">
+                蓝
+              </button>
+              <button type="button" data-notice-delta-filter="down" title="相对水位下跌（红）">
+                红
+              </button>
+            </div>
             <button type="button" id="nailNoticeRefreshBtn" title="刷新通知列表">
               刷新
             </button>
@@ -13743,7 +13796,12 @@
           let splitAt = NaN;
           let belowColor = base;
           let aboveColor = base;
-          if (useAlert) {
+          if (useAlert && inDelta) {
+            // 同根叠色：水位上荧光绿，水位下蓝/红（相对快照涨跌）。
+            splitAt = alertPrice;
+            aboveColor = NAIL_ALERT_GREEN;
+            belowColor = deltaUp ? NAIL_DELTA_BLUE : NAIL_DELTA_RED;
+          } else if (useAlert) {
             splitAt = alertPrice;
             belowColor = base;
             aboveColor = NAIL_ALERT_GREEN;
@@ -15423,6 +15481,7 @@
       let nailGreenNoticesReadAt = 0;
       let nailNoticeMode = "closed"; // closed | open
       let nailNoticeChartsBusy = false;
+      let nailNoticeDeltaFilter = "all"; // all | up | down
 
       function nailGreenUnreadCount() {
         if (
@@ -15532,6 +15591,8 @@
             jumpNailNoticeToSymbol(btn.getAttribute("data-notice-jump"));
           });
         });
+        syncNailNoticeDeltaFilterUi();
+        applyNailNoticeDeltaFilter();
         void paintNailNoticeCharts();
       }
 
@@ -15544,6 +15605,64 @@
           up: last > base,
           text: `${pct > 0 ? "+" : ""}${pct.toFixed(2)}%`,
         };
+      }
+
+      function syncNailNoticeDeltaFilterUi() {
+        const root = document.getElementById("nailNoticeDeltaFilter");
+        if (!root) return;
+        root.querySelectorAll("[data-notice-delta-filter]").forEach((btn) => {
+          const mode = btn.getAttribute("data-notice-delta-filter");
+          btn.classList.toggle("is-active", mode === nailNoticeDeltaFilter);
+        });
+      }
+
+      function applyNailNoticeDeltaFilter() {
+        const listEl = document.getElementById("nailNoticeList");
+        if (!listEl) return;
+        const mode = nailNoticeDeltaFilter;
+        let visible = 0;
+        listEl.querySelectorAll(".nail-notice-card").forEach((card) => {
+          const dir = card.getAttribute("data-notice-dir") || "";
+          const hide =
+            mode === "up"
+              ? dir !== "up"
+              : mode === "down"
+                ? dir !== "down"
+                : false;
+          // 尚未算出涨跌时：筛选开启则先藏，避免闪一下再消失。
+          const pending = !dir && mode !== "all";
+          const filtered = hide || pending;
+          card.classList.toggle("is-delta-filtered", filtered);
+          if (!filtered) visible += 1;
+        });
+        let emptyEl = listEl.querySelector(".nail-notice-filter-empty");
+        if (mode !== "all" && visible === 0 && listEl.querySelector(".nail-notice-card")) {
+          if (!emptyEl) {
+            emptyEl = document.createElement("div");
+            emptyEl.className = "nail-notice-empty nail-notice-filter-empty";
+            listEl.appendChild(emptyEl);
+          }
+          emptyEl.textContent =
+            mode === "up" ? "暂无上涨（蓝）通知" : "暂无下跌（红）通知";
+          emptyEl.hidden = false;
+        } else if (emptyEl) {
+          emptyEl.hidden = true;
+        }
+        const metaEl = document.getElementById("nailNoticeMeta");
+        const total = (nailGreenNotices || []).length;
+        if (metaEl && total) {
+          metaEl.textContent =
+            mode === "all"
+              ? `近 24 小时 · ${total} 条 · 最新在上`
+              : `近 24 小时 · 显示 ${visible}/${total} · ${mode === "up" ? "蓝" : "红"}`;
+        }
+      }
+
+      function setNailNoticeDeltaFilter(mode) {
+        nailNoticeDeltaFilter =
+          mode === "up" || mode === "down" ? mode : "all";
+        syncNailNoticeDeltaFilterUi();
+        applyNailNoticeDeltaFilter();
       }
 
       async function paintNailNoticeCharts() {
@@ -15577,8 +15696,9 @@
               const deltaEl = canvas
                 .closest(".nail-notice-card")
                 ?.querySelector("[data-notice-delta]");
+              const card = canvas.closest(".nail-notice-card");
+              const delta = formatNoticeDeltaPct(alertPrice, latestClose);
               if (deltaEl) {
-                const delta = formatNoticeDeltaPct(alertPrice, latestClose);
                 if (delta) {
                   deltaEl.textContent = delta.text;
                   deltaEl.classList.toggle("is-up", delta.up);
@@ -15587,6 +15707,13 @@
                   deltaEl.textContent = "";
                   deltaEl.classList.remove("is-up", "is-down");
                 }
+              }
+              if (card) {
+                card.setAttribute(
+                  "data-notice-dir",
+                  delta ? (delta.up ? "up" : "down") : "flat",
+                );
+                applyNailNoticeDeltaFilter();
               }
               drawKline(
                 canvas,
@@ -15620,6 +15747,7 @@
             },
           );
           await Promise.all(workers);
+          applyNailNoticeDeltaFilter();
         } finally {
           nailNoticeChartsBusy = false;
         }
@@ -19578,6 +19706,19 @@
       if (nailNoticeMask) {
         nailNoticeMask.addEventListener("click", () => {
           closeNailNoticeDrawer();
+        });
+      }
+      const nailNoticeDeltaFilterEl = document.getElementById(
+        "nailNoticeDeltaFilter",
+      );
+      if (nailNoticeDeltaFilterEl) {
+        syncNailNoticeDeltaFilterUi();
+        nailNoticeDeltaFilterEl.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-notice-delta-filter]");
+          if (!btn) return;
+          setNailNoticeDeltaFilter(
+            btn.getAttribute("data-notice-delta-filter"),
+          );
         });
       }
       const nailNoticeRefreshBtn = document.getElementById(
