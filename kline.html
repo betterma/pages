@@ -2480,28 +2480,104 @@
         margin: 4px 0 0;
         font-size: 11px;
         color: var(--secondary);
+        white-space: pre-wrap;
         word-break: break-word;
       }
-      .nail-note-input {
+      .nail-note-editor {
+        position: fixed;
+        inset: 0;
+        z-index: 240;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(0, 0, 0, 0.58);
+      }
+      .nail-note-editor[hidden] {
+        display: none !important;
+      }
+      .nail-note-editor-panel {
+        width: min(420px, 100%);
+        padding: 18px;
+        border: 1px solid var(--separator);
+        border-radius: 16px;
+        background: var(--grouped);
+        color: var(--label);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+      }
+      .nail-note-editor-panel h3 {
+        margin: 0 0 12px;
+        font-size: 16px;
+      }
+      .nail-note-editor-panel textarea {
         display: block;
         width: 100%;
-        margin: 4px 0 0;
-        padding: 3px 6px;
-        border: 1px solid color-mix(in srgb, var(--border, #333) 80%, transparent);
-        border-radius: 4px;
-        background: color-mix(in srgb, var(--card, #1a1b1e) 70%, transparent);
-        color: var(--text, #e8e8ea);
-        font-size: 11px;
-        line-height: 1.3;
-        box-sizing: border-box;
+        min-height: 96px;
+        padding: 10px;
+        border: 1px solid var(--separator);
+        border-radius: 10px;
+        background: var(--bg);
+        color: var(--label);
+        font: inherit;
+        font-size: 14px;
+        resize: vertical;
       }
-      .nail-note-input:focus {
-        outline: none;
-        border-color: color-mix(in srgb, var(--accent, #6af) 55%, transparent);
+      .nail-note-editor-panel textarea:focus {
+        outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
       }
-      .nail-note-input::placeholder {
+      .nail-note-time-options {
+        display: grid;
+        gap: 8px;
+        margin: 14px 0;
+        padding: 0;
+        border: 0;
         color: var(--secondary);
-        opacity: 0.7;
+        font-size: 13px;
+      }
+      .nail-note-time-options legend {
+        margin-bottom: 8px;
+        color: var(--label);
+        font-weight: 650;
+      }
+      .nail-note-time-options label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .nail-note-editor-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .nail-note-editor-actions button {
+        min-height: 36px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 9px;
+        background: var(--fill);
+        color: var(--label);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .nail-note-editor-actions button.is-primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .nail-note-editor-actions button:disabled {
+        opacity: 0.55;
+      }
+      #nailNoteEditorSave.is-loading::after {
+        content: "";
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        margin-left: 8px;
+        border: 2px solid color-mix(in srgb, currentColor 35%, transparent);
+        border-top-color: currentColor;
+        border-radius: 50%;
+        vertical-align: -2px;
+        animation: card-action-spin 0.7s linear infinite;
       }
       .nail-exit-tag {
         display: inline-block;
@@ -5383,6 +5459,42 @@
     </div>
 
     <div
+      id="nailNoteEditor"
+      class="nail-note-editor"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="nailNoteEditorTitle"
+      hidden
+    >
+      <form class="nail-note-editor-panel" id="nailNoteEditorForm">
+        <h3 id="nailNoteEditorTitle">编辑便签</h3>
+        <textarea
+          id="nailNoteEditorText"
+          maxlength="40"
+          placeholder="价格和备注，例如 0.01 到位观察"
+          aria-label="便签内容"
+        ></textarea>
+        <fieldset class="nail-note-time-options">
+          <legend>修改后 K 线便签起始时间</legend>
+          <label>
+            <input type="radio" name="nailNoteTimeMode" value="original" />
+            保留原时间（默认）
+          </label>
+          <label>
+            <input type="radio" name="nailNoteTimeMode" value="current" />
+            按照此刻时间
+          </label>
+        </fieldset>
+        <div class="nail-note-editor-actions">
+          <button type="button" id="nailNoteEditorCancel">取消</button>
+          <button type="submit" id="nailNoteEditorSave" class="is-primary">
+            保存
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div
       id="klineZoomGate"
       class="kline-zoom-gate"
       hidden
@@ -5641,6 +5753,18 @@
         nailRisingFilterOn = true;
       }
       const NAIL_SORT_KEY = "kline-nail-sort-v1";
+      const NAIL_NOTE_TIME_MODE_KEY = "kline-nail-note-time-mode-v1";
+      let nailNoteTimeMode = "original";
+      let nailNoteEditorSymbol = null;
+      let nailNoteEditorSaving = false;
+      try {
+        const savedNoteTimeMode = localStorage.getItem(
+          NAIL_NOTE_TIME_MODE_KEY,
+        );
+        if (savedNoteTimeMode === "current") nailNoteTimeMode = "current";
+      } catch (_) {
+        nailNoteTimeMode = "original";
+      }
       /** alertGreen/change24h are display-only sorts; order preserves drag order. */
       let nailSortMode = "order";
       const NAIL_AUTO_REFRESH_KEY = "kline-nail-auto-refresh-v1";
@@ -6927,7 +7051,7 @@
        */
       function notePeriodHighEgg(symbol, atHigh, peak) {
         const key = eggSymbolKey(symbol);
-        if (!key) return false;
+        if (!key) return;
         if (!cardEggState.periodHigh) cardEggState.periodHigh = {};
         if (!cardEggState.periodHighDismiss) cardEggState.periodHighDismiss = {};
         let changed = false;
@@ -15538,7 +15662,7 @@
               veil,
               `</div>`,
               note
-                ? `<input type="text" class="nail-note-input" data-nail-note="${symbol}" maxlength="40" value="${escapeHtml(note)}" placeholder="便签…" aria-label="便签 ${label}" />`
+                ? `<p class="nail-note" data-nail-note-display="${symbol}">${escapeHtml(note)}</p>`
                 : "",
               check,
               `</article>`,
@@ -15919,13 +16043,6 @@
         }
       }
 
-      function nailNoteInputHtml(symbol, label, note) {
-        const text = String(note || "").trim();
-        const sym = escapeHtml(symbol);
-        const lab = escapeHtml(label || symbol);
-        return `<input type="text" class="nail-note-input" data-nail-note="${sym}" maxlength="40" value="${escapeHtml(text)}" placeholder="便签…" aria-label="便签 ${lab}" />`;
-      }
-
       function openNailNoteEditor(symbol) {
         const key = WatchFavorites.nailSymbolKey
           ? WatchFavorites.nailSymbolKey(symbol)
@@ -15940,85 +16057,69 @@
           showToast("钉子列表找不到该币");
           return;
         }
-        let input = card.querySelector("input[data-nail-note]");
-        if (!input) {
-          const item = (nailItems || []).find(
-            (row) => String(row.symbol || "").toUpperCase() === key,
-          );
-          const wrap = card.querySelector(".nail-kline-wrap");
-          const host = document.createElement("div");
-          host.innerHTML = nailNoteInputHtml(
-            key,
-            (item && item.label) || key.replace(/USDT$/i, ""),
-            (item && item.note) || "",
-          );
-          input = host.firstElementChild;
-          if (wrap) wrap.after(input);
-          else card.appendChild(input);
-        }
-        input.focus();
-        input.select();
-      }
-
-      function removeEmptyNailNoteInput(input) {
-        if (!input || !(input instanceof HTMLInputElement)) return;
-        if (String(input.value || "").trim()) return;
-        const key = String(input.getAttribute("data-nail-note") || "")
-          .trim()
-          .toUpperCase();
-        const current = (nailItems || []).find(
-          (item) => String(item.symbol || "").toUpperCase() === key,
+        const item = (nailItems || []).find(
+          (row) => String(row.symbol || "").toUpperCase() === key,
         );
-        if (current && String(current.note || "").trim()) return;
-        input.remove();
+        if (!item) {
+          showToast("钉子列表找不到该币");
+          return;
+        }
+        const editor = document.getElementById("nailNoteEditor");
+        const title = document.getElementById("nailNoteEditorTitle");
+        const text = document.getElementById("nailNoteEditorText");
+        if (!editor || !text) return;
+        nailNoteEditorSymbol = key;
+        if (title) title.textContent = `编辑 ${key.replace(/USDT$/i, "")} 便签`;
+        text.value = String(item.note || "").trim();
+        editor.querySelectorAll('input[name="nailNoteTimeMode"]').forEach((radio) => {
+          radio.checked = radio.value === nailNoteTimeMode;
+        });
+        editor.hidden = false;
+        requestAnimationFrame(() => {
+          text.focus();
+          text.setSelectionRange(text.value.length, text.value.length);
+        });
       }
 
-      async function saveNailNote(symbol, note) {
+      function closeNailNoteEditor() {
+        if (nailNoteEditorSaving) return;
+        const editor = document.getElementById("nailNoteEditor");
+        if (editor) editor.hidden = true;
+        nailNoteEditorSymbol = null;
+      }
+
+      async function saveNailNote(symbol, note, timeMode) {
         const key = WatchFavorites.nailSymbolKey
           ? WatchFavorites.nailSymbolKey(symbol)
           : String(symbol || "")
               .trim()
               .toUpperCase();
-        if (!key) return;
+        if (!key) return false;
         const text = String(note || "")
           .trim()
           .slice(0, 40);
         const current = (nailItems || []).find(
           (item) => String(item.symbol || "").toUpperCase() === key,
         );
-        if (!current) return;
-        if (String(current.note || "").trim() === text) {
-          if (!text) {
-            const input = document.querySelector(
-              `#nailList input[data-nail-note="${key}"]`,
-            );
-            removeEmptyNailNoteInput(input);
-          }
-          return;
-        }
-        let noteAt;
-        if (text && String(current.note || "").trim()) {
-          const keepOriginalTime = !window.confirm(
-            "保存此便签修改？\n\n确定：以此刻时间为起点\n取消：保留原时间",
-          );
-          noteAt = keepOriginalTime
+        if (!current) return false;
+        if (String(current.note || "").trim() === text) return true;
+        const hasExistingNote = !!String(current.note || "").trim();
+        const noteAt = text
+          ? hasExistingNote && timeMode !== "current"
             ? Number(current.noteAt) || 0
-            : Date.now();
-        } else {
-          noteAt = text ? Date.now() : 0;
-        }
+            : Date.now()
+          : 0;
         try {
-          await persistNails(
+          const result = await persistNails(
             (list) => WatchFavorites.setNailNote(list, key, text, { noteAt }),
             `Update nail note ${key.replace(/USDT$/i, "")}`,
             { quiet: true, loadingText: "保存便签…" },
           );
-          if (isNailDrawerOpen()) {
-            void refreshSingleNailKline(key);
-          }
+          return !!result;
         } catch (error) {
           console.warn(error);
           showToast(error.message || "便签保存失败");
+          return false;
         }
       }
 
@@ -18422,39 +18523,87 @@
           event.stopPropagation();
           unveilNailBrowseCard(card.getAttribute("data-nail-symbol"));
         });
-        nailDrawer.addEventListener(
-          "focusout",
-          (event) => {
-            const input = event.target.closest("input[data-nail-note]");
-            if (!input) return;
-            const text = String(input.value || "").trim();
-            if (text) {
-              void saveNailNote(input.getAttribute("data-nail-note"), text);
-              return;
-            }
-            void saveNailNote(input.getAttribute("data-nail-note"), "");
-            // 等保存/短路后再清掉空输入，避免占位
-            requestAnimationFrame(() => removeEmptyNailNoteInput(input));
-          },
-          true,
-        );
-        nailDrawer.addEventListener("keydown", (event) => {
-          const input = event.target.closest("input[data-nail-note]");
-          if (!input) return;
-          if (event.key === "Enter") {
-            event.preventDefault();
-            input.blur();
+      }
+      const nailNoteEditor = document.getElementById("nailNoteEditor");
+      const nailNoteEditorForm = document.getElementById("nailNoteEditorForm");
+      const nailNoteEditorCancel = document.getElementById(
+        "nailNoteEditorCancel",
+      );
+      const nailNoteEditorSave = document.getElementById("nailNoteEditorSave");
+      const nailNoteEditorText = document.getElementById("nailNoteEditorText");
+      if (nailNoteEditorCancel) {
+        nailNoteEditorCancel.addEventListener("click", closeNailNoteEditor);
+      }
+      if (nailNoteEditor) {
+        nailNoteEditor.addEventListener("click", (event) => {
+          if (event.target === nailNoteEditor) closeNailNoteEditor();
+        });
+        nailNoteEditor
+          .querySelectorAll('input[name="nailNoteTimeMode"]')
+          .forEach((radio) => {
+            radio.addEventListener("change", () => {
+              if (!radio.checked) return;
+              nailNoteTimeMode =
+                radio.value === "current" ? "current" : "original";
+              try {
+                localStorage.setItem(
+                  NAIL_NOTE_TIME_MODE_KEY,
+                  nailNoteTimeMode,
+                );
+              } catch (error) {
+                console.warn("Unable to save nail note time preference", error);
+                showToast("无法保存便签时间选项偏好");
+              }
+            });
+          });
+      }
+      if (nailNoteEditorForm) {
+        nailNoteEditorForm.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          if (!nailNoteEditorSymbol || nailNoteEditorSaving) return;
+          const mode =
+            nailNoteEditor.querySelector(
+              'input[name="nailNoteTimeMode"]:checked',
+            )?.value || nailNoteTimeMode;
+          nailNoteEditorSaving = true;
+          nailNoteEditor.setAttribute("aria-busy", "true");
+          if (nailNoteEditorSave) {
+            nailNoteEditorSave.disabled = true;
+            nailNoteEditorSave.classList.add("is-loading");
+            nailNoteEditorSave.textContent = "保存中";
           }
-          if (event.key === "Escape") {
-            event.preventDefault();
-            const key = String(input.getAttribute("data-nail-note") || "")
-              .trim()
-              .toUpperCase();
-            const current = (nailItems || []).find(
-              (item) => String(item.symbol || "").toUpperCase() === key,
+          if (nailNoteEditorCancel) nailNoteEditorCancel.disabled = true;
+          if (nailNoteEditorText) nailNoteEditorText.disabled = true;
+          nailNoteEditor
+            .querySelectorAll('input[name="nailNoteTimeMode"]')
+            .forEach((radio) => {
+              radio.disabled = true;
+            });
+          try {
+            const saved = await saveNailNote(
+              nailNoteEditorSymbol,
+              nailNoteEditorText ? nailNoteEditorText.value : "",
+              mode,
             );
-            input.value = current ? String(current.note || "") : "";
-            input.blur();
+            if (saved) {
+              nailNoteEditorSaving = false;
+              closeNailNoteEditor();
+            }
+          } finally {
+            nailNoteEditorSaving = false;
+            nailNoteEditor.removeAttribute("aria-busy");
+            if (nailNoteEditorSave) {
+              nailNoteEditorSave.disabled = false;
+              nailNoteEditorSave.classList.remove("is-loading");
+              nailNoteEditorSave.textContent = "保存";
+            }
+            if (nailNoteEditorCancel) nailNoteEditorCancel.disabled = false;
+            if (nailNoteEditorText) nailNoteEditorText.disabled = false;
+            nailNoteEditor
+              .querySelectorAll('input[name="nailNoteTimeMode"]')
+              .forEach((radio) => {
+                radio.disabled = false;
+              });
           }
         });
       }
@@ -18686,6 +18835,12 @@
       });
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
+          const nailNoteEditor = document.getElementById("nailNoteEditor");
+          if (nailNoteEditor && !nailNoteEditor.hidden) {
+            event.preventDefault();
+            closeNailNoteEditor();
+            return;
+          }
           if (isKlineZoomOpen()) {
             closeKlineZoom();
             return;
