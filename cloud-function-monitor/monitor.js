@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 const https = require('https');
-const { getObjectJson, putObjectJson, obsConfig } = require('./obs-client');
 
 const CONFIG = {
   GITHUB_REPO: process.env.GITHUB_REPO || 'betterma/pages',
@@ -11,7 +10,7 @@ const CONFIG = {
   GITHUB_API: 'https://api.github.com',
   GITHUB_TOKEN: process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '',
   SNAPSHOT_INTERVAL: 15 * 60 * 1000,
-  // OBS 完整档：约 3 天全市场快照（云函数自用 / 备份）。
+  // 内存侧历史上限（写入 GitHub 前还会按 GH_HISTORY_MS 再裁）。
   HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000,
   // GitHub 热库：近 N 小时；价格只留观察池/榜前/盯住/钉子；名次用紧凑 r[]（前 N 名，冲榜雷达）。
   GH_HISTORY_MS: Number(
@@ -22,16 +21,12 @@ const CONFIG = {
   // 紧凑名次 r[] 只保留前 N 名（写入全市场会撑爆 900KB）；冲榜列表通常 ≤100。
   GH_RANK_LIST_KEEP: Number(process.env.GH_RANK_LIST_KEEP || 150),
   GH_MAX_BYTES: Number(process.env.GH_MAX_BYTES || 900 * 1024),
-  // OBS 默认关闭：页面/notify 只读 GitHub；云函数状态也优先 GitHub。
-  OBS_WRITE: String(process.env.OBS_WRITE || '0') === '1',
-  // OBS_READ=1：GitHub 失败时读 OBS。OBS_BOOTSTRAP=1：仅当 GitHub 空/404 时用 OBS 种子一次。
-  OBS_READ: String(process.env.OBS_READ || '0') === '1',
-  OBS_BOOTSTRAP: String(process.env.OBS_BOOTSTRAP || '1') === '1',
+  // 关注币若历史快照缺价：用币安 15m K 线回填（覆盖 4h 窗口 + 余量）。
+  GH_BACKFILL_MS: Number(process.env.GH_BACKFILL_MS || 6 * 60 * 60 * 1000),
+  GH_BACKFILL_CONCURRENCY: Number(process.env.GH_BACKFILL_CONCURRENCY || 4),
   TOP20: 20,
   WATCH_POOL_RANK: 30,
   MAX_EVENTS: 300,
-  // Store all USDT symbols in each OBS snapshot (no Top-N trim).
-  // File size stays bounded by HISTORY_DURATION (~3 days of 15m snaps).
   DURATION_MS: {
     '15m': 15 * 60 * 1000,
     '30m': 30 * 60 * 1000,
@@ -347,7 +342,7 @@ async function loadPinSymbols() {
           : String((item && item.symbol) || '')
               .trim()
               .toUpperCase();
-      if (symbol) set.add(symbol);
+      if (symbol) set.add(symbol.endsWith('USDT') ? symbol : `${symbol}USDT`);
     });
     console.log(`Loaded pins ${set.size} symbols for GitHub slim keep-set`);
     return set;
@@ -429,12 +424,10 @@ function hydrateWatchHistory(history) {
   return (Array.isArray(history) ? history : []).map(hydrateWatchSnap);
 }
 
-/**
- * GitHub 热库：短历史 + 少量币种价格 + 紧凑名次 r[]（前 N 名，冲榜雷达）。
- */
-function buildGithubSlimState(fullState, marketMap, extraSymbols) {
+/** 热库价格 keep 集：观察池 ∪ 盯/钉 ∪ 榜前 N。 */
+function collectKeepSymbols(fullState, marketMap, extraSymbols) {
   const keep = new Set();
-  for (const symbol of fullState.watchPool || []) {
+  for (const symbol of (fullState && fullState.watchPool) || []) {
     const key = String(symbol || '')
       .trim()
       .toUpperCase();
@@ -452,6 +445,132 @@ function buildGithubSlimState(fullState, marketMap, extraSymbols) {
     Number(CONFIG.GH_SLIM_RANK_KEEP) || 120,
   );
   ranked.slice(0, rankKeep).forEach((symbol) => keep.add(symbol));
+  return { keep, rankKeep };
+}
+
+function priceFromKlines(klines, timestamp) {
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts) || !Array.isArray(klines) || !klines.length) {
+    return null;
+  }
+  let best = null;
+  for (let i = 0; i < klines.length; i += 1) {
+    const openTime = Number(klines[i][0]);
+    const close = Number(klines[i][4]);
+    if (!Number.isFinite(openTime) || !Number.isFinite(close)) continue;
+    if (openTime <= ts) best = close;
+    else break;
+  }
+  return best;
+}
+
+async function fetchBinanceKlines(symbol, startMs, endMs) {
+  const timeoutMs = Number(process.env.BINANCE_TIMEOUT_MS) || 8000;
+  const bases = (
+    process.env.BINANCE_KLINE_URLS ||
+    [
+      'https://api.binance.com',
+      'https://data-api.binance.vision',
+    ].join(',')
+  )
+    .split(',')
+    .map((item) => item.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
+  let lastError = null;
+  for (const base of bases) {
+    const url =
+      `${base}/api/v3/klines?symbol=${encodeURIComponent(symbol)}` +
+      `&interval=15m&startTime=${startMs}&endTime=${endMs}&limit=1000`;
+    try {
+      const response = await requestJson(url, { timeout: timeoutMs });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const json = await response.json();
+      if (!Array.isArray(json)) throw new Error('klines not array');
+      return json;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error(`klines failed for ${symbol}`);
+}
+
+async function mapPool(items, concurrency, worker) {
+  const list = Array.isArray(items) ? items : [];
+  const limit = Math.max(1, Number(concurrency) || 1);
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, list.length) }, async () => {
+    while (cursor < list.length) {
+      const index = cursor;
+      cursor += 1;
+      await worker(list[index], index);
+    }
+  });
+  await Promise.all(runners);
+}
+
+/**
+ * 关注币冲进 keep 时，旧 slim 快照可能没有它的价。
+ * 用币安 15m K 线把 lookback 内缺价补上，保证 4h 窗口涨跌立即可用。
+ */
+async function backfillKeepPricesInHistory(history, symbols, lookbackMs) {
+  const snaps = (Array.isArray(history) ? history : []).filter(
+    (snap) => Number(snap && snap.timestamp) >= Date.now() - lookbackMs,
+  );
+  if (!snaps.length) return { fetched: 0, filled: 0 };
+
+  const need = [];
+  for (const symbol of symbols || []) {
+    const key = String(symbol || '')
+      .trim()
+      .toUpperCase();
+    if (!key) continue;
+    const missing = snaps.some(
+      (snap) => !Number.isFinite(Number(snap.prices && snap.prices[key])),
+    );
+    if (missing) need.push(key);
+  }
+  if (!need.length) return { fetched: 0, filled: 0 };
+
+  const startMs = Date.now() - lookbackMs - CONFIG.SNAPSHOT_INTERVAL;
+  const endMs = Date.now();
+  let filled = 0;
+  await mapPool(need, CONFIG.GH_BACKFILL_CONCURRENCY, async (symbol) => {
+    try {
+      const klines = await fetchBinanceKlines(symbol, startMs, endMs);
+      if (!klines.length) return;
+      for (const snap of snaps) {
+        if (!snap.prices || typeof snap.prices !== 'object') snap.prices = {};
+        if (Number.isFinite(Number(snap.prices[symbol]))) continue;
+        const price = priceFromKlines(klines, snap.timestamp);
+        if (Number.isFinite(price)) {
+          snap.prices[symbol] = price;
+          filled += 1;
+        }
+      }
+    } catch (error) {
+      console.warn(
+        `backfill ${symbol} failed: ${error && error.message ? error.message : error}`,
+      );
+    }
+  });
+  console.log(
+    `Backfilled keep prices · symbols=${need.length} · cells=${filled} · lookback≈${Math.round(lookbackMs / 3600000)}h`,
+  );
+  return { fetched: need.length, filled };
+}
+
+/**
+ * GitHub 热库：短历史 + 少量币种价格 + 紧凑名次 r[]（前 N 名，冲榜雷达）。
+ */
+function buildGithubSlimState(fullState, marketMap, extraSymbols) {
+  const { keep, rankKeep } = collectKeepSymbols(
+    fullState,
+    marketMap,
+    extraSymbols,
+  );
 
   const historyMs = Number(CONFIG.GH_HISTORY_MS) || 48 * 60 * 60 * 1000;
   const rankListKeep = Math.max(
@@ -486,6 +605,9 @@ function buildGithubSlimState(fullState, marketMap, extraSymbols) {
     watchPool: Array.isArray(fullState.watchPool)
       ? fullState.watchPool.slice()
       : [],
+    // Top20 去重态必须进热库，否则同一窗口每 15 分钟会重复判定进入榜。
+    alertState: compactAlertState(fullState.alertState),
+    events: Array.isArray(fullState.events) ? fullState.events.slice(0, CONFIG.MAX_EVENTS) : [],
     selectedDimension: fullState.selectedDimension || CONFIG.SELECTED_DIMENSION,
     savedAt: Number(fullState.savedAt) || Date.now(),
     source: 'github-slim',
@@ -571,34 +693,49 @@ function slimHistory(history) {
   return history.map(slimSnapshot);
 }
 
+/** 热库只保留 top20:true；缺省即 false，避免全市场 alertState 撑爆 slim。 */
+function compactAlertState(alertState) {
+  const out = {};
+  for (const [symbol, state] of Object.entries(alertState || {})) {
+    if (state && state.top20) {
+      const key = String(symbol || '')
+        .trim()
+        .toUpperCase();
+      if (key) out[key] = { top20: true };
+    }
+  }
+  return out;
+}
+
 function evaluateTop20(history, marketMap, alertState, selectedDimension) {
   const list = ranking(marketMap);
-  const nextState = { ...alertState };
+  const prev = alertState || {};
+  const nextState = {};
   const newTop20Symbols = new Set();
+  const oldRanks = comparison(history, selectedDimension)?.ranks;
 
-  for (const symbol of list) {
-    const state = nextState[symbol] || { top20: false };
-    const currentRank = list.indexOf(symbol) + 1;
-    const oldRanks = comparison(history, selectedDimension)?.ranks;
+  for (let index = 0; index < list.length; index += 1) {
+    const symbol = list[index];
+    const currentRank = index + 1;
+    if (currentRank > CONFIG.TOP20) continue;
+
+    const wasTop20 = !!(prev[symbol] && prev[symbol].top20);
     const oldRank =
       oldRanks && Number.isFinite(Number(oldRanks[symbol]))
         ? Number(oldRanks[symbol])
         : 999;
 
-    if (currentRank > CONFIG.TOP20) {
-      state.top20 = false;
-      nextState[symbol] = state;
-      continue;
-    }
-
-    if (!state.top20 && oldRank > CONFIG.TOP20 && currentRank <= CONFIG.TOP20) {
+    // 与旧逻辑一致：仅「窗口对照时未在榜 → 现进入 Top20」触发一次；
+    // 仍在榜则保留标记，离开榜则丢弃（compact 后不再写入）。
+    if (!wasTop20 && oldRank > CONFIG.TOP20) {
       newTop20Symbols.add(symbol);
-      state.top20 = true;
-      nextState[symbol] = state;
+      nextState[symbol] = { top20: true };
+    } else if (wasTop20) {
+      nextState[symbol] = { top20: true };
     }
   }
 
-  return { alertState: nextState, newTop20Symbols };
+  return { alertState: compactAlertState(nextState), newTop20Symbols };
 }
 
 async function readGithubState() {
@@ -744,118 +881,25 @@ async function writeGithubSlimState(slimState) {
   throw lastError || new Error('GitHub slim write failed');
 }
 
-async function readObsState() {
-  const key = process.env.OBS_DATA_PATH || CONFIG.DATA_PATH || 'watch-data.json';
-  console.log(`Reading OBS state ${obsConfig().publicBase}/${key}`);
-  const parsed = await getObjectJson(key);
-  if (!parsed) {
-    console.log(`OBS state not found yet: ${key}`);
-    return {
-      history: [],
-      events: [],
-      alertState: {},
-      watchPool: [],
-      selectedDimension: CONFIG.SELECTED_DIMENSION,
-    };
+async function readMonitorState() {
+  if (!CONFIG.GITHUB_TOKEN) {
+    throw new Error(
+      'Missing GITHUB_TOKEN / GH_TOKEN — set it on the cloud function',
+    );
   }
-  console.log(
-    `Loaded OBS state · history=${Array.isArray(parsed.history) ? parsed.history.length : 0}`,
-  );
-  return {
-    history: Array.isArray(parsed.history) ? parsed.history : [],
-    events: Array.isArray(parsed.events) ? parsed.events : [],
-    alertState: parsed.alertState || {},
-    watchPool: Array.isArray(parsed.watchPool) ? parsed.watchPool : [],
-    selectedDimension: Object.prototype.hasOwnProperty.call(
-      CONFIG.DURATION_MS,
-      parsed.selectedDimension,
-    )
-      ? parsed.selectedDimension
-      : CONFIG.SELECTED_DIMENSION,
-  };
-}
-
-async function writeObsState(state) {
-  if (!CONFIG.OBS_WRITE) {
-    console.log('OBS_WRITE=0 · skip OBS put');
-    return null;
-  }
-  const key = process.env.OBS_DATA_PATH || CONFIG.DATA_PATH || 'watch-data.json';
-  await putObjectJson(key, state);
-  return key;
-}
-
-function emptyMonitorState() {
-  return {
-    history: [],
-    events: [],
-    alertState: {},
-    watchPool: [],
-    selectedDimension: CONFIG.SELECTED_DIMENSION,
-  };
-}
-
-async function tryReadObsState(label) {
   try {
-    const obs = await readObsState();
-    console.warn(`${label}`);
+    const github = await readGithubState();
     return {
-      history: hydrateWatchHistory(obs.history || []),
-      events: Array.isArray(obs.events) ? obs.events : [],
-      alertState: obs.alertState || {},
-      watchPool: Array.isArray(obs.watchPool) ? obs.watchPool : [],
-      selectedDimension: obs.selectedDimension || CONFIG.SELECTED_DIMENSION,
+      history: github.history,
+      events: github.events,
+      alertState: github.alertState,
+      watchPool: github.watchPool,
+      selectedDimension: github.selectedDimension,
     };
   } catch (error) {
-    console.warn(`OBS ${label} failed: ${error.message}`);
-    return null;
+    // 读失败直接中止，绝不空写覆盖热库。
+    throw new Error(`GitHub watch-data read failed: ${error.message}`);
   }
-}
-
-async function readMonitorState() {
-  // 1) GitHub 热库（正常路径）
-  if (CONFIG.GITHUB_TOKEN) {
-    try {
-      const github = await readGithubState();
-      const emptyHist = !Array.isArray(github.history) || !github.history.length;
-      // 仅「空文件/首次」才 OBS 种子；短暂读失败绝不用 OBS 覆盖好数据。
-      if (emptyHist && CONFIG.OBS_BOOTSTRAP) {
-        const seeded = await tryReadObsState(
-          'Seeded monitor state from OBS (GitHub empty bootstrap)',
-        );
-        if (seeded) return seeded;
-      }
-      return {
-        history: github.history,
-        events: github.events,
-        alertState: github.alertState,
-        watchPool: github.watchPool,
-        selectedDimension: github.selectedDimension,
-      };
-    } catch (error) {
-      console.warn(`GitHub read failed: ${error.message}`);
-      if (CONFIG.OBS_READ) {
-        const fallback = await tryReadObsState(
-          'Fell back to OBS (OBS_READ=1)',
-        );
-        if (fallback) return fallback;
-      }
-      // 短暂失败：空跑一轮并重写，避免用陈旧 OBS 覆盖 GitHub。
-      console.warn('Continuing with empty state after GitHub read failure');
-      return emptyMonitorState();
-    }
-  }
-
-  console.warn(
-    'GITHUB_TOKEN / GH_TOKEN missing — set it on the cloud function',
-  );
-  if (CONFIG.OBS_READ || CONFIG.OBS_BOOTSTRAP) {
-    const seeded = await tryReadObsState(
-      'Seeded monitor state from OBS (no GitHub token)',
-    );
-    if (seeded) return seeded;
-  }
-  return emptyMonitorState();
 }
 
 async function fetchBinanceTicker() {
@@ -938,9 +982,27 @@ async function runMonitorOnce() {
     }
   }
 
+  const blacklist = await loadBlacklistSymbols();
+  const [pinSymbols, nailSymbols] = await Promise.all([
+    loadPinSymbols(),
+    loadNailSymbols(),
+  ]);
+  const extraKeep = new Set([...pinSymbols, ...nailSymbols]);
+
+  // 入池/窗口涨跌前：把榜前+池+盯钉的缺价用 K 线补上，避免「币进了但没基准价」。
+  const preKeep = collectKeepSymbols(
+    { watchPool: [...watchPool] },
+    marketMap,
+    extraKeep,
+  ).keep;
+  await backfillKeepPricesInHistory(
+    history,
+    preKeep,
+    Number(CONFIG.GH_BACKFILL_MS) || 6 * 60 * 60 * 1000,
+  );
+
   const result = evaluateTop20(history, marketMap, alertState, selectedDimension);
   alertState = result.alertState;
-  const blacklist = await loadBlacklistSymbols();
   watchPool = updateWatchPool(history, marketMap, watchPool, blacklist);
   history.push(buildSnapshot(marketMap));
   history = slimHistory(pruneHistory(history));
@@ -965,23 +1027,17 @@ async function runMonitorOnce() {
   );
 
   const resultSummary = {
-    storage: CONFIG.OBS_WRITE ? 'github-slim+obs' : 'github-slim',
+    storage: 'github-slim',
     updatedAt: new Date().toISOString(),
     snapshots: history.length,
     events: events.length,
     watchPool: watchPool.size,
     bytes: encodedSize,
     githubSlim: null,
-    obs: null,
   };
 
   // 主路径：GitHub 热库（含紧凑 r[]）。
   try {
-    const [pinSymbols, nailSymbols] = await Promise.all([
-      loadPinSymbols(),
-      loadNailSymbols(),
-    ]);
-    const extraKeep = new Set([...pinSymbols, ...nailSymbols]);
     const slimState = buildGithubSlimState(nextState, marketMap, extraKeep);
     const slimBytes = Buffer.byteLength(JSON.stringify(slimState), 'utf8');
     console.log(
@@ -1003,26 +1059,6 @@ async function runMonitorOnce() {
     resultSummary.githubSlim = { error: message };
     console.warn(`GitHub slim write failed: ${message}`);
     throw error;
-  }
-
-  // 可选：OBS 备份（默认关闭）。
-  try {
-    const key = await writeObsState(nextState);
-    if (key) {
-      resultSummary.obs = {
-        bucket: obsConfig().bucket,
-        path: key,
-        publicBase: obsConfig().publicBase,
-        bytes: encodedSize,
-      };
-      console.log(
-        `Updated OBS ${resultSummary.obs.bucket}/${key} | snapshots=${history.length} | bytes=${encodedSize}`,
-      );
-    }
-  } catch (error) {
-    const message = error && error.message ? error.message : String(error);
-    resultSummary.obs = { error: message };
-    console.warn(`OBS write skipped: ${message}`);
   }
 
   return resultSummary;
