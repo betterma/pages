@@ -15,9 +15,6 @@ const {
 
 const CONFIG = {
   DATA_PATH: process.env.DATA_PATH || 'watch-data.json',
-  OBS_DATA_URL:
-    process.env.OBS_DATA_URL ||
-    'https://mpctest.obs.cn-north-4.myhuaweicloud.com/watch-data.json',
   BLACKLIST_PATH: process.env.BLACKLIST_PATH || 'watch-blacklist.json',
   PINS_PATH: process.env.PINS_PATH || 'watch-pins.json',
   WATCH_POOL_RANK: Number(process.env.WATCH_POOL_RANK || 30),

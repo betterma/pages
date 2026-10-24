@@ -13,15 +13,20 @@ const CONFIG = {
   SNAPSHOT_INTERVAL: 15 * 60 * 1000,
   // OBS 完整档：约 3 天全市场快照（云函数自用 / 备份）。
   HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000,
-  // GitHub 热库：近 N 小时；价格只留观察池/榜前/盯住；名次用紧凑 r[] 全市场（冲榜雷达）。
+  // GitHub 热库：近 N 小时；价格只留观察池/榜前/盯住/钉子；名次用紧凑 r[]（前 N 名，冲榜雷达）。
   GH_HISTORY_MS: Number(
     process.env.GH_HISTORY_MS || 48 * 60 * 60 * 1000,
   ),
-  GH_SLIM_RANK_KEEP: Number(process.env.GH_SLIM_RANK_KEEP || 80),
+  // 价格 keep 与冲榜雷达对齐，默认 120 留余量。
+  GH_SLIM_RANK_KEEP: Number(process.env.GH_SLIM_RANK_KEEP || 120),
+  // 紧凑名次 r[] 只保留前 N 名（写入全市场会撑爆 900KB）；冲榜列表通常 ≤100。
+  GH_RANK_LIST_KEEP: Number(process.env.GH_RANK_LIST_KEEP || 150),
   GH_MAX_BYTES: Number(process.env.GH_MAX_BYTES || 900 * 1024),
   // OBS 默认关闭：页面/notify 只读 GitHub；云函数状态也优先 GitHub。
-  OBS_WRITE: String(process.env.OBS_WRITE || '0') !== '0',
-  OBS_READ: String(process.env.OBS_READ || '0') !== '0',
+  OBS_WRITE: String(process.env.OBS_WRITE || '0') === '1',
+  // OBS_READ=1：GitHub 失败时读 OBS。OBS_BOOTSTRAP=1：仅当 GitHub 空/404 时用 OBS 种子一次。
+  OBS_READ: String(process.env.OBS_READ || '0') === '1',
+  OBS_BOOTSTRAP: String(process.env.OBS_BOOTSTRAP || '1') === '1',
   TOP20: 20,
   WATCH_POOL_RANK: 30,
   MAX_EVENTS: 300,
@@ -378,20 +383,21 @@ async function loadNailSymbols() {
 }
 
 /** 快照名次：优先 ranks 对象，否则紧凑 r[]（按名次排列的 symbol 列表）。 */
-function rankListFromSnap(snap) {
-  if (!snap || typeof snap !== 'object') return [];
+function rankListFromSnap(snap, limit) {
+  const cap = Math.max(0, Number(limit) || 0);
+  let list = [];
+  if (!snap || typeof snap !== 'object') return list;
   if (Array.isArray(snap.r) && snap.r.length) {
-    return snap.r
+    list = snap.r
       .map((symbol) => String(symbol || '').trim().toUpperCase())
       .filter(Boolean);
-  }
-  if (snap.ranks && typeof snap.ranks === 'object') {
-    return Object.entries(snap.ranks)
+  } else if (snap.ranks && typeof snap.ranks === 'object') {
+    list = Object.entries(snap.ranks)
       .sort((a, b) => Number(a[1]) - Number(b[1]))
       .map(([symbol]) => String(symbol || '').trim().toUpperCase())
       .filter(Boolean);
   }
-  return [];
+  return cap > 0 ? list.slice(0, cap) : list;
 }
 
 function ranksFromRankList(list) {
@@ -411,7 +417,7 @@ function hydrateWatchSnap(snap) {
     typeof snap.ranks === 'object' &&
     Object.keys(snap.ranks).length > 0;
   if (hasRanks) return snap;
-  const list = rankListFromSnap(snap);
+  const list = rankListFromSnap(snap, 0);
   if (!list.length) return snap;
   return {
     ...snap,
@@ -424,7 +430,7 @@ function hydrateWatchHistory(history) {
 }
 
 /**
- * GitHub 热库：短历史 + 少量币种价格 + 全市场紧凑名次 r[]（冲榜雷达）。
+ * GitHub 热库：短历史 + 少量币种价格 + 紧凑名次 r[]（前 N 名，冲榜雷达）。
  */
 function buildGithubSlimState(fullState, marketMap, extraSymbols) {
   const keep = new Set();
@@ -443,12 +449,18 @@ function buildGithubSlimState(fullState, marketMap, extraSymbols) {
   const ranked = ranking(marketMap || {});
   const rankKeep = Math.max(
     CONFIG.WATCH_POOL_RANK,
-    Number(CONFIG.GH_SLIM_RANK_KEEP) || 80,
+    Number(CONFIG.GH_SLIM_RANK_KEEP) || 120,
   );
   ranked.slice(0, rankKeep).forEach((symbol) => keep.add(symbol));
 
   const historyMs = Number(CONFIG.GH_HISTORY_MS) || 48 * 60 * 60 * 1000;
+  const rankListKeep = Math.max(
+    rankKeep,
+    Number(CONFIG.GH_RANK_LIST_KEEP) || 150,
+  );
   const cutoff = Date.now() - historyMs;
+  // 至少保留约 5h，避免 4h 窗口涨跌失效。
+  const minSnaps = Math.max(12, Math.ceil((5 * 60 * 60 * 1000) / CONFIG.SNAPSHOT_INTERVAL));
   let history = (Array.isArray(fullState.history) ? fullState.history : [])
     .filter((snap) => Number(snap && snap.timestamp) >= cutoff)
     .map((snap) => {
@@ -458,7 +470,7 @@ function buildGithubSlimState(fullState, marketMap, extraSymbols) {
         const price = Number(src[symbol]);
         if (Number.isFinite(price)) prices[symbol] = price;
       }
-      const r = rankListFromSnap(snap);
+      const r = rankListFromSnap(snap, rankListKeep);
       const row = {
         timestamp: Number(snap.timestamp) || 0,
         prices,
@@ -481,6 +493,7 @@ function buildGithubSlimState(fullState, marketMap, extraSymbols) {
       historyMs,
       keepCount: keep.size,
       rankKeep,
+      rankListKeep,
       snapshots: snaps.length,
       hasRankList: snaps.some((s) => Array.isArray(s.r) && s.r.length > 0),
     },
@@ -488,13 +501,27 @@ function buildGithubSlimState(fullState, marketMap, extraSymbols) {
 
   let state = pack(history);
   let bytes = Buffer.byteLength(JSON.stringify(state), 'utf8');
-  // 超限则丢最旧快照，直到落入限额（体验上只是历史略短）。
-  while (bytes > maxBytes && history.length > 12) {
+  let trimmed = false;
+  while (bytes > maxBytes && history.length > minSnaps) {
     history = history.slice(1);
     state = pack(history);
     bytes = Buffer.byteLength(JSON.stringify(state), 'utf8');
+    trimmed = true;
+  }
+  if (bytes > maxBytes) {
+    throw new Error(
+      `GitHub slim still too large after trim: ${(bytes / 1024).toFixed(1)}KB ` +
+        `(snaps=${history.length}, limit ~${(maxBytes / 1024).toFixed(0)}KB). ` +
+        `Lower GH_RANK_LIST_KEEP / GH_HISTORY_MS.`,
+    );
   }
   state.slim.bytes = bytes;
+  state.slim.trimmed = trimmed;
+  if (trimmed) {
+    console.warn(
+      `GitHub slim trimmed to ${history.length} snaps · ${(bytes / 1024).toFixed(1)}KB`,
+    );
+  }
   return state;
 }
 
@@ -552,7 +579,11 @@ function evaluateTop20(history, marketMap, alertState, selectedDimension) {
   for (const symbol of list) {
     const state = nextState[symbol] || { top20: false };
     const currentRank = list.indexOf(symbol) + 1;
-    const oldRank = comparison(history, selectedDimension)?.ranks[symbol] || 999;
+    const oldRanks = comparison(history, selectedDimension)?.ranks;
+    const oldRank =
+      oldRanks && Number.isFinite(Number(oldRanks[symbol]))
+        ? Number(oldRanks[symbol])
+        : 999;
 
     if (currentRank > CONFIG.TOP20) {
       state.top20 = false;
@@ -764,11 +795,36 @@ function emptyMonitorState() {
   };
 }
 
+async function tryReadObsState(label) {
+  try {
+    const obs = await readObsState();
+    console.warn(`${label}`);
+    return {
+      history: hydrateWatchHistory(obs.history || []),
+      events: Array.isArray(obs.events) ? obs.events : [],
+      alertState: obs.alertState || {},
+      watchPool: Array.isArray(obs.watchPool) ? obs.watchPool : [],
+      selectedDimension: obs.selectedDimension || CONFIG.SELECTED_DIMENSION,
+    };
+  } catch (error) {
+    console.warn(`OBS ${label} failed: ${error.message}`);
+    return null;
+  }
+}
+
 async function readMonitorState() {
   // 1) GitHub 热库（正常路径）
   if (CONFIG.GITHUB_TOKEN) {
     try {
       const github = await readGithubState();
+      const emptyHist = !Array.isArray(github.history) || !github.history.length;
+      // 仅「空文件/首次」才 OBS 种子；短暂读失败绝不用 OBS 覆盖好数据。
+      if (emptyHist && CONFIG.OBS_BOOTSTRAP) {
+        const seeded = await tryReadObsState(
+          'Seeded monitor state from OBS (GitHub empty bootstrap)',
+        );
+        if (seeded) return seeded;
+      }
       return {
         history: github.history,
         events: github.events,
@@ -778,30 +834,27 @@ async function readMonitorState() {
       };
     } catch (error) {
       console.warn(`GitHub read failed: ${error.message}`);
+      if (CONFIG.OBS_READ) {
+        const fallback = await tryReadObsState(
+          'Fell back to OBS (OBS_READ=1)',
+        );
+        if (fallback) return fallback;
+      }
+      // 短暂失败：空跑一轮并重写，避免用陈旧 OBS 覆盖 GitHub。
+      console.warn('Continuing with empty state after GitHub read failure');
+      return emptyMonitorState();
     }
-  } else {
-    console.warn(
-      'GITHUB_TOKEN / GH_TOKEN missing — set it on the cloud function, otherwise GitHub write will also fail',
+  }
+
+  console.warn(
+    'GITHUB_TOKEN / GH_TOKEN missing — set it on the cloud function',
+  );
+  if (CONFIG.OBS_READ || CONFIG.OBS_BOOTSTRAP) {
+    const seeded = await tryReadObsState(
+      'Seeded monitor state from OBS (no GitHub token)',
     );
+    if (seeded) return seeded;
   }
-
-  // 2) 迁移种子：即使 OBS_READ=0 也尝试读一次 OBS，便于首次切 GitHub 时带上历史。
-  try {
-    const obs = await readObsState();
-    console.warn('Seeded monitor state from OBS (one-shot bootstrap)');
-    return {
-      history: hydrateWatchHistory(obs.history || []),
-      events: Array.isArray(obs.events) ? obs.events : [],
-      alertState: obs.alertState || {},
-      watchPool: Array.isArray(obs.watchPool) ? obs.watchPool : [],
-      selectedDimension: obs.selectedDimension || CONFIG.SELECTED_DIMENSION,
-    };
-  } catch (error) {
-    console.warn(`OBS bootstrap skipped: ${error.message}`);
-  }
-
-  // 3) 空状态冷启动（本轮拉币安后会写出新的 GitHub slim）
-  console.warn('Starting monitor with empty state');
   return emptyMonitorState();
 }
 
@@ -922,10 +975,14 @@ async function runMonitorOnce() {
     obs: null,
   };
 
-  // 主路径：GitHub 热库（含紧凑全市场 r[]）。
+  // 主路径：GitHub 热库（含紧凑 r[]）。
   try {
-    const pinSymbols = await loadPinSymbols();
-    const slimState = buildGithubSlimState(nextState, marketMap, pinSymbols);
+    const [pinSymbols, nailSymbols] = await Promise.all([
+      loadPinSymbols(),
+      loadNailSymbols(),
+    ]);
+    const extraKeep = new Set([...pinSymbols, ...nailSymbols]);
+    const slimState = buildGithubSlimState(nextState, marketMap, extraKeep);
     const slimBytes = Buffer.byteLength(JSON.stringify(slimState), 'utf8');
     console.log(
       `Prepared GitHub slim · ${(slimBytes / 1024).toFixed(1)}KB · snaps=${slimState.history.length} · keep≈${slimState.slim && slimState.slim.keepCount} · rankList=${!!(slimState.slim && slimState.slim.hasRankList)}`,

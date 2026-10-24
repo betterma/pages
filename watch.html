@@ -966,7 +966,6 @@
       async function loadGithubStorage() {
         setStep("github", "loading", "正在读取观察池 watch-data（GitHub）");
         let data = null;
-        let source = "github";
         try {
           const file = await WatchFavorites.fetchJsonFile({
             repo: CONFIG.GITHUB_REPO,
@@ -1037,13 +1036,12 @@
         }
 
         const latest = history.length ? history[history.length - 1].timestamp : 0;
-        const sourceLabel = source === "github" ? "GitHub" : "OBS";
         setStep(
           "github",
           "ok",
           latest
-            ? `${sourceLabel}已加载 · ${history.length} 张快照 · 收藏 ${favorites.size} · 黑名单 ${blacklist.size} · ${formatAge(latest)}`
-            : `${sourceLabel}已加载 · 暂无快照 · 收藏 ${favorites.size} · 黑名单 ${blacklist.size}`,
+            ? `GitHub已加载 · ${history.length} 张快照 · 收藏 ${favorites.size} · 黑名单 ${blacklist.size} · ${formatAge(latest)}`
+            : `GitHub已加载 · 暂无快照 · 收藏 ${favorites.size} · 黑名单 ${blacklist.size}`,
         );
       }
 
@@ -1532,17 +1530,20 @@
       function momentum(symbol) {
         const old = comparison();
         const currentRank = ranking().indexOf(symbol) + 1;
-        if (!old || !old.ranks[symbol] || !currentRank)
+        const oldRanks = old && old.ranks && typeof old.ranks === "object" ? old.ranks : null;
+        const oldRank = oldRanks ? Number(oldRanks[symbol]) : NaN;
+        if (!old || !Number.isFinite(oldRank) || oldRank <= 0 || !currentRank)
           return { rank: null, price: null };
-        const oldPrice = old.prices[symbol];
-        const currentPrice = marketMap[symbol].price;
+        const oldPrices = old.prices && typeof old.prices === "object" ? old.prices : {};
+        const oldPrice = Number(oldPrices[symbol]);
+        const currentPrice = marketMap[symbol] && marketMap[symbol].price;
         return {
           rank: {
-            oldRank: old.ranks[symbol],
+            oldRank,
             currentRank,
-            improvement: old.ranks[symbol] - currentRank,
+            improvement: oldRank - currentRank,
           },
-          price: Number.isFinite(oldPrice)
+          price: Number.isFinite(oldPrice) && oldPrice > 0 && Number.isFinite(currentPrice)
             ? {
                 oldPrice,
                 currentPrice,

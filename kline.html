@@ -5121,7 +5121,7 @@
           id="syncPoolBtn"
           type="button"
           class="chrome-btn is-secondary"
-          title="重同步：强制拉观察池快照（GitHub 瘦身优先，OBS 回落）+ GitHub 状态"
+          title="重同步：强制拉观察池快照（GitHub 热库）+ GitHub 状态"
         >
           同步池
         </button>
@@ -5186,7 +5186,7 @@
         <span
           id="dataAsOf"
           class="data-as-of"
-          title="行情与 K 线最近一次成功刷新的本地时间。轻刷新会同步动态/企微/日志，但不拉 OBS；「同步池」才强制更新观察池快照"
+          title="行情与 K 线最近一次成功刷新的本地时间。轻刷新会同步动态/企微/日志，但不强制拉观察池；「同步池」才强制更新观察池快照"
         ></span>
       </div>
       <nav id="sectionJumpNav" class="section-jump" aria-label="分区跳转">
@@ -6022,9 +6022,8 @@
         NOTIFY_POLL_MS: 60 * 1000,
         // 切回页面：距上次成功刷新不足此时长则跳过整页重拉。
         DATA_FOCUS_REFRESH_MIN_MS: 3 * 60 * 1000,
-        // OBS watch-data（history/观察池）内存缓存；对齐 monitor ≈15min 写入。
+        // 观察池 watch-data 内存缓存；对齐 monitor ≈15min 写入。
         OBS_CACHE_MS: 15 * 60 * 1000,
-        // GitHub 瘦身过旧则回落 OBS（避免停更文件被 prune 后窗口涨跌全判失败）。
         WATCH_DATA_STALE_MS: 2 * 60 * 60 * 1000,
         // GitHub 盯/记/仓等共享状态：轻刷新跳过；重同步时才全拉。
         SHARED_STATE_CACHE_MS: 5 * 60 * 1000,
@@ -9148,7 +9147,7 @@
       }
 
       /**
-       * 观察池快照：优先 GitHub 瘦身版（monitor 双写），失败/过旧再回落 OBS 完整版。
+       * 观察池快照：只读 GitHub 热库（含紧凑名次 r[]，读入展开为 ranks）。
        */
       async function loadObsWatchData(options) {
         const force = !!(options && options.force);
@@ -18912,7 +18911,7 @@
       }
 
       async function refreshFloatTabsLight() {
-        // 三个底栏 Tab 均不依赖 OBS：企微/日志 → GitHub；动态 → 币安 15m（破点高仍走 GitHub）。
+        // 三个底栏 Tab：企微/日志 → GitHub；动态 → 币安 15m（破点高仍走 GitHub）。
         const tasks = [
           refreshNotifyFloat({ silent: true }).catch((error) => {
             console.warn("light refresh notify failed", error);
@@ -19008,7 +19007,7 @@
                 ? "WAVE 1 · 观察池 / 共享态 / 行情 并行"
                 : "WAVE 1 · 共享态 / 行情 并行（观察池可用缓存）",
             );
-            // GitHub/OBS 与币安 ticker 无依赖，并行重叠 RTT。
+            // GitHub 观察池/共享态与币安 ticker 无依赖，并行重叠 RTT。
             const storagePromise = loadGithubStorage({ force: forceObs });
             const tickerPromise = bootTrack("ticker", "币安 24h ticker", () =>
               loadBinanceTicker(),
