@@ -2567,6 +2567,38 @@
         touch-action: pan-y;
         padding: 10px 12px 16px;
       }
+      /* 24h 排序：滚动时右侧位置百分比（类阅读进度气泡） */
+      .nail-scroll-pct {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%) scale(0.96);
+        z-index: 6;
+        min-width: 2.6em;
+        padding: 10px 8px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--label) 82%, transparent);
+        color: var(--bg);
+        font-size: 12px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.02em;
+        text-align: center;
+        line-height: 1.1;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.18s ease,
+          transform 0.18s ease,
+          visibility 0.18s;
+        box-shadow: 0 6px 18px color-mix(in srgb, #000 18%, transparent);
+      }
+      .nail-scroll-pct.is-visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(-50%) scale(1);
+      }
       .nail-grid {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5468,6 +5500,14 @@
           </div>
         </form>
         <div class="nail-body" id="nailList"></div>
+        <div
+          class="nail-scroll-pct"
+          id="nailScrollPct"
+          hidden
+          aria-hidden="true"
+        >
+          0%
+        </div>
         <div class="nail-batch-bar" id="nailBatchBar" hidden>
           <span class="nail-batch-count" id="nailBatchCount">0</span>
           <button type="button" id="nailBatchSelectAllBtn">全选</button>
@@ -5556,6 +5596,14 @@
           </div>
         </div>
         <div class="nail-notice-list" id="nailNoticeList"></div>
+        <div
+          class="nail-scroll-pct"
+          id="nailNoticeScrollPct"
+          hidden
+          aria-hidden="true"
+        >
+          0%
+        </div>
       </div>
     </div>
 
@@ -15684,10 +15732,12 @@
             );
             const id = escapeHtml(item.id || `${item.symbol}:${item.openTime}`);
             const notifyPrice = Number(item.notifyPrice) || 0;
+            const kind =
+              item.kind === "首绿" || item.kind === "续绿" ? item.kind : "";
             return [
               `<article class="nail-notice-card" data-notice-id="${id}" data-notice-symbol="${symbol}">`,
               `<div class="nail-notice-card-top">`,
-              `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}</button>`,
+              `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}${kind ? ` · ${escapeHtml(kind)}` : ""}</button>`,
               `<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span>`,
               `</div>`,
               `<div class="nail-notice-meta">`,
@@ -15778,6 +15828,9 @@
           mode === "up" || mode === "down" ? mode : "all";
         syncNailNoticeDeltaFilterUi();
         applyNailNoticeDeltaFilter();
+        requestAnimationFrame(() => {
+          updateNailNoticeScrollPct({ flash: false });
+        });
       }
 
       async function paintNailNoticeCharts() {
@@ -15934,6 +15987,9 @@
         await refreshNailGreenNotices();
         renderNailNoticeList();
         setNailNoticeDrawerMode("open");
+        requestAnimationFrame(() => {
+          updateNailNoticeScrollPct({ flash: false });
+        });
         if (!opts.skipMarkRead) {
           void markNailNoticesRead();
         }
@@ -15941,6 +15997,72 @@
 
       function closeNailNoticeDrawer() {
         setNailNoticeDrawerMode("closed");
+        hideNailNoticeScrollPct(true);
+      }
+
+      let nailNoticeScrollPctHideTimer = 0;
+
+      function nailNoticeScrollPctEl() {
+        return document.getElementById("nailNoticeScrollPct");
+      }
+
+      function hideNailNoticeScrollPct(immediate) {
+        const el = nailNoticeScrollPctEl();
+        if (!el) return;
+        if (nailNoticeScrollPctHideTimer) {
+          window.clearTimeout(nailNoticeScrollPctHideTimer);
+          nailNoticeScrollPctHideTimer = 0;
+        }
+        el.classList.remove("is-visible");
+        if (immediate) {
+          el.hidden = true;
+          el.setAttribute("aria-hidden", "true");
+        } else {
+          nailNoticeScrollPctHideTimer = window.setTimeout(() => {
+            el.hidden = true;
+            el.setAttribute("aria-hidden", "true");
+            nailNoticeScrollPctHideTimer = 0;
+          }, 220);
+        }
+      }
+
+      function updateNailNoticeScrollPct(options) {
+        const opts = options || {};
+        const list = document.getElementById("nailNoticeList");
+        const el = nailNoticeScrollPctEl();
+        if (!list || !el) return;
+        const drawer = document.getElementById("nailNoticeDrawer");
+        const open =
+          drawer &&
+          !drawer.hidden &&
+          drawer.classList.contains("is-open");
+        const show = open && list.scrollHeight > list.clientHeight + 8;
+        if (!show) {
+          hideNailNoticeScrollPct(true);
+          return;
+        }
+        const max = Math.max(1, list.scrollHeight - list.clientHeight);
+        const pct = Math.max(
+          0,
+          Math.min(100, Math.round((list.scrollTop / max) * 100)),
+        );
+        el.textContent = `${pct}%`;
+        el.hidden = false;
+        el.setAttribute("aria-hidden", "false");
+        if (opts.flash !== false) {
+          el.classList.add("is-visible");
+          if (nailNoticeScrollPctHideTimer) {
+            window.clearTimeout(nailNoticeScrollPctHideTimer);
+          }
+          nailNoticeScrollPctHideTimer = window.setTimeout(() => {
+            el.classList.remove("is-visible");
+            nailNoticeScrollPctHideTimer = window.setTimeout(() => {
+              el.hidden = true;
+              el.setAttribute("aria-hidden", "true");
+              nailNoticeScrollPctHideTimer = 0;
+            }, 220);
+          }, 900);
+        }
       }
 
       function jumpNailNoticeToSymbol(symbol) {
@@ -16141,6 +16263,7 @@
           setNailSelectMode(false);
           setNailSettingsOpen(false);
           closeNailNoticeDrawer();
+          hideNailScrollPct(true);
         }
       }
 
@@ -16765,6 +16888,69 @@
           });
       }
 
+      let nailScrollPctHideTimer = 0;
+
+      function nailScrollPctEl() {
+        return document.getElementById("nailScrollPct");
+      }
+
+      function hideNailScrollPct(immediate) {
+        const el = nailScrollPctEl();
+        if (!el) return;
+        if (nailScrollPctHideTimer) {
+          window.clearTimeout(nailScrollPctHideTimer);
+          nailScrollPctHideTimer = 0;
+        }
+        el.classList.remove("is-visible");
+        if (immediate) {
+          el.hidden = true;
+          el.setAttribute("aria-hidden", "true");
+        } else {
+          nailScrollPctHideTimer = window.setTimeout(() => {
+            el.hidden = true;
+            el.setAttribute("aria-hidden", "true");
+            nailScrollPctHideTimer = 0;
+          }, 220);
+        }
+      }
+
+      function updateNailScrollPct(options) {
+        const opts = options || {};
+        const list = document.getElementById("nailList");
+        const el = nailScrollPctEl();
+        if (!list || !el) return;
+        const show =
+          nailSortMode === "change24h" &&
+          isNailDrawerOpen() &&
+          list.scrollHeight > list.clientHeight + 8;
+        if (!show) {
+          hideNailScrollPct(true);
+          return;
+        }
+        const max = Math.max(1, list.scrollHeight - list.clientHeight);
+        const pct = Math.max(
+          0,
+          Math.min(100, Math.round((list.scrollTop / max) * 100)),
+        );
+        el.textContent = `${pct}%`;
+        el.hidden = false;
+        el.setAttribute("aria-hidden", "false");
+        if (opts.flash !== false) {
+          el.classList.add("is-visible");
+          if (nailScrollPctHideTimer) {
+            window.clearTimeout(nailScrollPctHideTimer);
+          }
+          nailScrollPctHideTimer = window.setTimeout(() => {
+            el.classList.remove("is-visible");
+            nailScrollPctHideTimer = window.setTimeout(() => {
+              el.hidden = true;
+              el.setAttribute("aria-hidden", "true");
+              nailScrollPctHideTimer = 0;
+            }, 220);
+          }, 900);
+        }
+      }
+
       function setNailSortMode(mode) {
         const next =
           mode === "alertGreen" || mode === "change24h" ? mode : "order";
@@ -16777,6 +16963,8 @@
         }
         syncNailSortUi();
         renderNailDrawer();
+        if (next === "change24h") updateNailScrollPct({ flash: false });
+        else hideNailScrollPct(true);
       }
 
       /** 展示排序下只挪 DOM，避免整表重绘打断已画好的 K 线。 */
@@ -19908,6 +20096,17 @@
           setNailSortMode(btn.dataset.nailSort);
         });
       }
+      const nailListScroll = document.getElementById("nailList");
+      if (nailListScroll) {
+        nailListScroll.addEventListener(
+          "scroll",
+          () => {
+            if (nailSortMode !== "change24h") return;
+            updateNailScrollPct();
+          },
+          { passive: true },
+        );
+      }
       const nailSelectBtn = document.getElementById("nailSelectBtn");
       if (nailSelectBtn) {
         nailSelectBtn.addEventListener("click", () => {
@@ -20010,7 +20209,20 @@
           await refreshNailGreenNotices();
           renderNailNoticeList();
           showToast("通知已刷新");
+          requestAnimationFrame(() => {
+            updateNailNoticeScrollPct({ flash: false });
+          });
         });
+      }
+      const nailNoticeListScroll = document.getElementById("nailNoticeList");
+      if (nailNoticeListScroll) {
+        nailNoticeListScroll.addEventListener(
+          "scroll",
+          () => {
+            updateNailNoticeScrollPct();
+          },
+          { passive: true },
+        );
       }
       const nailAutoRefresh = document.getElementById("nailAutoRefresh");
       if (nailAutoRefresh) {

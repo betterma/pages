@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * 钉子荧光绿再启动 / 续绿 → 企微文字 + 染绿 4h 图。
+ * 钉子荧光绿：首根染绿 + 续绿/断绿再绿 → 企微文字 + 染绿 4h 图。
  * 站在 Date.now() 拉当前 4h K，回看 noteAt 之后的窗口；
  * 同一根 K（同一 openTime）只推一次。
  */
@@ -305,8 +305,7 @@ function evaluateNail(candles, nail, now) {
 
   let priorGreen = false;
   for (let i = fromIndex; i < lastIndex; i += 1) {
-    // 回看：只要 noteAt 之后、当前根之前出现过「阳线且高点>水位」，就算有过绿。
-    // 续绿（上一根也绿）与断绿再绿都覆盖。
+    // 回看：noteAt 之后、当前根之前是否已有过绿（用于文案区分首绿/续绿）。
     const c = candles[i];
     if (!c) continue;
     const up = Number(c.close) >= Number(c.open);
@@ -317,11 +316,13 @@ function evaluateNail(candles, nail, now) {
   }
 
   return {
-    shouldNotify: priorGreen,
+    // 当前根已染绿即通知（含第一条绿）；同 openTime 去重在外层。
+    shouldNotify: true,
     range,
     openTime,
     currentGreen: true,
     priorGreen,
+    kind: priorGreen ? '续绿' : '首绿',
     alertPrice,
     // 通知时价格（当前 4h 收盘），页面红蓝相对此线，而非水位。
     notifyPrice: Number(current.close),
@@ -424,11 +425,14 @@ async function runNailGreenAlerts(options) {
   for (const hit of hits) {
     const { nail, candles, verdict } = hit;
     const label = nail.label || labelOf(nail.symbol);
+    const kind = verdict.kind || (verdict.priorGreen ? '续绿' : '首绿');
+    const text = `${label} · ${kind}`;
     // 先落页面通知 + 去重状态，避免企微失败导致同根每轮重打 K / 重试刷屏。
     noticeRows.push({
       id: `${nail.symbol}:${verdict.openTime}:${now}`,
       symbol: nail.symbol,
       label,
+      kind,
       at: now,
       openTime: verdict.openTime,
       alertPrice: verdict.alertPrice,
@@ -445,7 +449,7 @@ async function runNailGreenAlerts(options) {
 
     if (!webhook) continue;
     try {
-      await sendWecomText(label, webhook);
+      await sendWecomText(text, webhook);
 
       const painted = renderCandlesPng(candles, {
         title: label,
