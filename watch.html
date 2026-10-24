@@ -826,7 +826,7 @@
         WATCH_POOL_RANK: 30,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
         KLINE_MAX_LIMIT: 1000,
-        // GitHub 瘦身过旧则回落 OBS（避免停更文件被 prune 后窗口对比失效）。
+        // 只读 GitHub 热库（含紧凑名次 r[]）。
         WATCH_DATA_STALE_MS: 2 * 60 * 60 * 1000,
       };
       const DURATION_MS = {
@@ -964,29 +964,24 @@
       }
 
       async function loadGithubStorage() {
-        setStep("github", "loading", "正在读取观察池 watch-data（GitHub 优先）");
+        setStep("github", "loading", "正在读取观察池 watch-data（GitHub）");
         let data = null;
-        let source = "";
+        let source = "github";
         try {
           const file = await WatchFavorites.fetchJsonFile({
             repo: CONFIG.GITHUB_REPO,
             path: CONFIG.GITHUB_PATH,
           });
           if (file && file.data && isWatchDataUsable(file.data)) {
-            data = file.data;
-            source = "github";
+            data =
+              typeof WatchFavorites.hydrateWatchData === "function"
+                ? WatchFavorites.hydrateWatchData(file.data)
+                : file.data;
           } else if (file && file.data) {
-            console.warn("GitHub watch-data stale/unusable, fallback OBS", {
-              stamp: watchDataStampMs(file.data),
-            });
-          }
-        } catch (error) {
-          console.warn("GitHub watch-data failed, fallback OBS", error);
-        }
-        if (!data) {
-          const url = `${CONFIG.OBS_BASE}/${CONFIG.GITHUB_PATH}?t=${Date.now()}`;
-          const response = await fetch(url, { cache: "no-store" });
-          if (response.status === 404) {
+            throw new Error(
+              `观察池 GitHub 数据过旧或不可用（stamp=${watchDataStampMs(file.data)}）`,
+            );
+          } else {
             history = [];
             events = [];
             favorites = new Set();
@@ -997,16 +992,9 @@
             setStep("github", "warn", "观察池文件不存在，将使用空数据");
             return;
           }
-          if (!response.ok)
-            throw new Error(`读取观察池失败: ${response.status}`);
-          const content = await response.text();
-          if (!content.trim()) throw new Error("watch-data.json 内容为空");
-          try {
-            data = JSON.parse(content);
-          } catch (error) {
-            throw new Error(`watch-data.json 不是有效 JSON: ${error.message}`);
-          }
-          source = "obs";
+        } catch (error) {
+          console.warn("GitHub watch-data failed", error);
+          throw error;
         }
         history = Array.isArray(data.history) ? data.history : [];
         events = Array.isArray(data.events) ? data.events : [];

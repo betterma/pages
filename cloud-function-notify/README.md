@@ -1,7 +1,7 @@
 # 自动盯 · 微信 PushPlus
 
 定时事件函数：默认每 5 分钟读取 GitHub 盯一下、记住、持仓，拉币安现价。  
-观察池 `watch-data`：**优先 GitHub 瘦身版**，失败再回落 OBS。
+观察池 `watch-data`：只读 **GitHub 热库**（含紧凑名次 `r[]`，读入展开为 ranks）。
 
 ## 微信（新自动盯）
 

@@ -536,24 +536,22 @@
       }
 
       async function loadObsWatchData() {
-        try {
-          const file = await WatchFavorites.fetchJsonFile({
-            repo: CONFIG.GITHUB_REPO,
-            path: CONFIG.GITHUB_PATH,
-          });
-          if (file && file.data && isWatchDataUsable(file.data)) {
-            applyWatchPoolData(file.data);
-            return;
-          }
-        } catch (error) {
-          console.warn("load watch-data via GitHub failed", error);
+        const file = await WatchFavorites.fetchJsonFile({
+          repo: CONFIG.GITHUB_REPO,
+          path: CONFIG.GITHUB_PATH,
+        });
+        if (file && file.data && isWatchDataUsable(file.data)) {
+          const data =
+            typeof WatchFavorites.hydrateWatchData === "function"
+              ? WatchFavorites.hydrateWatchData(file.data)
+              : file.data;
+          applyWatchPoolData(data);
+          return;
         }
-        const response = await fetch(
-          CONFIG.OBS_BASE + "/" + CONFIG.GITHUB_PATH + "?t=" + Date.now(),
-          { cache: "no-store" },
-        );
-        if (!response.ok) throw new Error("读取观察池失败: " + response.status);
-        applyWatchPoolData(await response.json());
+        if (file && file.data) {
+          throw new Error("观察池 GitHub 数据过旧或不可用");
+        }
+        throw new Error("观察池文件不存在");
       }
 
       async function loadSharedFeatureState() {

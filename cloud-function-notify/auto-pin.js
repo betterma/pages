@@ -122,33 +122,46 @@ function isWatchDataUsable(data) {
   return hist.some((snap) => Number(snap && snap.timestamp) >= cutoff);
 }
 
+function hydrateWatchDataLocal(data) {
+  if (!data || typeof data !== 'object') return data;
+  const history = Array.isArray(data.history) ? data.history : [];
+  return {
+    ...data,
+    history: history.map((snap) => {
+      if (!snap || typeof snap !== 'object') return snap;
+      if (
+        snap.ranks &&
+        typeof snap.ranks === 'object' &&
+        Object.keys(snap.ranks).length
+      ) {
+        return snap;
+      }
+      const list = Array.isArray(snap.r) ? snap.r : null;
+      if (!list || !list.length) return snap;
+      const ranks = {};
+      list.forEach((symbol, index) => {
+        const key = String(symbol || '')
+          .trim()
+          .toUpperCase();
+        if (key) ranks[key] = index + 1;
+      });
+      return { ...snap, ranks };
+    }),
+  };
+}
+
 async function fetchWatchData() {
-  // 优先 GitHub 瘦身版；失败/过旧再回落 OBS 完整版。
-  try {
-    const file = await loadJson(CONFIG.DATA_PATH);
-    if (file && file.data && isWatchDataUsable(file.data)) {
-      return file.data;
-    }
-    if (file && file.data) {
-      console.warn(
-        'GitHub watch-data stale/unusable, fallback OBS',
-        JSON.stringify({ stamp: watchDataStampMs(file.data) }),
-      );
-    }
-  } catch (error) {
-    console.warn(
-      'GitHub watch-data load failed, fallback OBS',
-      error && error.message ? error.message : error,
+  // 只读 GitHub 热库（含紧凑名次 r[]）；不再回落 OBS。
+  const file = await loadJson(CONFIG.DATA_PATH);
+  if (file && file.data && isWatchDataUsable(file.data)) {
+    return hydrateWatchDataLocal(file.data);
+  }
+  if (file && file.data) {
+    throw new Error(
+      `GitHub watch-data stale/unusable stamp=${watchDataStampMs(file.data)}`,
     );
   }
-  const response = await requestRaw(CONFIG.OBS_DATA_URL, {
-    method: 'GET',
-    timeout: 20000,
-  });
-  if (!response.ok) {
-    throw new Error(`OBS watch-data ${response.status}`);
-  }
-  return JSON.parse(response.text());
+  throw new Error('GitHub watch-data missing');
 }
 
 async function loadBlacklistSet() {

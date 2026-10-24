@@ -2191,7 +2191,8 @@
         z-index: 122;
         pointer-events: none;
       }
-      .nail-drawer.is-open {
+      .nail-drawer.is-open,
+      body[data-active-view="nails"] .nail-drawer {
         pointer-events: auto;
       }
       .nail-mask {
@@ -2200,21 +2201,23 @@
         background: rgba(28, 34, 32, 0.35);
         opacity: 0;
         transition: opacity 0.2s ease;
+        /* 真双屏：不再用遮罩关屏，避免误踢回行情 */
+        pointer-events: none;
       }
       .nail-drawer.is-open .nail-mask {
-        opacity: 1;
+        opacity: 0;
       }
       .nail-panel {
-        /* 用 left 滑入，避免 iOS 在 transform 祖先下 overflow 无法触摸滚动 */
-        --nail-panel-w: min(980px, 96vw);
+        /* 用 left 滑入；双屏下全宽，避免 iOS transform 祖先挡滚动 */
+        --nail-panel-w: 100%;
         position: absolute;
         top: 0;
         left: calc(-1 * var(--nail-panel-w) - 8px);
         width: var(--nail-panel-w);
         height: 100%;
         background: var(--grouped);
-        border-right: 0.5px solid var(--separator);
-        box-shadow: 12px 0 36px rgba(0, 0, 0, 0.45);
+        border-right: none;
+        box-shadow: none;
         transform: none;
         transition: left 0.22s ease;
         display: flex;
@@ -2222,8 +2225,17 @@
         color: var(--label);
         overflow: hidden;
       }
-      .nail-drawer.is-open .nail-panel {
+      .nail-drawer.is-open .nail-panel,
+      body[data-active-view="nails"] .nail-panel {
         left: 0;
+      }
+      body[data-active-view="nails"] .app-chrome,
+      body[data-active-view="nails"] .page,
+      body[data-active-view="nails"] .float-tabs,
+      body[data-active-view="nails"] .nail-tab,
+      body[data-active-view="nails"] .hidden-pin-tab {
+        visibility: hidden;
+        pointer-events: none;
       }
       .nail-head {
         position: relative;
@@ -5303,11 +5315,11 @@
     </button>
     <div id="nailDrawer" class="nail-drawer" aria-hidden="true">
       <div class="nail-mask" data-close-nails></div>
-      <aside class="nail-panel" role="dialog" aria-label="钉子抽屉">
+      <aside class="nail-panel" role="dialog" aria-label="钉子">
         <div class="nail-head">
           <div class="nail-head-title-block">
             <div class="nail-head-title-line">
-              <h3>钉子抽屉</h3>
+              <h3>钉子</h3>
               <button
                 type="button"
                 class="nail-settings-btn"
@@ -5347,7 +5359,9 @@
               <span class="nail-notice-entry-meta" id="nailNoticeEntryMeta"></span>
             </button>
             <button type="button" id="nailAddBtn">新增</button>
-            <button type="button" data-close-nails>关闭</button>
+            <button type="button" data-close-nails id="nailGoMarketBtn" title="切到行情屏">
+              行情
+            </button>
           </div>
           <div
             class="nail-settings-popover"
@@ -5356,6 +5370,23 @@
             role="dialog"
             aria-label="筛选、排序与定时刷新"
           >
+            <div class="nail-rising-row nail-home-row">
+              <span>系统首页</span>
+              <div
+                class="mode-switch pin-sort-switch"
+                id="nailHomePrefSwitch"
+                role="group"
+                aria-label="系统首页"
+                title="启动进入行情或钉子全屏"
+              >
+                <button type="button" data-home-pref="market" class="is-active">
+                  行情
+                </button>
+                <button type="button" data-home-pref="nails">
+                  钉子
+                </button>
+              </div>
+            </div>
             <div class="nail-rising-row">
               <span>当前窗口上涨</span>
               <button
@@ -6574,6 +6605,7 @@
         { id: "break", label: "破点高 watch-break-high", wave: 1 },
         { id: "alerts", label: "价格预警 watch-price-alerts", wave: 1 },
         { id: "rankPrefs", label: "排序偏好 watch-notes-rank-prefs", wave: 1 },
+        { id: "homePrefs", label: "首页偏好 watch-home-prefs", wave: 1 },
       ];
 
       function bootInitSortTasks(tasks) {
@@ -9068,9 +9100,17 @@
       }
 
       function applyWatchPoolData(data) {
-        history = Array.isArray(data && data.history) ? data.history : [];
+        const normalized =
+          WatchFavorites && typeof WatchFavorites.hydrateWatchData === "function"
+            ? WatchFavorites.hydrateWatchData(data)
+            : data;
+        history = Array.isArray(normalized && normalized.history)
+          ? normalized.history
+          : [];
         watchPool = new Set(
-          Array.isArray(data && data.watchPool) ? data.watchPool : [],
+          Array.isArray(normalized && normalized.watchPool)
+            ? normalized.watchPool
+            : [],
         );
         lastObsFetchedAt = Date.now();
         pruneHistory();
@@ -9089,8 +9129,8 @@
       }
 
       /**
-       * GitHub 停更的旧全量文件会被 3 天 prune 清空，导致 hasWindowGain 全 false、
-       * 盯一下全部掉进「隐藏」。过旧或不含可用快照时拒绝，改走 OBS。
+       * GitHub 停更的旧文件会被 prune 清空，导致 hasWindowGain 全 false、
+       * 盯一下全部掉进「隐藏」。过旧或不含可用快照时拒绝。
        */
       function isWatchDataUsable(data) {
         if (!data) return false;
@@ -9123,55 +9163,28 @@
           return { fromCache: true, source: "memory" };
         }
 
-        // 1) GitHub slim（热库）
-        try {
-          const file = await WatchFavorites.fetchJsonFile({
-            repo: CONFIG.GITHUB_REPO,
-            path: CONFIG.GITHUB_PATH,
-          });
-          if (file && file.data && isWatchDataUsable(file.data)) {
-            applyWatchPoolData(file.data);
-            return {
-              fromCache: false,
-              source: "github",
-              slim: !!(file.data && file.data.slim),
-            };
-          }
-          if (file && file.data) {
-            console.warn(
-              "GitHub watch-data stale/unusable, fallback OBS",
-              {
-                stamp: watchDataStampMs(file.data),
-                slim: !!(file.data && file.data.slim),
-                hist: Array.isArray(file.data.history)
-                  ? file.data.history.length
-                  : 0,
-              },
-            );
-          }
-        } catch (error) {
-          console.warn("load watch-data via GitHub failed", error);
-        }
-
-        // 2) OBS full（冷库回落）
-        const url = force
-          ? `${CONFIG.OBS_BASE}/${CONFIG.GITHUB_PATH}?t=${Date.now()}`
-          : `${CONFIG.OBS_BASE}/${CONFIG.GITHUB_PATH}`;
-        const response = await fetch(url, {
-          cache: force ? "no-store" : "default",
+        // 只读 GitHub 热库（含紧凑名次 r[]）；不再回落 OBS。
+        const file = await WatchFavorites.fetchJsonFile({
+          repo: CONFIG.GITHUB_REPO,
+          path: CONFIG.GITHUB_PATH,
         });
-        if (response.status === 404) {
-          history = [];
-          watchPool = new Set();
-          lastObsFetchedAt = Date.now();
-          return { fromCache: false, missing: true, source: "obs" };
+        if (file && file.data && isWatchDataUsable(file.data)) {
+          applyWatchPoolData(file.data);
+          return {
+            fromCache: false,
+            source: "github",
+            slim: !!(file.data && file.data.slim),
+          };
         }
-        if (!response.ok) {
-          throw new Error(`读取观察池失败: ${response.status}`);
+        if (file && file.data) {
+          throw new Error(
+            `观察池 GitHub 数据过旧或不可用（stamp=${watchDataStampMs(file.data)}）`,
+          );
         }
-        const data = await response.json();
-        applyWatchPoolData(data);
-        return { fromCache: false, source: "obs" };
+        history = [];
+        watchPool = new Set();
+        lastObsFetchedAt = Date.now();
+        return { fromCache: false, missing: true, source: "github" };
       }
 
       function applyBlacklistToWatchPool() {
@@ -9295,6 +9308,9 @@
           }),
           soft("rankPrefs", "排序偏好", async () => {
             await loadNotesRankPrefsShared();
+          }),
+          soft("homePrefs", "首页偏好", async () => {
+            await loadHomePrefsShared();
           }),
           soft("alerts", "价格预警", async () => {
             await loadSharedPriceAlerts();
@@ -15416,9 +15432,7 @@
         const hiddenOpen = document
           .getElementById("hiddenPinDrawer")
           ?.classList.contains("is-open");
-        const nailOpen = document
-          .getElementById("nailDrawer")
-          ?.classList.contains("is-open");
+        const nailOpen = isNailDrawerOpen();
         const noticeOpen = nailNoticeMode === "open";
         document.body.style.overflow =
           hiddenOpen || nailOpen || noticeOpen || isKlineZoomOpen()
@@ -15427,8 +15441,7 @@
       }
 
       function isNailDrawerOpen() {
-        const drawer = document.getElementById("nailDrawer");
-        return !!(drawer && drawer.classList.contains("is-open"));
+        return getActiveView() === "nails";
       }
 
       function applyNailBrowseMaskFromState(browseMaskAt) {
@@ -15547,6 +15560,17 @@
       let nailNoticeMode = "closed"; // closed | open
       let nailNoticeChartsBusy = false;
       let nailNoticeDeltaFilter = "all"; // all | up | down
+      let activeView = "market"; // market | nails（会话当前屏）
+      let homePref = "market"; // market | nails（启动首页，GitHub）
+      let homePrefSaving = false;
+      const HOME_PREFS_LOCAL_KEY = "kline-home-pref-v1";
+      try {
+        const localHome = localStorage.getItem(HOME_PREFS_LOCAL_KEY);
+        if (localHome === "nails" || localHome === "market") homePref = localHome;
+      } catch (_) {
+        /* ignore */
+      }
+      document.body.dataset.activeView = activeView;
 
       function nailGreenUnreadCount() {
         if (
@@ -15938,19 +15962,123 @@
         }
       }
 
-      function setNailDrawerOpen(open) {
+      function getActiveView() {
+        return activeView === "nails" ? "nails" : "market";
+      }
+
+      function getHomePref() {
+        return homePref === "nails" ? "nails" : "market";
+      }
+
+      function syncHomePrefUi() {
+        const root = document.getElementById("nailHomePrefSwitch");
+        if (!root) return;
+        root.querySelectorAll("[data-home-pref]").forEach((btn) => {
+          btn.classList.toggle(
+            "is-active",
+            btn.getAttribute("data-home-pref") === getHomePref(),
+          );
+        });
+      }
+
+      function applyHomePref(next) {
+        homePref =
+          String(next || "").trim().toLowerCase() === "nails"
+            ? "nails"
+            : "market";
+        try {
+          localStorage.setItem(HOME_PREFS_LOCAL_KEY, homePref);
+        } catch (_) {
+          /* ignore */
+        }
+        syncHomePrefUi();
+      }
+
+      async function loadHomePrefsShared() {
+        try {
+          const local = localStorage.getItem(HOME_PREFS_LOCAL_KEY);
+          if (local === "nails" || local === "market") applyHomePref(local);
+        } catch (_) {
+          /* ignore */
+        }
+        if (
+          !WatchFavorites ||
+          typeof WatchFavorites.loadHomePrefsRaw !== "function"
+        ) {
+          return false;
+        }
+        try {
+          const remote = await WatchFavorites.loadHomePrefsRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path:
+              WatchFavorites.HOME_PREFS_PATH || "watch-home-prefs.json",
+          });
+          if (remote && remote.prefs) {
+            applyHomePref(remote.prefs.home);
+            return true;
+          }
+        } catch (error) {
+          console.warn("load home prefs failed", error);
+        }
+        return false;
+      }
+
+      async function flushHomePref(nextHome) {
+        const home =
+          String(nextHome || homePref).trim().toLowerCase() === "nails"
+            ? "nails"
+            : "market";
+        applyHomePref(home);
+        if (
+          !WatchFavorites ||
+          typeof WatchFavorites.patchHomePrefs !== "function" ||
+          homePrefSaving
+        ) {
+          return;
+        }
+        homePrefSaving = true;
+        try {
+          await WatchFavorites.patchHomePrefs({
+            repo: CONFIG.GITHUB_REPO,
+            path:
+              WatchFavorites.HOME_PREFS_PATH || "watch-home-prefs.json",
+            message: `Home pref ${home}`,
+            mutate: () => ({ home, updatedAt: Date.now() }),
+          });
+        } catch (error) {
+          console.warn("persist home pref failed", error);
+          showToast(error.message || "首页偏好保存失败");
+        } finally {
+          homePrefSaving = false;
+        }
+      }
+
+      function setActiveView(view, options) {
+        const opts = options || {};
+        const next = view === "nails" ? "nails" : "market";
         const drawer = document.getElementById("nailDrawer");
         const tab = document.getElementById("nailTab");
         if (!drawer) return;
-        const wasOpen = drawer.classList.contains("is-open");
-        if (open) setHiddenPinDrawerOpen(false);
-        drawer.classList.toggle("is-open", !!open);
-        drawer.setAttribute("aria-hidden", open ? "false" : "true");
-        if (tab) tab.setAttribute("aria-expanded", open ? "true" : "false");
+        const was = activeView;
+        const entering = next === "nails" && was !== "nails";
+        const leaving = next === "market" && was === "nails";
+        activeView = next;
+        document.body.dataset.activeView = next;
+        if (next === "nails") setHiddenPinDrawerOpen(false);
+        drawer.classList.toggle("is-open", next === "nails");
+        drawer.setAttribute(
+          "aria-hidden",
+          next === "nails" ? "false" : "true",
+        );
+        if (tab) {
+          tab.setAttribute(
+            "aria-expanded",
+            next === "nails" ? "true" : "false",
+          );
+        }
         syncBodyScrollLock();
-        if (open) {
-          // 仅从关闭→打开时拉 GitHub 蒙蔽/揭开状态；已打开时再定位不打断
-          if (!wasOpen) {
+        if (next === "nails") {
+          if (entering || opts.forceRefresh) {
             void openNailDrawerWithBrowse();
           } else {
             renderNailDrawer();
@@ -15961,7 +16089,7 @@
               });
             });
           }
-        } else {
+        } else if (leaving) {
           abortNailKlines();
           stopNailAutoRefresh();
           clearNailFocusSelection();
@@ -15969,6 +16097,10 @@
           setNailSettingsOpen(false);
           closeNailNoticeDrawer();
         }
+      }
+
+      function setNailDrawerOpen(open) {
+        setActiveView(open ? "nails" : "market");
       }
 
       function setNailSettingsOpen(open) {
@@ -16018,7 +16150,7 @@
 
       /**
        * 手机手势：
-       * - 主页右滑开钉子抽屉；钉子抽屉内左滑关闭（拖排序中不关）
+       * - 行情屏右滑 → 钉子屏；钉子屏左滑 → 行情屏（拖排序中不切）
        * - 右侧隐藏抽屉打开时右滑关闭
        */
       function bindNailDrawerSwipeGestures() {
@@ -16853,7 +16985,7 @@
         else if (statusEl && !nailAutoRefreshEnabled) {
           statusEl.textContent = "已关闭";
         } else if (statusEl && !nailAutoRefreshTimer) {
-          statusEl.textContent = "抽屉打开时运行";
+          statusEl.textContent = "钉子屏运行中";
         }
       }
 
@@ -18991,10 +19123,18 @@
             setHiddenPinDrawerOpen(false);
           }
         } finally {
+          // 冷启动：先切到偏好首页，再关进度层，避免首页=钉子时先闪行情。
+          if (reason === "boot") {
+            setActiveView(getHomePref(), { forceRefresh: true });
+          }
           if (showBootInit) {
-            bootInitSetStep(
-              reason === "sync-pool" ? "同步完成" : "初始化完成",
-            );
+            const homeLabel =
+              reason === "boot" && getHomePref() === "nails"
+                ? "进入钉子…"
+                : reason === "sync-pool"
+                  ? "同步完成"
+                  : "初始化完成";
+            bootInitSetStep(homeLabel);
             window.setTimeout(() => bootInitEnd(), 420);
           } else {
             bootInitEnd();
@@ -19690,6 +19830,19 @@
         }
         setNailSettingsOpen(false);
       });
+      const nailHomePrefSwitch = document.getElementById("nailHomePrefSwitch");
+      if (nailHomePrefSwitch) {
+        syncHomePrefUi();
+        nailHomePrefSwitch.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-home-pref]");
+          if (!btn) return;
+          const next = btn.getAttribute("data-home-pref");
+          void flushHomePref(next);
+          showToast(
+            next === "nails" ? "启动首页：钉子" : "启动首页：行情",
+          );
+        });
+      }
       const nailRisingFilter = document.getElementById("nailRisingFilter");
       if (nailRisingFilter) {
         syncNailRisingFilterUi();

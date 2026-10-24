@@ -28,6 +28,8 @@
   const NAIL_GREEN_NOTICES_TTL_MS = 24 * 60 * 60 * 1000;
   const NOTES_RANK_SNAPS_PATH = "watch-notes-rank-snaps.json";
   const NOTES_RANK_PREFS_PATH = "watch-notes-rank-prefs.json";
+  const HOME_PREFS_PATH = "watch-home-prefs.json";
+  const HOME_PREFS_DEFAULT = { home: "market", updatedAt: 0 };
   const PRICE_ALERTS_PATH = "watch-price-alerts.json";
   const LEGACY_DATA_PATH = "watch-data.json";
   const PIN_TTL_MS = 12 * 60 * 60 * 1000;
@@ -1860,6 +1862,117 @@
     throw lastError || new Error("保存排序偏好失败");
   }
 
+  function normalizeHomePref(value) {
+    return String(value || "").trim().toLowerCase() === "nails"
+      ? "nails"
+      : "market";
+  }
+
+  function normalizeHomePrefs(raw) {
+    const base =
+      raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    return {
+      home: normalizeHomePref(base.home),
+      updatedAt: Number.isFinite(Number(base.updatedAt))
+        ? Number(base.updatedAt)
+        : 0,
+    };
+  }
+
+  function serializeHomePrefs(prefs) {
+    const next = normalizeHomePrefs(prefs);
+    return {
+      home: next.home,
+      updatedAt: next.updatedAt || Date.now(),
+    };
+  }
+
+  async function loadHomePrefsRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || HOME_PREFS_PATH;
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          prefs: normalizeHomePrefs(current.data),
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadHomePrefs via API failed, trying raw", error);
+    }
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          prefs: normalizeHomePrefs(data),
+          source: "raw-commit",
+        };
+      }
+      if (response.status !== 404) {
+        console.warn(`读取首页偏好 raw 失败: ${response.status}`);
+      }
+    } catch (error) {
+      console.warn("loadHomePrefs via commit-raw failed", error);
+    }
+    return {
+      prefs: normalizeHomePrefs(HOME_PREFS_DEFAULT),
+      source: "default",
+    };
+  }
+
+  async function patchHomePrefs(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || HOME_PREFS_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = normalizeHomePrefs(current.data || HOME_PREFS_DEFAULT);
+        let nextPrefs = base;
+        if (typeof options.mutate === "function") {
+          const result = options.mutate({ ...base });
+          nextPrefs = normalizeHomePrefs(result || base);
+        }
+        const nextData = serializeHomePrefs({
+          ...nextPrefs,
+          updatedAt: Date.now(),
+        });
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update home prefs",
+        });
+        return { prefs: nextData };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存首页偏好失败");
+  }
+
   function normalizeActionLogEntry(item) {
     if (!item || typeof item !== "object") return null;
     const kind = String(item.kind || "").trim();
@@ -2973,6 +3086,13 @@
     serializeNotesRankPrefs,
     loadNotesRankPrefsRaw,
     patchNotesRankPrefs,
+    HOME_PREFS_PATH,
+    HOME_PREFS_DEFAULT,
+    normalizeHomePref,
+    normalizeHomePrefs,
+    serializeHomePrefs,
+    loadHomePrefsRaw,
+    patchHomePrefs,
     normalizePositions,
     serializePositions,
     positionsToSymbolSet,
@@ -2993,8 +3113,47 @@
     patchPriceAlerts,
     actionLogIdentityKey,
     updateActionLogEntryPrice,
+    hydrateWatchSnap,
+    hydrateWatchHistory,
+    hydrateWatchData,
     fetchJsonFile,
     getMainCommitSha,
     fetchRawJsonByCommit,
   };
+
+  /** 紧凑名次 r[] → ranks 对象，页面/冲榜雷达无感使用。 */
+  function hydrateWatchSnap(snap) {
+    if (!snap || typeof snap !== "object") return snap;
+    const hasRanks =
+      snap.ranks &&
+      typeof snap.ranks === "object" &&
+      Object.keys(snap.ranks).length > 0;
+    if (hasRanks) return snap;
+    const list = Array.isArray(snap.r)
+      ? snap.r
+      : Array.isArray(snap.rankList)
+        ? snap.rankList
+        : null;
+    if (!list || !list.length) return snap;
+    const ranks = {};
+    list.forEach((symbol, index) => {
+      const key = String(symbol || "")
+        .trim()
+        .toUpperCase();
+      if (key) ranks[key] = index + 1;
+    });
+    return { ...snap, ranks };
+  }
+
+  function hydrateWatchHistory(history) {
+    return (Array.isArray(history) ? history : []).map(hydrateWatchSnap);
+  }
+
+  function hydrateWatchData(data) {
+    if (!data || typeof data !== "object") return data;
+    return {
+      ...data,
+      history: hydrateWatchHistory(data.history),
+    };
+  }
 });
