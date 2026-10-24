@@ -2574,17 +2574,19 @@
         top: 50%;
         transform: translateY(-50%) scale(0.96);
         z-index: 6;
-        min-width: 2.6em;
-        padding: 10px 8px;
+        min-width: 3.2em;
+        max-width: 5.5em;
+        padding: 10px 9px;
         border-radius: 999px;
         background: color-mix(in srgb, var(--label) 82%, transparent);
         color: var(--bg);
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
-        letter-spacing: 0.02em;
+        letter-spacing: 0.01em;
         text-align: center;
-        line-height: 1.1;
+        line-height: 1.15;
+        white-space: pre-line;
         pointer-events: none;
         opacity: 0;
         visibility: hidden;
@@ -15735,7 +15737,7 @@
             const kind =
               item.kind === "首绿" || item.kind === "续绿" ? item.kind : "";
             return [
-              `<article class="nail-notice-card" data-notice-id="${id}" data-notice-symbol="${symbol}">`,
+              `<article class="nail-notice-card" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}">`,
               `<div class="nail-notice-card-top">`,
               `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}${kind ? ` · ${escapeHtml(kind)}` : ""}</button>`,
               `<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span>`,
@@ -16026,6 +16028,17 @@
         }
       }
 
+      function formatNoticeScrollBubble(at) {
+        const n = Number(at);
+        if (!Number.isFinite(n) || n <= 0) return "--";
+        const d = new Date(n);
+        const now = new Date();
+        const pad = (v) => String(v).padStart(2, "0");
+        const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        if (d.toDateString() === now.toDateString()) return hm;
+        return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}\n${hm}`;
+      }
+
       function updateNailNoticeScrollPct(options) {
         const opts = options || {};
         const list = document.getElementById("nailNoticeList");
@@ -16041,28 +16054,31 @@
           hideNailNoticeScrollPct(true);
           return;
         }
-        const max = Math.max(1, list.scrollHeight - list.clientHeight);
-        const pct = Math.max(
-          0,
-          Math.min(100, Math.round((list.scrollTop / max) * 100)),
+        const card = pickScrollAnchorCard(
+          list,
+          ".nail-notice-card[data-notice-at]",
         );
-        el.textContent = `${pct}%`;
+        const at = card ? Number(card.getAttribute("data-notice-at")) : 0;
+        el.textContent = formatNoticeScrollBubble(at);
+        if (opts.flash === false) {
+          el.hidden = false;
+          el.setAttribute("aria-hidden", "false");
+          return;
+        }
         el.hidden = false;
         el.setAttribute("aria-hidden", "false");
-        if (opts.flash !== false) {
-          el.classList.add("is-visible");
-          if (nailNoticeScrollPctHideTimer) {
-            window.clearTimeout(nailNoticeScrollPctHideTimer);
-          }
-          nailNoticeScrollPctHideTimer = window.setTimeout(() => {
-            el.classList.remove("is-visible");
-            nailNoticeScrollPctHideTimer = window.setTimeout(() => {
-              el.hidden = true;
-              el.setAttribute("aria-hidden", "true");
-              nailNoticeScrollPctHideTimer = 0;
-            }, 220);
-          }, 900);
+        el.classList.add("is-visible");
+        if (nailNoticeScrollPctHideTimer) {
+          window.clearTimeout(nailNoticeScrollPctHideTimer);
         }
+        nailNoticeScrollPctHideTimer = window.setTimeout(() => {
+          el.classList.remove("is-visible");
+          nailNoticeScrollPctHideTimer = window.setTimeout(() => {
+            el.hidden = true;
+            el.setAttribute("aria-hidden", "true");
+            nailNoticeScrollPctHideTimer = 0;
+          }, 220);
+        }, 900);
       }
 
       function jumpNailNoticeToSymbol(symbol) {
@@ -16894,6 +16910,34 @@
         return document.getElementById("nailScrollPct");
       }
 
+      /** 取视口靠上约 1/3 处最近的卡片（类通讯录索引）。 */
+      function pickScrollAnchorCard(listEl, selector) {
+        if (!listEl) return null;
+        const listRect = listEl.getBoundingClientRect();
+        const y = listRect.top + Math.max(24, listRect.height * 0.32);
+        const cards = [
+          ...listEl.querySelectorAll(selector),
+        ].filter((card) => {
+          if (!card || card.offsetParent === null) return false;
+          if (card.classList.contains("is-delta-filtered")) return false;
+          const style = window.getComputedStyle(card);
+          return style.display !== "none" && style.visibility !== "hidden";
+        });
+        let best = null;
+        let bestDist = Infinity;
+        for (const card of cards) {
+          const r = card.getBoundingClientRect();
+          if (r.bottom < listRect.top || r.top > listRect.bottom) continue;
+          const mid = (r.top + r.bottom) / 2;
+          const dist = Math.abs(mid - y);
+          if (dist < bestDist) {
+            bestDist = dist;
+            best = card;
+          }
+        }
+        return best;
+      }
+
       function hideNailScrollPct(immediate) {
         const el = nailScrollPctEl();
         if (!el) return;
@@ -16927,28 +16971,31 @@
           hideNailScrollPct(true);
           return;
         }
-        const max = Math.max(1, list.scrollHeight - list.clientHeight);
-        const pct = Math.max(
-          0,
-          Math.min(100, Math.round((list.scrollTop / max) * 100)),
-        );
-        el.textContent = `${pct}%`;
+        const card = pickScrollAnchorCard(list, ".nail-kcard[data-nail-symbol]");
+        const symbol = card
+          ? String(card.getAttribute("data-nail-symbol") || "")
+              .trim()
+              .toUpperCase()
+          : "";
+        const change = symbol
+          ? Number(marketMap[symbol] && marketMap[symbol].change24h)
+          : NaN;
+        el.textContent = formatPercent(change);
         el.hidden = false;
         el.setAttribute("aria-hidden", "false");
-        if (opts.flash !== false) {
-          el.classList.add("is-visible");
-          if (nailScrollPctHideTimer) {
-            window.clearTimeout(nailScrollPctHideTimer);
-          }
-          nailScrollPctHideTimer = window.setTimeout(() => {
-            el.classList.remove("is-visible");
-            nailScrollPctHideTimer = window.setTimeout(() => {
-              el.hidden = true;
-              el.setAttribute("aria-hidden", "true");
-              nailScrollPctHideTimer = 0;
-            }, 220);
-          }, 900);
+        if (opts.flash === false) return;
+        el.classList.add("is-visible");
+        if (nailScrollPctHideTimer) {
+          window.clearTimeout(nailScrollPctHideTimer);
         }
+        nailScrollPctHideTimer = window.setTimeout(() => {
+          el.classList.remove("is-visible");
+          nailScrollPctHideTimer = window.setTimeout(() => {
+            el.hidden = true;
+            el.setAttribute("aria-hidden", "true");
+            nailScrollPctHideTimer = 0;
+          }, 220);
+        }, 900);
       }
 
       function setNailSortMode(mode) {
