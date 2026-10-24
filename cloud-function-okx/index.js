@@ -43,11 +43,11 @@ const BAR_LIMITS = {
 
 const BAR_GAP_MS = Math.max(
   200,
-  Number(process.env.OKX_BAR_GAP_MS) || 450,
+  Number(process.env.OKX_BAR_GAP_MS) || 300,
 );
 const TOKEN_GAP_MS = Math.max(
   200,
-  Number(process.env.OKX_TOKEN_GAP_MS) || 600,
+  Number(process.env.OKX_TOKEN_GAP_MS) || 400,
 );
 const GH_MAX_BYTES = Number(process.env.GH_MAX_BYTES || 900 * 1024);
 const ALLOWED_CHAINS = new Set(
@@ -347,11 +347,30 @@ async function fetchBarsForToken(token, previous) {
   return { byBar, errors, okBars, reused };
 }
 
+function assertRuntimeEnv() {
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '';
+  if (!token) {
+    throw new Error(
+      'Missing GITHUB_TOKEN / GH_TOKEN（读写 okx/candles-cache.json 必填）',
+    );
+  }
+  if (
+    !process.env.OKX_API_KEY ||
+    !process.env.OKX_SECRET_KEY ||
+    !process.env.OKX_PASSPHRASE
+  ) {
+    throw new Error(
+      'Missing OKX_API_KEY / OKX_SECRET_KEY / OKX_PASSPHRASE',
+    );
+  }
+}
+
 async function syncCandlesCache() {
+  assertRuntimeEnv();
   const favoritesFile = await loadJson(FAVORITES_PATH);
   const tokens = normalizeFavorites(favoritesFile.data);
   console.log(
-    `okx-candles favorites=${tokens.length} bars=${BARS.join(',')}`,
+    `okx-candles favorites=${tokens.length} bars=${BARS.join(',')} path=${CANDLES_PATH}`,
   );
 
   let previous = null;
@@ -625,16 +644,56 @@ async function syncCandlesCache() {
 }
 
 exports.handler = async (event, context) => {
+  const started = Date.now();
   console.log(
     'okx-candles-timer invoke',
     JSON.stringify({
       keys: event && typeof event === 'object' ? Object.keys(event) : [],
       requestId: context && context.requestId,
+      remainingTime:
+        context && typeof context.getRemainingTimeInMillis === 'function'
+          ? context.getRemainingTimeInMillis()
+          : null,
+      node: process.version,
+      hasGithubToken: Boolean(
+        process.env.GITHUB_TOKEN || process.env.GH_TOKEN,
+      ),
+      hasOkxKey: Boolean(process.env.OKX_API_KEY),
     }),
   );
-  const result = await syncCandlesCache();
-  console.log('okx-candles-timer done', JSON.stringify(result));
-  return result;
+  // 快速探活：测试事件里带 {"ping":true} 只验证包能否加载。
+  if (event && event.ping) {
+    return {
+      ok: true,
+      ping: true,
+      path: CANDLES_PATH,
+      bars: BARS,
+      node: process.version,
+    };
+  }
+  try {
+    const result = await syncCandlesCache();
+    console.log(
+      'okx-candles-timer done',
+      JSON.stringify({ ...result, elapsedMs: Date.now() - started }),
+    );
+    return result;
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    const stack = error && error.stack ? String(error.stack).slice(0, 1500) : '';
+    console.error('okx-candles-timer failed', message);
+    if (stack) console.error(stack);
+    // 返回 JSON 而不是裸 throw，避免控制台只显示「--」看不到原因。
+    return {
+      ok: false,
+      error: message,
+      errorType: (error && error.name) || 'Error',
+      path: CANDLES_PATH,
+      elapsedMs: Date.now() - started,
+      hint:
+        '请确认：1) 整包上传含 index.js/github.js/okx-client.js；2) GITHUB_TOKEN 有 repo 写权限；3) 超时≥180s、内存≥512MB',
+    };
+  }
 };
 
 exports.syncCandlesCache = syncCandlesCache;
