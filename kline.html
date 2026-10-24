@@ -2462,6 +2462,24 @@
       .nail-notice-delta-filter button[data-notice-delta-filter="down"].is-active {
         color: #c45c5c;
       }
+      .nail-notice-deblue {
+        border: none;
+        background: var(--fill);
+        color: var(--secondary);
+        height: 32px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .nail-notice-deblue[hidden] {
+        display: none !important;
+      }
+      .nail-notice-deblue.is-on {
+        background: color-mix(in srgb, #3ecf8e 22%, var(--fill));
+        color: #1f8f5f;
+      }
       .nail-notice-list {
         flex: 1 1 auto;
         min-height: 0;
@@ -5697,6 +5715,16 @@
                 红
               </button>
             </div>
+            <button
+              type="button"
+              id="nailNoticeDeBlueBtn"
+              class="nail-notice-deblue"
+              hidden
+              aria-pressed="false"
+              title="仅蓝筛选可用。打开：按钉子抽屉染绿；关闭：正常染蓝。每次打开通知默认关闭。"
+            >
+              去蓝
+            </button>
             <button type="button" id="nailNoticeRefreshBtn" title="刷新通知列表">
               刷新
             </button>
@@ -15759,7 +15787,10 @@
       let nailGreenNoticesReadAt = 0;
       let nailNoticeMode = "closed"; // closed | open
       let nailNoticeChartsBusy = false;
+      let nailNoticeChartsQueued = false;
       let nailNoticeDeltaFilter = "all"; // all | up | down
+      /** 仅蓝筛选下有效；每次打开通知抽屉强制关闭（不持久化）。 */
+      let nailNoticeDeBlueEnabled = false;
       let activeView = "market"; // market | nails（会话当前屏）
       let homePref = "market"; // market | nails（启动首页，GitHub）
       let homePrefUpdatedAt = 0;
@@ -15969,6 +16000,28 @@
           const mode = btn.getAttribute("data-notice-delta-filter");
           btn.classList.toggle("is-active", mode === nailNoticeDeltaFilter);
         });
+        syncNailNoticeDeBlueUi();
+      }
+
+      function syncNailNoticeDeBlueUi() {
+        const btn = document.getElementById("nailNoticeDeBlueBtn");
+        if (!btn) return;
+        const show = nailNoticeDeltaFilter === "up";
+        if (!show) nailNoticeDeBlueEnabled = false;
+        btn.hidden = !show;
+        btn.classList.toggle("is-on", !!nailNoticeDeBlueEnabled);
+        btn.setAttribute(
+          "aria-pressed",
+          nailNoticeDeBlueEnabled ? "true" : "false",
+        );
+        btn.textContent = nailNoticeDeBlueEnabled ? "去蓝·开" : "去蓝";
+      }
+
+      function setNailNoticeDeBlueEnabled(enabled) {
+        nailNoticeDeBlueEnabled =
+          !!enabled && nailNoticeDeltaFilter === "up";
+        syncNailNoticeDeBlueUi();
+        void paintNailNoticeCharts();
       }
 
       function applyNailNoticeDeltaFilter() {
@@ -16026,13 +16079,18 @@
       async function setNailNoticeDeltaFilter(mode) {
         nailNoticeDeltaFilter =
           mode === "up" || mode === "down" ? mode : "all";
+        // 切换筛选时去蓝一律关（仅开着蓝筛选时才可再开）。
+        nailNoticeDeBlueEnabled = false;
         syncNailNoticeDeltaFilterUi();
         // 切换全部/蓝/红后主动刷新，重算相对通知线涨跌再过滤。
         await reloadNailNoticeList();
       }
 
       async function paintNailNoticeCharts() {
-        if (nailNoticeChartsBusy) return;
+        if (nailNoticeChartsBusy) {
+          nailNoticeChartsQueued = true;
+          return;
+        }
         const canvases = [
           ...document.querySelectorAll(
             "#nailNoticeList canvas[data-notice-chart]",
@@ -16040,6 +16098,10 @@
         ];
         if (!canvases.length) return;
         nailNoticeChartsBusy = true;
+        nailNoticeChartsQueued = false;
+        // 去蓝：不按通知线染蓝，整段按钉子抽屉荧光绿水位处理。
+        const deBlue =
+          nailNoticeDeBlueEnabled && nailNoticeDeltaFilter === "up";
         try {
           const paintOne = async (canvas) => {
             const symbol = String(
@@ -16101,7 +16163,7 @@
                   price: alertPrice,
                   fromAt: noteAt > 0 ? noteAt : 0,
                 },
-                openTime > 0
+                !deBlue && openTime > 0
                   ? {
                       fromOpenTime: openTime,
                       notifyPrice: notifyPrice > 0 ? notifyPrice : 0,
@@ -16129,6 +16191,10 @@
           applyNailNoticeDeltaFilter();
         } finally {
           nailNoticeChartsBusy = false;
+          if (nailNoticeChartsQueued) {
+            nailNoticeChartsQueued = false;
+            void paintNailNoticeCharts();
+          }
         }
       }
 
@@ -16182,6 +16248,9 @@
 
       async function openNailNoticeDrawer(options) {
         const opts = options || {};
+        // 定死：每次打开去蓝都是关。
+        nailNoticeDeBlueEnabled = false;
+        syncNailNoticeDeBlueUi();
         await refreshNailGreenNotices();
         renderNailNoticeList();
         setNailNoticeDrawerMode("open");
@@ -20633,6 +20702,15 @@
           void setNailNoticeDeltaFilter(
             btn.getAttribute("data-notice-delta-filter"),
           );
+        });
+      }
+      const nailNoticeDeBlueBtn = document.getElementById(
+        "nailNoticeDeBlueBtn",
+      );
+      if (nailNoticeDeBlueBtn) {
+        nailNoticeDeBlueBtn.addEventListener("click", () => {
+          if (nailNoticeDeltaFilter !== "up") return;
+          setNailNoticeDeBlueEnabled(!nailNoticeDeBlueEnabled);
         });
       }
       const nailNoticeRefreshBtn = document.getElementById(
