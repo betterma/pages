@@ -5,9 +5,9 @@
 | 数据 | 存哪 |
 |------|------|
 | 自选名单 `okx/favorites.json` | GitHub（页面增删） |
-| K 线缓存 `okx-candles-cache.json` | **OBS**（与 `watch-data.json` 同桶） |
+| K 线缓存 `okx/candles-cache.json` | **GitHub**（紧凑数组，定时云函数写） |
 
-定时：读 GitHub 自选 → 调 OKX → 写 OBS。页面读 OBS 公开 URL。
+定时：读 GitHub 自选 → 调 OKX → 写 GitHub slim 缓存。页面读同一文件。
 
 ## 部署
 
@@ -18,21 +18,25 @@
 | 变量 | 说明 |
 |------|------|
 | `OKX_API_KEY` / `OKX_SECRET_KEY` / `OKX_PASSPHRASE` | Onchain OS |
-| `GITHUB_TOKEN` | 读 `okx/favorites.json` |
+| `GITHUB_TOKEN` | 读写 `okx/favorites.json`、`okx/candles-cache.json`（必填） |
 | `GITHUB_REPO` | 默认 `betterma/pages` |
-| `OBS_ACCESS_KEY` / `OBS_SECRET_KEY` | 与 monitor 相同即可 |
-| `OBS_BUCKET` | 默认 `mpctest` |
-| `OBS_ENDPOINT` | 默认 `obs.cn-north-4.myhuaweicloud.com` |
-| `OBS_OKX_CANDLES_PATH` | 可选，默认 `okx-candles-cache.json` |
+| `OKX_CANDLES_PATH` | 可选，默认 `okx/candles-cache.json` |
+| `GH_MAX_BYTES` | 可选，默认 900KB；超限自动丢长周期 / 截短 15m |
 | `OKX_CANDLE_BARS` | 可选，默认 `15m,2H,4H,1D,3D,1W` |
 | `OKX_LIMIT_15m` 等 | 可选，覆盖各周期根数上限 |
+
+> 不再需要 OBS 密钥。云函数包里的 `obs-client.js` 可忽略不部署。
+
+## 缓存格式
+
+每根 K 线存为紧凑数组：`[time, open, high, low, close, volume]`（页面读入时展开为对象）。不再写重复的 `candles` 字段。
 
 ## 说明
 
 - 行情走 Basic：`GET /api/v6/dex/market/candles`（月免费约 100K），不再用 Premium 的 `historical-candles`
-- 每轮额外：`POST …/token/basic-info`（图标/名称）+ `POST …/price-info`（市值），写入 OBS 缓存字段 `tokenLogoUrl` / `marketCap`，供 `okx/kline.html` 展示
-- 额度用尽后接口返回 **HTTP 402 + x402**（要按次付费），不是 Key 坏了。函数会立刻停拉、保留上一份 OBS 缓存
+- 每轮额外：`POST …/token/basic-info`（图标/名称）+ `POST …/price-info`（市值）
+- 额度用尽后接口返回 **HTTP 402 + x402**。函数会立刻停拉、保留上一份 GitHub 缓存
 - 约 20 个自选 × 6 个周期、5 分钟一轮，几天就能打满 10 万次。可把定时拉长，或减少 `OKX_CANDLE_BARS`
 - 新加自选后，等下一次定时才有 K 线
 - 近 3 天 / 近 10 天在前端截取
-- 多周期改为**串行**请求，避免 OKX 429；失败会尽量沿用上一轮 OBS 缓存
+- 多周期**串行**请求，避免 OKX 429；失败会尽量沿用上一轮缓存

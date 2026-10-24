@@ -809,12 +809,7 @@
       const CONFIG = {
         GITHUB_REPO: "betterma/pages",
         FAVORITES_PATH: "okx/favorites.json",
-        OBS_BASE: "https://mpctest.obs.cn-north-4.myhuaweicloud.com",
-        CANDLES_OBS_KEY: "okx-candles-cache.json",
-        CANDLES_URLS: [
-          "https://mpctest.obs.cn-north-4.myhuaweicloud.com/okx-candles-cache.json",
-          "./candles-cache.json",
-        ],
+        CANDLES_PATH: "okx/candles-cache.json",
         BARS: [
           { id: "15m", label: "15分", ms: 15 * 60 * 1000 },
           { id: "2H", label: "2小时", ms: 2 * 60 * 60 * 1000 },
@@ -943,6 +938,53 @@
           }
         } catch (_) {}
         return "";
+      }
+
+      function hydrateCandle(candle) {
+        if (Array.isArray(candle) && candle.length >= 5) {
+          return {
+            time: Number(candle[0]) || 0,
+            open: Number(candle[1]),
+            high: Number(candle[2]),
+            low: Number(candle[3]),
+            close: Number(candle[4]),
+            volume: Number(candle[5]) || 0,
+          };
+        }
+        if (
+          candle &&
+          typeof candle === "object" &&
+          Number.isFinite(Number(candle.close))
+        ) {
+          return candle;
+        }
+        return null;
+      }
+
+      function hydrateCandleList(list) {
+        return (Array.isArray(list) ? list : [])
+          .map(hydrateCandle)
+          .filter((item) => item && Number.isFinite(item.close));
+      }
+
+      function hydrateTokenRow(row) {
+        if (!row || typeof row !== "object") return row;
+        const byBar = {};
+        const src =
+          row.candlesByBar && typeof row.candlesByBar === "object"
+            ? row.candlesByBar
+            : {};
+        Object.keys(src).forEach((bar) => {
+          byBar[bar] = hydrateCandleList(src[bar]);
+        });
+        if (
+          !Object.keys(byBar).length &&
+          Array.isArray(row.candles) &&
+          row.candles.length
+        ) {
+          byBar["4H"] = hydrateCandleList(row.candles);
+        }
+        return { ...row, candlesByBar: byBar };
       }
 
       /** 现价优先用更短周期最新收盘，图表周期仍按 activeBar */
@@ -1202,56 +1244,40 @@
       }
 
       async function loadCandlesCache(signal) {
-        let lastError = null;
-        const urls = CONFIG.CANDLES_URLS.filter(
-          (base) => !base.startsWith("./") && !base.startsWith("../"),
-        );
-        // 本地占位只作最后回退，且 updatedAt 为空时不算有效缓存
-        const localFallback = CONFIG.CANDLES_URLS.find((base) =>
-          base.startsWith("./"),
-        );
+        try {
+          const file = await OkxFavorites.fetchJsonFile({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.CANDLES_PATH,
+          });
+          if (signal && signal.aborted) {
+            throw new DOMException("Aborted", "AbortError");
+          }
+          if (file && file.data && file.data.updatedAt) {
+            return parseCandlesPayload(file.data, "github");
+          }
+        } catch (error) {
+          if (error && error.name === "AbortError") throw error;
+          console.warn("GitHub candles-cache failed", error);
+        }
 
-        for (const base of urls) {
-          const url = `${base}${base.includes("?") ? "&" : "?"}t=${Date.now()}`;
-          try {
-            const response = await fetch(url, {
-              signal,
-              cache: "no-store",
-            });
-            if (!response.ok) {
-              lastError = new Error(`OBS ${response.status}（${base}）`);
-              continue;
-            }
+        // 本地占位仅作开发回退
+        try {
+          const response = await fetch(`./candles-cache.json?t=${Date.now()}`, {
+            signal,
+            cache: "no-store",
+          });
+          if (response.ok) {
             const data = await response.json();
-            return parseCandlesPayload(data, base);
-          } catch (error) {
-            if (error.name === "AbortError") throw error;
-            lastError = error;
-          }
-        }
-
-        if (localFallback) {
-          try {
-            const response = await fetch(
-              `${localFallback}?t=${Date.now()}`,
-              { signal, cache: "no-store" },
-            );
-            if (response.ok) {
-              const data = await response.json();
-              if (data && data.updatedAt) {
-                return parseCandlesPayload(data, localFallback);
-              }
+            if (data && data.updatedAt) {
+              return parseCandlesPayload(data, "local");
             }
-          } catch (error) {
-            if (error.name === "AbortError") throw error;
           }
+        } catch (error) {
+          if (error && error.name === "AbortError") throw error;
         }
 
-        throw (
-          lastError ||
-          new Error(
-            "读不到 OBS K 线缓存。请确认定时函数已成功写入，且对象为公共读",
-          )
+        throw new Error(
+          "读不到 GitHub K 线缓存。请确认定时函数已写入 okx/candles-cache.json",
         );
       }
 
@@ -1262,7 +1288,7 @@
             : {};
         const map = new Map();
         Object.keys(tokens).forEach((key) => {
-          map.set(key, tokens[key]);
+          map.set(key, hydrateTokenRow(tokens[key]));
         });
         return {
           map,
@@ -1627,7 +1653,7 @@
           if (!cache.updatedAt && !cache.map.size) {
             setStatus(
               false,
-              "OBS 缓存为空或不可读 · 请先让定时函数成功跑完并确认公共读",
+              "GitHub K 线缓存为空 · 请先让定时函数写入 okx/candles-cache.json",
             );
           }
         } catch (error) {

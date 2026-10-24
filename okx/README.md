@@ -7,7 +7,7 @@
 - 打开：`okx/kline.html`
 - 链：Solana (`501`) · Robinhood (`4663`)
 - 自选：`okx/favorites.json`（GitHub，页面可写）
-- K 线：OBS `okx-candles-cache.json`（定时云函数写）
+- K 线：`okx/candles-cache.json`（GitHub，定时云函数写，紧凑格式）
 
 ## UI 规范：异步操作要有 loading
 
@@ -19,6 +19,6 @@
 
 1. 申请 [OKX Onchain OS](https://web3.okx.com/onchain-os/dev-portal) API Key  
 2. 部署 `cloud-function-okx` + 定时触发器  
-3. 环境变量：OKX 三件套 + `GITHUB_TOKEN` + 与 monitor 相同的 OBS 密钥  
+3. 环境变量：OKX 三件套 + `GITHUB_TOKEN`（读写 favorites + candles-cache）  
 
 详见 `cloud-function-okx/README.md`。

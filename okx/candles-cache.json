@@ -1,8 +1,8 @@
 {
-  "_comment": "正式缓存写在 OBS：okx-candles-cache.json；本文件仅作本地/回退占位",
+  "_comment": "正式缓存由 cloud-function-okx 写入本路径；本文件仅占位，updatedAt 为空时页面不会当有效缓存",
   "updatedAt": null,
-  "bar": "4H",
-  "limit": 72,
+  "source": "github-slim",
+  "bars": ["15m", "2H", "4H", "1D", "3D", "1W"],
   "tokenCount": 0,
   "okCount": 0,
   "failCount": 0,
