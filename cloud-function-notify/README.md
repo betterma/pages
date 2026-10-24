@@ -38,8 +38,9 @@
 - 页面通知列表：`watch-nail-green-notices.json`（24h，含 `readAt`；网页可重画近似图）
 - `NAIL_GREEN_ALERT`：默认 `1`；`0` 关闭
 - Webhook：`WECOM_WEBHOOK_PINS` → 否则 `WECOM_WEBHOOK_POSITIONS` / `WECOM_WEBHOOK_URL`
-- 单次最多推送 `NAIL_GREEN_SEND_MAX`（默认 5）
-- **100 钉减负**：本根已推过的跳过拉 K；单轮最多检查 `NAIL_GREEN_CHECK_MAX`（默认 40，轮询），并发 `NAIL_GREEN_CONCURRENCY`（默认 5）
+- 单次最多推送 `NAIL_GREEN_SEND_MAX`（默认 `0`=不限制）
+- **减负 / 及时**：本根已推过的跳过拉 K；`NAIL_GREEN_CHECK_MAX` 默认 `0`=每轮全查（更及时；钉很多时可改回 40 轮询），并发 `NAIL_GREEN_CONCURRENCY`（默认 8）
+- 时效仍受定时触发器约束（默认 5 分钟）；要更及时可把触发器改为 1 分钟，并保证超时 ≥ 60～120s
 
 ## 仅网页、不推微信
 

@@ -17,7 +17,6 @@ const NAILS_PATH = process.env.NAILS_PATH || 'watch-nails.json';
 const INTERVAL = process.env.NAIL_GREEN_INTERVAL || '4h';
 const LIMIT = Math.max(12, Number(process.env.NAIL_GREEN_LIMIT || 42));
 const NOTICES_TTL_MS = 24 * 60 * 60 * 1000;
-const NOTICES_MAX = 80;
 const DURATION_MS = {
   '15m': 15 * 60 * 1000,
   '1h': 60 * 60 * 1000,
@@ -27,15 +26,16 @@ const DURATION_MS = {
 };
 const DOWN_STREAK = 4;
 const NO_NEW_HIGH = 4;
-const SEND_MAX = Math.max(1, Number(process.env.NAIL_GREEN_SEND_MAX || 5));
-const CONCURRENCY = Math.max(1, Number(process.env.NAIL_GREEN_CONCURRENCY || 5));
-/** 单轮最多检查多少个尚未对本根报过的钉子；剩余下轮再查（轮询）。0=不限制。 */
+/** 单轮最多推送条数；0=不限制（命中即写 notices / 发企微）。 */
+const SEND_MAX = Math.max(0, Number(process.env.NAIL_GREEN_SEND_MAX || 0));
+const CONCURRENCY = Math.max(1, Number(process.env.NAIL_GREEN_CONCURRENCY || 8));
+/** 单轮最多检查多少个尚未对本根报过的钉子；0=本轮全查（更及时）。 */
 const CHECK_MAX = Math.max(
   0,
   Number(
     process.env.NAIL_GREEN_CHECK_MAX === undefined ||
       process.env.NAIL_GREEN_CHECK_MAX === ''
-      ? 40
+      ? 0
       : process.env.NAIL_GREEN_CHECK_MAX,
   ),
 );
@@ -414,8 +414,11 @@ async function runNailGreenAlerts(options) {
     }
   });
 
-  const hits = evaluated.filter(Boolean).slice(0, SEND_MAX);
-  result.hits = hits.length;
+  const matched = evaluated.filter(Boolean);
+  const hits =
+    SEND_MAX > 0 ? matched.slice(0, SEND_MAX) : matched;
+  result.hits = matched.length;
+  result.queued = hits.length;
   const noticeRows = [];
 
   for (const hit of hits) {
@@ -532,7 +535,7 @@ function trimNoticeItems(list, now) {
         interval: item.interval ? String(item.interval) : INTERVAL,
       });
     });
-  return out.slice(0, NOTICES_MAX);
+  return out;
 }
 
 async function appendNailGreenNotices(rows, now) {

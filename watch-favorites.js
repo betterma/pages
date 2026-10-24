@@ -26,7 +26,6 @@
   const NAILS_PATH = "watch-nails.json";
   const NAIL_GREEN_NOTICES_PATH = "watch-nail-green-notices.json";
   const NAIL_GREEN_NOTICES_TTL_MS = 24 * 60 * 60 * 1000;
-  const NAIL_GREEN_NOTICES_MAX = 80;
   const NOTES_RANK_SNAPS_PATH = "watch-notes-rank-snaps.json";
   const NOTES_RANK_PREFS_PATH = "watch-notes-rank-prefs.json";
   const PRICE_ALERTS_PATH = "watch-price-alerts.json";
@@ -1428,7 +1427,7 @@
         seen.add(key);
         out.push(item);
       });
-    return out.slice(0, NAIL_GREEN_NOTICES_MAX);
+    return out;
   }
 
   function serializeNailGreenNotices(list, readAt) {
