@@ -32,10 +32,11 @@
 ## 钉子荧光绿（企微 + 图）
 
 定时里读取 `watch-nails.json`：有便签水位的钉子，拉 **4h** K 线，站在当前时刻回看 `noteAt` 之后的窗口。  
-当**当前根已染绿**（含**第一条绿**，以及续绿/断绿再绿），且该根 `openTime` 尚未推过 → 发企微文字 + 染绿图（文案带「首绿」/「续绿」）。**同一根 4h 只推一次。**
+当**当前根已染绿**（含**第一条绿**，以及续绿/断绿再绿），且该根 `openTime` 尚未推过 → 发企微文字 + 染绿图（文案带「首绿」/「续绿」）。**同一根 4h 只推一次。**  
+通知列表只保留**当前 4h 窗**；进入新窗时自动清掉旧窗通知（更聚焦「此刻这根」）。
 
 - 去重状态：`watch-nail-green-alert.json`（按 openTime 同根只推一次）
-- 页面通知列表：`watch-nail-green-notices.json`（24h，含 `readAt`；网页可重画近似图）
+- 页面通知列表：`watch-nail-green-notices.json`（仅当前窗，含 `readAt`；网页可重画近似图）
 - `NAIL_GREEN_ALERT`：默认 `1`；`0` 关闭
 - Webhook：`WECOM_WEBHOOK_PINS` → 否则 `WECOM_WEBHOOK_POSITIONS` / `WECOM_WEBHOOK_URL`
 - 单次最多推送 `NAIL_GREEN_SEND_MAX`（默认 `0`=不限制）

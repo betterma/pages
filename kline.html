@@ -5565,7 +5565,7 @@
         <div class="nail-notice-head">
           <div>
             <h3 id="nailNoticeTitle">荧光绿通知</h3>
-            <p id="nailNoticeMeta">近 24 小时 · 最新在上</p>
+            <p id="nailNoticeMeta">当前 4h 窗 · 最新在上</p>
           </div>
           <div class="nail-notice-head-actions">
             <div
@@ -15675,6 +15675,18 @@
         }
       }
 
+      function currentNailNoticeWindowOpen() {
+        const duration = 4 * 60 * 60 * 1000;
+        return Math.floor(Date.now() / duration) * duration;
+      }
+
+      function filterNailNoticesCurrentWindow(items) {
+        const open = currentNailNoticeWindowOpen();
+        return (Array.isArray(items) ? items : []).filter(
+          (item) => Number(item && item.openTime) === open,
+        );
+      }
+
       async function refreshNailGreenNotices() {
         if (
           !WatchFavorites ||
@@ -15692,10 +15704,35 @@
               WatchFavorites.NAIL_GREEN_NOTICES_PATH ||
               "watch-nail-green-notices.json",
           });
-          nailGreenNotices = state.items || [];
+          const raw = state.items || [];
+          const filtered = filterNailNoticesCurrentWindow(raw);
+          nailGreenNotices = filtered;
           nailGreenNoticesReadAt = Number(state.readAt) || 0;
           syncNailNoticeEntryUi();
-          return state;
+          // 页面侧立刻丢掉旧窗；并异步写回 GitHub，避免等下一轮云函数。
+          if (filtered.length !== raw.length) {
+            void (async () => {
+              try {
+                if (typeof WatchFavorites.patchNailGreenNotices !== "function") {
+                  return;
+                }
+                await WatchFavorites.patchNailGreenNotices({
+                  repo: CONFIG.GITHUB_REPO,
+                  path:
+                    WatchFavorites.NAIL_GREEN_NOTICES_PATH ||
+                    "watch-nail-green-notices.json",
+                  message: "Prune nail green notices to current window",
+                  mutate: (items, meta) => ({
+                    items: filterNailNoticesCurrentWindow(items),
+                    readAt: Number(meta && meta.readAt) || 0,
+                  }),
+                });
+              } catch (error) {
+                console.warn("prune nail notices window failed", error);
+              }
+            })();
+          }
+          return { items: filtered, readAt: nailGreenNoticesReadAt };
         } catch (error) {
           console.warn("load nail green notices failed", error);
           syncNailNoticeEntryUi();
@@ -15718,8 +15755,8 @@
         const items = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
         if (metaEl) {
           metaEl.textContent = items.length
-            ? `近 24 小时 · ${items.length} 条 · 最新在上`
-            : "近 24 小时暂无通知";
+            ? `当前 4h 窗 · ${items.length} 条 · 最新在上`
+            : "当前 4h 窗暂无通知";
         }
         if (!items.length) {
           listEl.innerHTML =
@@ -15820,8 +15857,8 @@
         if (metaEl && total) {
           metaEl.textContent =
             mode === "all"
-              ? `近 24 小时 · ${total} 条 · 最新在上`
-              : `近 24 小时 · 显示 ${visible}/${total} · ${mode === "up" ? "蓝" : "红"}`;
+              ? `当前 4h 窗 · ${total} 条 · 最新在上`
+              : `当前 4h 窗 · 显示 ${visible}/${total} · ${mode === "up" ? "蓝" : "红"}`;
         }
       }
 

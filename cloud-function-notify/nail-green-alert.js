@@ -492,26 +492,38 @@ async function runNailGreenAlerts(options) {
     );
   }
 
-  if (noticeRows.length) {
-    try {
-      result.notices = await appendNailGreenNotices(noticeRows, now);
-    } catch (error) {
-      result.errors.push(
-        `notices:${error && error.message ? error.message : error}`,
-      );
-      console.warn('append nail green notices failed', error);
-    }
+  // 每轮都整理通知：进入新 4h 窗时清掉旧窗条目（无新命中也会写）。
+  try {
+    result.notices = await appendNailGreenNotices(noticeRows, now);
+  } catch (error) {
+    result.errors.push(
+      `notices:${error && error.message ? error.message : error}`,
+    );
+    console.warn('append nail green notices failed', error);
   }
 
   return result;
 }
 
+/** 当前染绿周期窗口起点（与 K 线 openTime 对齐）。 */
+function currentNailWindowOpen(now) {
+  const durationMs = DURATION_MS[INTERVAL] || DURATION_MS['4h'];
+  const ts = Number(now) || Date.now();
+  return Math.floor(ts / durationMs) * durationMs;
+}
+
 function trimNoticeItems(list, now) {
+  const currentOpen = currentNailWindowOpen(now);
   const cutoff = (Number(now) || Date.now()) - NOTICES_TTL_MS;
   const seen = new Set();
   const out = [];
   (Array.isArray(list) ? list : [])
-    .filter((item) => item && Number(item.at) >= cutoff)
+    .filter((item) => {
+      if (!item) return false;
+      if (Number(item.at) < cutoff) return false;
+      // 只保留「当前窗口」根上的通知；换窗即清旧窗。
+      return Number(item.openTime) === currentOpen;
+    })
     .sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0))
     .forEach((item) => {
       const symbol = String(item.symbol || '')
@@ -524,7 +536,7 @@ function trimNoticeItems(list, now) {
       seen.add(symbol);
       const alertPrice = Number(item.alertPrice);
       const notifyPrice = Number(item.notifyPrice);
-      out.push({
+      const row = {
         id: item.id || `${symbol}:${openTime}:${Number(item.at) || 0}`,
         symbol,
         label: item.label
@@ -537,27 +549,41 @@ function trimNoticeItems(list, now) {
           Number.isFinite(notifyPrice) && notifyPrice > 0 ? notifyPrice : 0,
         noteAt: Number(item.noteAt) || 0,
         interval: item.interval ? String(item.interval) : INTERVAL,
-      });
+      };
+      if (item.kind === '首绿' || item.kind === '续绿') row.kind = item.kind;
+      out.push(row);
     });
   return out;
+}
+
+function noticeItemsFingerprint(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((item) => `${item && item.id}:${item && item.openTime}`)
+    .join('|');
 }
 
 async function appendNailGreenNotices(rows, now) {
   const file = await loadJson(NOTICES_PATH);
   const prev = (file && file.data) || {};
-  const merged = trimNoticeItems(
-    [...(Array.isArray(rows) ? rows : []), ...(prev.items || [])],
-    now,
-  );
+  const prevItems = Array.isArray(prev.items) ? prev.items : [];
+  const incoming = Array.isArray(rows) ? rows : [];
+  const merged = trimNoticeItems([...incoming, ...prevItems], now);
+  const changed =
+    incoming.length > 0 ||
+    noticeItemsFingerprint(merged) !== noticeItemsFingerprint(prevItems);
+  if (!changed) return merged.length;
   await saveJson(
     NOTICES_PATH,
     {
       updatedAt: now,
       readAt: Number(prev.readAt) || 0,
       items: merged,
+      windowOpenTime: currentNailWindowOpen(now),
     },
     file && file.sha,
-    `Nail green notices +${(rows || []).length}`,
+    incoming.length
+      ? `Nail green notices +${incoming.length}`
+      : 'Nail green notices prune window',
   );
   return merged.length;
 }
