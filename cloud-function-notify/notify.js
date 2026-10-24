@@ -44,6 +44,19 @@ try {
   );
 }
 
+let runNailDailyReset = async () => ({
+  skipped: true,
+  reason: 'module-missing',
+});
+try {
+  runNailDailyReset = require('./nail-daily-reset').runNailDailyReset;
+} catch (error) {
+  console.warn(
+    'nail-daily-reset module missing — 请整包上传 cloud-function-notify',
+    error && error.message ? error.message : error,
+  );
+}
+
 function webhookKeyHint(url) {
   try {
     const key = new URL(String(url || '')).searchParams.get('key') || '';
@@ -1443,6 +1456,19 @@ async function main() {
     console.warn('break-high failed', message);
   }
 
+  let nailDailyReset = { skipped: true, reason: 'not-run' };
+  try {
+    nailDailyReset = await runNailDailyReset({ now });
+    if (!nailDailyReset.skipped && nailDailyReset.reason === 'ok') {
+      sent.push(`nail-daily-reset:${nailDailyReset.updatedCount || 0}`);
+    }
+    console.log('nail-daily-reset', JSON.stringify(nailDailyReset));
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    sendErrors.push(`nail-daily-reset:${message}`);
+    console.warn('nail-daily-reset failed', message);
+  }
+
   let nailGreenAlert = { skipped: true, reason: 'not-run', sent: 0, symbols: [] };
   try {
     nailGreenAlert = await runNailGreenAlerts({
@@ -1545,6 +1571,7 @@ async function main() {
       autoPinned,
       autoDropped,
       notesRankSnap,
+      nailDailyReset,
       nailGreenAlert,
       sendErrors,
     }),
@@ -1563,6 +1590,7 @@ async function main() {
     autoPinned,
     autoDropped,
     notesRankSnap,
+    nailDailyReset,
     nailGreenAlert,
     sendErrors,
   };

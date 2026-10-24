@@ -43,6 +43,20 @@
 - **减负 / 及时**：本根已推过的跳过拉 K；`NAIL_GREEN_CHECK_MAX` 默认 `0`=每轮全查（更及时；钉很多时可改回 40 轮询），并发 `NAIL_GREEN_CONCURRENCY`（默认 8）
 - 时效仍受定时触发器约束（默认 5 分钟）；要更及时可把触发器改为 1 分钟，并保证超时 ≥ 60～120s
 
+## 钉子每日便签现价（北京时间 0:00）
+
+定时里按 **Asia/Shanghai（北京时间）** 日历日：若今日尚未跑过，则对 `watch-nails.json` 里**非置顶**钉子写入当前现价便签（刷新 `noteAt`）；置顶不动。  
+状态写入 `watch-nail-daily-reset.json`。
+
+网页提示（进入钉子页）：
+
+1. **重置前 2 小时**（约 22:00–0:00）：提醒先置顶，并显示距 0:00 还有多少分钟；点确定本轮不再提示  
+2. **重置完成后**：提示「便签已重置」；点确定本轮不再提示  
+
+- `NAIL_DAILY_RESET_ENABLED`：默认 `1`；`0` 关闭
+- `NAIL_DAILY_RESET_TZ`：默认 `Asia/Shanghai`
+- `NAIL_DAILY_RESET_PROMPT_MS`：默认 `7200000`（重置前预警窗口）
+
 ## 仅网页、不推微信
 
 1. **持仓** → `lastPositionNotify`（企微浮窗右侧）
@@ -52,7 +66,7 @@
 
 ## 部署
 
-1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js` + `notes-rank-snap.js` + `nail-green-alert.js`）。只更新 `index.js` 会出现 `main is not a function`。
+1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js` + `notes-rank-snap.js` + `nail-green-alert.js` + `nail-daily-reset.js`）。只更新 `index.js` 会出现 `main is not a function`。
 2. Handler：`index.handler`，Node.js 18+
 3. **超时建议 ≥ 60～120 秒**
 4. 定时触发器：`0 */5 * * * *`

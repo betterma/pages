@@ -26,6 +26,8 @@
   const NAILS_PATH = "watch-nails.json";
   const NAIL_GREEN_NOTICES_PATH = "watch-nail-green-notices.json";
   const NAIL_GREEN_NOTICES_TTL_MS = 24 * 60 * 60 * 1000;
+  const NAIL_DAILY_RESET_PATH = "watch-nail-daily-reset.json";
+  const NAIL_DAILY_RESET_PROMPT_MS = 2 * 60 * 60 * 1000;
   const NOTES_RANK_SNAPS_PATH = "watch-notes-rank-snaps.json";
   const NOTES_RANK_PREFS_PATH = "watch-notes-rank-prefs.json";
   const HOME_PREFS_PATH = "watch-home-prefs.json";
@@ -1551,6 +1553,223 @@
     throw lastError || new Error("保存钉子通知失败");
   }
 
+  function nailDailyResetZonedParts(ms, timeZone) {
+    const dtf = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    });
+    const parts = {};
+    for (const part of dtf.formatToParts(new Date(ms))) {
+      if (part.type !== "literal") parts[part.type] = part.value;
+    }
+    return {
+      year: Number(parts.year),
+      month: Number(parts.month),
+      day: Number(parts.day),
+      hour: Number(parts.hour),
+      minute: Number(parts.minute),
+      second: Number(parts.second),
+    };
+  }
+
+  function nailDailyResetDayKey(ms, timeZone) {
+    const p = nailDailyResetZonedParts(ms, timeZone);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${p.year}-${pad(p.month)}-${pad(p.day)}`;
+  }
+
+  function nailDailyResetStartOfDayMs(dayKey, timeZone) {
+    const match = String(dayKey || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return 0;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    let utc = Date.UTC(year, month - 1, day, 0, 0, 0);
+    for (let i = 0; i < 4; i += 1) {
+      const asZone = nailDailyResetZonedParts(utc, timeZone);
+      const asUtc = Date.UTC(
+        asZone.year,
+        asZone.month - 1,
+        asZone.day,
+        asZone.hour,
+        asZone.minute,
+        asZone.second,
+      );
+      const wanted = Date.UTC(year, month - 1, day, 0, 0, 0);
+      utc += wanted - asUtc;
+    }
+    return utc;
+  }
+
+  /** 下一次北京时间 0:00（Asia/Shanghai）重置时刻。 */
+  function nextNailDailyResetAt(nowMs, timeZone) {
+    const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+    const tz = timeZone || "Asia/Shanghai";
+    const todayStart = nailDailyResetStartOfDayMs(
+      nailDailyResetDayKey(now, tz),
+      tz,
+    );
+    if (!(todayStart > 0)) return 0;
+    if (now < todayStart) return todayStart;
+    return todayStart + 24 * 60 * 60 * 1000;
+  }
+
+  function normalizeNailDailyReset(raw) {
+    const data = raw && typeof raw === "object" ? raw : {};
+    const postDismissed =
+      Number(data.postPromptDismissedAt) ||
+      Number(data.promptDismissedAt) ||
+      0;
+    return {
+      resetDay: String(data.resetDay || "").trim(),
+      resetAt: Number(data.resetAt) || 0,
+      updatedCount: Number(data.updatedCount) || 0,
+      skippedPinned: Number(data.skippedPinned) || 0,
+      skippedNoPrice: Number(data.skippedNoPrice) || 0,
+      prePromptDismissedAt: Number(data.prePromptDismissedAt) || 0,
+      postPromptDismissedAt: postDismissed,
+      promptWindowMs:
+        Number(data.promptWindowMs) > 0
+          ? Number(data.promptWindowMs)
+          : NAIL_DAILY_RESET_PROMPT_MS,
+      tz: String(data.tz || "Asia/Shanghai"),
+      updatedAt: Number(data.updatedAt) || 0,
+    };
+  }
+
+  function serializeNailDailyReset(state) {
+    const next = normalizeNailDailyReset(state);
+    return {
+      ...next,
+      updatedAt: Date.now(),
+    };
+  }
+
+  /**
+   * 重置前 2h（北京时间 22:00–0:00）：提醒置顶。
+   * 返回 'pre' | 'post' | null。
+   */
+  function nailDailyResetPromptKind(state, nowMs) {
+    const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+    const data = normalizeNailDailyReset(state);
+    const windowMs =
+      Number(data.promptWindowMs) > 0
+        ? Number(data.promptWindowMs)
+        : NAIL_DAILY_RESET_PROMPT_MS;
+    const upcoming = nextNailDailyResetAt(now, data.tz);
+    if (
+      upcoming > 0 &&
+      now >= upcoming - windowMs &&
+      now < upcoming &&
+      Number(data.prePromptDismissedAt) < upcoming
+    ) {
+      return "pre";
+    }
+    const resetAt = Number(data.resetAt) || 0;
+    if (
+      resetAt > 0 &&
+      now >= resetAt &&
+      Number(data.postPromptDismissedAt) < resetAt
+    ) {
+      return "post";
+    }
+    return null;
+  }
+
+  function shouldShowNailDailyResetPrompt(state, nowMs) {
+    return !!nailDailyResetPromptKind(state, nowMs);
+  }
+
+  async function loadNailDailyResetRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || NAIL_DAILY_RESET_PATH;
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          ...normalizeNailDailyReset(current.data),
+          sha: current.sha,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadNailDailyReset via API failed, trying raw", error);
+    }
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          ...normalizeNailDailyReset(data),
+          sha: null,
+          source: "raw-commit",
+        };
+      }
+    } catch (error) {
+      console.warn("loadNailDailyReset via commit-raw failed", error);
+    }
+    return {
+      ...normalizeNailDailyReset(null),
+      sha: null,
+      source: "empty",
+    };
+  }
+
+  async function patchNailDailyReset(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || NAIL_DAILY_RESET_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = normalizeNailDailyReset(current.data);
+        const mutated =
+          typeof options.mutate === "function"
+            ? options.mutate({ ...base })
+            : null;
+        const nextData = serializeNailDailyReset(
+          mutated && typeof mutated === "object" ? mutated : base,
+        );
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update nail daily reset",
+        });
+        return nextData;
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存钉子每日重置状态失败");
+  }
+
   function normalizeNotesRankSnap(item) {
     if (!item || typeof item !== "object") return null;
     const at = Number(item.at) || 0;
@@ -3071,6 +3290,14 @@
     countUnreadNailGreenNotices,
     loadNailGreenNoticesRaw,
     patchNailGreenNotices,
+    NAIL_DAILY_RESET_PATH,
+    NAIL_DAILY_RESET_PROMPT_MS,
+    normalizeNailDailyReset,
+    nextNailDailyResetAt,
+    nailDailyResetPromptKind,
+    shouldShowNailDailyResetPrompt,
+    loadNailDailyResetRaw,
+    patchNailDailyReset,
     NOTES_RANK_SNAPS_PATH,
     NOTES_RANK_SNAPS_TTL_MS,
     NOTES_RANK_SNAPS_MAX,

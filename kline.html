@@ -2965,6 +2965,20 @@
         color: inherit;
         cursor: pointer;
       }
+      .nail-calc-actions button.is-primary {
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 78%, #1a5c45);
+        color: #fff;
+      }
+      .nail-daily-reset-dialog .nail-calc-panel p {
+        margin: 0 0 10px;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--label);
+      }
+      .nail-daily-reset-dialog .nail-calc-panel .nail-daily-reset-count {
+        font-size: 12px;
+        color: var(--secondary);
+      }
       #nailNoteEditorSave.is-loading::after {
         content: "";
         display: inline-block;
@@ -6019,6 +6033,30 @@
         <p class="nail-calc-hint">基于当前现价下浮 3% / 5%</p>
         <div class="nail-calc-actions">
           <button type="button" id="nailCalcCloseBtn">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="nailDailyResetDialog"
+      class="nail-calc-dialog nail-daily-reset-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="nailDailyResetTitle"
+      hidden
+    >
+      <div class="nail-calc-panel">
+        <h3 id="nailDailyResetTitle">即将重置便签</h3>
+        <p id="nailDailyResetBody">
+          请将需要保留的币先置顶。北京时间 0:00 将对非置顶钉子写入便签现价。
+        </p>
+        <p class="nail-daily-reset-count" id="nailDailyResetCountdown">
+          还有 — 分钟后重置
+        </p>
+        <div class="nail-calc-actions">
+          <button type="button" id="nailDailyResetAck" class="is-primary">
+            确定
+          </button>
         </div>
       </div>
     </div>
@@ -15791,6 +15829,10 @@
       let nailNoticeDeltaFilter = "all"; // all | up | down
       /** 仅蓝筛选下有效；每次打开通知抽屉强制关闭（不持久化）。 */
       let nailNoticeDeBlueEnabled = false;
+      let nailDailyResetState = null;
+      let nailDailyResetPromptKind = null; // pre | post
+      let nailDailyResetPromptBusy = false;
+      let nailDailyResetCountdownTimer = 0;
       let activeView = "market"; // market | nails（会话当前屏）
       let homePref = "market"; // market | nails（启动首页，GitHub）
       let homePrefUpdatedAt = 0;
@@ -16373,6 +16415,7 @@
           if (nailGreenUnreadCount() > 0 && nailNoticeMode === "closed") {
             void openNailNoticeDrawer();
           }
+          void maybeShowNailDailyResetPrompt();
           return;
         }
         await refreshNailBrowseMeta();
@@ -16387,6 +16430,165 @@
         await refreshNailGreenNotices();
         if (nailGreenUnreadCount() > 0 && nailNoticeMode === "closed") {
           void openNailNoticeDrawer();
+        }
+        void maybeShowNailDailyResetPrompt();
+      }
+
+      function stopNailDailyResetCountdown() {
+        if (nailDailyResetCountdownTimer) {
+          window.clearInterval(nailDailyResetCountdownTimer);
+          nailDailyResetCountdownTimer = 0;
+        }
+      }
+
+      function syncNailDailyResetCountdownText() {
+        const el = document.getElementById("nailDailyResetCountdown");
+        if (!el) return;
+        if (nailDailyResetPromptKind !== "pre") {
+          el.hidden = true;
+          return;
+        }
+        el.hidden = false;
+        const upcoming =
+          typeof WatchFavorites.nextNailDailyResetAt === "function"
+            ? WatchFavorites.nextNailDailyResetAt(
+                Date.now(),
+                (nailDailyResetState && nailDailyResetState.tz) ||
+                  "Asia/Shanghai",
+              )
+            : 0;
+        if (!(upcoming > 0)) {
+          el.textContent = "还有 — 分钟后重置（北京时间 0:00）";
+          return;
+        }
+        const mins = Math.max(0, Math.ceil((upcoming - Date.now()) / 60000));
+        el.textContent = `还有 ${mins} 分钟后重置（北京时间 0:00）`;
+      }
+
+      function closeNailDailyResetPrompt() {
+        stopNailDailyResetCountdown();
+        nailDailyResetPromptKind = null;
+        const dialog = document.getElementById("nailDailyResetDialog");
+        if (dialog) dialog.hidden = true;
+      }
+
+      function openNailDailyResetPrompt(state, kind) {
+        nailDailyResetState = state;
+        nailDailyResetPromptKind = kind === "post" ? "post" : "pre";
+        const dialog = document.getElementById("nailDailyResetDialog");
+        const title = document.getElementById("nailDailyResetTitle");
+        const body = document.getElementById("nailDailyResetBody");
+        if (!dialog) return;
+        if (nailDailyResetPromptKind === "pre") {
+          if (title) title.textContent = "即将重置便签";
+          if (body) {
+            body.textContent =
+              "请将需要保留的币先置顶。北京时间 0:00 将对非置顶钉子写入便签现价。";
+          }
+        } else {
+          const n = Number(state && state.updatedCount) || 0;
+          const pinned = Number(state && state.skippedPinned) || 0;
+          if (title) title.textContent = "便签已重置";
+          if (body) {
+            body.textContent =
+              n > 0
+                ? `今日北京时间 0:00 已对 ${n} 个非置顶钉子写入便签现价${pinned ? `（置顶 ${pinned} 个未改）` : ""}。`
+                : "今日北京时间 0:00 便签重置已完成（置顶未改）。";
+          }
+        }
+        syncNailDailyResetCountdownText();
+        dialog.hidden = false;
+        stopNailDailyResetCountdown();
+        if (nailDailyResetPromptKind === "pre") {
+          nailDailyResetCountdownTimer = window.setInterval(() => {
+            syncNailDailyResetCountdownText();
+          }, 30000);
+        }
+      }
+
+      async function maybeShowNailDailyResetPrompt() {
+        if (
+          nailDailyResetPromptBusy ||
+          !isNailDrawerOpen() ||
+          !WatchFavorites ||
+          typeof WatchFavorites.loadNailDailyResetRaw !== "function" ||
+          typeof WatchFavorites.nailDailyResetPromptKind !== "function"
+        ) {
+          return;
+        }
+        const dialog = document.getElementById("nailDailyResetDialog");
+        if (dialog && !dialog.hidden) return;
+        nailDailyResetPromptBusy = true;
+        try {
+          const state = await WatchFavorites.loadNailDailyResetRaw({
+            repo: CONFIG.GITHUB_REPO,
+            path:
+              WatchFavorites.NAIL_DAILY_RESET_PATH ||
+              "watch-nail-daily-reset.json",
+          });
+          nailDailyResetState = state;
+          const kind = WatchFavorites.nailDailyResetPromptKind(state);
+          if (!kind) return;
+          openNailDailyResetPrompt(state, kind);
+        } catch (error) {
+          console.warn("load nail daily reset prompt failed", error);
+        } finally {
+          nailDailyResetPromptBusy = false;
+        }
+      }
+
+      async function dismissNailDailyResetPrompt() {
+        const state = nailDailyResetState;
+        const kind = nailDailyResetPromptKind;
+        closeNailDailyResetPrompt();
+        if (
+          !kind ||
+          !WatchFavorites ||
+          typeof WatchFavorites.patchNailDailyReset !== "function"
+        ) {
+          return;
+        }
+        try {
+          nailDailyResetState = await WatchFavorites.patchNailDailyReset({
+            repo: CONFIG.GITHUB_REPO,
+            path:
+              WatchFavorites.NAIL_DAILY_RESET_PATH ||
+              "watch-nail-daily-reset.json",
+            message:
+              kind === "pre"
+                ? "Dismiss nail daily reset pre-prompt"
+                : "Dismiss nail daily reset post-prompt",
+            mutate: (prev) => {
+              if (kind === "pre") {
+                const upcoming =
+                  typeof WatchFavorites.nextNailDailyResetAt === "function"
+                    ? WatchFavorites.nextNailDailyResetAt(
+                        Date.now(),
+                        prev.tz || "Asia/Shanghai",
+                      )
+                    : 0;
+                return {
+                  ...prev,
+                  prePromptDismissedAt: Math.max(
+                    Number(prev.prePromptDismissedAt) || 0,
+                    upcoming,
+                  ),
+                };
+              }
+              const resetAt = Number(prev.resetAt) || 0;
+              return {
+                ...prev,
+                postPromptDismissedAt: Math.max(
+                  Number(prev.postPromptDismissedAt) || 0,
+                  resetAt,
+                  Date.now(),
+                ),
+              };
+            },
+          });
+        } catch (error) {
+          console.warn("dismiss nail daily reset prompt failed", error);
+          showToast(error.message || "关闭提示失败");
         }
       }
 
@@ -20463,6 +20665,12 @@
           const text = String(btn.dataset.copyText || "").trim();
           if (!text) return;
           void copyName(text);
+        });
+      }
+      const nailDailyResetAck = document.getElementById("nailDailyResetAck");
+      if (nailDailyResetAck) {
+        nailDailyResetAck.addEventListener("click", () => {
+          void dismissNailDailyResetPrompt();
         });
       }
       const nailNoteEditor = document.getElementById("nailNoteEditor");
