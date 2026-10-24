@@ -2155,6 +2155,22 @@
         color: var(--secondary);
         text-align: right;
       }
+      .nail-auto-refresh-block {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+      .nail-auto-refresh-countdown {
+        margin: 0;
+        padding: 0 14px 10px;
+        font-size: 11px;
+        font-weight: 400;
+        color: var(--secondary);
+        line-height: 1.3;
+      }
+      .nail-auto-refresh-countdown[hidden] {
+        display: none;
+      }
       .nail-switch {
         position: relative;
         width: 46px;
@@ -2300,7 +2316,8 @@
       .nail-settings-popover[hidden] {
         display: none !important;
       }
-      .nail-settings-popover .nail-rising-row:last-child {
+      .nail-settings-popover .nail-rising-row:last-child,
+      .nail-settings-popover .nail-auto-refresh-block:last-child .nail-rising-row {
         border-bottom: none;
       }
       .nail-head-actions {
@@ -5461,25 +5478,35 @@
                 </button>
               </div>
             </div>
-            <div class="nail-rising-row">
-              <div class="nail-auto-refresh-label">
-                <span>定时刷新</span>
-                <small>每5秒更新当前排行前10价格</small>
+            <div class="nail-auto-refresh-block">
+              <div class="nail-rising-row">
+                <div class="nail-auto-refresh-label">
+                  <span>定时刷新</span>
+                  <small>每5秒前10 · 每15秒全部</small>
+                </div>
+                <span
+                  id="nailAutoRefreshStatus"
+                  class="nail-auto-refresh-status"
+                  aria-live="polite"
+                >已关闭</span>
+                <button
+                  type="button"
+                  class="nail-switch"
+                  id="nailAutoRefresh"
+                  role="switch"
+                  aria-checked="false"
+                  title="每5秒刷新前10现价；每15秒刷新全部现价与K线"
+                  aria-label="定时刷新"
+                ></button>
               </div>
-              <span
-                id="nailAutoRefreshStatus"
-                class="nail-auto-refresh-status"
+              <p
+                id="nailAutoRefreshCountdown"
+                class="nail-auto-refresh-countdown"
                 aria-live="polite"
-              >已关闭</span>
-              <button
-                type="button"
-                class="nail-switch"
-                id="nailAutoRefresh"
-                role="switch"
-                aria-checked="false"
-                title="每5秒刷新当前排行前10项的现价和24h涨跌"
-                aria-label="定时刷新"
-              ></button>
+                hidden
+              >
+                下次刷新还有 — 秒
+              </p>
             </div>
           </div>
         </div>
@@ -6174,8 +6201,17 @@
       } catch (_) {
         nailAutoRefreshEnabled = false;
       }
+      const NAIL_AUTO_REFRESH_TOP_MS = 5000;
+      const NAIL_AUTO_REFRESH_ALL_MS = 15000;
+      const NAIL_AUTO_REFRESH_ALL_EVERY = Math.round(
+        NAIL_AUTO_REFRESH_ALL_MS / NAIL_AUTO_REFRESH_TOP_MS,
+      ); // 3：每第 3 次 5s tick 做全部，避免与前十重叠
       let nailAutoRefreshTimer = null;
+      let nailAutoRefreshCountdownTimer = null;
+      let nailAutoRefreshTick = 0;
       let nailAutoRefreshBusy = false;
+      let nailAutoRefreshAllBusy = false;
+      let nailNextAllRefreshAt = 0;
       try {
         const savedNailSort = localStorage.getItem(NAIL_SORT_KEY);
         if (
@@ -15862,14 +15898,22 @@
         }
       }
 
-      function setNailNoticeDeltaFilter(mode) {
-        nailNoticeDeltaFilter =
-          mode === "up" || mode === "down" ? mode : "all";
-        syncNailNoticeDeltaFilterUi();
-        applyNailNoticeDeltaFilter();
+      async function reloadNailNoticeList(options) {
+        const opts = options || {};
+        await refreshNailGreenNotices();
+        renderNailNoticeList();
+        if (opts.toast) showToast(opts.toast);
         requestAnimationFrame(() => {
           updateNailNoticeScrollPct({ flash: false });
         });
+      }
+
+      async function setNailNoticeDeltaFilter(mode) {
+        nailNoticeDeltaFilter =
+          mode === "up" || mode === "down" ? mode : "all";
+        syncNailNoticeDeltaFilterUi();
+        // 切换全部/蓝/红后主动刷新，重算相对通知线涨跌再过滤。
+        await reloadNailNoticeList();
       }
 
       async function paintNailNoticeCharts() {
@@ -17304,6 +17348,26 @@
         } else if (statusEl && !nailAutoRefreshTimer) {
           statusEl.textContent = "钉子屏运行中";
         }
+        syncNailAutoRefreshCountdownUi();
+      }
+
+      function syncNailAutoRefreshCountdownUi() {
+        const el = document.getElementById("nailAutoRefreshCountdown");
+        if (!el) return;
+        if (
+          !nailAutoRefreshEnabled ||
+          !nailAutoRefreshTimer ||
+          !nailNextAllRefreshAt
+        ) {
+          el.hidden = true;
+          return;
+        }
+        const left = Math.max(
+          0,
+          Math.ceil((nailNextAllRefreshAt - Date.now()) / 1000),
+        );
+        el.hidden = false;
+        el.textContent = `下次刷新还有 ${left} 秒`;
       }
 
       function stopNailAutoRefresh() {
@@ -17311,6 +17375,12 @@
           window.clearInterval(nailAutoRefreshTimer);
           nailAutoRefreshTimer = null;
         }
+        if (nailAutoRefreshCountdownTimer) {
+          window.clearInterval(nailAutoRefreshCountdownTimer);
+          nailAutoRefreshCountdownTimer = null;
+        }
+        nailAutoRefreshTick = 0;
+        nailNextAllRefreshAt = 0;
         syncNailAutoRefreshUi();
       }
 
@@ -17323,11 +17393,28 @@
         ) {
           return;
         }
+        // 单一定时器：5s 一次；每第 3 拍做「全部」，中间两拍只刷前十，不会叠刷。
+        nailAutoRefreshTick = 0;
+        nailNextAllRefreshAt = Date.now() + NAIL_AUTO_REFRESH_ALL_MS;
         syncNailAutoRefreshUi();
         void refreshNailTopPrices();
         nailAutoRefreshTimer = window.setInterval(() => {
+          nailAutoRefreshTick += 1;
+          if (
+            NAIL_AUTO_REFRESH_ALL_EVERY > 0 &&
+            nailAutoRefreshTick % NAIL_AUTO_REFRESH_ALL_EVERY === 0
+          ) {
+            nailNextAllRefreshAt = Date.now() + NAIL_AUTO_REFRESH_ALL_MS;
+            syncNailAutoRefreshCountdownUi();
+            void refreshNailAllPrices();
+            return;
+          }
           void refreshNailTopPrices();
-        }, 5000);
+        }, NAIL_AUTO_REFRESH_TOP_MS);
+        nailAutoRefreshCountdownTimer = window.setInterval(() => {
+          syncNailAutoRefreshCountdownUi();
+        }, 1000);
+        syncNailAutoRefreshCountdownUi();
       }
 
       function setNailAutoRefreshEnabled(enabled) {
@@ -17345,25 +17432,16 @@
         else stopNailAutoRefresh();
       }
 
-      async function refreshNailTopPrices() {
-        if (
-          !nailAutoRefreshEnabled ||
-          !isNailDrawerOpen() ||
-          document.visibilityState === "hidden" ||
-          nailAutoRefreshBusy
-        ) {
-          return;
-        }
-        const symbols = nailDrawerVisibleItems()
-          .slice(0, 10)
+      async function refreshNailVisibleTickers(limit) {
+        const items = nailDrawerVisibleItems();
+        const sliced =
+          Number.isFinite(limit) && limit > 0 ? items.slice(0, limit) : items;
+        const symbols = sliced
           .map((item) => String(item.symbol || "").trim().toUpperCase())
           .filter(Boolean);
         if (!symbols.length) {
-          syncNailAutoRefreshUi("当前排行无项目");
-          return;
+          return { symbols: [], errors: [] };
         }
-        nailAutoRefreshBusy = true;
-        syncNailAutoRefreshUi("刷新中…");
         const errors = [];
         let cursor = 0;
         const workers = Array.from(
@@ -17381,6 +17459,22 @@
           },
         );
         await Promise.all(workers);
+        return { symbols, errors };
+      }
+
+      async function refreshNailTopPrices() {
+        if (
+          !nailAutoRefreshEnabled ||
+          !isNailDrawerOpen() ||
+          document.visibilityState === "hidden" ||
+          nailAutoRefreshBusy ||
+          nailAutoRefreshAllBusy
+        ) {
+          return;
+        }
+        nailAutoRefreshBusy = true;
+        syncNailAutoRefreshUi("刷新中…");
+        const { symbols, errors } = await refreshNailVisibleTickers(10);
         nailAutoRefreshBusy = false;
         if (!nailAutoRefreshEnabled) {
           syncNailAutoRefreshUi();
@@ -17388,6 +17482,10 @@
         }
         if (!isNailDrawerOpen() || document.visibilityState === "hidden") {
           syncNailAutoRefreshUi();
+          return;
+        }
+        if (!symbols.length) {
+          syncNailAutoRefreshUi("当前排行无项目");
           return;
         }
         syncNailPriceRows();
@@ -17398,6 +17496,56 @@
         }
         syncNailAutoRefreshUi(
           `更新于 ${new Date().toLocaleTimeString("zh-CN", {
+            hour12: false,
+          })}`,
+        );
+      }
+
+      /** 每15秒：全部可见钉子现价 + 重画 K 线。 */
+      async function refreshNailAllPrices() {
+        if (
+          !nailAutoRefreshEnabled ||
+          !isNailDrawerOpen() ||
+          document.visibilityState === "hidden" ||
+          nailAutoRefreshAllBusy
+        ) {
+          return;
+        }
+        nailAutoRefreshAllBusy = true;
+        syncNailAutoRefreshUi("全部刷新中…");
+        const { symbols, errors } = await refreshNailVisibleTickers(0);
+        if (
+          nailAutoRefreshEnabled &&
+          isNailDrawerOpen() &&
+          document.visibilityState !== "hidden"
+        ) {
+          syncNailPriceRows();
+          try {
+            await paintNailKlines();
+          } catch (error) {
+            console.warn("定时刷新钉子K线失败", error);
+          }
+        }
+        nailAutoRefreshAllBusy = false;
+        if (!nailAutoRefreshEnabled) {
+          syncNailAutoRefreshUi();
+          return;
+        }
+        if (!isNailDrawerOpen() || document.visibilityState === "hidden") {
+          syncNailAutoRefreshUi();
+          return;
+        }
+        if (!symbols.length) {
+          syncNailAutoRefreshUi("当前排行无项目");
+          return;
+        }
+        if (errors.length) {
+          console.warn("定时全部刷新钉子失败", errors);
+          syncNailAutoRefreshUi(`全部失败 ${errors.length}/${symbols.length}`);
+          return;
+        }
+        syncNailAutoRefreshUi(
+          `全部 ${new Date().toLocaleTimeString("zh-CN", {
             hour12: false,
           })}`,
         );
@@ -20280,7 +20428,7 @@
         nailNoticeDeltaFilterEl.addEventListener("click", (event) => {
           const btn = event.target.closest("[data-notice-delta-filter]");
           if (!btn) return;
-          setNailNoticeDeltaFilter(
+          void setNailNoticeDeltaFilter(
             btn.getAttribute("data-notice-delta-filter"),
           );
         });
@@ -20290,12 +20438,7 @@
       );
       if (nailNoticeRefreshBtn) {
         nailNoticeRefreshBtn.addEventListener("click", async () => {
-          await refreshNailGreenNotices();
-          renderNailNoticeList();
-          showToast("通知已刷新");
-          requestAnimationFrame(() => {
-            updateNailNoticeScrollPct({ flash: false });
-          });
+          await reloadNailNoticeList({ toast: "通知已刷新" });
         });
       }
       const nailNoticeListScroll = document.getElementById("nailNoticeList");
