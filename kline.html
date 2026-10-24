@@ -5377,7 +5377,7 @@
                 id="nailHomePrefSwitch"
                 role="group"
                 aria-label="系统首页"
-                title="启动进入行情或钉子全屏"
+                title="系统首页：切到哪一屏，刷新/下次启动就进哪一屏"
               >
                 <button type="button" data-home-pref="market" class="is-active">
                   行情
@@ -15561,13 +15561,39 @@
       let nailNoticeDeltaFilter = "all"; // all | up | down
       let activeView = "market"; // market | nails（会话当前屏）
       let homePref = "market"; // market | nails（启动首页，GitHub）
+      let homePrefUpdatedAt = 0;
       let homePrefSaving = false;
       const HOME_PREFS_LOCAL_KEY = "kline-home-pref-v1";
-      try {
-        const localHome = localStorage.getItem(HOME_PREFS_LOCAL_KEY);
-        if (localHome === "nails" || localHome === "market") homePref = localHome;
-      } catch (_) {
-        /* ignore */
+
+      function readLocalHomePref() {
+        try {
+          const raw = localStorage.getItem(HOME_PREFS_LOCAL_KEY);
+          if (!raw) return null;
+          if (raw === "nails" || raw === "market") {
+            return { home: raw, updatedAt: 0 };
+          }
+          const parsed = JSON.parse(raw);
+          if (
+            parsed &&
+            (parsed.home === "nails" || parsed.home === "market")
+          ) {
+            return {
+              home: parsed.home,
+              updatedAt: Number(parsed.updatedAt) || 0,
+            };
+          }
+        } catch (_) {
+          /* ignore */
+        }
+        return null;
+      }
+
+      {
+        const localHome = readLocalHomePref();
+        if (localHome) {
+          homePref = localHome.home;
+          homePrefUpdatedAt = localHome.updatedAt;
+        }
       }
       document.body.dataset.activeView = activeView;
 
@@ -15980,13 +16006,23 @@
         });
       }
 
-      function applyHomePref(next) {
+      function applyHomePref(next, updatedAt) {
         homePref =
           String(next || "").trim().toLowerCase() === "nails"
             ? "nails"
             : "market";
+        homePrefUpdatedAt =
+          Number.isFinite(Number(updatedAt)) && Number(updatedAt) > 0
+            ? Number(updatedAt)
+            : Date.now();
         try {
-          localStorage.setItem(HOME_PREFS_LOCAL_KEY, homePref);
+          localStorage.setItem(
+            HOME_PREFS_LOCAL_KEY,
+            JSON.stringify({
+              home: homePref,
+              updatedAt: homePrefUpdatedAt,
+            }),
+          );
         } catch (_) {
           /* ignore */
         }
@@ -15994,12 +16030,8 @@
       }
 
       async function loadHomePrefsShared() {
-        try {
-          const local = localStorage.getItem(HOME_PREFS_LOCAL_KEY);
-          if (local === "nails" || local === "market") applyHomePref(local);
-        } catch (_) {
-          /* ignore */
-        }
+        const local = readLocalHomePref();
+        if (local) applyHomePref(local.home, local.updatedAt || Date.now());
         if (
           !WatchFavorites ||
           typeof WatchFavorites.loadHomePrefsRaw !== "function"
@@ -16013,7 +16045,14 @@
               WatchFavorites.HOME_PREFS_PATH || "watch-home-prefs.json",
           });
           if (remote && remote.prefs) {
-            applyHomePref(remote.prefs.home);
+            const remoteAt = Number(remote.prefs.updatedAt) || 0;
+            const localAt = Number(homePrefUpdatedAt) || 0;
+            // 取较新一侧，避免 GitHub 未写上时用旧的 market 盖掉本地钉子首页。
+            if (remoteAt >= localAt) {
+              applyHomePref(remote.prefs.home, remoteAt || Date.now());
+            } else if (localAt > remoteAt) {
+              void flushHomePref(homePref);
+            }
             return true;
           }
         } catch (error) {
@@ -16027,7 +16066,7 @@
           String(nextHome || homePref).trim().toLowerCase() === "nails"
             ? "nails"
             : "market";
-        applyHomePref(home);
+        applyHomePref(home, Date.now());
         if (
           !WatchFavorites ||
           typeof WatchFavorites.patchHomePrefs !== "function" ||
@@ -16042,7 +16081,10 @@
             path:
               WatchFavorites.HOME_PREFS_PATH || "watch-home-prefs.json",
             message: `Home pref ${home}`,
-            mutate: () => ({ home, updatedAt: Date.now() }),
+            mutate: () => ({
+              home,
+              updatedAt: homePrefUpdatedAt || Date.now(),
+            }),
           });
         } catch (error) {
           console.warn("persist home pref failed", error);
@@ -16074,6 +16116,10 @@
             "aria-expanded",
             next === "nails" ? "true" : "false",
           );
+        }
+        // 双屏对等：当前屏即系统首页（启动恢复）；冷启动还原时不回写。
+        if (opts.persistHome !== false && was !== next) {
+          void flushHomePref(next);
         }
         syncBodyScrollLock();
         if (next === "nails") {
@@ -19124,7 +19170,10 @@
         } finally {
           // 冷启动：先切到偏好首页，再关进度层，避免首页=钉子时先闪行情。
           if (reason === "boot") {
-            setActiveView(getHomePref(), { forceRefresh: true });
+            setActiveView(getHomePref(), {
+              forceRefresh: true,
+              persistHome: false,
+            });
           }
           if (showBootInit) {
             const homeLabel =
@@ -19836,7 +19885,8 @@
           const btn = event.target.closest("[data-home-pref]");
           if (!btn) return;
           const next = btn.getAttribute("data-home-pref");
-          void flushHomePref(next);
+          if (next !== "nails" && next !== "market") return;
+          setActiveView(next);
           showToast(
             next === "nails" ? "启动首页：钉子" : "启动首页：行情",
           );
