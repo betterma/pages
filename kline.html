@@ -2867,6 +2867,86 @@
       .nail-note-editor-actions button:disabled {
         opacity: 0.55;
       }
+      .nail-calc-dialog {
+        position: fixed;
+        inset: 0;
+        z-index: 140;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 16px;
+        background: rgba(0, 0, 0, 0.42);
+      }
+      .nail-calc-dialog[hidden] {
+        display: none;
+      }
+      .nail-calc-panel {
+        width: min(360px, 100%);
+        border-radius: 16px;
+        border: 0.5px solid var(--separator);
+        background: var(--elevated, var(--grouped));
+        padding: 16px 16px 14px;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+      }
+      .nail-calc-panel h3 {
+        margin: 0 0 6px;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .nail-calc-base {
+        margin: 0 0 12px;
+        font-size: 12px;
+        color: var(--secondary);
+      }
+      .nail-calc-rows {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .nail-calc-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+        border: 0.5px solid var(--separator);
+        border-radius: 12px;
+        background: var(--fill, rgba(90, 106, 104, 0.08));
+        color: inherit;
+        padding: 12px 14px;
+        text-align: left;
+        cursor: pointer;
+      }
+      .nail-calc-row:active {
+        background: color-mix(in srgb, var(--fill) 70%, var(--accent, #2f8f6e) 18%);
+      }
+      .nail-calc-row strong {
+        font-size: 15px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-calc-row span {
+        font-size: 12px;
+        color: var(--secondary);
+      }
+      .nail-calc-hint {
+        margin: 10px 0 0;
+        font-size: 11px;
+        color: var(--secondary);
+      }
+      .nail-calc-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 12px;
+      }
+      .nail-calc-actions button {
+        border: none;
+        border-radius: 10px;
+        padding: 8px 14px;
+        background: var(--fill, rgba(90, 106, 104, 0.12));
+        color: inherit;
+        cursor: pointer;
+      }
       #nailNoteEditorSave.is-loading::after {
         content: "";
         display: inline-block;
@@ -3247,7 +3327,8 @@
       .card-focus-bar.is-nail-scope [data-focus-action="more"] {
         display: none;
       }
-      .card-focus-bar:not(.is-nail-scope) [data-focus-action="nail-note"] {
+      .card-focus-bar:not(.is-nail-scope) [data-focus-action="nail-note"],
+      .card-focus-bar:not(.is-nail-scope) [data-focus-action="nail-calc"] {
         display: none;
       }
       .card-focus-bar .card-focus-label {
@@ -5880,9 +5961,38 @@
       <button type="button" data-focus-action="zoom">放大</button>
       <button type="button" data-focus-action="refresh">刷新</button>
       <button type="button" data-focus-action="nail-note">便签</button>
+      <button type="button" data-focus-action="nail-calc">计算</button>
       <button type="button" class="is-primary" data-focus-action="more">
         更多
       </button>
+    </div>
+
+    <div
+      id="nailCalcDialog"
+      class="nail-calc-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="nailCalcTitle"
+      hidden
+    >
+      <div class="nail-calc-panel">
+        <h3 id="nailCalcTitle">止损价</h3>
+        <p class="nail-calc-base" id="nailCalcBase">现价 —</p>
+        <div class="nail-calc-rows" id="nailCalcRows">
+          <button type="button" class="nail-calc-row" data-calc-copy disabled>
+            <strong>—</strong>
+            <span>-3% 止损 · 点按复制</span>
+          </button>
+          <button type="button" class="nail-calc-row" data-calc-copy disabled>
+            <strong>—</strong>
+            <span>-5% 止损 · 点按复制</span>
+          </button>
+        </div>
+        <p class="nail-calc-hint">基于当前现价下浮 3% / 5%</p>
+        <div class="nail-calc-actions">
+          <button type="button" id="nailCalcCloseBtn">关闭</button>
+        </div>
+      </div>
     </div>
 
     <div
@@ -15415,6 +15525,11 @@
         if (action === "nail-note") {
           if (focusActionScope !== "nail") return;
           openNailNoteEditor(symbol);
+          return;
+        }
+        if (action === "nail-calc") {
+          if (focusActionScope !== "nail") return;
+          void openNailStopCalc(symbol);
         }
       }
 
@@ -17745,6 +17860,73 @@
         const editor = document.getElementById("nailNoteEditor");
         if (editor) editor.hidden = true;
         nailNoteEditorSymbol = null;
+      }
+
+      function closeNailStopCalc() {
+        const dialog = document.getElementById("nailCalcDialog");
+        if (dialog) dialog.hidden = true;
+      }
+
+      async function openNailStopCalc(symbol) {
+        const key = WatchFavorites.nailSymbolKey
+          ? WatchFavorites.nailSymbolKey(symbol)
+          : String(symbol || "")
+              .trim()
+              .toUpperCase();
+        if (!key) return;
+        const dialog = document.getElementById("nailCalcDialog");
+        const title = document.getElementById("nailCalcTitle");
+        const baseEl = document.getElementById("nailCalcBase");
+        const rowsEl = document.getElementById("nailCalcRows");
+        if (!dialog || !rowsEl) return;
+        const label = key.replace(/USDT$/i, "");
+        if (title) title.textContent = `${label} 止损价`;
+        if (baseEl) baseEl.textContent = "现价读取中…";
+        rowsEl.querySelectorAll("[data-calc-copy]").forEach((btn) => {
+          btn.disabled = true;
+          const strong = btn.querySelector("strong");
+          if (strong) strong.textContent = "—";
+          delete btn.dataset.copyText;
+        });
+        dialog.hidden = false;
+        let price = Number(marketMap[key]?.price);
+        if (!(price > 0)) {
+          try {
+            await fetchBinanceTickerForSymbol(key);
+            price = Number(marketMap[key]?.price);
+          } catch (error) {
+            console.warn("nail stop calc ticker failed", error);
+          }
+        }
+        if (!(price > 0)) {
+          if (baseEl) baseEl.textContent = "暂无现价，请先刷新";
+          showToast("暂无现价");
+          return;
+        }
+        const stop3 = price * 0.97;
+        const stop5 = price * 0.95;
+        const text3 = formatPinPrice(stop3);
+        const text5 = formatPinPrice(stop5);
+        if (baseEl) {
+          baseEl.textContent = `现价 ${formatPinPrice(price)}`;
+        }
+        const buttons = [...rowsEl.querySelectorAll("[data-calc-copy]")];
+        if (buttons[0]) {
+          buttons[0].disabled = false;
+          buttons[0].dataset.copyText = text3;
+          const strong = buttons[0].querySelector("strong");
+          if (strong) strong.textContent = text3;
+          const span = buttons[0].querySelector("span");
+          if (span) span.textContent = "-3% 止损 · 点按复制";
+        }
+        if (buttons[1]) {
+          buttons[1].disabled = false;
+          buttons[1].dataset.copyText = text5;
+          const strong = buttons[1].querySelector("strong");
+          if (strong) strong.textContent = text5;
+          const span = buttons[1].querySelector("span");
+          if (span) span.textContent = "-5% 止损 · 点按复制";
+        }
       }
 
       async function saveNailNote(symbol, note, timeMode) {
@@ -20192,6 +20374,26 @@
           event.preventDefault();
           event.stopPropagation();
           unveilNailBrowseCard(card.getAttribute("data-nail-symbol"));
+        });
+      }
+      const nailCalcDialog = document.getElementById("nailCalcDialog");
+      const nailCalcCloseBtn = document.getElementById("nailCalcCloseBtn");
+      const nailCalcRows = document.getElementById("nailCalcRows");
+      if (nailCalcCloseBtn) {
+        nailCalcCloseBtn.addEventListener("click", closeNailStopCalc);
+      }
+      if (nailCalcDialog) {
+        nailCalcDialog.addEventListener("click", (event) => {
+          if (event.target === nailCalcDialog) closeNailStopCalc();
+        });
+      }
+      if (nailCalcRows) {
+        nailCalcRows.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-calc-copy]");
+          if (!btn || btn.disabled) return;
+          const text = String(btn.dataset.copyText || "").trim();
+          if (!text) return;
+          void copyName(text);
         });
       }
       const nailNoteEditor = document.getElementById("nailNoteEditor");
