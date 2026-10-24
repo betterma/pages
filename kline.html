@@ -13815,15 +13815,17 @@
           const x = pad.left + slot * index + slot / 2;
           const up = candle.close >= candle.open;
           const base = up ? "#8a9a96" : "#9a8e88";
+          const inDelta = deltaFromIndex >= 0 && index >= deltaFromIndex;
+          // 通知线起不再染绿，只染蓝/红；绿仅保留在通知线之前。
           const useAlert =
+            !inDelta &&
             hasAlert &&
             up &&
             alertGreenRange.from >= 0 &&
             index >= alertGreenRange.from &&
             index < alertGreenRange.until;
-          const inDelta = deltaFromIndex >= 0 && index >= deltaFromIndex;
 
-          // 先灰底；再按通知线染蓝/红；荧光绿叠在水位以上（可同根并存）。
+          // 先灰底；通知线起按通知线染蓝/红；此前可叠荧光绿。
           strokeCandleWick(
             ctx,
             x,
