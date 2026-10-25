@@ -46,7 +46,8 @@ function normalizePinList(raw) {
   raw.forEach((item) => {
     if (!item || !item.symbol) return;
     const symbol = String(item.symbol).trim().toUpperCase();
-    if (!symbol) return;
+    // 只保留 USDT 现货；读入时丢掉脏交易对，避免污染后续边沿。
+    if (!symbol || !symbol.endsWith('USDT')) return;
     const pinnedAt = Number(item.pinnedAt) || 0;
     const pinPrice = Number(item.pinPrice);
     const expiresAt = Number(item.expiresAt) || 0;
@@ -72,7 +73,7 @@ function addPin(list, symbol, pinPrice, source, now) {
   const key = String(symbol || '')
     .trim()
     .toUpperCase();
-  if (!key) return normalizePinList(list);
+  if (!key || !key.endsWith('USDT')) return normalizePinList(list);
   const ts = Number.isFinite(Number(now)) ? Number(now) : Date.now();
   const price = Number(pinPrice);
   const next = normalizePinList(list).filter((item) => item.symbol !== key);
@@ -189,7 +190,10 @@ function ranking(marketMap, blacklist) {
   return Object.entries(marketMap || {})
     .sort((a, b) => (b[1].change24h || 0) - (a[1].change24h || 0))
     .map(([symbol]) => symbol)
-    .filter((symbol) => !blacklist.has(symbol));
+    .filter(
+      (symbol) =>
+        /USDT$/i.test(String(symbol || '')) && !blacklist.has(symbol),
+    );
 }
 
 function getWindowStart(timestamp, duration) {
@@ -249,7 +253,7 @@ function buildWatchPool(history, marketMap, seedPool, blacklist) {
   const next = new Set(
     (seedPool || [])
       .map((s) => String(s || '').toUpperCase())
-      .filter(Boolean),
+      .filter((s) => s.endsWith('USDT')),
   );
   for (const symbol of [...next]) {
     const rank = list.indexOf(symbol) + 1;
@@ -280,11 +284,15 @@ function listRisingZone(history, marketMap, watchPool, blacklist) {
   const ranked = list.filter((symbol) => watchPool.has(symbol));
   const unranked = [...watchPool].filter(
     (symbol) =>
+      String(symbol).endsWith('USDT') &&
       marketMap[symbol] &&
       !list.includes(symbol) &&
       !blacklist.has(symbol),
   );
-  return [...ranked, ...unranked].filter((symbol) => !blacklist.has(symbol));
+  return [...ranked, ...unranked].filter(
+    (symbol) =>
+      String(symbol).endsWith('USDT') && !blacklist.has(symbol),
+  );
 }
 
 function emptyResult(pins, snap, seeded, events) {
@@ -332,11 +340,14 @@ async function runAutoPin(options) {
   const history = Array.isArray(watchData && watchData.history)
     ? watchData.history
     : [];
-  const seedPool = Array.isArray(watchData && watchData.watchPool)
+  const seedPool = (Array.isArray(watchData && watchData.watchPool)
     ? watchData.watchPool
-    : [];
+    : []
+  )
+    .map((s) => String(s || '').trim().toUpperCase())
+    .filter((s) => s.endsWith('USDT'));
 
-  // 全市场 24hr，才能得到真实前 N（不能只拉池内子集再排名）。
+  // 全市场 USDT 24hr，才能得到真实前 N（不能只拉池内子集再排名）。
   const marketMap = await fetchBinanceTickers(null);
 
   const watchPool = buildWatchPool(history, marketMap, seedPool, blacklist);

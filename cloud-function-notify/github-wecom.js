@@ -136,7 +136,8 @@ async function fetchBinancePrices(symbols) {
 
 /**
  * @param {string[]|null|undefined} symbols
- *   传入数组则只保留这些；传 null/undefined 表示全市场（用于 24h 真前 N 排名）。
+ *   传入数组则只保留这些；传 null/undefined 表示全市场 **USDT** 交易对
+ *   （用于 24h 真前 N 排名；非 USDT 一律丢弃）。
  */
 async function fetchBinanceTickers(symbols) {
   const filter =
@@ -164,11 +165,14 @@ async function fetchBinanceTickers(symbols) {
       const map = {};
       list.forEach((item) => {
         if (!item || !item.symbol) return;
-        if (filter && !filter.has(item.symbol)) return;
+        const symbol = String(item.symbol).toUpperCase();
+        // 本项目只做 USDT 现货；全市场拉取时也必须过滤，否则 GBP/BNB/FDUSD 等会进自动盯。
+        if (!symbol.endsWith('USDT')) return;
+        if (filter && !filter.has(symbol)) return;
         const price = Number(item.lastPrice);
         const change24h = Number(item.priceChangePercent);
         if (!Number.isFinite(price)) return;
-        map[item.symbol] = {
+        map[symbol] = {
           price,
           change24h: Number.isFinite(change24h) ? change24h : null,
         };
