@@ -2648,12 +2648,26 @@
       }
       .nail-notice-meta {
         display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 6px;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 2px;
         font-size: 10px;
         color: var(--secondary);
         margin-bottom: 4px;
+      }
+      .nail-notice-line {
+        display: flex;
+        align-items: baseline;
+        gap: 5px;
+        line-height: 1.3;
+      }
+      .nail-notice-line .nail-notice-key {
+        flex-shrink: 0;
+        color: var(--muted);
+      }
+      .nail-notice-line .nail-notice-delta {
+        margin-left: auto;
+        font-weight: 600;
       }
       .pull-refresh-scroll {
         position: relative;
@@ -16347,8 +16361,9 @@
               `<span class="nail-notice-card-stamps">${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
               `</div>`,
               `<div class="nail-notice-meta">`,
-              `<span>水位 ${escapeHtml(formatPinPrice(item.alertPrice))}${notifyPrice > 0 ? ` · 通知 ${escapeHtml(formatPinPrice(notifyPrice))}` : ""} · ${escapeHtml(item.interval || "4h")}</span>`,
-              `<span class="nail-notice-delta" data-notice-delta></span>`,
+              `<span class="nail-notice-line"><span class="nail-notice-key">水位</span><span>${escapeHtml(formatPinPrice(item.alertPrice))}</span></span>`,
+              `<span class="nail-notice-line"><span class="nail-notice-key">通知</span><span>${notifyPrice > 0 ? escapeHtml(formatPinPrice(notifyPrice)) : "--"}</span><span class="nail-notice-iv">${escapeHtml(item.interval || "4h")}</span></span>`,
+              `<span class="nail-notice-line"><span class="nail-notice-key">现价</span><span data-notice-live>--</span><span class="nail-notice-delta" data-notice-delta></span></span>`,
               `</div>`,
               `<canvas width="640" height="160" data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${Number(item.alertPrice) || 0}" data-notice-notify="${notifyPrice}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
               `</article>`,
@@ -16516,6 +16531,16 @@
                 candles.length > 0
                   ? Number(candles[candles.length - 1].close)
                   : NaN;
+              const liveEl = canvas
+                .closest(".nail-notice-card")
+                ?.querySelector("[data-notice-live]");
+              if (
+                liveEl &&
+                Number.isFinite(latestClose) &&
+                latestClose > 0
+              ) {
+                liveEl.textContent = formatPinPrice(latestClose);
+              }
               const deltaEl = canvas
                 .closest(".nail-notice-card")
                 ?.querySelector("[data-notice-delta]");
