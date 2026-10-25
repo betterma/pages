@@ -196,7 +196,7 @@
             text-overflow: ellipsis;
             white-space: nowrap;
             vertical-align: bottom;
-            pointer-events: none; /* 点击事件由td处理 */
+            pointer-events: none;
         }
         .success-row {
             background-color: #ffffff;
@@ -388,7 +388,6 @@
             font-size: 13px;
             color: #0369a1;
         }
-        /* 复制成功提示 */
         .copy-toast {
             position: fixed;
             bottom: 20px;
@@ -476,23 +475,51 @@
         - 粘贴前两步得到的新地址 → 点击查询 → Birdeye 拉市值。<br>
         - <strong>市值 &lt; $5M</strong>：直接丢弃，不展示、不进入导出。<br>
         - <strong>市值 ≥ $5M</strong>：按市值降序展示；<strong>To Watch</strong> 覆盖写入本次完整信息（符号/市值等）；剪贴板仍复制地址数组；<strong>To All</strong> 与历史合并去重。<br>
-        - 查询失败的地址单独标红，不进入导出。
+        - 查询失败的地址单独标红，不进入导出。<br>
+        - 🔑 <strong>多 Key 轮换</strong>：当前 API key 额度/凭据不足时自动切换到下一个 key 继续，不中断批次；全部 key 均耗尽才停批。
     </div>
 
     <div class="footer-note">
-        ⚡ 数据来源：Birdeye API | 60 rpm → 1秒间隔 | 地址可点击复制
+        ⚡ 数据来源：Birdeye API | 60 rpm → 1秒间隔 | 地址可点击复制 | 支持多 API Key 自动轮换
     </div>
 </div>
 
 <script>
     (function() {
         // ---------- 配置 ----------
-       
-        
-        const API_KEY = '5ca354faacf24349b273420aa6872c3b';
         const BASE_URL = 'https://public-api.birdeye.so';
         const PLATFORM = 'solana';
         const REQUEST_DELAY = 1000; // 60 rpm → 1秒
+
+        // ========== 多 API Key（额度不足时自动轮换）==========
+        // 第 1 个为旧 key，第 2、3 个为用户新申请的 key
+        const API_KEYS = [
+            '5ca354faacf24349b273420aa6872c3b', // 旧 key（原）
+            '7d418781a83946079958b258518ff69e', // 新 key 1
+            '9f4d4e0d591b4fb682ec88fd859d184e', // 新 key 2
+        ];
+        // 当前使用的 key 下标（默认从第 1 个开始）
+        let activeKeyIndex = 0;
+        // 已被判定"额度/凭据耗尽"的 key 下标集合
+        const exhaustedKeys = new Set();
+
+        function getApiKey() {
+            return API_KEYS[activeKeyIndex];
+        }
+
+        // 标记当前 key 耗尽，并切换到下一个未耗尽的 key
+        function switchToNextKey() {
+            exhaustedKeys.add(activeKeyIndex);
+            const n = API_KEYS.length;
+            for (let step = 1; step <= n; step++) {
+                const idx = (activeKeyIndex + step) % n;
+                if (!exhaustedKeys.has(idx)) {
+                    activeKeyIndex = idx;
+                    return true;
+                }
+            }
+            return false; // 所有 key 都已耗尽
+        }
 
         // GitHub 配置（请替换为您的 Personal Access Token）
         const aaa1 = "gh"
@@ -684,40 +711,80 @@
             hideStatus();
         });
 
-        // ---------- Birdeye API 调用 (单个地址，带重试) ----------
-        async function queryTokenWithRetry(address, retries = 3) {
+        // ---------- Birdeye API 调用（多 key 自动轮换 + 重试）----------
+        // 同一 key 连续 429 达此次数 → 判定为该 key 速率/配额耗尽，切换下一个 key
+        const RATE_LIMIT_ROTATE_AFTER = 2;
+
+        async function queryTokenWithRetry(address) {
             const url = `${BASE_URL}/defi/token_overview?address=${encodeURIComponent(address)}`;
-            for (let i = 0; i < retries; i++) {
+            // 上界保证本地址内能轮换完所有 key，用于正确识别"全部 key 持续 429"并停批
+            const maxAttempts = Math.max(10, API_KEYS.length * RATE_LIMIT_ROTATE_AFTER + 4);
+            let lastQuotaError = null;
+            let rateLimitStreak = 0; // 当前 key 在本地址上连续 429 的次数
+            let rotateCount = 0;     // 本地址内因 429 触发的换 key 次数
+
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                // 若当前 key 已被判定确凿耗尽（401/402/403/配额文案），切换到下一个可用 key
+                if (exhaustedKeys.has(activeKeyIndex) && !switchToNextKey()) {
+                    const stop = new Error('所有 Birdeye API key 均不可用，已停止本批请求');
+                    stop.code = 'BIRDEYE_STOP_BATCH';
+                    throw stop;
+                }
+
+                const key = getApiKey();
                 try {
                     const response = await fetch(url, {
-                        headers: { 'X-API-KEY': API_KEY }
+                        headers: { 'X-API-KEY': key }
                     });
-                    
+
                     if (response.status === 429) {
-                        const waitTime = Math.pow(2, i) * 2000; // 2s, 4s, 8s
-                        console.log(`⏳ 429 限流，等待 ${waitTime}ms 后重试 (${i+1}/${retries})`);
+                        rateLimitStreak++;
+                        const waitTime = 1000 * rateLimitStreak; // 1s, 2s, ...
+                        console.log(`⏳ 429（key ${activeKeyIndex + 1}）第 ${rateLimitStreak} 次，等待 ${waitTime}ms`);
                         await new Promise(resolve => setTimeout(resolve, waitTime));
+
+                        if (rateLimitStreak >= RATE_LIMIT_ROTATE_AFTER) {
+                            rotateCount++;
+                            // 本地址内已把每个 key 都试过且全部持续 429 → 所有 key 当前不可用，停批
+                            if (rotateCount >= API_KEYS.length) {
+                                const stop = new Error('所有 Birdeye API key 持续 429（限流/额度耗尽），已停止本批请求');
+                                stop.code = 'BIRDEYE_STOP_BATCH';
+                                throw stop;
+                            }
+                            console.log(`🔄 key ${activeKeyIndex + 1} 持续 429，切换到下一个 key 继续`);
+                            activeKeyIndex = (activeKeyIndex + 1) % API_KEYS.length;
+                            rateLimitStreak = 0;
+                        }
                         continue;
                     }
-                    
+
                     if (!response.ok) {
                         if (response.status === 404) {
                             throw new Error('未收录');
-                        } else {
-                            const errText = await response.text();
-                            throw new Error(`HTTP ${response.status}: ${errText.slice(0, 100)}`);
                         }
+                        const errText = await response.text();
+                        // 凭据/额度类错误（确凿耗尽）→ 永久标记该 key 并切换，不中断批次
+                        const isQuota = [401, 402, 403].includes(response.status) ||
+                            /quota|monthly limit|credits exhausted/i.test(errText);
+                        if (isQuota) {
+                            lastQuotaError = new Error(`API key ${activeKeyIndex + 1} 额度/凭据不可用`);
+                            console.log(`🔄 ${lastQuotaError.message}，切换到下一个 key 继续`);
+                            exhaustedKeys.add(activeKeyIndex); // 下次循环自动 switchToNextKey
+                            rateLimitStreak = 0;
+                            continue;
+                        }
+                        throw new Error(`HTTP ${response.status}: ${errText.slice(0, 100)}`);
                     }
 
                     const json = await response.json();
                     const data = json.data || {};
-                    
+
                     // 提取所需字段
                     return {
                         address,
                         success: true,
                         symbol: data.symbol || '-',
-                        market_cap: data.marketCap,          // 注意大小写
+                        market_cap: data.marketCap,
                         price: data.price,
                         fdv: data.fdv,
                         liquidity: data.liquidity,
@@ -725,16 +792,19 @@
                         holders: data.holder,
                     };
                 } catch (err) {
-                    if (i === retries - 1) throw err;
-                    await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+                    if (err.code === 'BIRDEYE_STOP_BATCH') throw err;
+                    throw err; // 非配额类错误（404/其他 HTTP）直接抛出
                 }
             }
+
+            throw lastQuotaError || new Error('Birdeye 请求重试次数已用尽');
         }
 
         // ---------- 批量查询（串行，固定延迟 + 重试）----------
         async function batchQuery(addresses) {
             const results = [];
             let successCount = 0;
+            let rateLimited = false;
             
             for (let i = 0; i < addresses.length; i++) {
                 const addr = addresses[i];
@@ -750,17 +820,28 @@
                         success: false,
                         error: err.message
                     });
+                    if (['BIRDEYE_RATE_LIMIT', 'BIRDEYE_STOP_BATCH'].includes(err.code)) {
+                        rateLimited = true;
+                        for (const skippedAddress of addresses.slice(i + 1)) {
+                            results.push({
+                                address: skippedAddress,
+                                success: false,
+                                error: '已跳过：Birdeye 限流，本批后续请求已停止'
+                            });
+                        }
+                        break;
+                    }
                 }
 
                 if (i < addresses.length - 1) {
                     await new Promise(resolve => setTimeout(resolve, REQUEST_DELAY));
                 }
             }
-            return { results, successCount };
+            return { results, successCount, rateLimited };
         }
 
         // ---------- 渲染表格：丢弃 <5M，其余供 To Watch / To All ----------
-        function renderResults(results) {
+        function renderResults(results, stoppedEarly = false) {
             if (!results || results.length === 0) {
                 resultsBody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 40px;">无数据</td></tr>`;
                 exportArea.style.display = 'none';
@@ -858,8 +939,8 @@
 
             const discarded = successWithCap.length - filtered.length;
             showStatus(
-                `查询完成：有市值 ${successWithCap.length} · 保留 ≥$5M ${filtered.length} · 丢弃 <$5M ${discarded} · 失败 ${failed.length}。可 To Watch / To All。`,
-                'info',
+                `${stoppedEarly ? 'Birdeye 所有 key 已耗尽/额度错误，批次已停止' : '查询完成'}：有市值 ${successWithCap.length} · 保留 ≥$5M ${filtered.length} · 丢弃 <$5M ${discarded} · 失败/跳过 ${failed.length}。可 To Watch / To All。`,
+                stoppedEarly ? 'warning' : 'info',
             );
         }
 
@@ -1102,8 +1183,8 @@
             showStatus(`准备查询 ${addresses.length} 个代币，每个间隔 1 秒，预计耗时 ${addresses.length} 秒，请耐心等待...`);
 
             try {
-                const { results, successCount } = await batchQuery(addresses);
-                renderResults(results);
+                const { results, rateLimited } = await batchQuery(addresses);
+                renderResults(results, rateLimited);
             } catch (err) {
                 showStatus(`❌ 发生错误: ${err.message}`, 'error');
                 console.error(err);
