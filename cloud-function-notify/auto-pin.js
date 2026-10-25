@@ -1,9 +1,9 @@
 'use strict';
 
 /**
- * Server-side auto-pin / zone-drop: edges of 24h 前 N / 观察池
+ * Server-side auto-pin / zone-drop: 24h 前 N / 观察池
  * （默认前 30，不要求当前 4h 窗涨、不依赖窗起点价）。
- * Already-pinned coins are left alone (no rewarm).
+ * 钉：边沿新进 ∪ 在池且未盯（补漏）；已盯不续温。
  * Snapshot lives in watch-notify-state.json as risingZoneSnap（语义=池区快照）。
  */
 
@@ -391,10 +391,11 @@ async function runAutoPin(options) {
 
   const prevSet = new Set(prevSnap);
   const zoneSet = new Set(zone);
-  const edges = zone.filter((symbol) => !prevSet.has(symbol));
-  // Already pinned → ignore (no rewarm). Only unpinned edge-ins become new pins.
-  // Always advance zone snap so flicker does not re-fire the same edge.
-  const newcomers = edges.filter((symbol) => !hasPin(pins, symbol));
+  // 边沿新进 + 在池却未盯（snap 已含但漏钉）一律补钉；已盯不续温。
+  // 始终推进 zone snap，避免闪烁重复边沿。
+  const newcomers = zone.filter((symbol) => !hasPin(pins, symbol));
+  const edgeNew = newcomers.filter((symbol) => !prevSet.has(symbol));
+  const catchUp = newcomers.filter((symbol) => prevSet.has(symbol));
   const dropped = prevSnap.filter(
     (symbol) => symbol && !zoneSet.has(symbol) && hasPin(pins, symbol),
   );
@@ -409,12 +410,20 @@ async function runAutoPin(options) {
   }
   if (newcomers.length || dropped.length) {
     const nextEvents = [];
-    if (newcomers.length) {
+    if (edgeNew.length) {
       nextEvents.push({
         at: now,
-        symbols: newcomers.slice(),
+        symbols: edgeNew.slice(),
         source: 'auto-cloud',
         kind: 'new',
+      });
+    }
+    if (catchUp.length) {
+      nextEvents.push({
+        at: now,
+        symbols: catchUp.slice(),
+        source: 'auto-cloud',
+        kind: 'catch-up',
       });
     }
     if (dropped.length) {
@@ -430,8 +439,12 @@ async function runAutoPin(options) {
       'auto-pin zone edges',
       JSON.stringify({
         newcomers: newcomers.length,
+        edgeNew: edgeNew.length,
+        catchUp: catchUp.length,
         dropped: dropped.length,
         newSymbols: newcomers,
+        edgeSymbols: edgeNew,
+        catchUpSymbols: catchUp,
         droppedSymbols: dropped,
       }),
     );

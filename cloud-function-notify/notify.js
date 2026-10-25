@@ -1172,7 +1172,7 @@ async function main() {
       const saved = await savePinsFile(
         pinsFile,
         pins,
-        `Auto-pin top30/pool edge: new ${autoPinned.length}`,
+        `Auto-pin top30/pool (edge+catch-up): new ${autoPinned.length}`,
       );
       pins = saved.pins;
       // Refresh sha for later state writes only — pins file sha not reused below.
