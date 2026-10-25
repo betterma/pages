@@ -590,11 +590,41 @@
     throw lastError || new Error("保存黑名单失败");
   }
 
+  // Shared quote suffixes for rejecting fake *USDT (ADAGBPUSDT) and bare→USDT normalize.
+  const NAIL_NON_USDT_QUOTES = [
+    "USDC",
+    "BUSD",
+    "FDUSD",
+    "TUSD",
+    "BTC",
+    "ETH",
+    "BNB",
+    "EUR",
+    "GBP",
+    "TRY",
+    "BRL",
+    "RUB",
+  ];
+
   // Temporary pins / 盯一下 — optional 12h TTL (PIN_EXPIRY_ENABLED).
+  function isUsdtSpotSymbol(raw) {
+    const symbol = String(raw || "")
+      .trim()
+      .toUpperCase();
+    if (!symbol || !symbol.endsWith("USDT")) return false;
+    // 拒假双报价：ADAGBPUSDT / HYPERFDUSDUSDT
+    const base = symbol.slice(0, -4);
+    for (let i = 0; i < NAIL_NON_USDT_QUOTES.length; i += 1) {
+      const q = NAIL_NON_USDT_QUOTES[i];
+      if (base.endsWith(q) && base.length > q.length + 1) return false;
+    }
+    return true;
+  }
+
   function normalizePinItem(item) {
     if (!item || typeof item !== "object" || !item.symbol) return null;
     const symbol = String(item.symbol).trim().toUpperCase();
-    if (!symbol) return null;
+    if (!isUsdtSpotSymbol(symbol)) return null;
     const pinnedAt = Number.isFinite(Number(item.pinnedAt))
       ? Number(item.pinnedAt)
       : 0;
@@ -665,7 +695,7 @@
     const key = String(symbol || "")
       .trim()
       .toUpperCase();
-    if (!key) return normalizePins(list);
+    if (!isUsdtSpotSymbol(key)) return normalizePins(list);
     const now = Date.now();
     const ttl =
       Number.isFinite(Number(ttlMs)) && Number(ttlMs) > 0
@@ -917,20 +947,6 @@
   }
 
   // Bare base → USDT; already *USDT → keep; other quote pairs (ADAGBP…) → reject (do not invent *USDT).
-  const NAIL_NON_USDT_QUOTES = [
-    "USDC",
-    "BUSD",
-    "FDUSD",
-    "TUSD",
-    "BTC",
-    "ETH",
-    "BNB",
-    "EUR",
-    "GBP",
-    "TRY",
-    "BRL",
-    "RUB",
-  ];
   function nailSymbolKey(raw) {
     let key = String(raw || "")
       .trim()
@@ -3243,6 +3259,7 @@
     toggleBlacklist,
     loadBlacklistRaw,
     patchBlacklist,
+    isUsdtSpotSymbol,
     normalizePins,
     serializePins,
     pinsToSymbolSet,

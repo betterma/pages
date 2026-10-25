@@ -46,8 +46,28 @@ function normalizePinList(raw) {
   raw.forEach((item) => {
     if (!item || !item.symbol) return;
     const symbol = String(item.symbol).trim().toUpperCase();
-    // 只保留 USDT 现货；读入时丢掉脏交易对，避免污染后续边沿。
+    // 只保留真 USDT 现货；丢掉非 USDT / 假双报价（ADAGBPUSDT）。
     if (!symbol || !symbol.endsWith('USDT')) return;
+    const base = symbol.slice(0, -4);
+    const badQuotes = [
+      'USDC',
+      'BUSD',
+      'FDUSD',
+      'TUSD',
+      'BTC',
+      'ETH',
+      'BNB',
+      'EUR',
+      'GBP',
+      'TRY',
+      'BRL',
+      'RUB',
+    ];
+    if (
+      badQuotes.some((q) => base.endsWith(q) && base.length > q.length + 1)
+    ) {
+      return;
+    }
     const pinnedAt = Number(item.pinnedAt) || 0;
     const pinPrice = Number(item.pinPrice);
     const expiresAt = Number(item.expiresAt) || 0;
@@ -74,6 +94,14 @@ function addPin(list, symbol, pinPrice, source, now) {
     .trim()
     .toUpperCase();
   if (!key || !key.endsWith('USDT')) return normalizePinList(list);
+  const base = key.slice(0, -4);
+  if (
+    ['USDC', 'BUSD', 'FDUSD', 'TUSD', 'BTC', 'ETH', 'BNB', 'EUR', 'GBP', 'TRY', 'BRL', 'RUB'].some(
+      (q) => base.endsWith(q) && base.length > q.length + 1,
+    )
+  ) {
+    return normalizePinList(list);
+  }
   const ts = Number.isFinite(Number(now)) ? Number(now) : Date.now();
   const price = Number(pinPrice);
   const next = normalizePinList(list).filter((item) => item.symbol !== key);

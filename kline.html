@@ -10272,12 +10272,73 @@
         }, CONFIG.NOTIFY_POLL_MS);
       }
 
+      /** 24hr 仍含 BREAK；只保留 exchangeInfo 里 TRADING 的 USDT。 */
+      let usdtTradingSet = null;
+      let usdtTradingSetAt = 0;
+      async function loadUsdtTradingSet() {
+        const ttlMs = 30 * 60 * 1000;
+        if (
+          usdtTradingSet &&
+          usdtTradingSet.size &&
+          Date.now() - usdtTradingSetAt < ttlMs
+        ) {
+          return usdtTradingSet;
+        }
+        const endpoints = [
+          "https://data-api.binance.vision/api/v3/exchangeInfo",
+          "https://api.binance.com/api/v3/exchangeInfo",
+        ];
+        let lastError = null;
+        for (const url of endpoints) {
+          try {
+            const response = await fetch(url, { cache: "no-store" });
+            if (!response.ok) {
+              lastError = await errorFromHttpResponse(response, "币安交易对");
+              continue;
+            }
+            const data = await response.json();
+            const set = new Set();
+            (data.symbols || []).forEach((row) => {
+              if (
+                !row ||
+                row.status !== "TRADING" ||
+                row.quoteAsset !== "USDT"
+              ) {
+                return;
+              }
+              const symbol = String(row.symbol || "").toUpperCase();
+              if (symbol) set.add(symbol);
+            });
+            if (!set.size) {
+              lastError = new Error("币安 TRADING USDT 列表为空");
+              continue;
+            }
+            usdtTradingSet = set;
+            usdtTradingSetAt = Date.now();
+            return set;
+          } catch (error) {
+            lastError =
+              error && error.kind
+                ? error
+                : classifyFetchNetworkError(error, "币安交易对");
+          }
+        }
+        throw lastError || new Error("币安交易对请求失败");
+      }
+
       async function loadBinanceTicker() {
         const endpoints = [
           "https://data-api.binance.vision/api/v3/ticker/24hr",
           "https://api.binance.com/api/v3/ticker/24hr",
         ];
         let lastError = null;
+        let trading = null;
+        try {
+          trading = await loadUsdtTradingSet();
+        } catch (error) {
+          // 白名单失败时仍拉 ticker，但本地排名可能混入 BREAK；云端已挡写入。
+          console.warn("loadUsdtTradingSet failed", error);
+        }
         for (const url of endpoints) {
           try {
             const response = await fetch(url, { cache: "no-store" });
@@ -10294,11 +10355,17 @@
             }
             Object.keys(marketMap).forEach((key) => delete marketMap[key]);
             data.forEach((ticker) => {
-              if (!ticker.symbol.endsWith("USDT")) return;
+              const symbol = String(ticker.symbol || "").toUpperCase();
+              if (!symbol.endsWith("USDT")) return;
+              if (trading && !trading.has(symbol)) return;
               const price = Number(ticker.lastPrice);
               const change = Number(ticker.priceChangePercent);
-              if (Number.isFinite(price) && Number.isFinite(change)) {
-                marketMap[ticker.symbol] = {
+              if (
+                Number.isFinite(price) &&
+                price > 0 &&
+                Number.isFinite(change)
+              ) {
+                marketMap[symbol] = {
                   price,
                   change24h: change,
                 };
