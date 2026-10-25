@@ -2263,6 +2263,16 @@
         border-bottom: 0.5px solid var(--separator);
         flex: 0 0 auto;
       }
+      .nail-head-mainline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-width: 0;
+      }
+      .nail-head-title-block {
+        min-width: 0;
+      }
       .nail-head-title-line {
         display: flex;
         align-items: center;
@@ -2326,7 +2336,19 @@
         gap: 6px;
         flex-shrink: 0;
       }
+      .nail-head-primary-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex: 0 0 auto;
+      }
+      .nail-head .nail-head-primary-actions button {
+        height: 30px;
+        padding: 0 8px;
+        font-size: 12px;
+      }
       .nail-head-actions button,
+      .nail-head-primary-actions button,
       .nail-form button,
       .nail-del {
         border: none;
@@ -2359,6 +2381,75 @@
       }
       .nail-notice-entry.has-unread .nail-notice-entry-meta {
         color: inherit;
+      }
+      .nail-auto-pin-popover {
+        position: absolute;
+        top: calc(100% - 2px);
+        right: 10px;
+        z-index: 9;
+        width: min(440px, calc(100vw - 20px));
+        max-height: min(52vh, 440px);
+        border: 0.5px solid var(--separator);
+        border-radius: 10px;
+        background: var(--elevated, var(--grouped));
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+        overflow: hidden;
+      }
+      .nail-auto-pin-popover[hidden] {
+        display: none !important;
+      }
+      .nail-auto-pin-popover-title {
+        padding: 10px 12px 8px;
+        border-bottom: 0.5px solid var(--separator);
+        color: var(--secondary);
+        font-size: 12px;
+        font-weight: 650;
+      }
+      .nail-auto-pin-list {
+        max-height: min(48vh, 400px);
+        overflow: auto;
+        overscroll-behavior: contain;
+      }
+      .nail-auto-pin-row {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        padding: 9px 12px;
+        border-bottom: 0.5px solid var(--separator);
+      }
+      .nail-auto-pin-row:last-child {
+        border-bottom: none;
+      }
+      .nail-auto-pin-time {
+        flex: 0 0 auto;
+        color: var(--secondary);
+        font-size: 10px;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-auto-pin-symbols {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 8px;
+        min-width: 0;
+      }
+      .nail-auto-pin-symbol {
+        border: none;
+        background: transparent;
+        color: var(--accent);
+        padding: 0;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .nail-auto-pin-symbol:hover {
+        text-decoration: underline;
+        background: transparent;
+      }
+      .nail-auto-pin-empty {
+        padding: 18px 12px;
+        color: var(--secondary);
+        font-size: 12px;
+        text-align: center;
       }
       .nail-notice-drawer {
         position: fixed;
@@ -2515,6 +2606,22 @@
         gap: 6px;
         margin-bottom: 4px;
       }
+      .nail-notice-card-stamps {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        flex: 0 0 auto;
+      }
+      .nail-notice-new {
+        display: inline-block;
+        padding: 1px 4px;
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--down) 16%, transparent);
+        color: var(--down);
+        font-size: 9px;
+        font-weight: 700;
+        line-height: 1.25;
+      }
       .nail-notice-name {
         border: none;
         background: none;
@@ -2547,6 +2654,30 @@
         font-size: 10px;
         color: var(--secondary);
         margin-bottom: 4px;
+      .pull-refresh-scroll {
+        touch-action: pan-y;
+        overscroll-behavior-y: contain;
+      }
+      .pull-refresh-scroll::before {
+        content: attr(data-pull-refresh-label);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 0;
+        overflow: hidden;
+        opacity: 0;
+        color: var(--secondary);
+        font-size: 12px;
+        transition: height 0.16s ease, opacity 0.16s ease;
+      }
+      .pull-refresh-scroll.is-pulling::before,
+      .pull-refresh-scroll.is-refreshing::before {
+        height: var(--pull-refresh-height, 42px);
+        opacity: 1;
+      }
+      #nailNoticeList.pull-refresh-scroll::before {
+        grid-column: 1 / -1;
+      }
       }
       .nail-notice-delta {
         font-weight: 700;
@@ -5481,6 +5612,7 @@
       <div class="nail-mask" data-close-nails></div>
       <aside class="nail-panel" role="dialog" aria-label="钉子">
         <div class="nail-head">
+          <div class="nail-head-mainline">
           <div class="nail-head-title-block">
             <div class="nail-head-title-line">
               <h3>钉子</h3>
@@ -5501,7 +5633,7 @@
             </div>
             <p id="nailMeta">复制名称后新增 · 置顶 / 长按拖动排序</p>
           </div>
-          <div class="nail-head-actions">
+          <div class="nail-head-primary-actions">
             <button
               type="button"
               id="nailSelectBtn"
@@ -5513,6 +5645,10 @@
             <button type="button" id="nailRefreshBtn" title="重新拉取钉子列表和 K 线">
               刷新
             </button>
+            <button type="button" id="nailAddBtn">新增</button>
+          </div>
+          </div>
+          <div class="nail-head-actions">
             <button
               type="button"
               class="nail-notice-entry"
@@ -5522,10 +5658,21 @@
               通知
               <span class="nail-notice-entry-meta" id="nailNoticeEntryMeta"></span>
             </button>
-            <button type="button" id="nailAddBtn">新增</button>
+            <button
+              type="button"
+              id="nailAutoPinBtn"
+              aria-expanded="false"
+              aria-controls="nailAutoPinPopover"
+            >
+              自动盯
+            </button>
             <button type="button" data-close-nails id="nailGoMarketBtn" title="切到行情屏">
               行情
             </button>
+          </div>
+          <div class="nail-auto-pin-popover" id="nailAutoPinPopover" hidden>
+            <div class="nail-auto-pin-popover-title">自动盯记录</div>
+            <div class="nail-auto-pin-list" id="nailAutoPinList"></div>
           </div>
           <div
             class="nail-settings-popover"
@@ -5641,7 +5788,11 @@
             <button type="button" id="nailFormCancel">取消</button>
           </div>
         </form>
-        <div class="nail-body" id="nailList"></div>
+        <div
+          class="nail-body pull-refresh-scroll"
+          id="nailList"
+          data-pull-refresh-label="下拉刷新"
+        ></div>
         <div
           class="nail-scroll-pct"
           id="nailScrollPct"
@@ -5747,7 +5898,11 @@
             </button>
           </div>
         </div>
-        <div class="nail-notice-list" id="nailNoticeList"></div>
+        <div
+          class="nail-notice-list pull-refresh-scroll"
+          id="nailNoticeList"
+          data-pull-refresh-label="下拉刷新"
+        ></div>
         <div
           class="nail-scroll-pct"
           id="nailNoticeScrollPct"
@@ -9106,6 +9261,50 @@
             return `<div class="action-log-row${bandClass}"><span class="action-log-time">${formatActionLogTime(entry.at)}</span><span class="action-log-kind">${escapeHtml(kind)}</span>${names}${price}${edit}</div>`;
           })
           .join("");
+      }
+
+      function renderNailAutoPinList() {
+        const list = document.getElementById("nailAutoPinList");
+        if (!list) return;
+        const entries = readActionLog()
+          .filter(
+            (entry) => actionLogCategoryForKind(entry.kind) === "capture",
+          )
+          .sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0))
+          .slice(0, 80);
+        if (!entries.length) {
+          list.innerHTML = '<div class="nail-auto-pin-empty">暂无自动盯记录</div>';
+          return;
+        }
+        list.innerHTML = entries
+          .map((entry) => {
+            const names = (entry.symbols || [])
+              .map((symbol) => {
+                const key = String(symbol || "")
+                  .trim()
+                  .toUpperCase();
+                if (!key) return "";
+                const label = key.replace(/USDT$/i, "");
+                return `<button type="button" class="nail-auto-pin-symbol" data-nail-auto-symbol="${escapeHtml(key)}">${escapeHtml(label)}</button>`;
+              })
+              .filter(Boolean)
+              .join("");
+            return `<div class="nail-auto-pin-row"><time class="nail-auto-pin-time">${escapeHtml(formatActionLogTime(entry.at))}</time><div class="nail-auto-pin-symbols"><span>${escapeHtml(actionLogKindLabel(entry.kind))}</span>${names}</div></div>`;
+          })
+          .join("");
+      }
+
+      async function setNailAutoPinPopoverOpen(open) {
+        const popover = document.getElementById("nailAutoPinPopover");
+        const button = document.getElementById("nailAutoPinBtn");
+        if (!popover) return;
+        const next = !!open;
+        popover.hidden = !next;
+        if (button) button.setAttribute("aria-expanded", next ? "true" : "false");
+        if (next) {
+          await loadSharedActionLog();
+          renderNailAutoPinList();
+        }
       }
 
       async function editActionLogPrice(identityKey) {
@@ -16063,13 +16262,14 @@
             );
             const id = escapeHtml(item.id || `${item.symbol}:${item.openTime}`);
             const notifyPrice = Number(item.notifyPrice) || 0;
+            const isNew = Number(item.at) > (Number(nailGreenNoticesReadAt) || 0);
             const kind =
               item.kind === "首绿" || item.kind === "续绿" ? item.kind : "";
             return [
               `<article class="nail-notice-card" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}">`,
               `<div class="nail-notice-card-top">`,
               `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}${kind ? ` · ${escapeHtml(kind)}` : ""}</button>`,
-              `<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span>`,
+              `<span class="nail-notice-card-stamps">${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
               `</div>`,
               `<div class="nail-notice-meta">`,
               `<span>水位 ${escapeHtml(formatPinPrice(item.alertPrice))}${notifyPrice > 0 ? ` · 通知 ${escapeHtml(formatPinPrice(notifyPrice))}` : ""} · ${escapeHtml(item.interval || "4h")}</span>`,
@@ -18003,6 +18203,85 @@
             hour12: false,
           })}`,
         );
+      }
+
+      function bindPullToRefresh(element, refresh) {
+        if (!element || element.dataset.pullRefreshBound === "true") return;
+        element.dataset.pullRefreshBound = "true";
+        let startY = null;
+        let distance = 0;
+        let busy = false;
+
+        const clearPull = () => {
+          startY = null;
+          distance = 0;
+          element.classList.remove("is-pulling");
+          element.style.removeProperty("--pull-refresh-height");
+          element.dataset.pullRefreshLabel = "下拉刷新";
+        };
+
+        element.addEventListener(
+          "touchstart",
+          (event) => {
+            if (
+              busy ||
+              event.touches.length !== 1 ||
+              element.scrollTop > 0 ||
+              event.target.closest("button, input, a")
+            ) {
+              startY = null;
+              return;
+            }
+            startY = event.touches[0].clientY;
+            distance = 0;
+          },
+          { passive: true },
+        );
+
+        element.addEventListener(
+          "touchmove",
+          (event) => {
+            if (startY == null || busy || event.touches.length !== 1) return;
+            const delta = event.touches[0].clientY - startY;
+            if (delta <= 0 || element.scrollTop > 0) {
+              clearPull();
+              return;
+            }
+            distance = Math.min(56, delta * 0.7);
+            element.style.setProperty("--pull-refresh-height", `${distance}px`);
+            element.classList.add("is-pulling");
+            element.dataset.pullRefreshLabel =
+              distance >= 48 ? "松手刷新" : "下拉刷新";
+            if (event.cancelable) event.preventDefault();
+          },
+          { passive: false },
+        );
+
+        element.addEventListener("touchend", async () => {
+          if (startY == null) return;
+          const shouldRefresh = distance >= 48;
+          startY = null;
+          element.classList.remove("is-pulling");
+          if (!shouldRefresh) {
+            clearPull();
+            return;
+          }
+          busy = true;
+          element.classList.add("is-refreshing");
+          element.style.setProperty("--pull-refresh-height", "44px");
+          element.dataset.pullRefreshLabel = "正在刷新…";
+          try {
+            await refresh();
+          } catch (error) {
+            showToast(error.message || "刷新失败");
+          } finally {
+            busy = false;
+            element.classList.remove("is-refreshing");
+            clearPull();
+          }
+        });
+
+        element.addEventListener("touchcancel", clearPull, { passive: true });
       }
 
       async function refreshNailDrawer() {
@@ -20955,6 +21234,34 @@
           void openNailNoticeDrawer();
         });
       }
+      const nailAutoPinBtn = document.getElementById("nailAutoPinBtn");
+      const nailAutoPinPopover = document.getElementById("nailAutoPinPopover");
+      const nailAutoPinList = document.getElementById("nailAutoPinList");
+      if (nailAutoPinBtn) {
+        nailAutoPinBtn.addEventListener("click", () => {
+          void setNailAutoPinPopoverOpen(
+            !nailAutoPinPopover || nailAutoPinPopover.hidden,
+          );
+        });
+      }
+      if (nailAutoPinList) {
+        nailAutoPinList.addEventListener("click", (event) => {
+          const button = event.target.closest("[data-nail-auto-symbol]");
+          if (!button) return;
+          void setNailAutoPinPopoverOpen(false);
+          openNailDrawerAtSymbol(button.getAttribute("data-nail-auto-symbol"));
+        });
+      }
+      document.addEventListener("click", (event) => {
+        if (
+          event.target.closest("#nailAutoPinBtn, #nailAutoPinPopover")
+        ) {
+          return;
+        }
+        if (nailAutoPinPopover && !nailAutoPinPopover.hidden) {
+          void setNailAutoPinPopoverOpen(false);
+        }
+      });
       const nailNoticeCloseBtn = document.getElementById("nailNoticeCloseBtn");
       if (nailNoticeCloseBtn) {
         nailNoticeCloseBtn.addEventListener("click", () => {
@@ -20999,6 +21306,9 @@
       }
       const nailNoticeListScroll = document.getElementById("nailNoticeList");
       if (nailNoticeListScroll) {
+        bindPullToRefresh(nailNoticeListScroll, () =>
+          reloadNailNoticeList({ toast: "通知已刷新" }),
+        );
         nailNoticeListScroll.addEventListener(
           "scroll",
           () => {
@@ -21007,6 +21317,7 @@
           { passive: true },
         );
       }
+      bindPullToRefresh(document.getElementById("nailList"), refreshNailDrawer);
       const nailAutoRefresh = document.getElementById("nailAutoRefresh");
       if (nailAutoRefresh) {
         nailAutoRefresh.addEventListener("click", () => {
