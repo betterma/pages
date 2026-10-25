@@ -8527,9 +8527,10 @@
             watchPool.delete(symbol);
           }
         }
+        // 入池：24h 前 N 即进，不要求 4h 窗涨（与云端自动盯一致）。
         for (const symbol of list.slice(0, CONFIG.WATCH_POOL_RANK)) {
           if (blocked.has(symbol)) continue;
-          if (hasWindowGain(symbol, "4h")) watchPool.add(symbol);
+          watchPool.add(symbol);
         }
       }
 

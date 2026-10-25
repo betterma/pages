@@ -272,10 +272,10 @@ function updateWatchPool(history, marketMap, watchPool, blacklist) {
     }
   }
 
+  // 入池：24h 前 N 即进，不要求当前 4h 窗涨（与自动盯「榜高就盯」一致）。
   for (const symbol of list.slice(0, CONFIG.WATCH_POOL_RANK)) {
     if (blocked.has(symbol)) continue;
-    const change = getWindowPriceChange(history, marketMap, symbol, '4h');
-    if (Number.isFinite(change) && change > 0) nextPool.add(symbol);
+    nextPool.add(symbol);
   }
 
   return nextPool;
@@ -448,6 +448,10 @@ function collectKeepSymbols(fullState, marketMap, extraSymbols) {
   return { keep, rankKeep };
 }
 
+/**
+ * 用 15m K 线估算快照时刻价：取 openTime ≤ ts 的最后一根收盘；
+ * 若快照早于返回的第一根，用第一根开盘兜底（避免窗起点永久缺价）。
+ */
 function priceFromKlines(klines, timestamp) {
   const ts = Number(timestamp);
   if (!Number.isFinite(ts) || !Array.isArray(klines) || !klines.length) {
@@ -461,7 +465,12 @@ function priceFromKlines(klines, timestamp) {
     if (openTime <= ts) best = close;
     else break;
   }
-  return best;
+  if (Number.isFinite(best)) return best;
+  const open = Number(klines[0][1]);
+  const close = Number(klines[0][4]);
+  if (Number.isFinite(open) && open > 0) return open;
+  if (Number.isFinite(close) && close > 0) return close;
+  return null;
 }
 
 async function fetchBinanceKlines(symbol, startMs, endMs) {
@@ -511,15 +520,37 @@ async function mapPool(items, concurrency, worker) {
   await Promise.all(runners);
 }
 
+/** 当前 4h 窗内最早一张快照（窗涨基准格）。 */
+function earliestSnapInCurrentWindow(history, nowMs) {
+  const duration = CONFIG.DURATION_MS['4h'] || 4 * 60 * 60 * 1000;
+  const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
+  const windowStart = Math.floor(now / duration) * duration;
+  const inWin = (Array.isArray(history) ? history : []).filter((snap) => {
+    const t = Number(snap && snap.timestamp) || 0;
+    return t >= windowStart && t < windowStart + duration;
+  });
+  if (!inWin.length) return null;
+  return inWin.reduce((earliest, item) =>
+    Number(item.timestamp) < Number(earliest.timestamp) ? item : earliest,
+  );
+}
+
 /**
  * 关注币冲进 keep 时，旧 slim 快照可能没有它的价。
- * 用币安 15m K 线把 lookback 内缺价补上，保证 4h 窗口涨跌立即可用。
+ * 用币安 15m K 线把 lookback 内缺价补上；并强制覆盖「当前 4h 窗起点」那格。
  */
 async function backfillKeepPricesInHistory(history, symbols, lookbackMs) {
-  const snaps = (Array.isArray(history) ? history : []).filter(
-    (snap) => Number(snap && snap.timestamp) >= Date.now() - lookbackMs,
+  const now = Date.now();
+  const duration4h = CONFIG.DURATION_MS['4h'] || 4 * 60 * 60 * 1000;
+  // 至少盖住一整根 4h + 余量；默认 GH_BACKFILL_MS=6h。
+  const span = Math.max(
+    Number(lookbackMs) || 0,
+    duration4h + 60 * 60 * 1000,
   );
-  if (!snaps.length) return { fetched: 0, filled: 0 };
+  const snaps = (Array.isArray(history) ? history : []).filter(
+    (snap) => Number(snap && snap.timestamp) >= now - span,
+  );
+  if (!snaps.length) return { fetched: 0, filled: 0, windowStartMiss: 0 };
 
   const need = [];
   for (const symbol of symbols || []) {
@@ -532,34 +563,58 @@ async function backfillKeepPricesInHistory(history, symbols, lookbackMs) {
     );
     if (missing) need.push(key);
   }
-  if (!need.length) return { fetched: 0, filled: 0 };
+  if (!need.length) {
+    return { fetched: 0, filled: 0, windowStartMiss: 0 };
+  }
 
-  const startMs = Date.now() - lookbackMs - CONFIG.SNAPSHOT_INTERVAL;
-  const endMs = Date.now();
+  // 多往前多拉一根，避免窗起点落在 K 线区间外。
+  const startMs = now - span - CONFIG.SNAPSHOT_INTERVAL * 2;
+  const endMs = now;
   let filled = 0;
+  const failed = [];
   await mapPool(need, CONFIG.GH_BACKFILL_CONCURRENCY, async (symbol) => {
     try {
       const klines = await fetchBinanceKlines(symbol, startMs, endMs);
-      if (!klines.length) return;
+      if (!klines.length) {
+        failed.push(symbol);
+        return;
+      }
       for (const snap of snaps) {
         if (!snap.prices || typeof snap.prices !== 'object') snap.prices = {};
         if (Number.isFinite(Number(snap.prices[symbol]))) continue;
         const price = priceFromKlines(klines, snap.timestamp);
-        if (Number.isFinite(price)) {
+        if (Number.isFinite(price) && price > 0) {
           snap.prices[symbol] = price;
           filled += 1;
         }
       }
     } catch (error) {
+      failed.push(symbol);
       console.warn(
         `backfill ${symbol} failed: ${error && error.message ? error.message : error}`,
       );
     }
   });
+
+  const winEarliest = earliestSnapInCurrentWindow(history, now);
+  let windowStartMiss = 0;
+  if (winEarliest) {
+    if (!winEarliest.prices || typeof winEarliest.prices !== 'object') {
+      winEarliest.prices = {};
+    }
+    for (const symbol of need) {
+      if (Number.isFinite(Number(winEarliest.prices[symbol]))) continue;
+      windowStartMiss += 1;
+    }
+  }
+
   console.log(
-    `Backfilled keep prices · symbols=${need.length} · cells=${filled} · lookback≈${Math.round(lookbackMs / 3600000)}h`,
+    `Backfilled keep prices · symbols=${need.length} · cells=${filled}` +
+      ` · lookback≈${Math.round(span / 3600000)}h` +
+      ` · winStartMiss=${windowStartMiss}` +
+      (failed.length ? ` · failed=${failed.length}` : ''),
   );
-  return { fetched: need.length, filled };
+  return { fetched: need.length, filled, windowStartMiss, failed: failed.length };
 }
 
 /**
@@ -989,21 +1044,28 @@ async function runMonitorOnce() {
   ]);
   const extraKeep = new Set([...pinSymbols, ...nailSymbols]);
 
-  // 入池/窗口涨跌前：把榜前+池+盯钉的缺价用 K 线补上，避免「币进了但没基准价」。
-  const preKeep = collectKeepSymbols(
+  // 先更新观察池（前 N 入池），再用「新池 ∪ 榜前 ∪ 盯钉」回填历史缺价。
+  // 旧顺序是先回填再入池：新进榜币若还没进 keep，窗起点会永久空着。
+  const result = evaluateTop20(history, marketMap, alertState, selectedDimension);
+  alertState = result.alertState;
+  watchPool = updateWatchPool(history, marketMap, watchPool, blacklist);
+
+  const keepAfterPool = collectKeepSymbols(
     { watchPool: [...watchPool] },
     marketMap,
     extraKeep,
   ).keep;
-  await backfillKeepPricesInHistory(
+  const backfill = await backfillKeepPricesInHistory(
     history,
-    preKeep,
+    keepAfterPool,
     Number(CONFIG.GH_BACKFILL_MS) || 6 * 60 * 60 * 1000,
   );
+  if (backfill && backfill.windowStartMiss > 0) {
+    console.warn(
+      `backfill still missing ${backfill.windowStartMiss} keep prices on current 4h window-start snap`,
+    );
+  }
 
-  const result = evaluateTop20(history, marketMap, alertState, selectedDimension);
-  alertState = result.alertState;
-  watchPool = updateWatchPool(history, marketMap, watchPool, blacklist);
   history.push(buildSnapshot(marketMap));
   history = slimHistory(pruneHistory(history));
   events = events.slice(0, CONFIG.MAX_EVENTS);

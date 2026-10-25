@@ -1,9 +1,10 @@
 'use strict';
 
 /**
- * Server-side auto-pin / zone-drop: edges of 窗口上涨
- * (watch-pool ∩ window-up). Already-pinned coins are left alone
- * (no rewarm). Snapshot lives in watch-notify-state.json as risingZoneSnap.
+ * Server-side auto-pin / zone-drop: edges of 24h 前 N / 观察池
+ * （默认前 30，不要求当前 4h 窗涨、不依赖窗起点价）。
+ * Already-pinned coins are left alone (no rewarm).
+ * Snapshot lives in watch-notify-state.json as risingZoneSnap（语义=池区快照）。
  */
 
 const {
@@ -242,6 +243,7 @@ function hasWindowGain(history, marketMap, symbol, interval) {
   return Number.isFinite(change) && change > 0;
 }
 
+/** 观察池 = 现货 24h 涨幅前 N（默认 30），跌出前 N / 拉黑则出池。不要求 4h 窗涨。 */
 function buildWatchPool(history, marketMap, seedPool, blacklist) {
   const list = ranking(marketMap, blacklist);
   const next = new Set(
@@ -257,7 +259,7 @@ function buildWatchPool(history, marketMap, seedPool, blacklist) {
   }
   for (const symbol of list.slice(0, CONFIG.WATCH_POOL_RANK)) {
     if (blacklist.has(symbol)) continue;
-    if (hasWindowGain(history, marketMap, symbol, '4h')) next.add(symbol);
+    next.add(symbol);
   }
   return next;
 }
@@ -269,9 +271,11 @@ function listRisingSymbols(history, marketMap, watchPool, pinnedSet, blacklist) 
   );
 }
 
-/** Edge universe: watch-pool ∩ window-up (includes pinned). */
+/**
+ * 自动盯边沿宇宙 = 观察池（≈24h 前 N），含已盯。
+ * 不再过滤 hasWindowGain（榜高即可钉）。
+ */
 function listRisingZone(history, marketMap, watchPool, blacklist) {
-  const interval = CONFIG.WINDOW_INTERVAL;
   const list = ranking(marketMap, blacklist);
   const ranked = list.filter((symbol) => watchPool.has(symbol));
   const unranked = [...watchPool].filter(
@@ -280,11 +284,7 @@ function listRisingZone(history, marketMap, watchPool, blacklist) {
       !list.includes(symbol) &&
       !blacklist.has(symbol),
   );
-  return [...ranked, ...unranked].filter(
-    (symbol) =>
-      !blacklist.has(symbol) &&
-      hasWindowGain(history, marketMap, symbol, interval),
-  );
+  return [...ranked, ...unranked].filter((symbol) => !blacklist.has(symbol));
 }
 
 function emptyResult(pins, snap, seeded, events) {
@@ -336,31 +336,15 @@ async function runAutoPin(options) {
     ? watchData.watchPool
     : [];
 
-  const probe = ranking(
-    Object.fromEntries(
-      seedPool.map((symbol) => [String(symbol).toUpperCase(), { change24h: 0 }]),
-    ),
-    blacklist,
-  );
-  const lastSnap = history.length ? history[history.length - 1] : null;
-  const lastSymbols = lastSnap && lastSnap.prices ? Object.keys(lastSnap.prices) : [];
-  const want = [
-    ...new Set([
-      ...seedPool.map((s) => String(s).toUpperCase()),
-      ...lastSymbols.map((s) => String(s).toUpperCase()),
-      ...probe,
-    ]),
-  ].filter(Boolean);
-  const symbolList = want.slice(0, Math.max(80, CONFIG.WATCH_POOL_RANK * 3));
-  const tickers = await fetchBinanceTickers(symbolList);
-  const marketMap = tickers;
+  // 全市场 24hr，才能得到真实前 N（不能只拉池内子集再排名）。
+  const marketMap = await fetchBinanceTickers(null);
 
   const watchPool = buildWatchPool(history, marketMap, seedPool, blacklist);
   const zone = listRisingZone(history, marketMap, watchPool, blacklist);
 
   if (!seeded) {
     console.log(
-      'auto-pin seed rising zone snap',
+      'auto-pin seed pool-zone snap',
       JSON.stringify({ zone: zone.length, pool: watchPool.size }),
     );
     return emptyResult(pins, zone, true, events);

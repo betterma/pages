@@ -134,11 +134,20 @@ async function fetchBinancePrices(symbols) {
   return map;
 }
 
+/**
+ * @param {string[]|null|undefined} symbols
+ *   传入数组则只保留这些；传 null/undefined 表示全市场（用于 24h 真前 N 排名）。
+ */
 async function fetchBinanceTickers(symbols) {
-  const set = new Set(
-    (symbols || []).map((s) => String(s || '').toUpperCase()).filter(Boolean),
-  );
-  if (!set.size) return {};
+  const filter =
+    symbols == null
+      ? null
+      : new Set(
+          (symbols || [])
+            .map((s) => String(s || '').toUpperCase())
+            .filter(Boolean),
+        );
+  if (filter && !filter.size) return {};
   const endpoints = [
     'https://data-api.binance.vision/api/v3/ticker/24hr',
     'https://api.binance.com/api/v3/ticker/24hr',
@@ -154,7 +163,8 @@ async function fetchBinanceTickers(symbols) {
       const list = JSON.parse(response.text());
       const map = {};
       list.forEach((item) => {
-        if (!item || !set.has(item.symbol)) return;
+        if (!item || !item.symbol) return;
+        if (filter && !filter.has(item.symbol)) return;
         const price = Number(item.lastPrice);
         const change24h = Number(item.priceChangePercent);
         if (!Number.isFinite(price)) return;
