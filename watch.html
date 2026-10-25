@@ -1648,6 +1648,57 @@
         document.getElementById("apiStatus").textContent = text;
       }
 
+      /** 24hr 仍含 BREAK；只保留 exchangeInfo 里 TRADING 的 USDT。 */
+      let usdtTradingSet = null;
+      let usdtTradingSetAt = 0;
+      async function loadUsdtTradingSet() {
+        const ttlMs = 30 * 60 * 1000;
+        if (
+          usdtTradingSet &&
+          usdtTradingSet.size &&
+          Date.now() - usdtTradingSetAt < ttlMs
+        ) {
+          return usdtTradingSet;
+        }
+        const endpoints = [
+          "https://data-api.binance.vision/api/v3/exchangeInfo",
+          "https://api.binance.com/api/v3/exchangeInfo",
+        ];
+        let lastError = null;
+        for (const url of endpoints) {
+          try {
+            const response = await fetch(url, { cache: "no-store" });
+            if (!response.ok) {
+              lastError = new Error(`HTTP ${response.status}`);
+              continue;
+            }
+            const data = await response.json();
+            const set = new Set();
+            (data.symbols || []).forEach((row) => {
+              if (
+                !row ||
+                row.status !== "TRADING" ||
+                row.quoteAsset !== "USDT"
+              ) {
+                return;
+              }
+              const symbol = String(row.symbol || "").toUpperCase();
+              if (symbol) set.add(symbol);
+            });
+            if (!set.size) {
+              lastError = new Error("TRADING USDT 列表为空");
+              continue;
+            }
+            usdtTradingSet = set;
+            usdtTradingSetAt = Date.now();
+            return set;
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        throw lastError || new Error("exchangeInfo 请求失败");
+      }
+
       function loadData() {
         if (!githubReady) {
           setStep("binance", "error", "需先完成 GitHub 数据加载");
@@ -1664,15 +1715,29 @@
             if (index + 1 < endpoints.length) return requestTicker(index + 1);
             throw Error(`HTTP ${response.status}`);
           });
-        requestTicker()
-          .then((data) => {
+        Promise.resolve()
+          .then(() => loadUsdtTradingSet().catch((error) => {
+            console.warn("loadUsdtTradingSet failed", error);
+            return null;
+          }))
+          .then((trading) =>
+            requestTicker().then((data) => ({ trading, data })),
+          )
+          .then(({ trading, data }) => {
+            Object.keys(marketMap).forEach((key) => delete marketMap[key]);
             let count = 0;
             data.forEach((ticker) => {
-              if (!ticker.symbol.endsWith("USDT")) return;
+              const symbol = String(ticker.symbol || "").toUpperCase();
+              if (!symbol.endsWith("USDT")) return;
+              if (trading && !trading.has(symbol)) return;
               const price = Number(ticker.lastPrice);
               const change = Number(ticker.priceChangePercent);
-              if (Number.isFinite(price) && Number.isFinite(change)) {
-                marketMap[ticker.symbol] = {
+              if (
+                Number.isFinite(price) &&
+                price > 0 &&
+                Number.isFinite(change)
+              ) {
+                marketMap[symbol] = {
                   price,
                   change24h: change,
                   updateTime: Date.now(),
@@ -1684,7 +1749,7 @@
             setStep(
               "binance",
               "ok",
-              `已更新 · ${count} 个 USDT · ${formatTime(lastApiUpdate)}`,
+              `已更新 · ${count} 个 TRADING USDT · ${formatTime(lastApiUpdate)}`,
             );
             updateWatchPool();
             render();
