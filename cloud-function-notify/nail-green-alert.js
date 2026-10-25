@@ -212,8 +212,7 @@ function normalizeNails(raw) {
         .trim()
         .toUpperCase()
         .replace(/\s+/g, '');
-      if (!symbol) return null;
-      if (!/USDT$/.test(symbol)) symbol += 'USDT';
+      if (!symbol || !/USDT$/.test(symbol)) return null;
       const alertPrice = parseAlertPrice(item.note);
       if (!Number.isFinite(alertPrice) || alertPrice <= 0) return null;
       return {

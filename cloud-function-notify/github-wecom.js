@@ -134,10 +134,40 @@ async function fetchBinancePrices(symbols) {
   return map;
 }
 
+/** USDT 现货且 status=TRADING（24hr 仍会返回已 BREAK 下架对，必须用 exchangeInfo 挡掉）。 */
+async function fetchBinanceUsdtTradingSet() {
+  const endpoints = [
+    'https://data-api.binance.vision/api/v3/exchangeInfo',
+    'https://api.binance.com/api/v3/exchangeInfo',
+  ];
+  let lastError = null;
+  for (const endpoint of endpoints) {
+    try {
+      const response = await requestRaw(endpoint, { method: 'GET' });
+      if (!response.ok) {
+        lastError = new Error(`Binance exchangeInfo ${response.status}`);
+        continue;
+      }
+      const data = JSON.parse(response.text());
+      const set = new Set();
+      (data.symbols || []).forEach((row) => {
+        if (!row || row.status !== 'TRADING' || row.quoteAsset !== 'USDT') return;
+        const symbol = String(row.symbol || '').toUpperCase();
+        if (symbol) set.add(symbol);
+      });
+      if (set.size) return set;
+      lastError = new Error('Binance exchangeInfo empty USDT TRADING set');
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('Binance exchangeInfo fetch failed');
+}
+
 /**
  * @param {string[]|null|undefined} symbols
- *   传入数组则只保留这些；传 null/undefined 表示全市场 **USDT** 交易对
- *   （用于 24h 真前 N 排名；非 USDT 一律丢弃）。
+ *   传入数组则只保留这些；传 null/undefined 表示全市场 **USDT TRADING** 交易对
+ *   （用于 24h 真前 N 排名；非 USDT / 已 BREAK 一律丢弃）。
  */
 async function fetchBinanceTickers(symbols) {
   const filter =
@@ -149,6 +179,16 @@ async function fetchBinanceTickers(symbols) {
             .filter(Boolean),
         );
   if (filter && !filter.size) return {};
+  // 全市场排名时必须卡 TRADING；按符号取价时也尽量去掉已下架，避免脏钉回流。
+  let trading = null;
+  try {
+    trading = await fetchBinanceUsdtTradingSet();
+  } catch (error) {
+    if (symbols == null) throw error;
+    console.warn(
+      `fetchBinanceUsdtTradingSet failed, continue without: ${error.message}`,
+    );
+  }
   const endpoints = [
     'https://data-api.binance.vision/api/v3/ticker/24hr',
     'https://api.binance.com/api/v3/ticker/24hr',
@@ -168,10 +208,11 @@ async function fetchBinanceTickers(symbols) {
         const symbol = String(item.symbol).toUpperCase();
         // 本项目只做 USDT 现货；全市场拉取时也必须过滤，否则 GBP/BNB/FDUSD 等会进自动盯。
         if (!symbol.endsWith('USDT')) return;
+        if (trading && !trading.has(symbol)) return;
         if (filter && !filter.has(symbol)) return;
         const price = Number(item.lastPrice);
         const change24h = Number(item.priceChangePercent);
-        if (!Number.isFinite(price)) return;
+        if (!Number.isFinite(price) || price <= 0) return;
         map[symbol] = {
           price,
           change24h: Number.isFinite(change24h) ? change24h : null,
@@ -380,6 +421,7 @@ module.exports = {
   saveJson,
   fetchBinancePrices,
   fetchBinanceTickers,
+  fetchBinanceUsdtTradingSet,
   sendWecomMarkdown,
   sendWecomText,
   sendWecomImage,

@@ -342,7 +342,8 @@ async function loadPinSymbols() {
           : String((item && item.symbol) || '')
               .trim()
               .toUpperCase();
-      if (symbol) set.add(symbol.endsWith('USDT') ? symbol : `${symbol}USDT`);
+      // Only keep real *USDT; never invent ADAGBP→ADAGBPUSDT.
+      if (symbol && symbol.endsWith('USDT')) set.add(symbol);
     });
     console.log(`Loaded pins ${set.size} symbols for GitHub slim keep-set`);
     return set;
@@ -367,7 +368,7 @@ async function loadNailSymbols() {
           : String((item && item.symbol) || '')
               .trim()
               .toUpperCase();
-      if (symbol) set.add(symbol.endsWith('USDT') ? symbol : `${symbol}USDT`);
+      if (symbol && symbol.endsWith('USDT')) set.add(symbol);
     });
     console.log(`Loaded nails ${set.size} symbols for GitHub slim keep-set`);
     return set;
@@ -957,6 +958,39 @@ async function readMonitorState() {
   }
 }
 
+async function fetchBinanceUsdtTradingSet() {
+  const endpoints = [
+    'https://data-api.binance.vision/api/v3/exchangeInfo',
+    'https://api.binance.com/api/v3/exchangeInfo',
+  ];
+  const timeoutMs = Number(process.env.BINANCE_TIMEOUT_MS) || 8000;
+  let lastError = null;
+  for (const endpoint of endpoints) {
+    try {
+      const response = await requestJson(endpoint, { timeout: timeoutMs });
+      if (!response.ok) {
+        lastError = new Error(`exchangeInfo HTTP ${response.status}`);
+        continue;
+      }
+      const data = await response.json();
+      const set = new Set();
+      (data.symbols || []).forEach((row) => {
+        if (!row || row.status !== 'TRADING' || row.quoteAsset !== 'USDT') return;
+        const symbol = String(row.symbol || '').toUpperCase();
+        if (symbol) set.add(symbol);
+      });
+      if (set.size) {
+        console.log(`Binance USDT TRADING set size=${set.size}`);
+        return set;
+      }
+      lastError = new Error('exchangeInfo empty USDT TRADING set');
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('Binance exchangeInfo fetch failed');
+}
+
 async function fetchBinanceTicker() {
   const fromEnv = process.env.BINANCE_TICKER_URLS;
   const endpoints = (
@@ -1021,15 +1055,20 @@ async function runMonitorOnce() {
     ? state.selectedDimension
     : CONFIG.SELECTED_DIMENSION;
 
-  const data = await fetchBinanceTicker();
+  const [data, trading] = await Promise.all([
+    fetchBinanceTicker(),
+    fetchBinanceUsdtTradingSet(),
+  ]);
   const marketMap = {};
 
   for (const ticker of data) {
-    if (!ticker.symbol.endsWith('USDT')) continue;
+    const symbol = String(ticker.symbol || '').toUpperCase();
+    // 24hr 仍含 BREAK 下架对；只进 TRADING USDT，避免假前 N / 脏自动盯。
+    if (!symbol.endsWith('USDT') || !trading.has(symbol)) continue;
     const price = Number(ticker.lastPrice);
     const change = Number(ticker.priceChangePercent);
-    if (Number.isFinite(price) && Number.isFinite(change)) {
-      marketMap[ticker.symbol] = {
+    if (Number.isFinite(price) && price > 0 && Number.isFinite(change)) {
+      marketMap[symbol] = {
         price,
         change24h: change,
         updateTime: Date.now(),

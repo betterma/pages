@@ -916,14 +916,33 @@
     throw lastError || new Error("保存记一笔失败");
   }
 
+  // Bare base → USDT; already *USDT → keep; other quote pairs (ADAGBP…) → reject (do not invent *USDT).
+  const NAIL_NON_USDT_QUOTES = [
+    "USDC",
+    "BUSD",
+    "FDUSD",
+    "TUSD",
+    "BTC",
+    "ETH",
+    "BNB",
+    "EUR",
+    "GBP",
+    "TRY",
+    "BRL",
+    "RUB",
+  ];
   function nailSymbolKey(raw) {
     let key = String(raw || "")
       .trim()
       .toUpperCase()
       .replace(/\s+/g, "");
     if (!key) return "";
-    if (!/USDT$/.test(key)) key += "USDT";
-    return key;
+    if (/USDT$/.test(key)) return key;
+    for (let i = 0; i < NAIL_NON_USDT_QUOTES.length; i += 1) {
+      const q = NAIL_NON_USDT_QUOTES[i];
+      if (key.endsWith(q) && key.length > q.length + 1) return "";
+    }
+    return key + "USDT";
   }
 
   function normalizeNail(item, index) {
