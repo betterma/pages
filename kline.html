@@ -2654,30 +2654,105 @@
         font-size: 10px;
         color: var(--secondary);
         margin-bottom: 4px;
+      }
       .pull-refresh-scroll {
+        position: relative;
         touch-action: pan-y;
         overscroll-behavior-y: contain;
       }
       .pull-refresh-scroll::before {
-        content: attr(data-pull-refresh-label);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        content: "";
+        position: relative;
+        z-index: 2;
+        display: block;
         height: 0;
         overflow: hidden;
         opacity: 0;
+        width: calc(100% - 24px);
+        margin: 0 auto;
+        background: linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--accent) 15%, var(--elevated)),
+          color-mix(in srgb, var(--accent) 5%, transparent)
+        );
+        border-radius: 0 0 50% 50% / 0 0 18% 18%;
+        clip-path: polygon(
+          0 0, 100% 0, 100% 72%, 91% 86%, 82% 76%, 72% 96%,
+          62% 82%, 51% 100%, 40% 82%, 30% 96%, 20% 78%, 10% 90%, 0 74%
+        );
+        box-shadow: 0 8px 18px color-mix(in srgb, var(--accent) 16%, transparent);
+        transform: scaleX(0.78) scaleY(0.55);
+        transform-origin: top center;
+        transition:
+          height 0.12s linear,
+          opacity 0.16s ease,
+          transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+      .pull-refresh-scroll::after {
+        content: attr(data-pull-refresh-label);
+        position: absolute;
+        top: 5px;
+        left: 0;
+        right: 0;
+        z-index: 3;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 30px;
+        opacity: 0;
         color: var(--secondary);
         font-size: 12px;
-        transition: height 0.16s ease, opacity 0.16s ease;
+        font-weight: 600;
+        pointer-events: none;
+        transition: opacity 0.14s ease;
       }
       .pull-refresh-scroll.is-pulling::before,
       .pull-refresh-scroll.is-refreshing::before {
         height: var(--pull-refresh-height, 42px);
         opacity: 1;
+        transform: scaleX(var(--pull-tear-scale, 0.9)) scaleY(1);
+      }
+      .pull-refresh-scroll.is-pulling::after,
+      .pull-refresh-scroll.is-refreshing::after {
+        opacity: 1;
+      }
+      .pull-refresh-scroll.is-refreshing::before {
+        animation: pull-refresh-release 0.42s cubic-bezier(0.18, 0.72, 0.25, 1) both;
       }
       #nailNoticeList.pull-refresh-scroll::before {
         grid-column: 1 / -1;
       }
+      @keyframes pull-refresh-release {
+        0% {
+          clip-path: polygon(
+            0 0, 100% 0, 100% 72%, 91% 86%, 82% 76%, 72% 96%,
+            62% 82%, 51% 100%, 40% 82%, 30% 96%, 20% 78%, 10% 90%, 0 74%
+          );
+          transform: scaleX(1) scaleY(1.08);
+        }
+        48% {
+          clip-path: polygon(
+            0 0, 100% 0, 100% 78%, 90% 94%, 80% 80%, 70% 100%,
+            60% 84%, 50% 100%, 40% 84%, 30% 100%, 20% 82%, 10% 94%, 0 78%
+          );
+          transform: scaleX(1.02) scaleY(1.12);
+        }
+        100% {
+          clip-path: polygon(
+            0 0, 100% 0, 100% 72%, 91% 86%, 82% 76%, 72% 96%,
+            62% 82%, 51% 100%, 40% 82%, 30% 96%, 20% 78%, 10% 90%, 0 74%
+          );
+          transform: scaleX(var(--pull-tear-scale, 0.9)) scaleY(1);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .pull-refresh-scroll::before,
+        .pull-refresh-scroll::after {
+          transition: none;
+        }
+        .pull-refresh-scroll.is-refreshing::before {
+          animation: none;
+        }
       }
       .nail-notice-delta {
         font-weight: 700;
@@ -18215,8 +18290,9 @@
         const clearPull = () => {
           startY = null;
           distance = 0;
-          element.classList.remove("is-pulling");
+          element.classList.remove("is-pulling", "is-refreshing");
           element.style.removeProperty("--pull-refresh-height");
+          element.style.removeProperty("--pull-tear-scale");
           element.dataset.pullRefreshLabel = "下拉刷新";
         };
 
@@ -18249,6 +18325,10 @@
             }
             distance = Math.min(56, delta * 0.7);
             element.style.setProperty("--pull-refresh-height", `${distance}px`);
+            element.style.setProperty(
+              "--pull-tear-scale",
+              String(0.72 + (distance / 56) * 0.3),
+            );
             element.classList.add("is-pulling");
             element.dataset.pullRefreshLabel =
               distance >= 48 ? "松手刷新" : "下拉刷新";
@@ -18269,6 +18349,7 @@
           busy = true;
           element.classList.add("is-refreshing");
           element.style.setProperty("--pull-refresh-height", "44px");
+          element.style.setProperty("--pull-tear-scale", "0.96");
           element.dataset.pullRefreshLabel = "正在刷新…";
           try {
             await refresh();
