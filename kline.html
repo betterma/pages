@@ -18389,6 +18389,8 @@
           syncNailInMarks();
           syncNailPriceRows();
           await paintNailKlines();
+          await refreshNailGreenNotices();
+          if (nailNoticeMode === "open") renderNailNoticeList();
           showToast("钉子已刷新");
         } catch (error) {
           console.warn(error);
