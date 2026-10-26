@@ -29,11 +29,39 @@ const SECRET_NAMES = [
   'BINANCE_SECRET_KEY',
 ];
 
-/** 控制台粘贴 PEM 时常见把换行写成 \n。 */
+/**
+ * 华为云环境变量常把 PEM 换行吃掉，变成单行，OpenSSL 报 bad end line。
+ * 这里把字面 \\n、以及「一整行的 PEM」还原成标准多行 PKCS#8。
+ */
+function reformatPemSingleLine(text) {
+  const match = String(text || '').match(
+    /-----BEGIN ([A-Z0-9 ]+)-----([A-Za-z0-9+/=\s]+)-----END \1-----/,
+  );
+  if (!match) return text;
+  const label = match[1];
+  const body = match[2].replace(/\s+/g, '');
+  if (!body) return text;
+  const lines = [];
+  for (let i = 0; i < body.length; i += 64) {
+    lines.push(body.slice(i, i + 64));
+  }
+  return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----`;
+}
+
 function normalizeSecret(raw) {
   let text = String(raw || '').trim();
   if (!text) return '';
+  if (
+    (text.startsWith('"') && text.endsWith('"')) ||
+    (text.startsWith("'") && text.endsWith("'"))
+  ) {
+    text = text.slice(1, -1).trim();
+  }
   if (text.includes('\\n')) text = text.replace(/\\n/g, '\n');
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+  if (text.includes('BEGIN') && !text.includes('\n')) {
+    text = reformatPemSingleLine(text);
+  }
   return text.trim();
 }
 
@@ -93,11 +121,16 @@ function keyDiag(context) {
     ...KEY_NAMES,
     ...SECRET_NAMES,
   ]);
+  const secretNorm = normalizeSecret(apiSecret);
   return {
     hasKey: !!apiKey,
     hasSecret: !!apiSecret,
     keyLen: apiKey ? apiKey.length : 0,
     secretLen: apiSecret ? apiSecret.length : 0,
+    secretNormLen: secretNorm ? secretNorm.length : 0,
+    secretHasNewline: secretNorm.includes('\n'),
+    secretHasBegin: /BEGIN [A-Z0-9 ]+ PRIVATE KEY/.test(secretNorm),
+    secretHasEnd: /END [A-Z0-9 ]+ PRIVATE KEY/.test(secretNorm),
     secretKind: secretKindOf(apiSecret),
     hasGetUserData: sources.hasGetUserData,
     runtimeUserDataLen: sources.runtimeUserDataLen,
