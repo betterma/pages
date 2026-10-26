@@ -868,6 +868,12 @@
         border-radius: 999px;
         padding-inline: 13px;
       }
+      html[data-ui-style="ios"] .nail-head-actions #nailGoMarketBtn {
+        min-height: 26px;
+        height: 26px;
+        padding-inline: 9px;
+        font-size: 11px;
+      }
       html[data-ui-style="ios"] .nail-settings-panel .nail-rising-row {
         padding: 11px 16px;
       }
@@ -2351,6 +2357,10 @@
       }
       .nail-head-actions #nailGoMarketBtn {
         margin-left: auto;
+        height: 26px;
+        padding: 0 8px;
+        font-size: 11px;
+        font-weight: 600;
       }
       .nail-head-primary-actions {
         display: flex;
@@ -6049,7 +6059,7 @@
               持有
             </button>
             <button type="button" data-close-nails id="nailGoMarketBtn" title="切到行情屏">
-              行情 >>
+              行情 >
             </button>
           </div>
           <div class="nail-auto-pin-popover" id="nailAutoPinPopover" hidden>
@@ -6320,7 +6330,7 @@
               class="nail-notice-deblue"
               hidden
               aria-pressed="false"
-              title="仅蓝筛选可用。打开：按钉子抽屉染绿；关闭：正常染蓝。每次打开通知默认关闭。"
+              title="仅蓝筛选可用。打开：按钉子抽屉染绿；关闭：正常染蓝。偏好保存在本机。"
             >
               去蓝
             </button>
@@ -9863,6 +9873,9 @@
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
+        if (!key) return "";
+        // 关注的就是 USDT 本身（稳定币余额），不要剥成空串。
+        if (key === "USDT") return "USDT";
         return key.endsWith("USDT") ? key.slice(0, -4) : key;
       }
 
@@ -9997,7 +10010,9 @@
         });
         nailHoldingsState = result.state || nailHoldingsState;
         renderNailHoldList();
-        showToast(`已关注 ${symbol.replace(/USDT$/i, "")} · 等下次云扫描回填`);
+        showToast(
+          `已关注 ${holdingsBaseAsset(symbol)} · 等下次云扫描回填`,
+        );
       }
 
       async function removeNailHoldingSymbol(rawSymbol) {
@@ -16810,8 +16825,26 @@
       let nailNoticeChartsBusy = false;
       let nailNoticeChartsQueued = false;
       let nailNoticeDeltaFilter = "all"; // all | up | down
-      /** 仅蓝筛选下有效；每次打开通知抽屉强制关闭（不持久化）。 */
-      let nailNoticeDeBlueEnabled = false;
+      /** 仅蓝筛选下有效；开关偏好存本机 localStorage。 */
+      const NAIL_NOTICE_DEBLUE_KEY = "kline-nail-notice-deblue-v1";
+      function readLocalNailNoticeDeBlue() {
+        try {
+          return localStorage.getItem(NAIL_NOTICE_DEBLUE_KEY) === "1";
+        } catch (_) {
+          return false;
+        }
+      }
+      function writeLocalNailNoticeDeBlue(enabled) {
+        try {
+          localStorage.setItem(
+            NAIL_NOTICE_DEBLUE_KEY,
+            enabled ? "1" : "0",
+          );
+        } catch (_) {
+          /* ignore */
+        }
+      }
+      let nailNoticeDeBlueEnabled = readLocalNailNoticeDeBlue();
       let nailDailyResetState = null;
       let nailDailyResetPromptKind = null; // pre | post
       let nailDailyResetPromptBusy = false;
@@ -17034,19 +17067,17 @@
         const btn = document.getElementById("nailNoticeDeBlueBtn");
         if (!btn) return;
         const show = nailNoticeDeltaFilter === "up";
-        if (!show) nailNoticeDeBlueEnabled = false;
+        const on = show && !!nailNoticeDeBlueEnabled;
         btn.hidden = !show;
-        btn.classList.toggle("is-on", !!nailNoticeDeBlueEnabled);
-        btn.setAttribute(
-          "aria-pressed",
-          nailNoticeDeBlueEnabled ? "true" : "false",
-        );
-        btn.textContent = nailNoticeDeBlueEnabled ? "去蓝·开" : "去蓝";
+        btn.classList.toggle("is-on", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+        btn.textContent = on ? "去蓝·开" : "去蓝";
       }
 
       function setNailNoticeDeBlueEnabled(enabled) {
-        nailNoticeDeBlueEnabled =
-          !!enabled && nailNoticeDeltaFilter === "up";
+        if (nailNoticeDeltaFilter !== "up") return;
+        nailNoticeDeBlueEnabled = !!enabled;
+        writeLocalNailNoticeDeBlue(nailNoticeDeBlueEnabled);
         syncNailNoticeDeBlueUi();
         void paintNailNoticeCharts();
       }
@@ -17106,8 +17137,10 @@
       async function setNailNoticeDeltaFilter(mode) {
         nailNoticeDeltaFilter =
           mode === "up" || mode === "down" ? mode : "all";
-        // 切换筛选时去蓝一律关（仅开着蓝筛选时才可再开）。
-        nailNoticeDeBlueEnabled = false;
+        // 切回蓝时按本机偏好恢复去蓝；其它筛选下 UI 隐藏，不改写偏好。
+        if (nailNoticeDeltaFilter === "up") {
+          nailNoticeDeBlueEnabled = readLocalNailNoticeDeBlue();
+        }
         syncNailNoticeDeltaFilterUi();
         // 切换全部/蓝/红后主动刷新，重算相对通知线涨跌再过滤。
         await reloadNailNoticeList();
@@ -17285,8 +17318,7 @@
 
       async function openNailNoticeDrawer(options) {
         const opts = options || {};
-        // 定死：每次打开去蓝都是关。
-        nailNoticeDeBlueEnabled = false;
+        nailNoticeDeBlueEnabled = readLocalNailNoticeDeBlue();
         syncNailNoticeDeBlueUi();
         await refreshNailGreenNotices();
         renderNailNoticeList();

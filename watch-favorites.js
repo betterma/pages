@@ -2780,6 +2780,8 @@
       .toUpperCase()
       .replace(/\s+/g, "");
     if (!symbol) return "";
+    // 允许直接关注 USDT 余额（不是交易对）。
+    if (symbol === "USDT") return "USDT";
     if (!symbol.endsWith("USDT")) symbol += "USDT";
     return symbol;
   }

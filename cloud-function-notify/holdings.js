@@ -164,12 +164,16 @@ function normalizeSymbol(raw) {
     .toUpperCase()
     .replace(/\s+/g, '');
   if (!key) return '';
+  // 允许直接关注 USDT 余额。
+  if (key === 'USDT') return 'USDT';
   if (!key.endsWith('USDT')) key += 'USDT';
   return key;
 }
 
 function baseAssetOf(symbol) {
   const key = normalizeSymbol(symbol);
+  // USDT 本身是资产，不是 *USDT 交易对。
+  if (key === 'USDT') return 'USDT';
   return key.endsWith('USDT') ? key.slice(0, -4) : key;
 }
 
