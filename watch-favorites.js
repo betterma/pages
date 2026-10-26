@@ -2921,7 +2921,7 @@
   }
 
   function emptySellTasks() {
-    return { updatedAt: 0, tasks: [] };
+    return { updatedAt: 0, live: false, tasks: [] };
   }
 
   function normalizeSellTaskSymbol(raw) {
@@ -2978,6 +2978,7 @@
     });
     return {
       updatedAt: Number(data.updatedAt) || 0,
+      live: data.live === true,
       tasks,
     };
   }
@@ -3076,7 +3077,7 @@
   }
 
   function emptyBuyTasks() {
-    return { updatedAt: 0, tasks: [] };
+    return { updatedAt: 0, live: false, tasks: [] };
   }
 
   function normalizeBuyTaskSymbol(raw) {
@@ -3131,6 +3132,7 @@
     });
     return {
       updatedAt: Number(data.updatedAt) || 0,
+      live: data.live === true,
       tasks,
     };
   }

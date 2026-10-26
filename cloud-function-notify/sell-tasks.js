@@ -2,7 +2,8 @@
 
 /**
  * 限价卖出任务：网页写入 watch-sell-tasks.json，本模块在 notify 定时里执行。
- * 默认 dry-run（SELL_LIVE≠1 不下单）；数量=可用×%，价格=max(minSell, bid)。
+ * 默认 dry-run；`live: true`（页面开关写入 JSON）才真下单。
+ * 数量=可用×%，价格=max(minSell, bid)。
  */
 
 const { loadJson, saveJson } = require('./github-wecom');
@@ -10,13 +11,6 @@ const spot = require('./binance-spot');
 const { appendTradeActionLog } = require('./trade-action-log');
 
 const SELL_TASKS_PATH = process.env.SELL_TASKS_PATH || 'watch-sell-tasks.json';
-
-function sellLiveEnabled() {
-  const raw = String(process.env.SELL_LIVE || '')
-    .trim()
-    .toLowerCase();
-  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
-}
 
 function baseAssetOf(symbol) {
   const key = String(symbol || '')
@@ -39,7 +33,7 @@ function normalizeSymbol(raw) {
 }
 
 function emptyState() {
-  return { updatedAt: 0, tasks: [] };
+  return { updatedAt: 0, live: false, tasks: [] };
 }
 
 function normalizeTask(raw) {
@@ -82,6 +76,7 @@ function normalizeState(raw) {
   });
   return {
     updatedAt: Number(data.updatedAt) || 0,
+    live: data.live === true,
     tasks,
   };
 }
@@ -211,11 +206,10 @@ async function runSellTasks(options) {
   const opts = options || {};
   const now = Number(opts.now) || Date.now();
   const context = opts.context || null;
-  const live = sellLiveEnabled();
   const result = {
     skipped: false,
     reason: null,
-    live,
+    live: false,
     hasKeys: spot.hasKeys(context),
     checked: 0,
     dryRun: 0,
@@ -241,6 +235,8 @@ async function runSellTasks(options) {
   }
 
   const state = normalizeState(file.data);
+  const live = !!state.live;
+  result.live = live;
   if (!state.tasks.length) {
     result.skipped = true;
     result.reason = 'no-tasks';
@@ -291,6 +287,7 @@ async function runSellTasks(options) {
 
   const next = {
     updatedAt: now,
+    live: !!state.live,
     tasks: keptTasks.map((task) => {
       const copy = { ...task };
       delete copy._removeAfterFill;
@@ -302,7 +299,7 @@ async function runSellTasks(options) {
       SELL_TASKS_PATH,
       next,
       file.sha,
-      `Sell tasks sync dry=${result.dryRun} place=${result.placed} fill=${result.filled}`,
+      `Sell tasks sync live=${live ? 1 : 0} dry=${result.dryRun} place=${result.placed} fill=${result.filled}`,
     );
   } catch (error) {
     const message = error && error.message ? error.message : String(error);

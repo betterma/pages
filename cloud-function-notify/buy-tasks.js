@@ -3,7 +3,7 @@
 /**
  * 限价买入任务：网页写入 watch-buy-tasks.json。
  * 花费 = USDT 可用 × buyPercent%；价格 = min(maxBuy||∞, ask)；LIMIT BUY。
- * 默认 dry-run（BUY_LIVE≠1）。
+ * 默认 dry-run；`live: true`（页面开关）才真下单。
  */
 
 const { loadJson, saveJson } = require('./github-wecom');
@@ -11,13 +11,6 @@ const spot = require('./binance-spot');
 const { appendTradeActionLog } = require('./trade-action-log');
 
 const BUY_TASKS_PATH = process.env.BUY_TASKS_PATH || 'watch-buy-tasks.json';
-
-function buyLiveEnabled() {
-  const raw = String(process.env.BUY_LIVE || '')
-    .trim()
-    .toLowerCase();
-  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
-}
 
 function normalizeSymbol(raw) {
   let key = String(raw || '')
@@ -30,7 +23,7 @@ function normalizeSymbol(raw) {
 }
 
 function emptyState() {
-  return { updatedAt: 0, tasks: [] };
+  return { updatedAt: 0, live: false, tasks: [] };
 }
 
 function normalizeTask(raw) {
@@ -74,6 +67,7 @@ function normalizeState(raw) {
   });
   return {
     updatedAt: Number(data.updatedAt) || 0,
+    live: data.live === true,
     tasks,
   };
 }
@@ -216,11 +210,10 @@ async function runBuyTasks(options) {
   const opts = options || {};
   const now = Number(opts.now) || Date.now();
   const context = opts.context || null;
-  const live = buyLiveEnabled();
   const result = {
     skipped: false,
     reason: null,
-    live,
+    live: false,
     hasKeys: spot.hasKeys(context),
     checked: 0,
     dryRun: 0,
@@ -246,6 +239,8 @@ async function runBuyTasks(options) {
   }
 
   const state = normalizeState(file.data);
+  const live = !!state.live;
+  result.live = live;
   if (!state.tasks.length) {
     result.skipped = true;
     result.reason = 'no-tasks';
@@ -296,6 +291,7 @@ async function runBuyTasks(options) {
 
   const next = {
     updatedAt: now,
+    live: !!state.live,
     tasks: keptTasks.map((task) => {
       const copy = { ...task };
       delete copy._removeAfterFill;
@@ -307,7 +303,7 @@ async function runBuyTasks(options) {
       BUY_TASKS_PATH,
       next,
       file.sha,
-      `Buy tasks sync dry=${result.dryRun} place=${result.placed} fill=${result.filled}`,
+      `Buy tasks sync live=${live ? 1 : 0} dry=${result.dryRun} place=${result.placed} fill=${result.filled}`,
     );
   } catch (error) {
     const message = error && error.message ? error.message : String(error);

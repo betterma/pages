@@ -83,8 +83,6 @@
 | `WECOM_WEBHOOK_POSITIONS` | 否 | 仅当 `AUTO_PIN_WECOM=1` |
 | `NOTES_RANK_SNAP_ENABLED` | 否 | 默认 `1` |
 | `BINANCE_API_KEY` / `BINANCE_API_SECRET` | 持有/卖出 | 现货 Key（可读账户；真下单还需交易权限）。支持 HMAC 或 Ed25519 PEM |
-| `SELL_LIVE` | 否 | 默认关。设 `1` 才真正 LIMIT 卖出；否则只写 dry-run 计划 |
-| `BUY_LIVE` | 否 | 默认关。设 `1` 才真正 LIMIT 买入；否则只写 dry-run 计划 |
 
 \* `AUTO_PIN_PUSHPLUS=0` 时可空。
 
@@ -98,4 +96,4 @@
 - 卖出：`watch-sell-tasks.json` — 数量 = 币可用 × 卖%；价格 = `max(最低价, 买一)`；买一 &lt; 最低价则跳过
 - 买入：`watch-buy-tasks.json` — 花费 = USDT 可用 × 买%；价格 = `min(最高价||卖一, 卖一)`；卖一 &gt; 最高价则跳过
 - 均为 LIMIT GTC；**默认 dry-run**（`wouldSell` / `wouldBuy`）
-- 真下单：分别设 `SELL_LIVE=1` / `BUY_LIVE=1`；成交后写动作日志 `buy`/`sell`，并从任务列表移除
+- 真下单：钉子页「持有」里打开 **卖出实盘 / 买入实盘**（写入 JSON 的 `live: true`）；成交后写动作日志 `buy`/`sell`，并从任务列表移除
