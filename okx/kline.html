@@ -802,6 +802,7 @@
       </div>
     </div>
 
+    <script src="../github-token-vault.js"></script>
     <script src="./favorites.js"></script>
     <script>
       "use strict";
@@ -1610,6 +1611,9 @@
           if (textEl) textEl.textContent = busyLabel;
         }
         try {
+          if (window.GithubTokenVault) {
+            await window.GithubTokenVault.ensureUnlocked();
+          }
           setStatus(true, "读取自选…");
           const state = await OkxFavorites.loadFavorites({
             repo: CONFIG.GITHUB_REPO,

@@ -810,6 +810,7 @@
         <div id="blacklistList" class="blacklist-list"></div>
       </div>
     </dialog>
+    <script src="./github-token-vault.js"></script>
     <script src="./watch-favorites.js"></script>
     <script>
       "use strict";
@@ -2036,6 +2037,9 @@
       async function init() {
         renderPipeline();
         try {
+          if (window.GithubTokenVault) {
+            await window.GithubTokenVault.ensureUnlocked();
+          }
           await loadGithubStorage();
           githubReady = true;
           render();

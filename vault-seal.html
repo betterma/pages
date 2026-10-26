@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>封存 GitHub Token（只需做一次）</title>
+    <style>
+      body {
+        font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 24px 16px 48px;
+        line-height: 1.5;
+        color: #1a1a1a;
+        background: #f6f7f9;
+      }
+      h1 {
+        font-size: 1.35rem;
+        margin: 0 0 8px;
+      }
+      .lede {
+        color: #555;
+        font-size: 0.92rem;
+        margin-bottom: 20px;
+      }
+      label {
+        display: block;
+        font-size: 0.85rem;
+        margin: 12px 0 4px;
+        color: #444;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        height: 40px;
+        padding: 0 10px;
+        border: 1px solid #ccd;
+        border-radius: 8px;
+        font-size: 14px;
+      }
+      button {
+        margin-top: 16px;
+        height: 40px;
+        padding: 0 16px;
+        border: none;
+        border-radius: 8px;
+        background: #2f6fed;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #e8ecf2;
+        color: #333;
+        margin-left: 8px;
+      }
+      pre {
+        margin-top: 16px;
+        padding: 12px;
+        background: #111;
+        color: #d7ffd7;
+        border-radius: 8px;
+        font-size: 12px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+      }
+      .err {
+        color: #b33;
+        font-size: 0.9rem;
+        min-height: 1.3em;
+      }
+      .ok {
+        color: #1a7f37;
+        font-size: 0.9rem;
+      }
+      ol {
+        padding-left: 1.2rem;
+        color: #444;
+        font-size: 0.92rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>封存 GitHub Token</h1>
+    <p class="lede">
+      只做一次：用 Token + 密码生成密文。之后打开钉子页等站点，只需要输入这个密码。
+    </p>
+    <ol>
+      <li>先到 GitHub 作废旧 Token，新建一个</li>
+      <li>在本页填 Token 和密码，点生成</li>
+      <li>复制密文，发给我或自己贴进 <code>github-token-vault.js</code> 的 <code>EMBEDDED_BLOB</code></li>
+      <li>部署后，日常只输密码</li>
+    </ol>
+
+    <label for="token">GitHub Token（勿用已泄露的旧 Token）</label>
+    <input id="token" type="password" autocomplete="off" spellcheck="false" />
+
+    <label for="pass">密码（之后打开网站只用这个）</label>
+    <input id="pass" type="password" autocomplete="new-password" />
+
+    <label for="pass2">再输一次密码</label>
+    <input id="pass2" type="password" autocomplete="new-password" />
+
+    <div>
+      <button type="button" id="genBtn">生成密文</button>
+      <button type="button" class="secondary" id="copyBtn" hidden>复制密文</button>
+    </div>
+    <p class="err" id="err"></p>
+    <p class="ok" id="ok"></p>
+    <pre id="out" hidden></pre>
+
+    <script src="./github-token-vault.js"></script>
+    <script>
+      const err = document.getElementById("err");
+      const ok = document.getElementById("ok");
+      const out = document.getElementById("out");
+      const copyBtn = document.getElementById("copyBtn");
+      let lastText = "";
+
+      document.getElementById("genBtn").onclick = async () => {
+        err.textContent = "";
+        ok.textContent = "";
+        out.hidden = true;
+        copyBtn.hidden = true;
+        const token = document.getElementById("token").value.trim();
+        const pass = document.getElementById("pass").value;
+        const pass2 = document.getElementById("pass2").value;
+        try {
+          if (!token) throw new Error("请填写 Token");
+          if (pass.length < 6) throw new Error("密码至少 6 位");
+          if (pass !== pass2) throw new Error("两次密码不一致");
+          const blob = await window.GithubTokenVault.encryptToken(token, pass);
+          lastText =
+            "  const EMBEDDED_BLOB = " +
+            JSON.stringify(blob, null, 2).replace(/\n/g, "\n  ") +
+            ";";
+          out.textContent = lastText;
+          out.hidden = false;
+          copyBtn.hidden = false;
+          ok.textContent =
+            "已生成。把下面这段替换进 github-token-vault.js 里原来的 EMBEDDED_BLOB = null;";
+        } catch (error) {
+          err.textContent = (error && error.message) || "生成失败";
+        }
+      };
+
+      copyBtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(lastText);
+          ok.textContent = "已复制到剪贴板";
+        } catch (error) {
+          err.textContent = "复制失败，请手动全选复制";
+        }
+      };
+    </script>
+  </body>
+</html>

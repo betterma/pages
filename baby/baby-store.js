@@ -3,11 +3,17 @@
 
   const DEFAULT_REPO = "betterma/pages";
   const DATA_PATH = "baby/baby-data.json";
-  const TOKEN_PART_A = "gh";
-  const TOKEN_PART_B = "p_Xrmz1DjzLfbjyiXZqFyJGd9O8aWFIq4D9758";
-
   function getGithubToken() {
-    return TOKEN_PART_A + TOKEN_PART_B;
+    const vault =
+      (typeof globalThis !== "undefined" && globalThis.GithubTokenVault) ||
+      (typeof window !== "undefined" && window.GithubTokenVault) ||
+      null;
+    if (!vault || typeof vault.getToken !== "function") {
+      throw new Error(
+        "GithubTokenVault 未加载：请先引入 github-token-vault.js 并解锁",
+      );
+    }
+    return vault.getToken();
   }
 
   function encodeBase64Utf8(text) {

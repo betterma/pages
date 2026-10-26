@@ -124,6 +124,7 @@
       </div>
     </div>
 
+    <script src="./github-token-vault.js"></script>
     <script src="./trade-sim.js"></script>
     <script>
       "use strict";
@@ -241,9 +242,17 @@
       const params = new URLSearchParams(location.search);
       if (params.get("symbol")) $("symbolInput").value = params.get("symbol");
 
-      wrap(() => TradeSim.load()).catch(() => {
-        $("statusGrid").innerHTML = '<div class="k">尚无状态文件，开始一笔模拟即可创建</div>';
-      });
+      void (async () => {
+        try {
+          if (window.GithubTokenVault) {
+            await window.GithubTokenVault.ensureUnlocked();
+          }
+          await wrap(() => TradeSim.load());
+        } catch (error) {
+          $("statusGrid").innerHTML =
+            '<div class="k">尚无状态文件或 Token 未解锁，开始一笔模拟即可</div>';
+        }
+      })()
 
       // 页面打开时也可本地兜底定时（云函数才是主定时）
       setInterval(() => {

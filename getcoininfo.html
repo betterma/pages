@@ -484,6 +484,7 @@
     </div>
 </div>
 
+<script src="./github-token-vault.js"></script>
 <script>
     (function() {
         // ---------- 配置 ----------
@@ -521,10 +522,13 @@
             return false; // 所有 key 都已耗尽
         }
 
-        // GitHub 配置（请替换为您的 Personal Access Token）
-        const aaa1 = "gh"
-        const aaa2 = "p_Xrmz1DjzLfbjyiXZqFyJGd9O8aWFIq4D9758"
-        const GITHUB_TOKEN = aaa1 + aaa2; 
+        // GitHub 写权限走本机加密保险库（见 github-token-vault.js）
+        function GITHUB_TOKEN() {
+          if (!window.GithubTokenVault) {
+            throw new Error("GithubTokenVault 未加载");
+          }
+          return window.GithubTokenVault.getToken();
+        }
         const GITHUB_REPO = 'betterma/pages';
 
         // ---------- 全局数据集合 ----------
@@ -638,10 +642,11 @@
         // 更新 GitHub 文件
         async function updateGitHubFile(path, content) {
             try {
+                await window.GithubTokenVault.ensureUnlocked();
                 // 获取文件的当前 SHA
                 const getResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
                     headers: {
-                        'Authorization': `token ${GITHUB_TOKEN}`,
+                        'Authorization': `token ${GITHUB_TOKEN()}`,
                         'Accept': 'application/vnd.github.v3+json'
                     }
                 });
@@ -653,7 +658,7 @@
                 const updateResponse = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`, {
                     method: 'PUT',
                     headers: {
-                        'Authorization': `token ${GITHUB_TOKEN}`,
+                        'Authorization': `token ${GITHUB_TOKEN()}`,
                         'Accept': 'application/vnd.github.v3+json',
                         'Content-Type': 'application/json'
                     },

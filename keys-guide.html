@@ -162,7 +162,7 @@
         <tr>
           <td><code>GITHUB_TOKEN</code><br />GitHub PAT（classic 以 <code>ghp_</code> 开头）</td>
           <td class="need">会过期（申请时自选 30/90/365 天或无期限）</td>
-          <td>几乎所有会写仓库 JSON 的页面 + 全部云函数</td>
+          <td>云函数：环境变量明文/加密变量。<br />浏览器：<code>github-token-vault.js</code> AES-GCM 密文存本机，启动输密码（可记住）</td>
           <td><a class="ext" href="https://github.com/settings/tokens" target="_blank" rel="noopener">github.com/settings/tokens</a></td>
         </tr>
         <tr>

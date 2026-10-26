@@ -592,6 +592,9 @@
   async function boot() {
     bindEvents();
     try {
+      if (globalThis.GithubTokenVault) {
+        await globalThis.GithubTokenVault.ensureUnlocked();
+      }
       const loaded = await BabyStore.loadBabyDataRaw();
       state.data = loaded.data;
       state.source = loaded.source;

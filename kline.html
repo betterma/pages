@@ -3551,6 +3551,93 @@
           font-size: 12px;
         }
       }
+      .gh-vault-gate {
+        position: fixed;
+        inset: 0;
+        z-index: 10050;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: color-mix(in srgb, #000 55%, transparent);
+        backdrop-filter: blur(6px);
+      }
+      .gh-vault-gate[hidden] {
+        display: none !important;
+      }
+      .gh-vault-panel {
+        width: min(420px, 100%);
+        border: 0.5px solid var(--separator);
+        border-radius: 14px;
+        background: var(--elevated, var(--grouped));
+        padding: 18px 16px 14px;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+      }
+      .gh-vault-panel h2 {
+        margin: 0 0 6px;
+        font-size: 17px;
+      }
+      .gh-vault-panel .gh-vault-lede {
+        margin: 0 0 14px;
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--secondary);
+      }
+      .gh-vault-panel label {
+        display: block;
+        margin: 0 0 4px;
+        font-size: 12px;
+        color: var(--secondary);
+      }
+      .gh-vault-panel .gh-vault-field {
+        margin-bottom: 10px;
+      }
+      .gh-vault-panel input[type="password"],
+      .gh-vault-panel input[type="text"] {
+        width: 100%;
+        height: 36px;
+        border: 0.5px solid var(--separator);
+        border-radius: 8px;
+        background: var(--fill);
+        color: var(--label);
+        padding: 0 10px;
+        font-size: 14px;
+      }
+      .gh-vault-panel .gh-vault-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+        margin-top: 12px;
+      }
+      .gh-vault-panel .gh-vault-actions button {
+        height: 34px;
+        padding: 0 14px;
+        border: none;
+        border-radius: 8px;
+        background: var(--fill);
+        color: var(--label);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .gh-vault-panel .gh-vault-actions button.primary {
+        background: color-mix(in srgb, var(--accent) 28%, var(--fill));
+        color: var(--accent);
+      }
+      .gh-vault-panel .gh-vault-err {
+        margin: 8px 0 0;
+        font-size: 12px;
+        color: var(--warn, #c45c26);
+        min-height: 1.2em;
+      }
+      .gh-vault-panel .gh-vault-remember {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--secondary);
+        margin-top: 4px;
+      }
       .boot-init-gate {
         position: fixed;
         inset: 0;
@@ -5411,6 +5498,46 @@
       <div class="mode-progress-label" id="modeProgressLabel">正在切换…</div>
     </div>
     <div
+      id="ghVaultGate"
+      class="gh-vault-gate"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="ghVaultTitle"
+    >
+      <div class="gh-vault-panel">
+        <h2 id="ghVaultTitle">输入密码</h2>
+        <p class="gh-vault-lede" id="ghVaultLede">
+          只需输入密码即可解锁写权限。Token 已事先加密写在代码里；云函数 Token 不受影响。
+        </p>
+        <div class="gh-vault-field">
+          <label for="ghVaultPassInput">密码</label>
+          <input
+            id="ghVaultPassInput"
+            type="password"
+            autocomplete="current-password"
+            placeholder="解密密码"
+          />
+        </div>
+        <label class="gh-vault-remember">
+          <input type="checkbox" id="ghVaultRemember" checked />
+          记住密码（下次自动解锁）
+        </label>
+        <p class="gh-vault-err" id="ghVaultErr" aria-live="polite"></p>
+        <div class="gh-vault-actions">
+          <a
+            href="./vault-seal.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            id="ghVaultSealLink"
+            style="margin-right:auto;font-size:12px;color:var(--secondary)"
+            >还没有密文？去封存</a
+          >
+          <button type="button" class="primary" id="ghVaultSubmitBtn">解锁</button>
+        </div>
+      </div>
+    </div>
+    <div
       id="bootInitGate"
       class="boot-init-gate"
       hidden
@@ -6831,6 +6958,7 @@
       <button type="button" id="pinBatchExitBtn" title="退出多选">×</button>
     </div>
 
+    <script src="./github-token-vault.js"></script>
     <script src="./watch-favorites.js"></script>
     <script>
       "use strict";
@@ -22747,7 +22875,113 @@
         });
       }
 
-      refreshAll({ reason: "boot", mode: "full", forceObs: true });
+      function showGhVaultGate() {
+        const gate = document.getElementById("ghVaultGate");
+        const err = document.getElementById("ghVaultErr");
+        const lede = document.getElementById("ghVaultLede");
+        const sealLink = document.getElementById("ghVaultSealLink");
+        const vault = window.GithubTokenVault;
+        if (!gate) return;
+        if (err) err.textContent = "";
+        if (lede) {
+          lede.textContent = vault && vault.hasBlob()
+            ? "输入密码即可解锁。勾选记住后下次自动解锁。"
+            : "还没有加密好的 Token。请先打开「去封存」生成密文，再回来只输密码。";
+        }
+        if (sealLink) {
+          sealLink.style.visibility =
+            vault && vault.hasBlob() ? "hidden" : "visible";
+        }
+        gate.hidden = false;
+        const passInput = document.getElementById("ghVaultPassInput");
+        if (passInput) passInput.focus();
+      }
+
+      function hideGhVaultGate() {
+        const gate = document.getElementById("ghVaultGate");
+        if (gate) gate.hidden = true;
+      }
+
+      function ensureGhVaultUnlocked() {
+        return new Promise((resolve, reject) => {
+          const vault = window.GithubTokenVault;
+          if (!vault) {
+            reject(new Error("GithubTokenVault 未加载"));
+            return;
+          }
+          void (async () => {
+            try {
+              if (vault.isUnlocked()) {
+                resolve(true);
+                return;
+              }
+              if (await vault.tryAutoUnlock()) {
+                resolve(true);
+                return;
+              }
+            } catch (error) {
+              /* fall through to modal */
+            }
+
+            showGhVaultGate();
+
+            const submit = document.getElementById("ghVaultSubmitBtn");
+            const err = document.getElementById("ghVaultErr");
+            const passInput = document.getElementById("ghVaultPassInput");
+            const rememberEl = document.getElementById("ghVaultRemember");
+
+            const cleanup = () => {
+              if (submit) submit.onclick = null;
+              if (passInput) passInput.onkeydown = null;
+            };
+
+            const onSubmit = async () => {
+              if (err) err.textContent = "";
+              const remember = !!(rememberEl && rememberEl.checked);
+              const pass = passInput ? passInput.value : "";
+              try {
+                if (!vault.hasBlob()) {
+                  throw new Error(
+                    "尚未封存：请先打开 vault-seal.html 生成密文并写入代码",
+                  );
+                }
+                if (!pass) throw new Error("请输入密码");
+                await vault.unlock(pass, { remember });
+                cleanup();
+                hideGhVaultGate();
+                resolve(true);
+              } catch (error) {
+                if (err) {
+                  err.textContent =
+                    (error && error.message) || "解锁失败";
+                }
+              }
+            };
+
+            if (submit) submit.onclick = () => void onSubmit();
+            if (passInput) {
+              passInput.onkeydown = (event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void onSubmit();
+                }
+              };
+            }
+          })().catch(reject);
+        });
+      }
+
+      void (async () => {
+        try {
+          await ensureGhVaultUnlocked();
+          refreshAll({ reason: "boot", mode: "full", forceObs: true });
+        } catch (error) {
+          console.error(error);
+          showToast(
+            (error && error.message) || "GitHub Token 解锁失败，页面写操作不可用",
+          );
+        }
+      })();
     </script>
   </body>
 </html>
