@@ -2588,19 +2588,25 @@
         text-align: center;
       }
       .nail-hold-popover {
-        position: absolute;
-        top: calc(100% - 2px);
+        position: fixed;
+        left: 10px;
         right: 10px;
-        z-index: 9;
-        width: min(400px, calc(100vw - 20px));
-        max-height: min(68vh, 560px);
+        top: 120px; /* 打开时由 JS 对齐到钉子头下方 */
+        bottom: 0;
+        z-index: 12;
+        width: auto;
+        max-width: none;
+        max-height: none;
         border: 0.5px solid var(--separator);
-        border-radius: 10px;
+        border-bottom: none;
+        border-radius: 10px 10px 0 0;
         background: var(--elevated, var(--grouped));
         box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
         overflow: hidden;
         display: flex;
         flex-direction: column;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        box-sizing: border-box;
       }
       .nail-hold-popover[hidden] {
         display: none !important;
@@ -2683,9 +2689,11 @@
         white-space: nowrap;
       }
       .nail-hold-list {
+        flex: 1 1 auto;
+        min-height: 0;
         overflow: auto;
         overscroll-behavior: contain;
-        max-height: min(44vh, 380px);
+        max-height: none;
       }
       .nail-hold-empty {
         padding: 18px 12px;
@@ -10880,6 +10888,16 @@
         );
       }
 
+      function layoutNailHoldPopover() {
+        const popover = document.getElementById("nailHoldPopover");
+        if (!popover || popover.hidden) return;
+        const head = document.querySelector(".nail-panel .nail-head");
+        const top = head
+          ? Math.max(8, Math.round(head.getBoundingClientRect().bottom - 2))
+          : 120;
+        popover.style.top = `${top}px`;
+      }
+
       async function setNailHoldPopoverOpen(open) {
         const popover = document.getElementById("nailHoldPopover");
         const button = document.getElementById("nailHoldBtn");
@@ -10895,7 +10913,11 @@
           button.classList.toggle("is-active", next);
         }
         if (next) {
+          layoutNailHoldPopover();
           await reloadNailHoldings({ silent: true });
+          layoutNailHoldPopover();
+        } else {
+          popover.style.top = "";
         }
       }
 
@@ -22961,6 +22983,9 @@
           );
         });
       }
+      window.addEventListener("resize", () => {
+        layoutNailHoldPopover();
+      });
       if (nailHoldList) {
         nailHoldList.addEventListener("input", (event) => {
           const sellRange = event.target.closest("[data-sell-pct]");
