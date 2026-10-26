@@ -8,20 +8,65 @@
 const https = require('https');
 const crypto = require('crypto');
 const { loadJson, saveJson } = require('./github-wecom');
+const {
+  getUserDataFirst,
+  diagSources,
+} = require('./runtime-env');
 
 const HOLDINGS_PATH = process.env.HOLDINGS_PATH || 'watch-holdings.json';
 
-function binanceConfig() {
+const KEY_NAMES = [
+  'BINANCE_API_KEY',
+  'BINANCE_KEY',
+  'BN_API_KEY',
+  'BINANCE_APIKEY',
+];
+const SECRET_NAMES = [
+  'BINANCE_API_SECRET',
+  'BINANCE_SECRET',
+  'BN_API_SECRET',
+  'BINANCE_SECRET_KEY',
+];
+
+function binanceConfig(context) {
   return {
-    apiKey: process.env.BINANCE_API_KEY || '',
-    apiSecret: process.env.BINANCE_API_SECRET || '',
-    baseUrl: process.env.BINANCE_API_BASE || 'https://api.binance.com',
+    // 事件函数加密变量：优先 context.getUserData，其次 process.env / RUNTIME_USERDATA。
+    apiKey: getUserDataFirst(context, KEY_NAMES),
+    apiSecret: getUserDataFirst(context, SECRET_NAMES),
+    baseUrl:
+      getUserDataFirst(context, ['BINANCE_API_BASE', 'BINANCE_BASE_URL']) ||
+      'https://api.binance.com',
   };
 }
 
-function hasReadKeys() {
-  const { apiKey, apiSecret } = binanceConfig();
-  return !!(apiKey && apiSecret);
+function keyDiag(context) {
+  const { apiKey, apiSecret } = binanceConfig(context);
+  const sources = diagSources(context, [
+    ...KEY_NAMES,
+    ...SECRET_NAMES,
+  ]);
+  return {
+    hasKey: !!apiKey,
+    hasSecret: !!apiSecret,
+    keyLen: apiKey ? apiKey.length : 0,
+    secretLen: apiSecret ? apiSecret.length : 0,
+    hasGetUserData: sources.hasGetUserData,
+    runtimeUserDataLen: sources.runtimeUserDataLen,
+    sources: sources.seen,
+  };
+}
+
+function hasReadKeys(context) {
+  const d = keyDiag(context);
+  return d.hasKey && d.hasSecret;
+}
+
+function missingKeysReason(context) {
+  const d = keyDiag(context);
+  if (!d.hasKey && !d.hasSecret) return 'missing-api-keys:both';
+  if (!d.hasKey) return 'missing-api-keys:no-key';
+  if (!d.hasSecret) return 'missing-api-keys:no-secret';
+  return 'missing-api-keys';
 }
 
 function requestJson(url, options = {}) {
@@ -76,8 +121,8 @@ function requestJson(url, options = {}) {
   });
 }
 
-async function signedGet(path, params = {}) {
-  const { apiKey, apiSecret, baseUrl } = binanceConfig();
+async function signedGet(path, params = {}, context) {
+  const { apiKey, apiSecret, baseUrl } = binanceConfig(context);
   if (!apiKey || !apiSecret) {
     throw new Error('Missing BINANCE_API_KEY / BINANCE_API_SECRET');
   }
@@ -107,6 +152,10 @@ async function signedGet(path, params = {}) {
     );
   }
   return response.data;
+}
+
+async function fetchAccountBalances(context) {
+  return signedGet('/api/v3/account', {}, context);
 }
 
 function normalizeSymbol(raw) {
@@ -162,10 +211,11 @@ function normalizeState(raw) {
 async function runHoldingsSync(options) {
   const opts = options || {};
   const now = Number(opts.now) || Date.now();
+  const context = opts.context || null;
   const result = {
     skipped: false,
     reason: null,
-    hasKeys: hasReadKeys(),
+    hasKeys: hasReadKeys(context),
     symbols: 0,
     updated: 0,
   };
@@ -186,30 +236,34 @@ async function runHoldingsSync(options) {
     result.reason = 'no-symbols';
     return result;
   }
-  if (!hasReadKeys()) {
+  const diag = keyDiag(context);
+  console.log('holdings key-diag', JSON.stringify(diag));
+
+  if (!hasReadKeys(context)) {
+    const reason = missingKeysReason(context);
     const next = {
       ...state,
       updatedAt: now,
-      lastError: 'missing-api-keys',
+      lastError: reason,
     };
     try {
       await saveJson(
         HOLDINGS_PATH,
         next,
         file.sha,
-        'Holdings: missing API keys',
+        `Holdings: ${reason}`,
       );
     } catch (error) {
       /* ignore write if conflict */
     }
     result.skipped = true;
-    result.reason = 'no-api-keys';
+    result.reason = reason;
     return result;
   }
 
   let account;
   try {
-    account = await signedGet('/api/v3/account');
+    account = await fetchAccountBalances(context);
   } catch (error) {
     const message = error && error.message ? error.message : String(error);
     const next = {

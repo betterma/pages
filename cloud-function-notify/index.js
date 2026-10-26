@@ -36,5 +36,6 @@ exports.handler = async (event, context) => {
         `请整包上传 cloud-function-notify（含 notify.js）。exports=[${keys.join(',')}]`,
     );
   }
-  return run();
+  // 事件函数加密环境变量需经 context.getUserData 读取，必须把 context 传下去。
+  return run(event, context);
 };

@@ -1084,7 +1084,7 @@ async function processPriceAlerts(now) {
   return { sent, hit, checked: active.length };
 }
 
-async function main() {
+async function main(event, context) {
   if (CONFIG.AUTO_PIN_PUSHPLUS && !CONFIG.PUSHPLUS_TOKEN) {
     throw new Error('Missing PUSHPLUS_TOKEN for auto-pin WeChat push');
   }
@@ -1484,7 +1484,7 @@ async function main() {
 
   let holdings = { skipped: true, reason: 'not-run' };
   try {
-    holdings = await runHoldingsSync({ now });
+    holdings = await runHoldingsSync({ now, context: context || null });
     if (!holdings.skipped && holdings.reason === 'ok') {
       sent.push(`holdings:${holdings.updated || 0}`);
     }

@@ -2053,8 +2053,19 @@
       .nail-tab[data-count="0"] .tab-count {
         display: none;
       }
-      .nail-head-actions button.is-active {
-        background: color-mix(in srgb, var(--accent) 18%, transparent);
+      .nail-head-actions #nailAutoPinBtn,
+      .nail-head-actions #nailRadarBtn,
+      .nail-head-actions #nailHoldBtn {
+        border: 1px solid transparent;
+      }
+      .nail-head-actions #nailAutoPinBtn.is-active,
+      .nail-head-actions #nailAutoPinBtn[aria-expanded="true"],
+      .nail-head-actions #nailRadarBtn.is-active,
+      .nail-head-actions #nailRadarBtn[aria-expanded="true"],
+      .nail-head-actions #nailHoldBtn.is-active,
+      .nail-head-actions #nailHoldBtn[aria-expanded="true"] {
+        border-color: color-mix(in srgb, var(--label) 38%, transparent);
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
         color: var(--accent);
       }
       .nail-batch-bar {
@@ -2370,21 +2381,31 @@
         opacity: 0.45;
         cursor: wait;
       }
-      .nail-notice-entry {
+      .nail-head-actions .nail-notice-entry {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: 5px;
+        border: 1px solid color-mix(in srgb, var(--label) 22%, transparent);
+        background: color-mix(in srgb, var(--fill) 55%, transparent);
+        color: var(--label);
       }
-      .nail-notice-entry .nail-notice-entry-meta {
+      .nail-head-actions .nail-notice-entry .nail-notice-bell {
+        width: 14px;
+        height: 14px;
+        flex: 0 0 auto;
+        display: block;
+      }
+      .nail-head-actions .nail-notice-entry .nail-notice-entry-meta {
         color: var(--secondary);
         font-size: 11px;
         font-weight: 600;
         font-variant-numeric: tabular-nums;
       }
-      .nail-notice-entry.has-unread {
+      .nail-head-actions .nail-notice-entry.has-unread {
         color: var(--warn, #b07030);
+        border-color: color-mix(in srgb, var(--warn, #b07030) 45%, transparent);
       }
-      .nail-notice-entry.has-unread .nail-notice-entry-meta {
+      .nail-head-actions .nail-notice-entry.has-unread .nail-notice-entry-meta {
         color: inherit;
       }
       .nail-auto-pin-popover {
@@ -5985,6 +6006,19 @@
               id="nailNoticeEntry"
               title="近 24h 荧光绿通知"
             >
+              <svg
+                class="nail-notice-bell"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M6 9a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+              </svg>
               通知
               <span class="nail-notice-entry-meta" id="nailNoticeEntryMeta"></span>
             </button>
@@ -6015,7 +6049,7 @@
               持有
             </button>
             <button type="button" data-close-nails id="nailGoMarketBtn" title="切到行情屏">
-              行情
+              行情 >>
             </button>
           </div>
           <div class="nail-auto-pin-popover" id="nailAutoPinPopover" hidden>
@@ -9704,7 +9738,10 @@
           await setNailHoldPopoverOpen(false);
         }
         popover.hidden = !next;
-        if (button) button.setAttribute("aria-expanded", next ? "true" : "false");
+        if (button) {
+          button.setAttribute("aria-expanded", next ? "true" : "false");
+          button.classList.toggle("is-active", next);
+        }
         if (next) {
           await loadSharedActionLog();
           renderNailAutoPinList();
@@ -9806,7 +9843,10 @@
           await setNailHoldPopoverOpen(false);
         }
         popover.hidden = !next;
-        if (button) button.setAttribute("aria-expanded", next ? "true" : "false");
+        if (button) {
+          button.setAttribute("aria-expanded", next ? "true" : "false");
+          button.classList.toggle("is-active", next);
+        }
         if (next) {
           renderNailRadarTable();
         }
@@ -9842,14 +9882,28 @@
           ? nailHoldingsState.symbols.slice()
           : [];
         if (hint) {
-          const err = nailHoldingsState.lastError;
+          const err = String(nailHoldingsState.lastError || "").trim();
           const stamp = Number(nailHoldingsState.updatedAt) || 0;
           const when = stamp
             ? new Date(stamp).toLocaleString("zh-CN", { hour12: false })
             : "尚未同步";
-          hint.textContent = err
-            ? `上次同步异常：${err} · ${when}`
-            : `添加要关注的币；云函数每 5 分钟回填可用/冻结。上次同步 ${when}`;
+          let errLabel = "";
+          if (
+            err === "missing-api-keys" ||
+            err === "missing-api-keys:both"
+          ) {
+            errLabel =
+              "云函数里 Key 和 Secret 都没读到（检查 notify 函数环境变量名是否为 BINANCE_API_KEY / BINANCE_API_SECRET）";
+          } else if (err === "missing-api-keys:no-key") {
+            errLabel = "读到了 Secret，但缺少 BINANCE_API_KEY";
+          } else if (err === "missing-api-keys:no-secret") {
+            errLabel = "读到了 Key，但缺少 BINANCE_API_SECRET";
+          } else if (err) {
+            errLabel = err;
+          }
+          hint.textContent = errLabel
+            ? `余额未同步：${errLabel} · ${when}`
+            : `添加关注币后，云函数约每 5 分钟回填可用/冻结。上次同步 ${when}`;
         }
         if (!symbols.length) {
           list.innerHTML =
@@ -9911,7 +9965,10 @@
           await setNailRadarPopoverOpen(false);
         }
         popover.hidden = !next;
-        if (button) button.setAttribute("aria-expanded", next ? "true" : "false");
+        if (button) {
+          button.setAttribute("aria-expanded", next ? "true" : "false");
+          button.classList.toggle("is-active", next);
+        }
         if (next) {
           await reloadNailHoldings({ silent: true });
         }
