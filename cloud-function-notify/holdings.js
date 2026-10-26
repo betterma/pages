@@ -1,8 +1,9 @@
 'use strict';
 
 /**
- * 只读持仓余额：网页指定关注币种 → 云函数用「允许读取」API Key 拉账户余额写回 GitHub。
- * 不包含任何下单 / 卖出逻辑。
+ * 持仓余额同步：网页指定关注币种 → 云函数拉账户余额写回 GitHub。
+ * 签名支持 HMAC（系统生成 Secret）与 Ed25519/RSA（自行生成 PEM 私钥）。
+ * 本文件仍不做下单；交易权限 Key 也可用于只读 account。
  */
 
 const https = require('https');
@@ -28,6 +29,53 @@ const SECRET_NAMES = [
   'BINANCE_SECRET_KEY',
 ];
 
+/** 控制台粘贴 PEM 时常见把换行写成 \n。 */
+function normalizeSecret(raw) {
+  let text = String(raw || '').trim();
+  if (!text) return '';
+  if (text.includes('\\n')) text = text.replace(/\\n/g, '\n');
+  return text.trim();
+}
+
+function isPemPrivateKey(secret) {
+  const text = normalizeSecret(secret);
+  return (
+    text.includes('BEGIN PRIVATE KEY') ||
+    text.includes('BEGIN RSA PRIVATE KEY') ||
+    text.includes('BEGIN ENCRYPTED PRIVATE KEY')
+  );
+}
+
+/**
+ * HMAC → hex；Ed25519/RSA PEM → base64（币安自签 Key）。
+ * @param {string} query
+ * @param {string} secret
+ */
+function signBinanceQuery(query, secret) {
+  const material = normalizeSecret(secret);
+  if (!material) throw new Error('Empty BINANCE_API_SECRET');
+  if (isPemPrivateKey(material)) {
+    const keyObject = crypto.createPrivateKey(material);
+    return crypto.sign(null, Buffer.from(query, 'ascii'), keyObject).toString('base64');
+  }
+  return crypto.createHmac('sha256', material).update(query).digest('hex');
+}
+
+function secretKindOf(secret) {
+  if (!secret) return 'none';
+  if (!isPemPrivateKey(secret)) return 'hmac';
+  const text = normalizeSecret(secret);
+  try {
+    const keyObject = crypto.createPrivateKey(text);
+    const type = keyObject.asymmetricKeyType || '';
+    if (type === 'ed25519') return 'ed25519';
+    if (type === 'rsa') return 'rsa';
+    return `pem:${type || 'unknown'}`;
+  } catch (error) {
+    return 'pem-invalid';
+  }
+}
+
 function binanceConfig(context) {
   return {
     // 事件函数加密变量：优先 context.getUserData，其次 process.env / RUNTIME_USERDATA。
@@ -50,6 +98,7 @@ function keyDiag(context) {
     hasSecret: !!apiSecret,
     keyLen: apiKey ? apiKey.length : 0,
     secretLen: apiSecret ? apiSecret.length : 0,
+    secretKind: secretKindOf(apiSecret),
     hasGetUserData: sources.hasGetUserData,
     runtimeUserDataLen: sources.runtimeUserDataLen,
     sources: sources.seen,
@@ -137,11 +186,8 @@ async function signedGet(path, params = {}, context) {
       return map;
     }, {}),
   ).toString();
-  const signature = crypto
-    .createHmac('sha256', apiSecret)
-    .update(query)
-    .digest('hex');
-  const url = `${baseUrl}${path}?${query}&signature=${signature}`;
+  const signature = signBinanceQuery(query, apiSecret);
+  const url = `${baseUrl}${path}?${query}&signature=${encodeURIComponent(signature)}`;
   const response = await requestJson(url, {
     method: 'GET',
     headers: { 'X-MBX-APIKEY': apiKey },
