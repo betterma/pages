@@ -215,6 +215,17 @@ function alignPrice(price, tickSize) {
   return Number((units * t).toFixed(precision));
 }
 
+/** 卖单价向上靠档，避免 floor 后跌破最低卖出价。 */
+function alignPriceCeil(price, tickSize) {
+  const n = Number(price);
+  const t = Number(tickSize);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  if (!Number.isFinite(t) || t <= 0) return n;
+  const precision = Math.max(0, (String(t).split('.')[1] || '').length);
+  const units = Math.ceil(n / t - 1e-12);
+  return Number((units * t).toFixed(precision));
+}
+
 const symbolFilterCache = new Map();
 
 async function getSymbolFilters(symbol, context) {
@@ -307,6 +318,28 @@ async function getOrder(symbol, orderId, context) {
   );
 }
 
+async function cancelOrder(symbol, orderId, context) {
+  return signedRequest(
+    'DELETE',
+    '/api/v3/order',
+    {
+      symbol: String(symbol).toUpperCase(),
+      orderId: String(orderId),
+    },
+    context,
+  );
+}
+
+function fillAvgPrice(order) {
+  const qty = Number(order && order.executedQty);
+  const quote = Number(order && order.cummulativeQuoteQty);
+  if (Number.isFinite(qty) && qty > 0 && Number.isFinite(quote) && quote > 0) {
+    return quote / qty;
+  }
+  const px = Number(order && order.price);
+  return Number.isFinite(px) && px > 0 ? px : null;
+}
+
 module.exports = {
   hasKeys,
   binanceConfig,
@@ -316,7 +349,10 @@ module.exports = {
   getFreeBalance,
   floorToStep,
   alignPrice,
+  alignPriceCeil,
   limitSell,
   limitBuy,
   getOrder,
+  cancelOrder,
+  fillAvgPrice,
 };

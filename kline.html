@@ -2597,48 +2597,102 @@
         width: auto;
         max-width: none;
         max-height: none;
-        border: 0.5px solid var(--separator);
+        border: 1px solid rgba(255, 255, 255, 0.28);
         border-bottom: none;
-        border-radius: 10px 10px 0 0;
-        background: var(--elevated, var(--grouped));
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+        border-radius: 14px 14px 0 0;
+        background: color-mix(in srgb, #f4f5f7 78%, transparent);
+        color: #1c1c1e;
+        -webkit-backdrop-filter: blur(18px) saturate(1.2);
+        backdrop-filter: blur(18px) saturate(1.2);
+        box-shadow: 0 -8px 36px rgba(0, 0, 0, 0.28);
         overflow: hidden;
         display: flex;
         flex-direction: column;
         padding-bottom: env(safe-area-inset-bottom, 0px);
         box-sizing: border-box;
       }
+      html[data-theme="light"] .nail-hold-popover {
+        background: color-mix(in srgb, #ffffff 82%, transparent);
+        border-color: rgba(0, 0, 0, 0.08);
+        box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.12);
+      }
       .nail-hold-popover[hidden] {
         display: none !important;
       }
-      .nail-hold-refresh {
+      .nail-hold-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 12px 8px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      }
+      .nail-hold-toolbar-title {
+        font-size: 14px;
+        font-weight: 750;
+        color: #1c1c1e;
+      }
+      .nail-hold-toolbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .nail-hold-refresh,
+      .nail-hold-settings-btn {
         border: none;
-        background: var(--fill);
-        color: var(--label);
-        height: 28px;
-        padding: 0 10px;
-        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.72);
+        color: #1c1c1e;
+        height: 30px;
+        padding: 0 11px;
+        border-radius: 9px;
         font-size: 12px;
         font-weight: 650;
         cursor: pointer;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      }
+      .nail-hold-settings-btn {
+        width: 30px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .nail-hold-settings-btn svg {
+        width: 15px;
+        height: 15px;
+        display: block;
+      }
+      .nail-hold-settings-btn.is-open {
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 22%, #fff);
+        color: var(--accent, #2f8f6e);
+      }
+      .nail-hold-refresh:disabled {
+        opacity: 0.55;
+        cursor: wait;
       }
       .nail-hold-hint {
         margin: 0;
         padding: 8px 12px;
-        color: var(--secondary);
+        color: rgba(28, 28, 30, 0.62);
         font-size: 11px;
         line-height: 1.45;
-        border-bottom: 0.5px solid var(--separator);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+      }
+      .nail-hold-settings-panel {
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        background: rgba(255, 255, 255, 0.45);
+      }
+      .nail-hold-settings-panel[hidden] {
+        display: none !important;
       }
       .nail-hold-live-row {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 10px 16px;
-        padding: 8px 12px;
-        border-bottom: 0.5px solid var(--separator);
+        padding: 10px 12px 6px;
         font-size: 12px;
-        color: var(--label);
+        color: #1c1c1e;
       }
       .nail-hold-live-row .nail-hold-live-item {
         display: inline-flex;
@@ -2646,7 +2700,7 @@
         gap: 8px;
       }
       .nail-hold-live-row .nail-hold-live-warn {
-        color: var(--warn, #b07030);
+        color: #b07030;
         font-size: 11px;
         font-weight: 650;
       }
@@ -2655,31 +2709,30 @@
         grid-template-columns: 1fr auto;
         gap: 8px;
         align-items: end;
-        padding: 10px 12px;
-        border-bottom: 0.5px solid var(--separator);
+        padding: 6px 12px 12px;
       }
       .nail-hold-form label {
         display: grid;
         gap: 4px;
-        color: var(--secondary);
+        color: rgba(28, 28, 30, 0.62);
         font-size: 11px;
         font-weight: 650;
       }
       .nail-hold-form input[type="text"] {
         height: 32px;
-        border: 0.5px solid var(--separator);
+        border: 1px solid rgba(0, 0, 0, 0.1);
         border-radius: 8px;
         padding: 0 10px;
-        background: var(--fill);
-        color: var(--label);
+        background: rgba(255, 255, 255, 0.9);
+        color: #1c1c1e;
         font-size: 13px;
         width: 100%;
         box-sizing: border-box;
       }
       .nail-hold-form button[type="submit"] {
         border: none;
-        background: color-mix(in srgb, var(--accent, #2f8f6e) 22%, var(--fill));
-        color: var(--label);
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 28%, #fff);
+        color: #1c1c1e;
         height: 32px;
         padding: 0 12px;
         border-radius: 8px;
@@ -2688,27 +2741,49 @@
         cursor: pointer;
         white-space: nowrap;
       }
+      .nail-hold-list-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 12px 4px;
+        font-size: 12px;
+        font-weight: 700;
+        color: rgba(28, 28, 30, 0.72);
+      }
       .nail-hold-list {
         flex: 1 1 auto;
         min-height: 0;
         overflow: auto;
         overscroll-behavior: contain;
         max-height: none;
+        padding: 4px 10px 12px;
+        display: grid;
+        gap: 10px;
+        align-content: start;
       }
       .nail-hold-empty {
-        padding: 18px 12px;
-        color: var(--secondary);
+        padding: 22px 12px;
+        color: rgba(28, 28, 30, 0.55);
         font-size: 12px;
         text-align: center;
       }
-      .nail-hold-row {
-        padding: 10px 12px;
-        border-bottom: 0.5px solid var(--separator);
-        display: grid;
-        gap: 4px;
+      .nail-hold-usdt-banner {
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.55);
+        color: rgba(28, 28, 30, 0.7);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
       }
-      .nail-hold-row:last-child {
-        border-bottom: none;
+      .nail-hold-row {
+        padding: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.72);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+        display: grid;
+        gap: 5px;
       }
       .nail-hold-row-top {
         display: flex;
@@ -2717,19 +2792,20 @@
         gap: 8px;
       }
       .nail-hold-sym {
-        font-weight: 700;
-        font-size: 13px;
+        font-weight: 750;
+        font-size: 14px;
+        color: #1c1c1e;
       }
       .nail-hold-meta {
-        color: var(--secondary);
+        color: rgba(28, 28, 30, 0.62);
         font-size: 11px;
         font-variant-numeric: tabular-nums;
-        line-height: 1.4;
+        line-height: 1.45;
       }
       .nail-hold-actions button {
         border: none;
-        background: var(--fill);
-        color: var(--label);
+        background: rgba(0, 0, 0, 0.06);
+        color: #1c1c1e;
         height: 28px;
         padding: 0 8px;
         border-radius: 8px;
@@ -2738,7 +2814,7 @@
         cursor: pointer;
       }
       .nail-hold-ops {
-        margin-top: 8px;
+        margin-top: 6px;
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
@@ -2748,25 +2824,25 @@
         padding: 0 10px;
         border: none;
         border-radius: 8px;
-        background: var(--fill);
-        color: var(--label);
+        background: rgba(0, 0, 0, 0.06);
+        color: #1c1c1e;
         font-size: 12px;
         font-weight: 600;
         cursor: pointer;
       }
       .nail-hold-ops button.is-sell {
-        background: color-mix(in srgb, var(--warn, #c45c26) 16%, var(--fill));
+        background: color-mix(in srgb, #c45c26 18%, #fff);
       }
       .nail-hold-ops button.is-buy {
-        background: color-mix(in srgb, var(--accent) 18%, var(--fill));
-        color: var(--accent);
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 20%, #fff);
+        color: #1a6b52;
       }
       .nail-hold-panel {
         margin-top: 8px;
         padding: 10px;
-        border: 0.5px solid var(--separator);
+        border: 1px solid rgba(0, 0, 0, 0.08);
         border-radius: 10px;
-        background: color-mix(in srgb, var(--fill) 70%, transparent);
+        background: rgba(255, 255, 255, 0.88);
         display: grid;
         gap: 8px;
       }
@@ -2776,11 +2852,12 @@
       .nail-hold-panel .nail-hold-panel-title {
         font-size: 12px;
         font-weight: 700;
+        color: #1c1c1e;
       }
       .nail-hold-panel label {
         display: block;
         font-size: 11px;
-        color: var(--secondary);
+        color: rgba(28, 28, 30, 0.62);
         margin-bottom: 4px;
       }
       .nail-hold-panel .nail-hold-price-row {
@@ -2808,10 +2885,10 @@
       .nail-hold-panel input[type="number"] {
         width: 100%;
         height: 32px;
-        border: 0.5px solid var(--separator);
+        border: 1px solid rgba(0, 0, 0, 0.1);
         border-radius: 8px;
-        background: var(--elevated, var(--fill));
-        color: var(--label);
+        background: #fff;
+        color: #1c1c1e;
         padding: 0 10px;
         font-size: 13px;
         box-sizing: border-box;
@@ -2835,29 +2912,37 @@
         padding: 0 12px;
         border: none;
         border-radius: 8px;
-        background: var(--fill);
-        color: var(--label);
+        background: rgba(0, 0, 0, 0.06);
+        color: #1c1c1e;
         font-size: 12px;
         font-weight: 600;
         cursor: pointer;
       }
       .nail-hold-panel .nail-hold-panel-actions button.primary {
-        background: color-mix(in srgb, var(--accent) 24%, transparent);
-        color: var(--accent);
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 26%, #fff);
+        color: #1a6b52;
+      }
+      .nail-hold-panel .nail-hold-price-row button {
+        background: rgba(0, 0, 0, 0.06);
+        color: #1c1c1e;
       }
       .nail-hold-sell-status {
         display: flex;
         flex-wrap: wrap;
-        align-items: center;
+        align-items: flex-start;
         gap: 6px 8px;
         font-size: 11px;
-        color: var(--secondary);
-        line-height: 1.35;
+        color: rgba(28, 28, 30, 0.72);
+        line-height: 1.45;
         margin-top: 6px;
+        padding: 8px;
+        border-radius: 9px;
+        background: rgba(0, 0, 0, 0.04);
       }
       .nail-hold-sell-status .nail-hold-status-text {
-        flex: 1 1 140px;
+        flex: 1 1 160px;
         min-width: 0;
+        white-space: pre-line;
       }
       .nail-hold-sell-status button {
         flex: 0 0 auto;
@@ -2865,14 +2950,14 @@
         padding: 0 8px;
         border: none;
         border-radius: 7px;
-        background: var(--fill);
-        color: var(--label);
+        background: rgba(255, 255, 255, 0.85);
+        color: #1c1c1e;
         font-size: 11px;
         font-weight: 650;
         cursor: pointer;
       }
       .nail-hold-sell-status button.is-danger {
-        color: var(--warn, #b07030);
+        color: #b07030;
       }
       .nail-notice-drawer {
         position: fixed;
@@ -6384,58 +6469,79 @@
             </div>
           </div>
           <div class="nail-hold-popover" id="nailHoldPopover" hidden>
-            <div class="nail-radar-popover-head">
-              <div class="nail-auto-pin-popover-title">持有 · 余额 / 卖出</div>
-              <button type="button" class="nail-hold-refresh" id="nailHoldRefreshBtn">
+            <div class="nail-hold-toolbar">
+              <div class="nail-hold-toolbar-title">持有</div>
+              <div class="nail-hold-toolbar-actions">
+                <button
+                  type="button"
+                  class="nail-hold-settings-btn"
+                  id="nailHoldSettingsBtn"
+                  aria-expanded="false"
+                  aria-controls="nailHoldSettingsPanel"
+                  title="实盘开关与新增关注"
+                  aria-label="持有设置"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M12 3.5v2.2M12 18.3v2.2M4.9 6.4l1.6 1.6M17.5 16l1.6 1.6M3.5 12h2.2M18.3 12h2.2M4.9 17.6l1.6-1.6M17.5 8l1.6-1.6" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <p class="nail-hold-hint" id="nailHoldHint">
+              有余额可卖可买；无币仅买。默认模拟；设置里开实盘后才真下单。
+            </p>
+            <div class="nail-hold-settings-panel" id="nailHoldSettingsPanel" hidden>
+              <div class="nail-hold-live-row">
+                <div class="nail-hold-live-item">
+                  <span>卖出实盘</span>
+                  <button
+                    type="button"
+                    class="nail-switch"
+                    id="nailSellLiveSwitch"
+                    role="switch"
+                    aria-checked="false"
+                    title="关闭=只 dry-run；打开=云函数 LIMIT 卖出"
+                    aria-label="卖出实盘"
+                  ></button>
+                </div>
+                <div class="nail-hold-live-item">
+                  <span>买入实盘</span>
+                  <button
+                    type="button"
+                    class="nail-switch"
+                    id="nailBuyLiveSwitch"
+                    role="switch"
+                    aria-checked="false"
+                    title="关闭=只 dry-run；打开=云函数 LIMIT 买入"
+                    aria-label="买入实盘"
+                  ></button>
+                </div>
+                <span class="nail-hold-live-warn" id="nailHoldLiveWarn" hidden
+                  >实盘已开</span
+                >
+              </div>
+              <form class="nail-hold-form" id="nailHoldForm">
+                <label>
+                  新增关注
+                  <input
+                    id="nailHoldSymbol"
+                    name="symbol"
+                    type="text"
+                    placeholder="IOST 或 IOSTUSDT"
+                    autocomplete="off"
+                    required
+                  />
+                </label>
+                <button type="submit" id="nailHoldAddBtn">加入</button>
+              </form>
+            </div>
+            <div class="nail-hold-list-head">
+              <span>币列表</span>
+              <button type="button" class="nail-hold-refresh" id="nailHoldRefreshBtn" title="拉取余额、现价与买卖任务">
                 刷新
               </button>
             </div>
-            <p class="nail-hold-hint" id="nailHoldHint">
-              有余额可「设置卖出」或「买入」；余额为 0 仅买入。默认只模拟；打开下方实盘开关后云函数才真下单。
-            </p>
-            <div class="nail-hold-live-row">
-              <div class="nail-hold-live-item">
-                <span>卖出实盘</span>
-                <button
-                  type="button"
-                  class="nail-switch"
-                  id="nailSellLiveSwitch"
-                  role="switch"
-                  aria-checked="false"
-                  title="关闭=只 dry-run；打开=云函数 LIMIT 卖出"
-                  aria-label="卖出实盘"
-                ></button>
-              </div>
-              <div class="nail-hold-live-item">
-                <span>买入实盘</span>
-                <button
-                  type="button"
-                  class="nail-switch"
-                  id="nailBuyLiveSwitch"
-                  role="switch"
-                  aria-checked="false"
-                  title="关闭=只 dry-run；打开=云函数 LIMIT 买入"
-                  aria-label="买入实盘"
-                ></button>
-              </div>
-              <span class="nail-hold-live-warn" id="nailHoldLiveWarn" hidden
-                >实盘已开</span
-              >
-            </div>
-            <form class="nail-hold-form" id="nailHoldForm">
-              <label>
-                币
-                <input
-                  id="nailHoldSymbol"
-                  name="symbol"
-                  type="text"
-                  placeholder="IOST 或 IOSTUSDT"
-                  autocomplete="off"
-                  required
-                />
-              </label>
-              <button type="submit" id="nailHoldAddBtn">加入关注</button>
-            </form>
             <div class="nail-hold-list" id="nailHoldList"></div>
           </div>
           <div
@@ -10203,6 +10309,84 @@
         if (warn) warn.hidden = !(sellOn || buyOn);
       }
 
+      function setNailHoldSettingsOpen(open) {
+        const panel = document.getElementById("nailHoldSettingsPanel");
+        const btn = document.getElementById("nailHoldSettingsBtn");
+        if (!panel) return;
+        const next = !!open;
+        panel.hidden = !next;
+        if (btn) {
+          btn.setAttribute("aria-expanded", next ? "true" : "false");
+          btn.classList.toggle("is-open", next);
+        }
+      }
+
+      function describeHoldTaskStatus(side, task) {
+        if (!task) return "";
+        const statusMap = {
+          armed: "待命",
+          order_open: "已挂限价单",
+          partial: "部分成交",
+          cancel_requested: "撤单中",
+          paused: "已暂停",
+          error: "出错",
+          filled: "已成交",
+          done: "已完成",
+          canceled: "已撤销",
+        };
+        const skipMap = {
+          "dry-run": "模拟中（未真下单）",
+          "below-minSell": "买一未达最低卖出价",
+          "above-maxBuy": "卖一高于最高买入价",
+          "qty-too-small": "数量过小",
+          "below-minNotional": "名义金额过低",
+          "no-bid": "无买一",
+          "no-ask": "无卖一",
+          "no-usdt": "USDT 不足",
+          "insufficient-usdt": "USDT 不足",
+          "bad-price": "价格无效",
+        };
+        const label = side === "buy" ? "买入" : "卖出";
+        const st = String(task.status || "").toLowerCase();
+        const statusText = statusMap[st] || st || "未知";
+        const skip = String(task.skipReason || "").trim();
+        const skipText = skip
+          ? skipMap[skip] || skip
+          : "";
+        const pct =
+          side === "buy"
+            ? Number(task.buyPercent)
+            : Number(task.sellPercent);
+        const limit =
+          side === "buy" ? Number(task.maxBuy) : Number(task.minSell);
+        const bits = [`${label}·${statusText}`];
+        if (skipText) bits.push(skipText);
+        if (Number.isFinite(pct) && pct > 0) {
+          bits.push(side === "buy" ? `用 ${pct}% USDT` : `卖 ${pct}%`);
+        }
+        if (Number.isFinite(limit) && limit > 0) {
+          bits.push(
+            side === "buy"
+              ? `最高 ${formatHoldingsPriceInput(limit)}`
+              : `最低 ${formatHoldingsPriceInput(limit)}`,
+          );
+        }
+        const would = side === "buy" ? task.wouldBuy : task.wouldSell;
+        if (would && (would.qty || would.price || would.bid || would.ask)) {
+          bits.push(
+            `计划 ${would.qty || "--"} @ ${
+              would.price || would.bid || would.ask || "--"
+            }`,
+          );
+        }
+        if (task.openOrderId) bits.push(`单号 ${task.openOrderId}`);
+        if (task.lastError) bits.push(`错误 ${String(task.lastError).slice(0, 80)}`);
+        if (task.enabled === false && st !== "paused" && st !== "cancel_requested") {
+          bits.push("已关闭");
+        }
+        return bits.join(" · ");
+      }
+
       async function setNailTradeLive(side, nextLive) {
         const wantLive = !!nextLive;
         if (wantLive) {
@@ -10216,6 +10400,7 @@
             return;
           }
         }
+        showToast("保存中…");
         try {
           if (side === "buy") {
             const result = await WatchFavorites.patchBuyTasks({
@@ -10377,7 +10562,7 @@
         }
         if (!symbols.length) {
           list.innerHTML =
-            '<div class="nail-hold-empty">暂无关注币 · 加入后等云函数回填余额</div>';
+            '<div class="nail-hold-empty">暂无关注币 · 点设置加入，等云函数回填余额</div>';
           syncNailHoldLiveSwitches();
           return;
         }
@@ -10401,7 +10586,7 @@
           return String(a).localeCompare(String(b));
         });
         list.innerHTML =
-          `<div class="nail-hold-meta" style="padding:4px 0 8px">账户 USDT 可用 ${escapeHtml(usdtFree)} · 按数量从多到少</div>` +
+          `<div class="nail-hold-usdt-banner">账户 USDT 可用 ${escapeHtml(usdtFree)} · 按数量从多到少</div>` +
           sortedSymbols
             .map((symbol) => {
               const asset = holdingsBaseAsset(symbol);
@@ -10435,31 +10620,9 @@
               const buyPct = buy ? Number(buy.buyPercent) || 50 : 50;
               const maxBuy =
                 buy && Number(buy.maxBuy) > 0 ? String(buy.maxBuy) : "";
-              const sellWould = sell && sell.wouldSell ? sell.wouldSell : null;
-              const buyWould = buy && buy.wouldBuy ? buy.wouldBuy : null;
               const statusBits = [];
-              if (sell) {
-                const sellOff = sell.enabled === false ? "/已关" : "";
-                statusBits.push(
-                  `卖 ${sell.status || ""}${sell.skipReason ? "/" + sell.skipReason : ""}${sellOff}`,
-                );
-                if (sellWould) {
-                  statusBits.push(
-                    `计划卖 ${sellWould.qty || "--"}@${sellWould.price || sellWould.bid || "--"}`,
-                  );
-                }
-              }
-              if (buy) {
-                const buyOff = buy.enabled === false ? "/已关" : "";
-                statusBits.push(
-                  `买 ${buy.status || ""}${buy.skipReason ? "/" + buy.skipReason : ""}${buyOff}`,
-                );
-                if (buyWould) {
-                  statusBits.push(
-                    `计划买 ${buyWould.qty || "--"}@${buyWould.price || buyWould.ask || "--"}`,
-                  );
-                }
-              }
+              if (sell) statusBits.push(describeHoldTaskStatus("sell", sell));
+              if (buy) statusBits.push(describeHoldTaskStatus("buy", buy));
               const clearBtns = [
                 sell
                   ? `<button type="button" class="is-danger" data-sell-clear="${escapeHtml(symbol)}" title="从任务列表删除，不再执行">清除卖出</button>`
@@ -10522,7 +10685,7 @@
                 statusBits.length || clearBtns
                   ? `<div class="nail-hold-sell-status">${
                       statusBits.length
-                        ? `<span class="nail-hold-status-text">${escapeHtml(statusBits.join(" · "))}</span>`
+                        ? `<span class="nail-hold-status-text">${escapeHtml(statusBits.join("\n"))}</span>`
                         : ""
                     }${clearBtns}</div>`
                   : ""
@@ -10607,10 +10770,16 @@
 
       async function reloadNailHoldings(options) {
         const silent = !!(options && options.silent);
+        const refreshBtn = document.getElementById("nailHoldRefreshBtn");
         if (!WatchFavorites || typeof WatchFavorites.loadHoldingsRaw !== "function") {
           if (!silent) showToast("持有模块未就绪");
           return;
         }
+        if (refreshBtn) {
+          refreshBtn.disabled = true;
+          refreshBtn.textContent = "刷新中…";
+        }
+        if (!silent) showToast("正在拉取余额 / 现价 / 任务…");
         try {
           const [raw, sellRaw, buyRaw] = await Promise.all([
             WatchFavorites.loadHoldingsRaw({
@@ -10620,12 +10789,12 @@
               ? WatchFavorites.loadSellTasksRaw({
                   repo: CONFIG.GITHUB_REPO,
                 })
-              : Promise.resolve({ state: { updatedAt: 0, tasks: [] } }),
+              : Promise.resolve({ state: { updatedAt: 0, live: false, tasks: [] } }),
             typeof WatchFavorites.loadBuyTasksRaw === "function"
               ? WatchFavorites.loadBuyTasksRaw({
                   repo: CONFIG.GITHUB_REPO,
                 })
-              : Promise.resolve({ state: { updatedAt: 0, tasks: [] } }),
+              : Promise.resolve({ state: { updatedAt: 0, live: false, tasks: [] } }),
           ]);
           nailHoldingsState =
             raw && raw.state
@@ -10639,68 +10808,154 @@
             buyRaw && buyRaw.state
               ? buyRaw.state
               : { updatedAt: 0, live: false, tasks: [] };
+
+          const symbols = Array.isArray(nailHoldingsState.symbols)
+            ? nailHoldingsState.symbols
+            : [];
+          const priceTargets = symbols
+            .map((s) => String(s || "").toUpperCase())
+            .filter((s) => s && s !== "USDT");
+          await Promise.all(
+            priceTargets.map((sym) =>
+              fetchBinanceTickerForSymbol(sym).catch(() => null),
+            ),
+          );
+
           renderNailHoldList();
           syncNailHoldLiveSwitches();
-          if (!silent) showToast("持有列表已刷新");
+          if (!silent) {
+            showToast(
+              `已刷新 · ${symbols.length} 币 / 卖任务 ${(nailSellTasksState.tasks || []).length} / 买任务 ${(nailBuyTasksState.tasks || []).length}`,
+            );
+          }
         } catch (error) {
           console.warn("reloadNailHoldings failed", error);
           if (!silent) showToast("刷新持有失败");
+        } finally {
+          if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = "刷新";
+          }
         }
       }
 
-      async function clearNailSellTask(symbol) {
+      async function clearNailSellTask(symbol, options) {
+        const opts = options || {};
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
-        if (!key) return;
-        if (!window.confirm(`清除 ${holdingsBaseAsset(key)} 的卖出任务？`)) {
-          return;
+        if (!key) return false;
+        if (
+          opts.confirm !== false &&
+          !window.confirm(`清除 ${holdingsBaseAsset(key)} 的卖出任务？`)
+        ) {
+          return false;
         }
+        if (opts.confirm !== false) showToast("清除中…");
         try {
+          let awaitingCancel = false;
           const result = await WatchFavorites.patchSellTasks({
             repo: CONFIG.GITHUB_REPO,
             message: `Clear sell task ${key}`,
-            mutate: (state) => ({
-              ...state,
-              tasks: (state.tasks || []).filter(
-                (t) => String(t.symbol).toUpperCase() !== key,
-              ),
-            }),
+            mutate: (state) => {
+              const tasks = Array.isArray(state.tasks) ? state.tasks.slice() : [];
+              const idx = tasks.findIndex(
+                (t) => String(t.symbol).toUpperCase() === key,
+              );
+              if (idx < 0) return state;
+              const task = tasks[idx];
+              if (task && task.openOrderId) {
+                awaitingCancel = true;
+                tasks[idx] = {
+                  ...task,
+                  status: "cancel_requested",
+                  enabled: true,
+                  updatedAt: Date.now(),
+                };
+                return { ...state, tasks };
+              }
+              return {
+                ...state,
+                tasks: tasks.filter(
+                  (t) => String(t.symbol).toUpperCase() !== key,
+                ),
+              };
+            },
           });
           nailSellTasksState = result.state || nailSellTasksState;
-          renderNailHoldList();
-          showToast(`${holdingsBaseAsset(key)} 卖出任务已清除`);
+          if (!opts.skipRender) renderNailHoldList();
+          if (opts.silent !== true) {
+            showToast(
+              awaitingCancel
+                ? `${holdingsBaseAsset(key)} 已请求撤单，等云函数执行后消失`
+                : `${holdingsBaseAsset(key)} 卖出任务已清除`,
+            );
+          }
+          return true;
         } catch (error) {
           console.warn("clearNailSellTask failed", error);
-          showToast("清除卖出任务失败");
+          if (opts.silent !== true) showToast("清除卖出任务失败");
+          return false;
         }
       }
 
-      async function clearNailBuyTask(symbol) {
+      async function clearNailBuyTask(symbol, options) {
+        const opts = options || {};
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
-        if (!key) return;
-        if (!window.confirm(`清除 ${holdingsBaseAsset(key)} 的买入任务？`)) {
-          return;
+        if (!key) return false;
+        if (
+          opts.confirm !== false &&
+          !window.confirm(`清除 ${holdingsBaseAsset(key)} 的买入任务？`)
+        ) {
+          return false;
         }
+        if (opts.confirm !== false) showToast("清除中…");
         try {
+          let awaitingCancel = false;
           const result = await WatchFavorites.patchBuyTasks({
             repo: CONFIG.GITHUB_REPO,
             message: `Clear buy task ${key}`,
-            mutate: (state) => ({
-              ...state,
-              tasks: (state.tasks || []).filter(
-                (t) => String(t.symbol).toUpperCase() !== key,
-              ),
-            }),
+            mutate: (state) => {
+              const tasks = Array.isArray(state.tasks) ? state.tasks.slice() : [];
+              const idx = tasks.findIndex(
+                (t) => String(t.symbol).toUpperCase() === key,
+              );
+              if (idx < 0) return state;
+              const task = tasks[idx];
+              if (task && task.openOrderId) {
+                awaitingCancel = true;
+                tasks[idx] = {
+                  ...task,
+                  status: "cancel_requested",
+                  enabled: true,
+                  updatedAt: Date.now(),
+                };
+                return { ...state, tasks };
+              }
+              return {
+                ...state,
+                tasks: tasks.filter(
+                  (t) => String(t.symbol).toUpperCase() !== key,
+                ),
+              };
+            },
           });
           nailBuyTasksState = result.state || nailBuyTasksState;
-          renderNailHoldList();
-          showToast(`${holdingsBaseAsset(key)} 买入任务已清除`);
+          if (!opts.skipRender) renderNailHoldList();
+          if (opts.silent !== true) {
+            showToast(
+              awaitingCancel
+                ? `${holdingsBaseAsset(key)} 已请求撤单，等云函数执行后消失`
+                : `${holdingsBaseAsset(key)} 买入任务已清除`,
+            );
+          }
+          return true;
         } catch (error) {
           console.warn("clearNailBuyTask failed", error);
-          showToast("清除买入任务失败");
+          if (opts.silent !== true) showToast("清除买入任务失败");
+          return false;
         }
       }
 
@@ -10714,6 +10969,20 @@
         }
         const opts = options || {};
         const pause = !!opts.pause;
+        const existing = (nailSellTasksState.tasks || []).find(
+          (t) => String(t.symbol).toUpperCase() === key,
+        );
+        if (
+          !pause &&
+          existing &&
+          (existing.openOrderId ||
+            existing.status === "order_open" ||
+            existing.status === "partial" ||
+            existing.status === "cancel_requested")
+        ) {
+          showToast("请先清除卖出任务（有挂单会先撤单）再重新设置");
+          return;
+        }
         const row = document.querySelector(
           `.nail-hold-row[data-hold-symbol="${key}"]`,
         );
@@ -10747,7 +11016,10 @@
             return;
           }
         }
-        const result = await WatchFavorites.patchSellTasks({
+        showToast("保存中…");
+        let result;
+        try {
+          result = await WatchFavorites.patchSellTasks({
           repo: CONFIG.GITHUB_REPO,
           message: pause
             ? `Pause sell task ${key}`
@@ -10787,13 +11059,17 @@
             return { ...state, tasks };
           },
         });
-        nailSellTasksState = result.state || nailSellTasksState;
-        renderNailHoldList();
-        showToast(
-          pause
-            ? `${holdingsBaseAsset(key)} 卖出已暂停`
-            : `${holdingsBaseAsset(key)} 卖出已确定 ${sellPercent}% ≥${minSell}`,
-        );
+          nailSellTasksState = result.state || nailSellTasksState;
+          renderNailHoldList();
+          showToast(
+            pause
+              ? `${holdingsBaseAsset(key)} 卖出已暂停`
+              : `${holdingsBaseAsset(key)} 卖出已确定 ${sellPercent}% ≥${minSell}`,
+          );
+        } catch (error) {
+          console.warn("upsertNailSellTask failed", error);
+          showToast("保存卖出任务失败");
+        }
       }
 
       async function upsertNailBuyTask(symbol, options) {
@@ -10806,6 +11082,20 @@
         }
         const opts = options || {};
         const pause = !!opts.pause;
+        const existing = (nailBuyTasksState.tasks || []).find(
+          (t) => String(t.symbol).toUpperCase() === key,
+        );
+        if (
+          !pause &&
+          existing &&
+          (existing.openOrderId ||
+            existing.status === "order_open" ||
+            existing.status === "partial" ||
+            existing.status === "cancel_requested")
+        ) {
+          showToast("请先清除买入任务（有挂单会先撤单）再重新设置");
+          return;
+        }
         const row = document.querySelector(
           `.nail-hold-row[data-hold-symbol="${key}"]`,
         );
@@ -10839,53 +11129,61 @@
             return;
           }
         }
-        const result = await WatchFavorites.patchBuyTasks({
-          repo: CONFIG.GITHUB_REPO,
-          message: pause
-            ? `Pause buy task ${key}`
-            : `Arm buy task ${key} ${buyPercent}% USDT`,
-          mutate: (state) => {
-            const tasks = Array.isArray(state.tasks) ? state.tasks.slice() : [];
-            const idx = tasks.findIndex(
-              (t) => String(t.symbol).toUpperCase() === key,
-            );
-            const now = Date.now();
-            if (pause) {
-              if (idx >= 0) {
-                tasks[idx] = {
-                  ...tasks[idx],
-                  status: "paused",
-                  enabled: false,
-                  updatedAt: now,
-                };
+        showToast("保存中…");
+        try {
+          const result = await WatchFavorites.patchBuyTasks({
+            repo: CONFIG.GITHUB_REPO,
+            message: pause
+              ? `Pause buy task ${key}`
+              : `Arm buy task ${key} ${buyPercent}% USDT`,
+            mutate: (state) => {
+              const tasks = Array.isArray(state.tasks)
+                ? state.tasks.slice()
+                : [];
+              const idx = tasks.findIndex(
+                (t) => String(t.symbol).toUpperCase() === key,
+              );
+              const now = Date.now();
+              if (pause) {
+                if (idx >= 0) {
+                  tasks[idx] = {
+                    ...tasks[idx],
+                    status: "paused",
+                    enabled: false,
+                    updatedAt: now,
+                  };
+                }
+                return { ...state, tasks };
               }
+              const nextTask = {
+                id: idx >= 0 ? tasks[idx].id : `${key}-buy-${now}`,
+                symbol: key,
+                buyPercent,
+                maxBuy,
+                enabled: true,
+                status: "armed",
+                openOrderId: null,
+                createdAt: idx >= 0 ? tasks[idx].createdAt || now : now,
+                updatedAt: now,
+                lastError: null,
+                skipReason: null,
+              };
+              if (idx >= 0) tasks[idx] = { ...tasks[idx], ...nextTask };
+              else tasks.unshift(nextTask);
               return { ...state, tasks };
-            }
-            const nextTask = {
-              id: idx >= 0 ? tasks[idx].id : `${key}-buy-${now}`,
-              symbol: key,
-              buyPercent,
-              maxBuy,
-              enabled: true,
-              status: "armed",
-              openOrderId: null,
-              createdAt: idx >= 0 ? tasks[idx].createdAt || now : now,
-              updatedAt: now,
-              lastError: null,
-              skipReason: null,
-            };
-            if (idx >= 0) tasks[idx] = { ...tasks[idx], ...nextTask };
-            else tasks.unshift(nextTask);
-            return { ...state, tasks };
-          },
-        });
-        nailBuyTasksState = result.state || nailBuyTasksState;
-        renderNailHoldList();
-        showToast(
-          pause
-            ? `${holdingsBaseAsset(key)} 买入已暂停`
-            : `${holdingsBaseAsset(key)} 买入已确定 USDT ${buyPercent}% ≤${maxBuy}`,
-        );
+            },
+          });
+          nailBuyTasksState = result.state || nailBuyTasksState;
+          renderNailHoldList();
+          showToast(
+            pause
+              ? `${holdingsBaseAsset(key)} 买入已暂停`
+              : `${holdingsBaseAsset(key)} 买入已确定 USDT ${buyPercent}% ≤${maxBuy}`,
+          );
+        } catch (error) {
+          console.warn("upsertNailBuyTask failed", error);
+          showToast("保存买入任务失败");
+        }
       }
 
       function layoutNailHoldPopover() {
@@ -10931,22 +11229,28 @@
           return;
         }
         if (!symbol.endsWith("USDT")) symbol += "USDT";
-        const result = await WatchFavorites.patchHoldings({
-          repo: CONFIG.GITHUB_REPO,
-          message: `Add holdings watch ${symbol}`,
-          mutate: (state) => {
-            const symbols = Array.isArray(state.symbols)
-              ? state.symbols.slice()
-              : [];
-            if (!symbols.includes(symbol)) symbols.unshift(symbol);
-            return { ...state, symbols };
-          },
-        });
-        nailHoldingsState = result.state || nailHoldingsState;
-        renderNailHoldList();
-        showToast(
-          `已关注 ${holdingsBaseAsset(symbol)} · 等下次云扫描回填`,
-        );
+        showToast("保存中…");
+        try {
+          const result = await WatchFavorites.patchHoldings({
+            repo: CONFIG.GITHUB_REPO,
+            message: `Add holdings watch ${symbol}`,
+            mutate: (state) => {
+              const symbols = Array.isArray(state.symbols)
+                ? state.symbols.slice()
+                : [];
+              if (!symbols.includes(symbol)) symbols.unshift(symbol);
+              return { ...state, symbols };
+            },
+          });
+          nailHoldingsState = result.state || nailHoldingsState;
+          renderNailHoldList();
+          showToast(
+            `已关注 ${holdingsBaseAsset(symbol)} · 等下次云扫描回填`,
+          );
+        } catch (error) {
+          console.warn("addNailHoldingSymbol failed", error);
+          showToast("加入关注失败");
+        }
       }
 
       async function removeNailHoldingSymbol(rawSymbol) {
@@ -10954,22 +11258,42 @@
           .trim()
           .toUpperCase();
         if (!symbol) return;
-        const result = await WatchFavorites.patchHoldings({
-          repo: CONFIG.GITHUB_REPO,
-          message: `Remove holdings watch ${symbol}`,
-          mutate: (state) => {
-            const asset = holdingsBaseAsset(symbol);
-            const symbols = (state.symbols || []).filter(
-              (item) => String(item).toUpperCase() !== symbol,
-            );
-            const balances = { ...(state.balances || {}) };
-            delete balances[asset];
-            return { ...state, symbols, balances };
-          },
-        });
-        nailHoldingsState = result.state || nailHoldingsState;
-        renderNailHoldList();
-        showToast("已移除");
+        const label = holdingsBaseAsset(symbol) || symbol;
+        if (!window.confirm(`移除关注 ${label}？相关买卖任务也会清除。`)) {
+          return;
+        }
+        showToast("移除中…");
+        try {
+          const result = await WatchFavorites.patchHoldings({
+            repo: CONFIG.GITHUB_REPO,
+            message: `Remove holdings watch ${symbol}`,
+            mutate: (state) => {
+              const asset = holdingsBaseAsset(symbol);
+              const symbols = (state.symbols || []).filter(
+                (item) => String(item).toUpperCase() !== symbol,
+              );
+              const balances = { ...(state.balances || {}) };
+              delete balances[asset];
+              return { ...state, symbols, balances };
+            },
+          });
+          nailHoldingsState = result.state || nailHoldingsState;
+          await clearNailSellTask(symbol, {
+            confirm: false,
+            silent: true,
+            skipRender: true,
+          });
+          await clearNailBuyTask(symbol, {
+            confirm: false,
+            silent: true,
+            skipRender: true,
+          });
+          renderNailHoldList();
+          showToast(`已移除 ${label}`);
+        } catch (error) {
+          console.warn("removeNailHoldingSymbol failed", error);
+          showToast("移除失败");
+        }
       }
 
       async function editActionLogPrice(identityKey) {
@@ -23071,6 +23395,13 @@
       if (nailHoldRefreshBtn) {
         nailHoldRefreshBtn.addEventListener("click", () => {
           void reloadNailHoldings();
+        });
+      }
+      const nailHoldSettingsBtn = document.getElementById("nailHoldSettingsBtn");
+      if (nailHoldSettingsBtn) {
+        nailHoldSettingsBtn.addEventListener("click", () => {
+          const panel = document.getElementById("nailHoldSettingsPanel");
+          setNailHoldSettingsOpen(panel ? panel.hidden : true);
         });
       }
       const nailSellLiveSwitch = document.getElementById("nailSellLiveSwitch");

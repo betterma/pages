@@ -83,7 +83,7 @@ async function pollOpenOrder(task, context) {
     task.skipReason = null;
     task.lastError = null;
     task.lastQty = Number(order.executedQty) || task.lastQty;
-    task.lastPrice = Number(order.price) || task.lastPrice;
+    task.lastPrice = spot.fillAvgPrice(order) || Number(order.price) || task.lastPrice;
     task._removeAfterFill = true;
     try {
       await appendTradeActionLog(
@@ -144,8 +144,12 @@ async function planAndMaybePlace(task, context, live) {
   }
 
   const cap = task.maxBuy > 0 ? task.maxBuy : ask;
-  const price = spot.alignPrice(Math.min(cap, ask), filters.tickSize);
-  if (!(price > 0)) {
+  let price = spot.alignPrice(Math.min(cap, ask), filters.tickSize);
+  // floor 后勿超过最高买入价
+  if (task.maxBuy > 0 && price > task.maxBuy + 1e-12) {
+    price = spot.alignPrice(task.maxBuy, filters.tickSize);
+  }
+  if (!(price > 0) || (task.maxBuy > 0 && price > task.maxBuy + 1e-12)) {
     task.skipReason = 'bad-price';
     task.updatedAt = Date.now();
     return 'skip';
@@ -202,8 +206,49 @@ async function planAndMaybePlace(task, context, live) {
 
   const order = await spot.limitBuy(task.symbol, qty, price, context);
   task.openOrderId = order.orderId != null ? String(order.orderId) : null;
+  const placeStatus = String(order.status || '').toUpperCase();
+  if (placeStatus === 'FILLED') {
+    task.status = 'filled';
+    task.enabled = false;
+    task.openOrderId = null;
+    task.skipReason = null;
+    task.lastError = null;
+    task.lastQty = Number(order.executedQty) || qty;
+    task.lastPrice = spot.fillAvgPrice(order) || price;
+    task._removeAfterFill = true;
+    try {
+      await appendTradeActionLog(
+        'buy',
+        task.symbol,
+        task.lastPrice,
+        task.lastQty,
+      );
+    } catch (error) {
+      console.warn('buy fill log failed', error && error.message);
+    }
+    return 'filled';
+  }
   task.status = 'order_open';
   return 'placed';
+}
+
+async function cancelAndDrop(task, context) {
+  if (task.openOrderId) {
+    try {
+      await spot.cancelOrder(task.symbol, task.openOrderId, context);
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      if (!/UNKNOWN_ORDER|does not exist|-2011|-2013/i.test(message)) {
+        throw error;
+      }
+    }
+  }
+  task.openOrderId = null;
+  task._removeAfterFill = true;
+  task.status = 'canceled';
+  task.enabled = false;
+  task.updatedAt = Date.now();
+  return 'canceled';
 }
 
 async function runBuyTasks(options) {
@@ -219,6 +264,7 @@ async function runBuyTasks(options) {
     dryRun: 0,
     placed: 0,
     filled: 0,
+    canceled: 0,
     skippedTask: 0,
     errors: [],
   };
@@ -249,11 +295,24 @@ async function runBuyTasks(options) {
 
   let changed = false;
   for (const task of state.tasks) {
-    if (!task.enabled) continue;
     if (task.status === 'filled' || task.status === 'done') continue;
-    if (task.status === 'paused') continue;
     result.checked += 1;
     try {
+      if (task.status === 'cancel_requested') {
+        await cancelAndDrop(task, context);
+        changed = true;
+        result.canceled += 1;
+        continue;
+      }
+      if (!task.enabled) continue;
+      if (task.status === 'paused') {
+        if (task.openOrderId) {
+          const poll = await pollOpenOrder(task, context);
+          changed = true;
+          if (poll === 'filled') result.filled += 1;
+        }
+        continue;
+      }
       if (task.openOrderId) {
         const poll = await pollOpenOrder(task, context);
         changed = true;
@@ -269,6 +328,7 @@ async function runBuyTasks(options) {
         changed = true;
         if (action === 'dry-run') result.dryRun += 1;
         else if (action === 'placed') result.placed += 1;
+        else if (action === 'filled') result.filled += 1;
         else if (action === 'skip') result.skippedTask += 1;
       }
     } catch (error) {
@@ -303,7 +363,7 @@ async function runBuyTasks(options) {
       BUY_TASKS_PATH,
       next,
       file.sha,
-      `Buy tasks sync live=${live ? 1 : 0} dry=${result.dryRun} place=${result.placed} fill=${result.filled}`,
+      `Buy tasks sync live=${live ? 1 : 0} dry=${result.dryRun} place=${result.placed} fill=${result.filled} cancel=${result.canceled}`,
     );
   } catch (error) {
     const message = error && error.message ? error.message : String(error);
@@ -324,5 +384,4 @@ module.exports = {
   normalizeState,
   normalizeTask,
   BUY_TASKS_PATH,
-  buyLiveEnabled,
 };
