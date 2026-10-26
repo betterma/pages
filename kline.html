@@ -2451,6 +2451,120 @@
         font-size: 12px;
         text-align: center;
       }
+      .nail-radar-popover {
+        position: absolute;
+        top: calc(100% - 2px);
+        right: 10px;
+        z-index: 9;
+        width: min(520px, calc(100vw - 20px));
+        max-height: min(62vh, 560px);
+        border: 0.5px solid var(--separator);
+        border-radius: 10px;
+        background: var(--elevated, var(--grouped));
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .nail-radar-popover[hidden] {
+        display: none !important;
+      }
+      .nail-radar-popover-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        border-bottom: 0.5px solid var(--separator);
+        padding-right: 10px;
+      }
+      .nail-radar-popover-head .nail-auto-pin-popover-title {
+        border-bottom: none;
+        flex: 1;
+        min-width: 0;
+      }
+      .nail-radar-open-full {
+        flex: 0 0 auto;
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 650;
+        text-decoration: none;
+      }
+      .nail-radar-open-full:hover {
+        text-decoration: underline;
+      }
+      .nail-radar-table-wrap {
+        overflow: auto;
+        overscroll-behavior: contain;
+        max-height: min(56vh, 520px);
+      }
+      .nail-radar-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-radar-table th,
+      .nail-radar-table td {
+        padding: 7px 8px;
+        border-bottom: 0.5px solid var(--separator);
+        text-align: left;
+        white-space: nowrap;
+      }
+      .nail-radar-table th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: var(--elevated, var(--grouped));
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 650;
+      }
+      .nail-radar-table th:nth-child(1),
+      .nail-radar-table td:nth-child(1) {
+        width: 2.2em;
+        color: var(--secondary);
+      }
+      .nail-radar-table th:nth-child(3),
+      .nail-radar-table td:nth-child(3),
+      .nail-radar-table th:nth-child(4),
+      .nail-radar-table td:nth-child(4),
+      .nail-radar-table th:nth-child(5),
+      .nail-radar-table td:nth-child(5) {
+        text-align: right;
+      }
+      .nail-radar-table tr.is-pool {
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 8%, transparent);
+      }
+      .nail-radar-table tr.is-top20 td:nth-child(1) {
+        color: var(--warn, #b07030);
+        font-weight: 700;
+      }
+      .nail-radar-symbol {
+        border: none;
+        background: transparent;
+        color: var(--accent);
+        padding: 0;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .nail-radar-symbol:hover {
+        text-decoration: underline;
+      }
+      .nail-radar-up {
+        color: #2f8f6e;
+        font-weight: 650;
+      }
+      .nail-radar-down {
+        color: #c04545;
+        font-weight: 650;
+      }
+      .nail-radar-empty {
+        padding: 18px 12px;
+        color: var(--secondary);
+        font-size: 12px;
+        text-align: center;
+      }
       .nail-notice-drawer {
         position: fixed;
         inset: 0;
@@ -5755,6 +5869,15 @@
             >
               自动盯
             </button>
+            <button
+              type="button"
+              id="nailRadarBtn"
+              aria-expanded="false"
+              aria-controls="nailRadarPopover"
+              title="冲榜雷达（24h 排名）"
+            >
+              雷达
+            </button>
             <button type="button" data-close-nails id="nailGoMarketBtn" title="切到行情屏">
               行情
             </button>
@@ -5762,6 +5885,32 @@
           <div class="nail-auto-pin-popover" id="nailAutoPinPopover" hidden>
             <div class="nail-auto-pin-popover-title">自动盯记录</div>
             <div class="nail-auto-pin-list" id="nailAutoPinList"></div>
+          </div>
+          <div class="nail-radar-popover" id="nailRadarPopover" hidden>
+            <div class="nail-radar-popover-head">
+              <div class="nail-auto-pin-popover-title">冲榜雷达</div>
+              <a
+                class="nail-radar-open-full"
+                href="./watch.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                >完整页</a
+              >
+            </div>
+            <div class="nail-radar-table-wrap" id="nailRadarTableWrap">
+              <table class="nail-radar-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>币</th>
+                    <th>24h</th>
+                    <th>窗涨</th>
+                    <th>名次</th>
+                  </tr>
+                </thead>
+                <tbody id="nailRadarBody"></tbody>
+              </table>
+            </div>
           </div>
           <div
             class="nail-settings-popover"
@@ -9388,11 +9537,110 @@
         const button = document.getElementById("nailAutoPinBtn");
         if (!popover) return;
         const next = !!open;
+        if (next) await setNailRadarPopoverOpen(false);
         popover.hidden = !next;
         if (button) button.setAttribute("aria-expanded", next ? "true" : "false");
         if (next) {
           await loadSharedActionLog();
           renderNailAutoPinList();
+        }
+      }
+
+      function nailRadarRankDelta(symbol, interval) {
+        const list = ranking();
+        const currentRank = list.indexOf(symbol) + 1;
+        if (!currentRank) return null;
+        const old = comparison(interval);
+        const oldRanks =
+          old && old.ranks && typeof old.ranks === "object" ? old.ranks : null;
+        const oldRank = oldRanks ? Number(oldRanks[symbol]) : NaN;
+        if (!Number.isFinite(oldRank) || oldRank <= 0) {
+          return { currentRank, improvement: null };
+        }
+        return {
+          currentRank,
+          improvement: oldRank - currentRank,
+        };
+      }
+
+      function renderNailRadarTable() {
+        const body = document.getElementById("nailRadarBody");
+        const wrap = document.getElementById("nailRadarTableWrap");
+        if (!body) return;
+        const interval = CONFIG.KLINE_INTERVAL;
+        const maxRank = Math.max(
+          Number(CONFIG.WATCH_POOL_RANK) || 30,
+          100,
+        );
+        const list = ranking().slice(0, maxRank);
+        if (!list.length) {
+          body.innerHTML = "";
+          if (wrap) {
+            let empty = wrap.querySelector(".nail-radar-empty");
+            if (!empty) {
+              empty = document.createElement("div");
+              empty.className = "nail-radar-empty";
+              wrap.appendChild(empty);
+            }
+            empty.textContent = "暂无行情 · 先等页面拉完币安 ticker";
+            empty.hidden = false;
+          }
+          return;
+        }
+        if (wrap) {
+          const empty = wrap.querySelector(".nail-radar-empty");
+          if (empty) empty.hidden = true;
+        }
+        const pool = watchPool instanceof Set ? watchPool : new Set();
+        body.innerHTML = list
+          .map((symbol, index) => {
+            const rank = index + 1;
+            const label = String(symbol || "").replace(/USDT$/i, "");
+            const change24h = Number(marketMap[symbol] && marketMap[symbol].change24h);
+            const win = windowPriceChange(symbol, interval);
+            const rankMeta = nailRadarRankDelta(symbol, interval);
+            const winCls =
+              Number.isFinite(win) && win > 0
+                ? "nail-radar-up"
+                : Number.isFinite(win) && win < 0
+                  ? "nail-radar-down"
+                  : "";
+            const chCls =
+              Number.isFinite(change24h) && change24h > 0
+                ? "nail-radar-up"
+                : Number.isFinite(change24h) && change24h < 0
+                  ? "nail-radar-down"
+                  : "";
+            let rankHtml = `#${rank}`;
+            if (rankMeta && Number.isFinite(rankMeta.improvement)) {
+              const imp = rankMeta.improvement;
+              if (imp > 0) {
+                rankHtml = `<span class="nail-radar-up">+${imp}</span> <span>#${rank}</span>`;
+              } else if (imp < 0) {
+                rankHtml = `<span class="nail-radar-down">${imp}</span> <span>#${rank}</span>`;
+              }
+            }
+            const rowClass = [
+              pool.has(symbol) ? "is-pool" : "",
+              rank <= 20 ? "is-top20" : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
+            return `<tr class="${rowClass}"><td>${rank}</td><td><button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td class="${winCls}">${escapeHtml(formatPercent(win))}</td><td>${rankHtml}</td></tr>`;
+          })
+          .join("");
+      }
+
+      async function setNailRadarPopoverOpen(open) {
+        const popover = document.getElementById("nailRadarPopover");
+        const button = document.getElementById("nailRadarBtn");
+        if (!popover) return;
+        const next = !!open;
+        if (next) await setNailAutoPinPopoverOpen(false);
+        popover.hidden = !next;
+        if (button) button.setAttribute("aria-expanded", next ? "true" : "false");
+        if (next) {
+          renderNailRadarTable();
         }
       }
 
@@ -21360,14 +21608,37 @@
           openNailDrawerAtSymbol(button.getAttribute("data-nail-auto-symbol"));
         });
       }
+      const nailRadarBtn = document.getElementById("nailRadarBtn");
+      const nailRadarPopover = document.getElementById("nailRadarPopover");
+      const nailRadarBody = document.getElementById("nailRadarBody");
+      if (nailRadarBtn) {
+        nailRadarBtn.addEventListener("click", () => {
+          void setNailRadarPopoverOpen(
+            !nailRadarPopover || nailRadarPopover.hidden,
+          );
+        });
+      }
+      if (nailRadarBody) {
+        nailRadarBody.addEventListener("click", (event) => {
+          const button = event.target.closest("[data-nail-radar-symbol]");
+          if (!button) return;
+          void setNailRadarPopoverOpen(false);
+          openNailDrawerAtSymbol(button.getAttribute("data-nail-radar-symbol"));
+        });
+      }
       document.addEventListener("click", (event) => {
         if (
-          event.target.closest("#nailAutoPinBtn, #nailAutoPinPopover")
+          event.target.closest(
+            "#nailAutoPinBtn, #nailAutoPinPopover, #nailRadarBtn, #nailRadarPopover",
+          )
         ) {
           return;
         }
         if (nailAutoPinPopover && !nailAutoPinPopover.hidden) {
           void setNailAutoPinPopoverOpen(false);
+        }
+        if (nailRadarPopover && !nailRadarPopover.hidden) {
+          void setNailRadarPopoverOpen(false);
         }
       });
       const nailNoticeCloseBtn = document.getElementById("nailNoticeCloseBtn");
