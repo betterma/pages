@@ -68,7 +68,7 @@
 
 ## 部署
 
-1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js` + `notes-rank-snap.js` + `nail-green-alert.js` + `nail-daily-reset.js`）。只更新 `index.js` 会出现 `main is not a function`。
+1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js` + `notes-rank-snap.js` + `nail-green-alert.js` + `nail-daily-reset.js` + `holdings.js`）。只更新 `index.js` 会出现 `main is not a function`。
 2. Handler：`index.handler`，Node.js 18+
 3. **超时建议 ≥ 60～120 秒**
 4. 定时触发器：`0 */5 * * * *`
@@ -82,5 +82,12 @@
 | `AUTO_PIN_WECOM` | 否 | 默认 `0` |
 | `WECOM_WEBHOOK_POSITIONS` | 否 | 仅当 `AUTO_PIN_WECOM=1` |
 | `NOTES_RANK_SNAP_ENABLED` | 否 | 默认 `1` |
+| `BINANCE_API_KEY` / `BINANCE_API_SECRET` | 持有余额 | **允许读取**即可；Key 只放云函数，网页不碰 |
 
 \* `AUTO_PIN_PUSHPLUS=0` 时可空。
+
+## 持有余额（只读）
+
+- 配置：`watch-holdings.json`（钉子屏「持有」浮窗指定关注币种）
+- 每轮用读取权限拉账户，只回填关注列表里的 `free` / `locked`
+- **无下单 / 无卖出逻辑**；现货交易权限以后再开

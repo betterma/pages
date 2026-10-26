@@ -57,6 +57,19 @@ try {
   );
 }
 
+let runHoldingsSync = async () => ({
+  skipped: true,
+  reason: 'module-missing',
+});
+try {
+  runHoldingsSync = require('./holdings').runHoldingsSync;
+} catch (error) {
+  console.warn(
+    'holdings module missing — 请整包上传 cloud-function-notify',
+    error && error.message ? error.message : error,
+  );
+}
+
 function webhookKeyHint(url) {
   try {
     const key = new URL(String(url || '')).searchParams.get('key') || '';
@@ -1469,6 +1482,19 @@ async function main() {
     console.warn('nail-daily-reset failed', message);
   }
 
+  let holdings = { skipped: true, reason: 'not-run' };
+  try {
+    holdings = await runHoldingsSync({ now });
+    if (!holdings.skipped && holdings.reason === 'ok') {
+      sent.push(`holdings:${holdings.updated || 0}`);
+    }
+    console.log('holdings', JSON.stringify(holdings));
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    sendErrors.push(`holdings:${message}`);
+    console.warn('holdings failed', message);
+  }
+
   let nailGreenAlert = { skipped: true, reason: 'not-run', sent: 0, symbols: [] };
   try {
     nailGreenAlert = await runNailGreenAlerts({
@@ -1572,6 +1598,7 @@ async function main() {
       autoDropped,
       notesRankSnap,
       nailDailyReset,
+      holdings,
       nailGreenAlert,
       sendErrors,
     }),
@@ -1591,6 +1618,7 @@ async function main() {
     autoDropped,
     notesRankSnap,
     nailDailyReset,
+    holdings,
     nailGreenAlert,
     sendErrors,
   };

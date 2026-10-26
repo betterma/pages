@@ -2565,6 +2565,128 @@
         font-size: 12px;
         text-align: center;
       }
+      .nail-hold-popover {
+        position: absolute;
+        top: calc(100% - 2px);
+        right: 10px;
+        z-index: 9;
+        width: min(400px, calc(100vw - 20px));
+        max-height: min(68vh, 560px);
+        border: 0.5px solid var(--separator);
+        border-radius: 10px;
+        background: var(--elevated, var(--grouped));
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .nail-hold-popover[hidden] {
+        display: none !important;
+      }
+      .nail-hold-refresh {
+        border: none;
+        background: var(--fill);
+        color: var(--label);
+        height: 28px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .nail-hold-hint {
+        margin: 0;
+        padding: 8px 12px;
+        color: var(--secondary);
+        font-size: 11px;
+        line-height: 1.45;
+        border-bottom: 0.5px solid var(--separator);
+      }
+      .nail-hold-form {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        align-items: end;
+        padding: 10px 12px;
+        border-bottom: 0.5px solid var(--separator);
+      }
+      .nail-hold-form label {
+        display: grid;
+        gap: 4px;
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 650;
+      }
+      .nail-hold-form input[type="text"] {
+        height: 32px;
+        border: 0.5px solid var(--separator);
+        border-radius: 8px;
+        padding: 0 10px;
+        background: var(--fill);
+        color: var(--label);
+        font-size: 13px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .nail-hold-form button[type="submit"] {
+        border: none;
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 22%, var(--fill));
+        color: var(--label);
+        height: 32px;
+        padding: 0 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .nail-hold-list {
+        overflow: auto;
+        overscroll-behavior: contain;
+        max-height: min(44vh, 380px);
+      }
+      .nail-hold-empty {
+        padding: 18px 12px;
+        color: var(--secondary);
+        font-size: 12px;
+        text-align: center;
+      }
+      .nail-hold-row {
+        padding: 10px 12px;
+        border-bottom: 0.5px solid var(--separator);
+        display: grid;
+        gap: 4px;
+      }
+      .nail-hold-row:last-child {
+        border-bottom: none;
+      }
+      .nail-hold-row-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .nail-hold-sym {
+        font-weight: 700;
+        font-size: 13px;
+      }
+      .nail-hold-meta {
+        color: var(--secondary);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.4;
+      }
+      .nail-hold-actions button {
+        border: none;
+        background: var(--fill);
+        color: var(--label);
+        height: 28px;
+        padding: 0 8px;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 650;
+        cursor: pointer;
+      }
       .nail-notice-drawer {
         position: fixed;
         inset: 0;
@@ -5878,6 +6000,15 @@
             >
               雷达
             </button>
+            <button
+              type="button"
+              id="nailHoldBtn"
+              aria-expanded="false"
+              aria-controls="nailHoldPopover"
+              title="指定币种持仓余额（只读）"
+            >
+              持有
+            </button>
             <button type="button" data-close-nails id="nailGoMarketBtn" title="切到行情屏">
               行情
             </button>
@@ -5911,6 +6042,32 @@
                 <tbody id="nailRadarBody"></tbody>
               </table>
             </div>
+          </div>
+          <div class="nail-hold-popover" id="nailHoldPopover" hidden>
+            <div class="nail-radar-popover-head">
+              <div class="nail-auto-pin-popover-title">持有 · 只读余额</div>
+              <button type="button" class="nail-hold-refresh" id="nailHoldRefreshBtn">
+                刷新
+              </button>
+            </div>
+            <p class="nail-hold-hint" id="nailHoldHint">
+              添加要关注的币；云函数每 5 分钟用「允许读取」Key 回填可用/冻结。密钥只在云端。
+            </p>
+            <form class="nail-hold-form" id="nailHoldForm">
+              <label>
+                币
+                <input
+                  id="nailHoldSymbol"
+                  name="symbol"
+                  type="text"
+                  placeholder="IOST 或 IOSTUSDT"
+                  autocomplete="off"
+                  required
+                />
+              </label>
+              <button type="submit" id="nailHoldAddBtn">加入关注</button>
+            </form>
+            <div class="nail-hold-list" id="nailHoldList"></div>
           </div>
           <div
             class="nail-settings-popover"
@@ -9537,7 +9694,10 @@
         const button = document.getElementById("nailAutoPinBtn");
         if (!popover) return;
         const next = !!open;
-        if (next) await setNailRadarPopoverOpen(false);
+        if (next) {
+          await setNailRadarPopoverOpen(false);
+          await setNailHoldPopoverOpen(false);
+        }
         popover.hidden = !next;
         if (button) button.setAttribute("aria-expanded", next ? "true" : "false");
         if (next) {
@@ -9636,12 +9796,169 @@
         const button = document.getElementById("nailRadarBtn");
         if (!popover) return;
         const next = !!open;
-        if (next) await setNailAutoPinPopoverOpen(false);
+        if (next) {
+          await setNailAutoPinPopoverOpen(false);
+          await setNailHoldPopoverOpen(false);
+        }
         popover.hidden = !next;
         if (button) button.setAttribute("aria-expanded", next ? "true" : "false");
         if (next) {
           renderNailRadarTable();
         }
+      }
+
+      let nailHoldingsState = {
+        updatedAt: 0,
+        symbols: [],
+        balances: {},
+        lastError: null,
+      };
+
+      function holdingsBaseAsset(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        return key.endsWith("USDT") ? key.slice(0, -4) : key;
+      }
+
+      function formatHoldingsQty(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return "--";
+        if (Math.abs(n) >= 1000) return n.toFixed(2);
+        if (Math.abs(n) >= 1) return n.toFixed(4);
+        return n.toPrecision(6);
+      }
+
+      function renderNailHoldList() {
+        const list = document.getElementById("nailHoldList");
+        const hint = document.getElementById("nailHoldHint");
+        if (!list) return;
+        const symbols = Array.isArray(nailHoldingsState.symbols)
+          ? nailHoldingsState.symbols.slice()
+          : [];
+        if (hint) {
+          const err = nailHoldingsState.lastError;
+          const stamp = Number(nailHoldingsState.updatedAt) || 0;
+          const when = stamp
+            ? new Date(stamp).toLocaleString("zh-CN", { hour12: false })
+            : "尚未同步";
+          hint.textContent = err
+            ? `上次同步异常：${err} · ${when}`
+            : `添加要关注的币；云函数每 5 分钟回填可用/冻结。上次同步 ${when}`;
+        }
+        if (!symbols.length) {
+          list.innerHTML =
+            '<div class="nail-hold-empty">暂无关注币 · 加入后等云函数回填余额</div>';
+          return;
+        }
+        const balances = nailHoldingsState.balances || {};
+        list.innerHTML = symbols
+          .map((symbol) => {
+            const asset = holdingsBaseAsset(symbol);
+            const row = balances[asset] || {};
+            const free = formatHoldingsQty(row.free);
+            const locked = formatHoldingsQty(row.locked);
+            const at = Number(row.at) || 0;
+            const when = at
+              ? new Date(at).toLocaleString("zh-CN", { hour12: false })
+              : "等待扫描";
+            return `<div class="nail-hold-row" data-hold-symbol="${escapeHtml(symbol)}">
+              <div class="nail-hold-row-top">
+                <span class="nail-hold-sym">${escapeHtml(asset)}</span>
+                <span class="nail-hold-actions"><button type="button" data-hold-remove="${escapeHtml(symbol)}">移除</button></span>
+              </div>
+              <div class="nail-hold-meta">可用 ${escapeHtml(free)} · 冻结 ${escapeHtml(locked)}</div>
+              <div class="nail-hold-meta">${escapeHtml(when)}</div>
+            </div>`;
+          })
+          .join("");
+      }
+
+      async function reloadNailHoldings(options) {
+        const silent = !!(options && options.silent);
+        if (!WatchFavorites || typeof WatchFavorites.loadHoldingsRaw !== "function") {
+          if (!silent) showToast("持有模块未就绪");
+          return;
+        }
+        try {
+          const raw = await WatchFavorites.loadHoldingsRaw({
+            repo: CONFIG.GITHUB_REPO,
+          });
+          nailHoldingsState =
+            raw && raw.state
+              ? raw.state
+              : { updatedAt: 0, symbols: [], balances: {}, lastError: null };
+          renderNailHoldList();
+          if (!silent) showToast("持有列表已刷新");
+        } catch (error) {
+          console.warn("reloadNailHoldings failed", error);
+          if (!silent) showToast("刷新持有失败");
+        }
+      }
+
+      async function setNailHoldPopoverOpen(open) {
+        const popover = document.getElementById("nailHoldPopover");
+        const button = document.getElementById("nailHoldBtn");
+        if (!popover) return;
+        const next = !!open;
+        if (next) {
+          await setNailAutoPinPopoverOpen(false);
+          await setNailRadarPopoverOpen(false);
+        }
+        popover.hidden = !next;
+        if (button) button.setAttribute("aria-expanded", next ? "true" : "false");
+        if (next) {
+          await reloadNailHoldings({ silent: true });
+        }
+      }
+
+      async function addNailHoldingSymbol(rawSymbol) {
+        let symbol = String(rawSymbol || "")
+          .trim()
+          .toUpperCase()
+          .replace(/\s+/g, "");
+        if (!symbol) {
+          showToast("请填写币种");
+          return;
+        }
+        if (!symbol.endsWith("USDT")) symbol += "USDT";
+        const result = await WatchFavorites.patchHoldings({
+          repo: CONFIG.GITHUB_REPO,
+          message: `Add holdings watch ${symbol}`,
+          mutate: (state) => {
+            const symbols = Array.isArray(state.symbols)
+              ? state.symbols.slice()
+              : [];
+            if (!symbols.includes(symbol)) symbols.unshift(symbol);
+            return { ...state, symbols };
+          },
+        });
+        nailHoldingsState = result.state || nailHoldingsState;
+        renderNailHoldList();
+        showToast(`已关注 ${symbol.replace(/USDT$/i, "")} · 等下次云扫描回填`);
+      }
+
+      async function removeNailHoldingSymbol(rawSymbol) {
+        const symbol = String(rawSymbol || "")
+          .trim()
+          .toUpperCase();
+        if (!symbol) return;
+        const result = await WatchFavorites.patchHoldings({
+          repo: CONFIG.GITHUB_REPO,
+          message: `Remove holdings watch ${symbol}`,
+          mutate: (state) => {
+            const asset = holdingsBaseAsset(symbol);
+            const symbols = (state.symbols || []).filter(
+              (item) => String(item).toUpperCase() !== symbol,
+            );
+            const balances = { ...(state.balances || {}) };
+            delete balances[asset];
+            return { ...state, symbols, balances };
+          },
+        });
+        nailHoldingsState = result.state || nailHoldingsState;
+        renderNailHoldList();
+        showToast("已移除");
       }
 
       async function editActionLogPrice(identityKey) {
@@ -21626,10 +21943,45 @@
           openNailDrawerAtSymbol(button.getAttribute("data-nail-radar-symbol"));
         });
       }
+      const nailHoldBtn = document.getElementById("nailHoldBtn");
+      const nailHoldPopover = document.getElementById("nailHoldPopover");
+      const nailHoldForm = document.getElementById("nailHoldForm");
+      const nailHoldRefreshBtn = document.getElementById("nailHoldRefreshBtn");
+      const nailHoldList = document.getElementById("nailHoldList");
+      if (nailHoldBtn) {
+        nailHoldBtn.addEventListener("click", () => {
+          void setNailHoldPopoverOpen(
+            !nailHoldPopover || nailHoldPopover.hidden,
+          );
+        });
+      }
+      if (nailHoldList) {
+        nailHoldList.addEventListener("click", (event) => {
+          const removeBtn = event.target.closest("[data-hold-remove]");
+          if (!removeBtn) return;
+          void removeNailHoldingSymbol(
+            removeBtn.getAttribute("data-hold-remove"),
+          );
+        });
+      }
+      if (nailHoldForm) {
+        nailHoldForm.addEventListener("submit", (event) => {
+          event.preventDefault();
+          const symbol = document.getElementById("nailHoldSymbol");
+          void addNailHoldingSymbol(symbol && symbol.value).then(() => {
+            if (symbol) symbol.value = "";
+          });
+        });
+      }
+      if (nailHoldRefreshBtn) {
+        nailHoldRefreshBtn.addEventListener("click", () => {
+          void reloadNailHoldings();
+        });
+      }
       document.addEventListener("click", (event) => {
         if (
           event.target.closest(
-            "#nailAutoPinBtn, #nailAutoPinPopover, #nailRadarBtn, #nailRadarPopover",
+            "#nailAutoPinBtn, #nailAutoPinPopover, #nailRadarBtn, #nailRadarPopover, #nailHoldBtn, #nailHoldPopover",
           )
         ) {
           return;
@@ -21639,6 +21991,9 @@
         }
         if (nailRadarPopover && !nailRadarPopover.hidden) {
           void setNailRadarPopoverOpen(false);
+        }
+        if (nailHoldPopover && !nailHoldPopover.hidden) {
+          void setNailHoldPopoverOpen(false);
         }
       });
       const nailNoticeCloseBtn = document.getElementById("nailNoticeCloseBtn");

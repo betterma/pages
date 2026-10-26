@@ -23,6 +23,7 @@
   const ACTION_LOG_PATH = "watch-action-log.json";
   const CARD_EGGS_PATH = "watch-card-eggs.json";
   const BREAK_HIGH_PATH = "watch-break-high.json";
+  const HOLDINGS_PATH = "watch-holdings.json";
   const NAILS_PATH = "watch-nails.json";
   const NAIL_GREEN_NOTICES_PATH = "watch-nail-green-notices.json";
   const NAIL_GREEN_NOTICES_TTL_MS = 24 * 60 * 60 * 1000;
@@ -2769,6 +2770,146 @@
     throw lastError || new Error("保存破点高失败");
   }
 
+  function emptyHoldings() {
+    return { updatedAt: 0, symbols: [], balances: {}, lastError: null };
+  }
+
+  function normalizeHoldingsSymbol(raw) {
+    let symbol = String(raw || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "");
+    if (!symbol) return "";
+    if (!symbol.endsWith("USDT")) symbol += "USDT";
+    return symbol;
+  }
+
+  function normalizeHoldings(raw) {
+    const data = raw && typeof raw === "object" ? raw : {};
+    const seen = new Set();
+    const symbols = [];
+    (Array.isArray(data.symbols) ? data.symbols : []).forEach((item) => {
+      const symbol = normalizeHoldingsSymbol(item);
+      if (!symbol || seen.has(symbol)) return;
+      seen.add(symbol);
+      symbols.push(symbol);
+    });
+    const balances = {};
+    const rawBal =
+      data.balances && typeof data.balances === "object" ? data.balances : {};
+    Object.keys(rawBal).forEach((asset) => {
+      const row = rawBal[asset];
+      if (!row || typeof row !== "object") return;
+      const key = String(asset || "").toUpperCase();
+      if (!key) return;
+      balances[key] = {
+        free: Number(row.free) || 0,
+        locked: Number(row.locked) || 0,
+        at: Number(row.at) || 0,
+      };
+    });
+    return {
+      updatedAt: Number(data.updatedAt) || 0,
+      symbols,
+      balances,
+      lastError: data.lastError ? String(data.lastError) : null,
+    };
+  }
+
+  async function loadHoldingsRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || HOLDINGS_PATH;
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          state: normalizeHoldings(current.data),
+          sha: current.sha,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadHoldings via API failed, trying raw", error);
+    }
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          state: normalizeHoldings(data),
+          sha: null,
+          source: "raw-commit",
+        };
+      }
+    } catch (error) {
+      console.warn("loadHoldings via commit-raw failed", error);
+    }
+    return { state: emptyHoldings(), sha: null, source: "empty" };
+  }
+
+  async function patchHoldings(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || HOLDINGS_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = normalizeHoldings(current.data || emptyHoldings());
+        let next = base;
+        if (typeof options.mutate === "function") {
+          const result = options.mutate({
+            ...base,
+            symbols: base.symbols.slice(),
+            balances: { ...base.balances },
+          });
+          if (result && result.skipWrite) {
+            return {
+              state: normalizeHoldings(result.state || base),
+              skipped: true,
+            };
+          }
+          next = normalizeHoldings(
+            result && result.state ? result.state : result || base,
+          );
+        }
+        const nextData = {
+          ...next,
+          updatedAt: Date.now(),
+        };
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update holdings watchlist",
+        });
+        return { state: normalizeHoldings(nextData), skipped: false };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存持有列表失败");
+  }
+
   async function patchPins(options) {
     const repo = (options && options.repo) || DEFAULT_REPO;
     const path = (options && options.path) || PINS_PATH;
@@ -3300,6 +3441,11 @@
     normalizeBreakHigh,
     loadBreakHighRaw,
     patchBreakHigh,
+    HOLDINGS_PATH,
+    emptyHoldings,
+    normalizeHoldings,
+    loadHoldingsRaw,
+    patchHoldings,
     NAILS_PATH,
     NAILS_MAX,
     nailSymbolKey,
