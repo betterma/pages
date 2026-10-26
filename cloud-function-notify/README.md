@@ -68,7 +68,7 @@
 
 ## 部署
 
-1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js` + `notes-rank-snap.js` + `nail-green-alert.js` + `nail-daily-reset.js` + `holdings.js`）。只更新 `index.js` 会出现 `main is not a function`。
+1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js` + `notes-rank-snap.js` + `nail-green-alert.js` + `nail-daily-reset.js` + `holdings.js` + `runtime-env.js` + `binance-spot.js` + `sell-tasks.js` + `buy-tasks.js` + `trade-action-log.js`）。只更新 `index.js` 会出现 `main is not a function`。
 2. Handler：`index.handler`，Node.js 18+
 3. **超时建议 ≥ 60～120 秒**
 4. 定时触发器：`0 */5 * * * *`
@@ -82,12 +82,20 @@
 | `AUTO_PIN_WECOM` | 否 | 默认 `0` |
 | `WECOM_WEBHOOK_POSITIONS` | 否 | 仅当 `AUTO_PIN_WECOM=1` |
 | `NOTES_RANK_SNAP_ENABLED` | 否 | 默认 `1` |
-| `BINANCE_API_KEY` / `BINANCE_API_SECRET` | 持有余额 | **允许读取**即可；Key 只放云函数，网页不碰 |
+| `BINANCE_API_KEY` / `BINANCE_API_SECRET` | 持有/卖出 | 现货 Key（可读账户；真下单还需交易权限）。支持 HMAC 或 Ed25519 PEM |
+| `SELL_LIVE` | 否 | 默认关。设 `1` 才真正 LIMIT 卖出；否则只写 dry-run 计划 |
+| `BUY_LIVE` | 否 | 默认关。设 `1` 才真正 LIMIT 买入；否则只写 dry-run 计划 |
 
 \* `AUTO_PIN_PUSHPLUS=0` 时可空。
 
-## 持有余额（只读）
+## 持有余额
 
 - 配置：`watch-holdings.json`（钉子屏「持有」浮窗指定关注币种）
-- 每轮用读取权限拉账户，只回填关注列表里的 `free` / `locked`
-- **无下单 / 无卖出逻辑**；现货交易权限以后再开
+- 每轮拉账户，回填关注列表里的 `free` / `locked`
+
+## 限价卖出 / 买入任务
+
+- 卖出：`watch-sell-tasks.json` — 数量 = 币可用 × 卖%；价格 = `max(最低价, 买一)`；买一 &lt; 最低价则跳过
+- 买入：`watch-buy-tasks.json` — 花费 = USDT 可用 × 买%；价格 = `min(最高价||卖一, 卖一)`；卖一 &gt; 最高价则跳过
+- 均为 LIMIT GTC；**默认 dry-run**（`wouldSell` / `wouldBuy`）
+- 真下单：分别设 `SELL_LIVE=1` / `BUY_LIVE=1`；成交后写动作日志 `buy`/`sell`，并从任务列表移除

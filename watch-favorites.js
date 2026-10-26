@@ -24,6 +24,8 @@
   const CARD_EGGS_PATH = "watch-card-eggs.json";
   const BREAK_HIGH_PATH = "watch-break-high.json";
   const HOLDINGS_PATH = "watch-holdings.json";
+  const SELL_TASKS_PATH = "watch-sell-tasks.json";
+  const BUY_TASKS_PATH = "watch-buy-tasks.json";
   const NAILS_PATH = "watch-nails.json";
   const NAIL_GREEN_NOTICES_PATH = "watch-nail-green-notices.json";
   const NAIL_GREEN_NOTICES_TTL_MS = 24 * 60 * 60 * 1000;
@@ -2918,6 +2920,314 @@
     throw lastError || new Error("保存持有列表失败");
   }
 
+  function emptySellTasks() {
+    return { updatedAt: 0, tasks: [] };
+  }
+
+  function normalizeSellTaskSymbol(raw) {
+    let symbol = String(raw || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "");
+    if (!symbol || symbol === "USDT") return "";
+    if (!symbol.endsWith("USDT")) symbol += "USDT";
+    return symbol;
+  }
+
+  function normalizeSellTask(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const symbol = normalizeSellTaskSymbol(raw.symbol);
+    if (!symbol) return null;
+    const id =
+      String(raw.id || "").trim() ||
+      `${symbol}-${Number(raw.createdAt) || Date.now()}`;
+    let sellPercent = Number(raw.sellPercent);
+    if (!Number.isFinite(sellPercent) || sellPercent <= 0) sellPercent = 100;
+    if (sellPercent > 100) sellPercent = 100;
+    const minSell = Number(raw.minSell);
+    return {
+      id,
+      symbol,
+      sellPercent,
+      minSell: Number.isFinite(minSell) && minSell > 0 ? minSell : 0,
+      enabled: raw.enabled !== false,
+      status: String(raw.status || "paused"),
+      openOrderId: raw.openOrderId != null ? String(raw.openOrderId) : null,
+      lastPrice: Number(raw.lastPrice) || null,
+      lastQty: Number(raw.lastQty) || null,
+      wouldSell:
+        raw.wouldSell && typeof raw.wouldSell === "object"
+          ? raw.wouldSell
+          : null,
+      skipReason: raw.skipReason ? String(raw.skipReason) : null,
+      lastError: raw.lastError ? String(raw.lastError).slice(0, 240) : null,
+      createdAt: Number(raw.createdAt) || 0,
+      updatedAt: Number(raw.updatedAt) || 0,
+    };
+  }
+
+  function normalizeSellTasks(raw) {
+    const data = raw && typeof raw === "object" ? raw : {};
+    const seen = new Set();
+    const tasks = [];
+    (Array.isArray(data.tasks) ? data.tasks : []).forEach((item) => {
+      const task = normalizeSellTask(item);
+      if (!task || seen.has(task.id)) return;
+      seen.add(task.id);
+      tasks.push(task);
+    });
+    return {
+      updatedAt: Number(data.updatedAt) || 0,
+      tasks,
+    };
+  }
+
+  async function loadSellTasksRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || SELL_TASKS_PATH;
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          state: normalizeSellTasks(current.data),
+          sha: current.sha,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadSellTasks via API failed, trying raw", error);
+    }
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          state: normalizeSellTasks(data),
+          sha: null,
+          source: "raw-commit",
+        };
+      }
+    } catch (error) {
+      console.warn("loadSellTasks via commit-raw failed", error);
+    }
+    return { state: emptySellTasks(), sha: null, source: "empty" };
+  }
+
+  async function patchSellTasks(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || SELL_TASKS_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = normalizeSellTasks(current.data || emptySellTasks());
+        let next = base;
+        if (typeof options.mutate === "function") {
+          const result = options.mutate({
+            ...base,
+            tasks: base.tasks.slice(),
+          });
+          if (result && result.skipWrite) {
+            return {
+              state: normalizeSellTasks(result.state || base),
+              skipped: true,
+            };
+          }
+          next = normalizeSellTasks(
+            result && result.state ? result.state : result || base,
+          );
+        }
+        const nextData = {
+          ...next,
+          updatedAt: Date.now(),
+        };
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update sell tasks",
+        });
+        return { state: normalizeSellTasks(nextData), skipped: false };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存卖出任务失败");
+  }
+
+  function emptyBuyTasks() {
+    return { updatedAt: 0, tasks: [] };
+  }
+
+  function normalizeBuyTaskSymbol(raw) {
+    let symbol = String(raw || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "");
+    if (!symbol || symbol === "USDT") return "";
+    if (!symbol.endsWith("USDT")) symbol += "USDT";
+    return symbol;
+  }
+
+  function normalizeBuyTask(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const symbol = normalizeBuyTaskSymbol(raw.symbol);
+    if (!symbol) return null;
+    const id =
+      String(raw.id || "").trim() ||
+      `${symbol}-${Number(raw.createdAt) || Date.now()}`;
+    let buyPercent = Number(raw.buyPercent);
+    if (!Number.isFinite(buyPercent) || buyPercent <= 0) buyPercent = 100;
+    if (buyPercent > 100) buyPercent = 100;
+    const maxBuy = Number(raw.maxBuy);
+    return {
+      id,
+      symbol,
+      buyPercent,
+      maxBuy: Number.isFinite(maxBuy) && maxBuy > 0 ? maxBuy : 0,
+      enabled: raw.enabled !== false,
+      status: String(raw.status || "paused"),
+      openOrderId: raw.openOrderId != null ? String(raw.openOrderId) : null,
+      lastPrice: Number(raw.lastPrice) || null,
+      lastQty: Number(raw.lastQty) || null,
+      wouldBuy:
+        raw.wouldBuy && typeof raw.wouldBuy === "object" ? raw.wouldBuy : null,
+      skipReason: raw.skipReason ? String(raw.skipReason) : null,
+      lastError: raw.lastError ? String(raw.lastError).slice(0, 240) : null,
+      createdAt: Number(raw.createdAt) || 0,
+      updatedAt: Number(raw.updatedAt) || 0,
+    };
+  }
+
+  function normalizeBuyTasks(raw) {
+    const data = raw && typeof raw === "object" ? raw : {};
+    const seen = new Set();
+    const tasks = [];
+    (Array.isArray(data.tasks) ? data.tasks : []).forEach((item) => {
+      const task = normalizeBuyTask(item);
+      if (!task || seen.has(task.id)) return;
+      seen.add(task.id);
+      tasks.push(task);
+    });
+    return {
+      updatedAt: Number(data.updatedAt) || 0,
+      tasks,
+    };
+  }
+
+  async function loadBuyTasksRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || BUY_TASKS_PATH;
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          state: normalizeBuyTasks(current.data),
+          sha: current.sha,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadBuyTasks via API failed, trying raw", error);
+    }
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          state: normalizeBuyTasks(data),
+          sha: null,
+          source: "raw-commit",
+        };
+      }
+    } catch (error) {
+      console.warn("loadBuyTasks via commit-raw failed", error);
+    }
+    return { state: emptyBuyTasks(), sha: null, source: "empty" };
+  }
+
+  async function patchBuyTasks(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || BUY_TASKS_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = normalizeBuyTasks(current.data || emptyBuyTasks());
+        let next = base;
+        if (typeof options.mutate === "function") {
+          const result = options.mutate({
+            ...base,
+            tasks: base.tasks.slice(),
+          });
+          if (result && result.skipWrite) {
+            return {
+              state: normalizeBuyTasks(result.state || base),
+              skipped: true,
+            };
+          }
+          next = normalizeBuyTasks(
+            result && result.state ? result.state : result || base,
+          );
+        }
+        const nextData = {
+          ...next,
+          updatedAt: Date.now(),
+        };
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update buy tasks",
+        });
+        return { state: normalizeBuyTasks(nextData), skipped: false };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存买入任务失败");
+  }
+
   async function patchPins(options) {
     const repo = (options && options.repo) || DEFAULT_REPO;
     const path = (options && options.path) || PINS_PATH;
@@ -3454,6 +3764,16 @@
     normalizeHoldings,
     loadHoldingsRaw,
     patchHoldings,
+    SELL_TASKS_PATH,
+    emptySellTasks,
+    normalizeSellTasks,
+    loadSellTasksRaw,
+    patchSellTasks,
+    BUY_TASKS_PATH,
+    emptyBuyTasks,
+    normalizeBuyTasks,
+    loadBuyTasksRaw,
+    patchBuyTasks,
     NAILS_PATH,
     NAILS_MAX,
     nailSymbolKey,

@@ -2060,8 +2060,7 @@
         display: none;
       }
       .nail-head-actions #nailAutoPinBtn,
-      .nail-head-actions #nailRadarBtn,
-      .nail-head-actions #nailHoldBtn {
+      .nail-head-actions #nailRadarBtn {
         border: 1px solid transparent;
       }
       .nail-head-actions #nailAutoPinBtn.is-active,
@@ -2722,6 +2721,98 @@
         font-size: 11px;
         font-weight: 650;
         cursor: pointer;
+      }
+      .nail-hold-ops {
+        margin-top: 8px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .nail-hold-ops button {
+        height: 28px;
+        padding: 0 10px;
+        border: none;
+        border-radius: 8px;
+        background: var(--fill);
+        color: var(--label);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .nail-hold-ops button.is-sell {
+        background: color-mix(in srgb, var(--warn, #c45c26) 16%, var(--fill));
+      }
+      .nail-hold-ops button.is-buy {
+        background: color-mix(in srgb, var(--accent) 18%, var(--fill));
+        color: var(--accent);
+      }
+      .nail-hold-panel {
+        margin-top: 8px;
+        padding: 10px;
+        border: 0.5px solid var(--separator);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--fill) 70%, transparent);
+        display: grid;
+        gap: 8px;
+      }
+      .nail-hold-panel[hidden] {
+        display: none !important;
+      }
+      .nail-hold-panel .nail-hold-panel-title {
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .nail-hold-panel label {
+        display: block;
+        font-size: 11px;
+        color: var(--secondary);
+        margin-bottom: 4px;
+      }
+      .nail-hold-panel input[type="number"] {
+        width: 100%;
+        height: 32px;
+        border: 0.5px solid var(--separator);
+        border-radius: 8px;
+        background: var(--elevated, var(--fill));
+        color: var(--label);
+        padding: 0 10px;
+        font-size: 13px;
+        box-sizing: border-box;
+      }
+      .nail-hold-panel input[type="range"] {
+        width: 100%;
+      }
+      .nail-hold-panel .nail-hold-pct-line {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-hold-panel .nail-hold-panel-actions {
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+      .nail-hold-panel .nail-hold-panel-actions button {
+        height: 30px;
+        padding: 0 12px;
+        border: none;
+        border-radius: 8px;
+        background: var(--fill);
+        color: var(--label);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .nail-hold-panel .nail-hold-panel-actions button.primary {
+        background: color-mix(in srgb, var(--accent) 24%, transparent);
+        color: var(--accent);
+      }
+      .nail-hold-sell-status {
+        font-size: 11px;
+        color: var(--secondary);
+        line-height: 1.35;
+        margin-top: 6px;
       }
       .nail-notice-drawer {
         position: fixed;
@@ -6139,6 +6230,23 @@
           <div class="nail-head-actions">
             <button
               type="button"
+              id="nailAutoPinBtn"
+              aria-expanded="false"
+              aria-controls="nailAutoPinPopover"
+            >
+              自动盯
+            </button>
+            <button
+              type="button"
+              id="nailRadarBtn"
+              aria-expanded="false"
+              aria-controls="nailRadarPopover"
+              title="冲榜雷达（24h 排名）"
+            >
+              雷达
+            </button>
+            <button
+              type="button"
               class="nail-notice-entry"
               id="nailNoticeEntry"
               title="近 24h 荧光绿通知"
@@ -6161,28 +6269,27 @@
             </button>
             <button
               type="button"
-              id="nailAutoPinBtn"
-              aria-expanded="false"
-              aria-controls="nailAutoPinPopover"
-            >
-              自动盯
-            </button>
-            <button
-              type="button"
-              id="nailRadarBtn"
-              aria-expanded="false"
-              aria-controls="nailRadarPopover"
-              title="冲榜雷达（24h 排名）"
-            >
-              雷达
-            </button>
-            <button
-              type="button"
+              class="nail-notice-entry"
               id="nailHoldBtn"
               aria-expanded="false"
               aria-controls="nailHoldPopover"
-              title="指定币种持仓余额（只读）"
+              title="指定币种持仓余额"
             >
+              <svg
+                class="nail-notice-bell"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z" />
+                <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+                <path d="M12 12v4" />
+                <path d="M10 14h4" />
+              </svg>
               持有
             </button>
             <button type="button" data-close-nails id="nailGoMarketBtn" title="切到行情屏">
@@ -6221,13 +6328,13 @@
           </div>
           <div class="nail-hold-popover" id="nailHoldPopover" hidden>
             <div class="nail-radar-popover-head">
-              <div class="nail-auto-pin-popover-title">持有 · 只读余额</div>
+              <div class="nail-auto-pin-popover-title">持有 · 余额 / 卖出</div>
               <button type="button" class="nail-hold-refresh" id="nailHoldRefreshBtn">
                 刷新
               </button>
             </div>
             <p class="nail-hold-hint" id="nailHoldHint">
-              添加要关注的币；云函数每 5 分钟用「允许读取」Key 回填可用/冻结。密钥只在云端。
+              有余额可「设置卖出」或「买入」；余额为 0 仅买入。比例可滑动。默认 dry-run（SELL_LIVE / BUY_LIVE=1 才真下单）。
             </p>
             <form class="nail-hold-form" id="nailHoldForm">
               <label>
@@ -9996,6 +10103,8 @@
         balances: {},
         lastError: null,
       };
+      let nailSellTasksState = { updatedAt: 0, tasks: [] };
+      let nailBuyTasksState = { updatedAt: 0, tasks: [] };
 
       function holdingsBaseAsset(symbol) {
         const key = String(symbol || "")
@@ -10013,6 +10122,42 @@
         if (Math.abs(n) >= 1000) return n.toFixed(2);
         if (Math.abs(n) >= 1) return n.toFixed(4);
         return n.toPrecision(6);
+      }
+
+      function formatHoldingsUsdt(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return "--";
+        if (Math.abs(n) >= 1000) return n.toFixed(2);
+        if (Math.abs(n) >= 1) return n.toFixed(2);
+        if (Math.abs(n) >= 0.01) return n.toFixed(4);
+        return n.toPrecision(4);
+      }
+
+      function holdingsSpotPrice(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || key === "USDT") return 1;
+        const row = marketMap[key];
+        const price = Number(row && row.price);
+        return Number.isFinite(price) && price > 0 ? price : NaN;
+      }
+
+      function holdingsFreeQty(symbol) {
+        const asset = holdingsBaseAsset(symbol);
+        const row =
+          (nailHoldingsState.balances && nailHoldingsState.balances[asset]) ||
+          {};
+        const free = Number(row.free);
+        return Number.isFinite(free) && free > 0 ? free : 0;
+      }
+
+      function holdingsTotalUsdt(symbol) {
+        const free = holdingsFreeQty(symbol);
+        const price = holdingsSpotPrice(symbol);
+        if (!(free > 0)) return 0;
+        if (!Number.isFinite(price)) return NaN;
+        return free * price;
       }
 
       function renderNailHoldList() {
@@ -10044,7 +10189,7 @@
           }
           hint.textContent = errLabel
             ? `余额未同步：${errLabel} · ${when}`
-            : `添加关注币后，云函数约每 5 分钟回填可用/冻结。上次同步 ${when}`;
+            : `余额约 5 分钟同步。有币可卖可买；无币仅买。上次同步 ${when}`;
         }
         if (!symbols.length) {
           list.innerHTML =
@@ -10052,26 +10197,150 @@
           return;
         }
         const balances = nailHoldingsState.balances || {};
-        list.innerHTML = symbols
-          .map((symbol) => {
-            const asset = holdingsBaseAsset(symbol);
-            const row = balances[asset] || {};
-            const free = formatHoldingsQty(row.free);
-            const locked = formatHoldingsQty(row.locked);
-            const at = Number(row.at) || 0;
-            const when = at
-              ? new Date(at).toLocaleString("zh-CN", { hour12: false })
-              : "等待扫描";
-            return `<div class="nail-hold-row" data-hold-symbol="${escapeHtml(symbol)}">
+        const usdtBal = balances.USDT || {};
+        const usdtFree = formatHoldingsQty(usdtBal.free);
+        const sellBySymbol = new Map();
+        (nailSellTasksState.tasks || []).forEach((task) => {
+          if (!task || !task.symbol) return;
+          sellBySymbol.set(String(task.symbol).toUpperCase(), task);
+        });
+        const buyBySymbol = new Map();
+        (nailBuyTasksState.tasks || []).forEach((task) => {
+          if (!task || !task.symbol) return;
+          buyBySymbol.set(String(task.symbol).toUpperCase(), task);
+        });
+        const sortedSymbols = symbols.slice().sort((a, b) => {
+          const qa = holdingsFreeQty(a);
+          const qb = holdingsFreeQty(b);
+          if (qb !== qa) return qb - qa;
+          return String(a).localeCompare(String(b));
+        });
+        list.innerHTML =
+          `<div class="nail-hold-meta" style="padding:4px 0 8px">账户 USDT 可用 ${escapeHtml(usdtFree)} · 按数量从多到少</div>` +
+          sortedSymbols
+            .map((symbol) => {
+              const asset = holdingsBaseAsset(symbol);
+              if (asset === "USDT") {
+                const qtyText = formatHoldingsQty(usdtBal.free);
+                const totalText = formatHoldingsUsdt(usdtBal.free);
+                return `<div class="nail-hold-row" data-hold-symbol="${escapeHtml(symbol)}">
+              <div class="nail-hold-row-top">
+                <span class="nail-hold-sym">USDT</span>
+                <span class="nail-hold-actions"><button type="button" data-hold-remove="${escapeHtml(symbol)}">移除</button></span>
+              </div>
+              <div class="nail-hold-meta">数量 ${escapeHtml(qtyText)} · 总金额 ≈ ${escapeHtml(totalText)} USDT · 冻结 ${escapeHtml(formatHoldingsQty(usdtBal.locked))}</div>
+            </div>`;
+              }
+              const row = balances[asset] || {};
+              const freeNum = Number(row.free) || 0;
+              const free = formatHoldingsQty(row.free);
+              const locked = formatHoldingsQty(row.locked);
+              const px = holdingsSpotPrice(symbol);
+              const total = holdingsTotalUsdt(symbol);
+              const totalText = Number.isFinite(total)
+                ? formatHoldingsUsdt(total)
+                : "--";
+              const pxText = Number.isFinite(px) ? formatHoldingsUsdt(px) : "--";
+              const canSell = freeNum > 0;
+              const sell = sellBySymbol.get(String(symbol).toUpperCase());
+              const buy = buyBySymbol.get(String(symbol).toUpperCase());
+              const sellPct = sell ? Number(sell.sellPercent) || 50 : 50;
+              const minSell =
+                sell && Number(sell.minSell) > 0 ? String(sell.minSell) : "";
+              const buyPct = buy ? Number(buy.buyPercent) || 50 : 50;
+              const maxBuy =
+                buy && Number(buy.maxBuy) > 0 ? String(buy.maxBuy) : "";
+              const sellWould = sell && sell.wouldSell ? sell.wouldSell : null;
+              const buyWould = buy && buy.wouldBuy ? buy.wouldBuy : null;
+              const statusBits = [];
+              if (sell && sell.enabled !== false) {
+                statusBits.push(
+                  `卖 ${sell.status || ""}${sell.skipReason ? "/" + sell.skipReason : ""}`,
+                );
+                if (sellWould) {
+                  statusBits.push(
+                    `计划卖 ${sellWould.qty || "--"}@${sellWould.price || sellWould.bid || "--"}`,
+                  );
+                }
+              }
+              if (buy && buy.enabled !== false) {
+                statusBits.push(
+                  `买 ${buy.status || ""}${buy.skipReason ? "/" + buy.skipReason : ""}`,
+                );
+                if (buyWould) {
+                  statusBits.push(
+                    `计划买 ${buyWould.qty || "--"}@${buyWould.price || buyWould.ask || "--"}`,
+                  );
+                }
+              }
+              const ops = canSell
+                ? `<button type="button" class="is-sell" data-hold-open-sell="${escapeHtml(symbol)}">设置卖出</button>
+                   <button type="button" class="is-buy" data-hold-open-buy="${escapeHtml(symbol)}">买入</button>`
+                : `<button type="button" class="is-buy" data-hold-open-buy="${escapeHtml(symbol)}">买入</button>`;
+              return `<div class="nail-hold-row" data-hold-symbol="${escapeHtml(symbol)}">
               <div class="nail-hold-row-top">
                 <span class="nail-hold-sym">${escapeHtml(asset)}</span>
                 <span class="nail-hold-actions"><button type="button" data-hold-remove="${escapeHtml(symbol)}">移除</button></span>
               </div>
-              <div class="nail-hold-meta">可用 ${escapeHtml(free)} · 冻结 ${escapeHtml(locked)}</div>
-              <div class="nail-hold-meta">${escapeHtml(when)}</div>
+              <div class="nail-hold-meta">数量 ${escapeHtml(free)} · 总金额 ≈ ${escapeHtml(totalText)} USDT</div>
+              <div class="nail-hold-meta">现价 ${escapeHtml(pxText)} · 冻结 ${escapeHtml(locked)}</div>
+              <div class="nail-hold-ops">${ops}</div>
+              <div class="nail-hold-panel" data-hold-panel="sell" hidden>
+                <div class="nail-hold-panel-title">设置卖出 · ${escapeHtml(asset)}</div>
+                <div>
+                  <label>最低卖出价</label>
+                  <input type="number" min="0" step="any" value="${escapeHtml(minSell)}" placeholder="必填" data-sell-min="${escapeHtml(symbol)}" />
+                </div>
+                <div>
+                  <div class="nail-hold-pct-line"><span>卖出比例</span><span data-sell-pct-label="${escapeHtml(symbol)}">${escapeHtml(String(sellPct))}%</span></div>
+                  <input type="range" min="1" max="100" step="1" value="${escapeHtml(String(sellPct))}" data-sell-pct="${escapeHtml(symbol)}" />
+                </div>
+                <div class="nail-hold-panel-actions">
+                  <button type="button" data-hold-cancel-panel="${escapeHtml(symbol)}">取消</button>
+                  <button type="button" class="primary" data-sell-arm="${escapeHtml(symbol)}">确定</button>
+                </div>
+              </div>
+              <div class="nail-hold-panel" data-hold-panel="buy" hidden>
+                <div class="nail-hold-panel-title">买入 · ${escapeHtml(asset)} · 可用USDT ${escapeHtml(usdtFree)}</div>
+                <div>
+                  <label>最高买入价</label>
+                  <input type="number" min="0" step="any" value="${escapeHtml(maxBuy)}" placeholder="必填" data-buy-max="${escapeHtml(symbol)}" />
+                </div>
+                <div>
+                  <div class="nail-hold-pct-line"><span>使用 USDT 比例</span><span data-buy-pct-label="${escapeHtml(symbol)}">${escapeHtml(String(buyPct))}%</span></div>
+                  <input type="range" min="1" max="100" step="1" value="${escapeHtml(String(buyPct))}" data-buy-pct="${escapeHtml(symbol)}" />
+                </div>
+                <div class="nail-hold-panel-actions">
+                  <button type="button" data-hold-cancel-panel="${escapeHtml(symbol)}">取消</button>
+                  <button type="button" class="primary" data-buy-arm="${escapeHtml(symbol)}">确定</button>
+                </div>
+              </div>
+              ${
+                statusBits.length
+                  ? `<div class="nail-hold-sell-status">${escapeHtml(statusBits.join(" · "))}</div>`
+                  : ""
+              }
             </div>`;
-          })
-          .join("");
+            })
+            .join("");
+      }
+
+      function closeNailHoldPanels(row) {
+        if (!row) return;
+        row.querySelectorAll(".nail-hold-panel").forEach((panel) => {
+          panel.hidden = true;
+        });
+      }
+
+      function openNailHoldPanel(symbol, mode) {
+        const key = String(symbol || "").toUpperCase();
+        const row = document.querySelector(
+          `.nail-hold-row[data-hold-symbol="${key}"]`,
+        );
+        if (!row) return;
+        closeNailHoldPanels(row);
+        const panel = row.querySelector(`.nail-hold-panel[data-hold-panel="${mode}"]`);
+        if (panel) panel.hidden = false;
       }
 
       async function reloadNailHoldings(options) {
@@ -10081,19 +10350,191 @@
           return;
         }
         try {
-          const raw = await WatchFavorites.loadHoldingsRaw({
-            repo: CONFIG.GITHUB_REPO,
-          });
+          const [raw, sellRaw, buyRaw] = await Promise.all([
+            WatchFavorites.loadHoldingsRaw({
+              repo: CONFIG.GITHUB_REPO,
+            }),
+            typeof WatchFavorites.loadSellTasksRaw === "function"
+              ? WatchFavorites.loadSellTasksRaw({
+                  repo: CONFIG.GITHUB_REPO,
+                })
+              : Promise.resolve({ state: { updatedAt: 0, tasks: [] } }),
+            typeof WatchFavorites.loadBuyTasksRaw === "function"
+              ? WatchFavorites.loadBuyTasksRaw({
+                  repo: CONFIG.GITHUB_REPO,
+                })
+              : Promise.resolve({ state: { updatedAt: 0, tasks: [] } }),
+          ]);
           nailHoldingsState =
             raw && raw.state
               ? raw.state
               : { updatedAt: 0, symbols: [], balances: {}, lastError: null };
+          nailSellTasksState =
+            sellRaw && sellRaw.state
+              ? sellRaw.state
+              : { updatedAt: 0, tasks: [] };
+          nailBuyTasksState =
+            buyRaw && buyRaw.state
+              ? buyRaw.state
+              : { updatedAt: 0, tasks: [] };
           renderNailHoldList();
           if (!silent) showToast("持有列表已刷新");
         } catch (error) {
           console.warn("reloadNailHoldings failed", error);
           if (!silent) showToast("刷新持有失败");
         }
+      }
+
+      async function upsertNailSellTask(symbol, options) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || key === "USDT") {
+          showToast("USDT 不能挂卖出任务");
+          return;
+        }
+        const opts = options || {};
+        const pause = !!opts.pause;
+        const row = document.querySelector(
+          `.nail-hold-row[data-hold-symbol="${key}"]`,
+        );
+        let sellPercent = 100;
+        let minSell = 0;
+        if (row) {
+          const pctEl = row.querySelector("[data-sell-pct]");
+          const minEl = row.querySelector("[data-sell-min]");
+          sellPercent = Number(pctEl && pctEl.value);
+          minSell = Number(minEl && minEl.value);
+        }
+        if (!Number.isFinite(sellPercent) || sellPercent <= 0) sellPercent = 50;
+        if (sellPercent > 100) sellPercent = 100;
+        if (!pause && (!(Number.isFinite(minSell) && minSell > 0))) {
+          showToast("请填写最低卖出价");
+          return;
+        }
+        const result = await WatchFavorites.patchSellTasks({
+          repo: CONFIG.GITHUB_REPO,
+          message: pause
+            ? `Pause sell task ${key}`
+            : `Arm sell task ${key} ${sellPercent}%`,
+          mutate: (state) => {
+            const tasks = Array.isArray(state.tasks) ? state.tasks.slice() : [];
+            const idx = tasks.findIndex(
+              (t) => String(t.symbol).toUpperCase() === key,
+            );
+            const now = Date.now();
+            if (pause) {
+              if (idx >= 0) {
+                tasks[idx] = {
+                  ...tasks[idx],
+                  status: "paused",
+                  enabled: false,
+                  updatedAt: now,
+                };
+              }
+              return { ...state, tasks };
+            }
+            const nextTask = {
+              id: idx >= 0 ? tasks[idx].id : `${key}-${now}`,
+              symbol: key,
+              sellPercent,
+              minSell,
+              enabled: true,
+              status: "armed",
+              openOrderId: null,
+              createdAt: idx >= 0 ? tasks[idx].createdAt || now : now,
+              updatedAt: now,
+              lastError: null,
+              skipReason: null,
+            };
+            if (idx >= 0) tasks[idx] = { ...tasks[idx], ...nextTask };
+            else tasks.unshift(nextTask);
+            return { ...state, tasks };
+          },
+        });
+        nailSellTasksState = result.state || nailSellTasksState;
+        renderNailHoldList();
+        showToast(
+          pause
+            ? `${holdingsBaseAsset(key)} 卖出已暂停`
+            : `${holdingsBaseAsset(key)} 卖出已确定 ${sellPercent}% ≥${minSell}`,
+        );
+      }
+
+      async function upsertNailBuyTask(symbol, options) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || key === "USDT") {
+          showToast("请选择具体币种挂买");
+          return;
+        }
+        const opts = options || {};
+        const pause = !!opts.pause;
+        const row = document.querySelector(
+          `.nail-hold-row[data-hold-symbol="${key}"]`,
+        );
+        let buyPercent = 100;
+        let maxBuy = 0;
+        if (row) {
+          const pctEl = row.querySelector("[data-buy-pct]");
+          const maxEl = row.querySelector("[data-buy-max]");
+          buyPercent = Number(pctEl && pctEl.value);
+          maxBuy = Number(maxEl && maxEl.value);
+        }
+        if (!Number.isFinite(buyPercent) || buyPercent <= 0) buyPercent = 50;
+        if (buyPercent > 100) buyPercent = 100;
+        if (!pause && (!(Number.isFinite(maxBuy) && maxBuy > 0))) {
+          showToast("请填写最高买入价");
+          return;
+        }
+        const result = await WatchFavorites.patchBuyTasks({
+          repo: CONFIG.GITHUB_REPO,
+          message: pause
+            ? `Pause buy task ${key}`
+            : `Arm buy task ${key} ${buyPercent}% USDT`,
+          mutate: (state) => {
+            const tasks = Array.isArray(state.tasks) ? state.tasks.slice() : [];
+            const idx = tasks.findIndex(
+              (t) => String(t.symbol).toUpperCase() === key,
+            );
+            const now = Date.now();
+            if (pause) {
+              if (idx >= 0) {
+                tasks[idx] = {
+                  ...tasks[idx],
+                  status: "paused",
+                  enabled: false,
+                  updatedAt: now,
+                };
+              }
+              return { ...state, tasks };
+            }
+            const nextTask = {
+              id: idx >= 0 ? tasks[idx].id : `${key}-buy-${now}`,
+              symbol: key,
+              buyPercent,
+              maxBuy,
+              enabled: true,
+              status: "armed",
+              openOrderId: null,
+              createdAt: idx >= 0 ? tasks[idx].createdAt || now : now,
+              updatedAt: now,
+              lastError: null,
+              skipReason: null,
+            };
+            if (idx >= 0) tasks[idx] = { ...tasks[idx], ...nextTask };
+            else tasks.unshift(nextTask);
+            return { ...state, tasks };
+          },
+        });
+        nailBuyTasksState = result.state || nailBuyTasksState;
+        renderNailHoldList();
+        showToast(
+          pause
+            ? `${holdingsBaseAsset(key)} 买入已暂停`
+            : `${holdingsBaseAsset(key)} 买入已确定 USDT ${buyPercent}% ≤${maxBuy}`,
+        );
       }
 
       async function setNailHoldPopoverOpen(open) {
@@ -22178,12 +22619,58 @@
         });
       }
       if (nailHoldList) {
+        nailHoldList.addEventListener("input", (event) => {
+          const sellRange = event.target.closest("[data-sell-pct]");
+          if (sellRange && sellRange.type === "range") {
+            const sym = sellRange.getAttribute("data-sell-pct");
+            const label = nailHoldList.querySelector(
+              `[data-sell-pct-label="${sym}"]`,
+            );
+            if (label) label.textContent = `${sellRange.value}%`;
+            return;
+          }
+          const buyRange = event.target.closest("[data-buy-pct]");
+          if (buyRange && buyRange.type === "range") {
+            const sym = buyRange.getAttribute("data-buy-pct");
+            const label = nailHoldList.querySelector(
+              `[data-buy-pct-label="${sym}"]`,
+            );
+            if (label) label.textContent = `${buyRange.value}%`;
+          }
+        });
         nailHoldList.addEventListener("click", (event) => {
           const removeBtn = event.target.closest("[data-hold-remove]");
-          if (!removeBtn) return;
-          void removeNailHoldingSymbol(
-            removeBtn.getAttribute("data-hold-remove"),
-          );
+          if (removeBtn) {
+            void removeNailHoldingSymbol(
+              removeBtn.getAttribute("data-hold-remove"),
+            );
+            return;
+          }
+          const openSell = event.target.closest("[data-hold-open-sell]");
+          if (openSell) {
+            openNailHoldPanel(openSell.getAttribute("data-hold-open-sell"), "sell");
+            return;
+          }
+          const openBuy = event.target.closest("[data-hold-open-buy]");
+          if (openBuy) {
+            openNailHoldPanel(openBuy.getAttribute("data-hold-open-buy"), "buy");
+            return;
+          }
+          const cancelPanel = event.target.closest("[data-hold-cancel-panel]");
+          if (cancelPanel) {
+            const row = cancelPanel.closest(".nail-hold-row");
+            closeNailHoldPanels(row);
+            return;
+          }
+          const armBtn = event.target.closest("[data-sell-arm]");
+          if (armBtn) {
+            void upsertNailSellTask(armBtn.getAttribute("data-sell-arm"));
+            return;
+          }
+          const buyArmBtn = event.target.closest("[data-buy-arm]");
+          if (buyArmBtn) {
+            void upsertNailBuyTask(buyArmBtn.getAttribute("data-buy-arm"));
+          }
         });
       }
       if (nailHoldForm) {

@@ -396,6 +396,15 @@ async function runHoldingsSync(options) {
     };
     result.updated += 1;
   });
+  // 买入任务需要 USDT 可用额；无论关注列表是否含 USDT 都回填。
+  {
+    const row = byAsset.get('USDT') || { free: 0, locked: 0 };
+    balances.USDT = {
+      free: row.free,
+      locked: row.locked,
+      at: now,
+    };
+  }
 
   const nextState = {
     updatedAt: now,

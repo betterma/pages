@@ -70,6 +70,32 @@ try {
   );
 }
 
+let runSellTasks = async () => ({
+  skipped: true,
+  reason: 'module-missing',
+});
+try {
+  runSellTasks = require('./sell-tasks').runSellTasks;
+} catch (error) {
+  console.warn(
+    'sell-tasks module missing — 请整包上传 cloud-function-notify',
+    error && error.message ? error.message : error,
+  );
+}
+
+let runBuyTasks = async () => ({
+  skipped: true,
+  reason: 'module-missing',
+});
+try {
+  runBuyTasks = require('./buy-tasks').runBuyTasks;
+} catch (error) {
+  console.warn(
+    'buy-tasks module missing — 请整包上传 cloud-function-notify',
+    error && error.message ? error.message : error,
+  );
+}
+
 function webhookKeyHint(url) {
   try {
     const key = new URL(String(url || '')).searchParams.get('key') || '';
@@ -1495,6 +1521,42 @@ async function main(event, context) {
     console.warn('holdings failed', message);
   }
 
+  let sellTasks = { skipped: true, reason: 'not-run' };
+  try {
+    sellTasks = await runSellTasks({ now, context: context || null });
+    if (!sellTasks.skipped && sellTasks.reason === 'ok') {
+      if (sellTasks.live && sellTasks.placed) {
+        sent.push(`sell-live:${sellTasks.placed}`);
+      } else if (sellTasks.dryRun) {
+        sent.push(`sell-dry:${sellTasks.dryRun}`);
+      }
+      if (sellTasks.filled) sent.push(`sell-fill:${sellTasks.filled}`);
+    }
+    console.log('sell-tasks', JSON.stringify(sellTasks));
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    sendErrors.push(`sell-tasks:${message}`);
+    console.warn('sell-tasks failed', message);
+  }
+
+  let buyTasks = { skipped: true, reason: 'not-run' };
+  try {
+    buyTasks = await runBuyTasks({ now, context: context || null });
+    if (!buyTasks.skipped && buyTasks.reason === 'ok') {
+      if (buyTasks.live && buyTasks.placed) {
+        sent.push(`buy-live:${buyTasks.placed}`);
+      } else if (buyTasks.dryRun) {
+        sent.push(`buy-dry:${buyTasks.dryRun}`);
+      }
+      if (buyTasks.filled) sent.push(`buy-fill:${buyTasks.filled}`);
+    }
+    console.log('buy-tasks', JSON.stringify(buyTasks));
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    sendErrors.push(`buy-tasks:${message}`);
+    console.warn('buy-tasks failed', message);
+  }
+
   let nailGreenAlert = { skipped: true, reason: 'not-run', sent: 0, symbols: [] };
   try {
     nailGreenAlert = await runNailGreenAlerts({
@@ -1599,6 +1661,8 @@ async function main(event, context) {
       notesRankSnap,
       nailDailyReset,
       holdings,
+      sellTasks,
+      buyTasks,
       nailGreenAlert,
       sendErrors,
     }),
@@ -1619,6 +1683,8 @@ async function main(event, context) {
     notesRankSnap,
     nailDailyReset,
     holdings,
+    sellTasks,
+    buyTasks,
     nailGreenAlert,
     sendErrors,
   };
