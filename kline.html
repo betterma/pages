@@ -2768,6 +2768,28 @@
         color: var(--secondary);
         margin-bottom: 4px;
       }
+      .nail-hold-panel .nail-hold-price-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .nail-hold-panel .nail-hold-price-row input[type="number"] {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .nail-hold-panel .nail-hold-price-row button {
+        flex: 0 0 auto;
+        height: 32px;
+        padding: 0 10px;
+        border: none;
+        border-radius: 8px;
+        background: var(--fill);
+        color: var(--label);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
       .nail-hold-panel input[type="number"] {
         width: 100%;
         height: 32px;
@@ -10133,6 +10155,47 @@
         return n.toPrecision(4);
       }
 
+      /** 买卖价输入框：有任务价用任务价，否则用现价；不限制相对现价高低。 */
+      function formatHoldingsPriceInput(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n) || !(n > 0)) return "";
+        if (n >= 1000) return n.toFixed(2);
+        if (n >= 1) return String(Number(n.toFixed(6)));
+        if (n >= 0.0001) return String(Number(n.toFixed(8)));
+        return String(Number(n.toPrecision(6)));
+      }
+
+      function defaultHoldPriceInput(saved, symbol, mode) {
+        const spot = holdingsSpotPrice(symbol);
+        const savedNum = Number(saved);
+        if (Number.isFinite(savedNum) && savedNum > 0) {
+          if (Number.isFinite(spot) && spot > 0) {
+            if (mode === "sell" && savedNum < spot * 0.999999) {
+              return formatHoldingsPriceInput(spot);
+            }
+            if (mode === "buy" && savedNum > spot * 1.000001) {
+              return formatHoldingsPriceInput(spot);
+            }
+          }
+          return formatHoldingsPriceInput(savedNum);
+        }
+        return formatHoldingsPriceInput(spot);
+      }
+
+      async function resolveHoldSpotPrice(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        let spot = holdingsSpotPrice(key);
+        if (Number.isFinite(spot) && spot > 0) return spot;
+        const ticker = await fetchBinanceTickerForSymbol(key);
+        spot = Number(ticker && ticker.price);
+        if (!(Number.isFinite(spot) && spot > 0)) {
+          throw new Error("无法获取现价");
+        }
+        return spot;
+      }
+
       function holdingsSpotPrice(symbol) {
         const key = String(symbol || "")
           .trim()
@@ -10288,8 +10351,11 @@
               <div class="nail-hold-panel" data-hold-panel="sell" hidden>
                 <div class="nail-hold-panel-title">设置卖出 · ${escapeHtml(asset)}</div>
                 <div>
-                  <label>最低卖出价</label>
-                  <input type="number" min="0" step="any" value="${escapeHtml(minSell)}" placeholder="必填" data-sell-min="${escapeHtml(symbol)}" />
+                  <label>最低卖出价（须 ≥ 现价，可更高等涨）</label>
+                  <div class="nail-hold-price-row">
+                    <input type="number" min="${escapeHtml(formatHoldingsPriceInput(holdingsSpotPrice(symbol)) || "0")}" step="any" value="${escapeHtml(defaultHoldPriceInput(minSell, symbol, "sell"))}" placeholder="须 ≥ 现价" data-sell-min="${escapeHtml(symbol)}" />
+                    <button type="button" data-hold-price-refresh="${escapeHtml(symbol)}" data-hold-price-mode="sell" title="查询现价并填入">刷新</button>
+                  </div>
                 </div>
                 <div>
                   <div class="nail-hold-pct-line"><span>卖出比例</span><span data-sell-pct-label="${escapeHtml(symbol)}">${escapeHtml(String(sellPct))}%</span></div>
@@ -10303,8 +10369,11 @@
               <div class="nail-hold-panel" data-hold-panel="buy" hidden>
                 <div class="nail-hold-panel-title">买入 · ${escapeHtml(asset)} · 可用USDT ${escapeHtml(usdtFree)}</div>
                 <div>
-                  <label>最高买入价</label>
-                  <input type="number" min="0" step="any" value="${escapeHtml(maxBuy)}" placeholder="必填" data-buy-max="${escapeHtml(symbol)}" />
+                  <label>最高买入价（须 ≤ 现价，可更低等跌）</label>
+                  <div class="nail-hold-price-row">
+                    <input type="number" min="0" max="${escapeHtml(formatHoldingsPriceInput(holdingsSpotPrice(symbol)) || "")}" step="any" value="${escapeHtml(defaultHoldPriceInput(maxBuy, symbol, "buy"))}" placeholder="须 ≤ 现价" data-buy-max="${escapeHtml(symbol)}" />
+                    <button type="button" data-hold-price-refresh="${escapeHtml(symbol)}" data-hold-price-mode="buy" title="查询现价并填入">刷新</button>
+                  </div>
                 </div>
                 <div>
                   <div class="nail-hold-pct-line"><span>使用 USDT 比例</span><span data-buy-pct-label="${escapeHtml(symbol)}">${escapeHtml(String(buyPct))}%</span></div>
@@ -10339,8 +10408,62 @@
         );
         if (!row) return;
         closeNailHoldPanels(row);
-        const panel = row.querySelector(`.nail-hold-panel[data-hold-panel="${mode}"]`);
-        if (panel) panel.hidden = false;
+        const panel = row.querySelector(
+          `.nail-hold-panel[data-hold-panel="${mode}"]`,
+        );
+        if (!panel) return;
+        panel.hidden = false;
+        const input = panel.querySelector(
+          mode === "buy" ? "[data-buy-max]" : "[data-sell-min]",
+        );
+        if (input && !String(input.value || "").trim()) {
+          const px = formatHoldingsPriceInput(holdingsSpotPrice(key));
+          if (px) input.value = px;
+          else void refreshHoldPanelPrice(key, mode, { silent: true });
+        }
+      }
+
+      async function refreshHoldPanelPrice(symbol, mode, options) {
+        const silent = !!(options && options.silent);
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || key === "USDT") {
+          if (!silent) showToast("请选择具体币种");
+          return;
+        }
+        const row = document.querySelector(
+          `.nail-hold-row[data-hold-symbol="${key}"]`,
+        );
+        if (!row) return;
+        const input = row.querySelector(
+          mode === "buy" ? "[data-buy-max]" : "[data-sell-min]",
+        );
+        if (!input) return;
+        try {
+          const ticker = await fetchBinanceTickerForSymbol(key);
+          const text = formatHoldingsPriceInput(ticker && ticker.price);
+          if (!text) {
+            if (!silent) showToast("现价无效");
+            return;
+          }
+          input.value = text;
+          if (mode === "buy") {
+            input.max = text;
+            input.min = "0";
+          } else {
+            input.min = text;
+            input.removeAttribute("max");
+          }
+          if (!silent) showToast(`已填入现价 ${text}`);
+        } catch (error) {
+          console.warn("refreshHoldPanelPrice failed", error);
+          if (!silent) {
+            showToast(
+              (error && (error.userMessage || error.message)) || "查询现价失败",
+            );
+          }
+        }
       }
 
       async function reloadNailHoldings(options) {
@@ -10411,6 +10534,22 @@
         if (!pause && (!(Number.isFinite(minSell) && minSell > 0))) {
           showToast("请填写最低卖出价");
           return;
+        }
+        if (!pause) {
+          try {
+            const spot = await resolveHoldSpotPrice(key);
+            if (minSell < spot * 0.999999) {
+              showToast(
+                `卖出价须 ≥ 现价 ${formatHoldingsPriceInput(spot)}（更高=等涨）`,
+              );
+              return;
+            }
+          } catch (error) {
+            showToast(
+              (error && (error.userMessage || error.message)) || "无法校验现价",
+            );
+            return;
+          }
         }
         const result = await WatchFavorites.patchSellTasks({
           repo: CONFIG.GITHUB_REPO,
@@ -10487,6 +10626,22 @@
         if (!pause && (!(Number.isFinite(maxBuy) && maxBuy > 0))) {
           showToast("请填写最高买入价");
           return;
+        }
+        if (!pause) {
+          try {
+            const spot = await resolveHoldSpotPrice(key);
+            if (maxBuy > spot * 1.000001) {
+              showToast(
+                `买入价须 ≤ 现价 ${formatHoldingsPriceInput(spot)}（更低=等跌）`,
+              );
+              return;
+            }
+          } catch (error) {
+            showToast(
+              (error && (error.userMessage || error.message)) || "无法校验现价",
+            );
+            return;
+          }
         }
         const result = await WatchFavorites.patchBuyTasks({
           repo: CONFIG.GITHUB_REPO,
@@ -22660,6 +22815,14 @@
           if (cancelPanel) {
             const row = cancelPanel.closest(".nail-hold-row");
             closeNailHoldPanels(row);
+            return;
+          }
+          const priceRefresh = event.target.closest("[data-hold-price-refresh]");
+          if (priceRefresh) {
+            void refreshHoldPanelPrice(
+              priceRefresh.getAttribute("data-hold-price-refresh"),
+              priceRefresh.getAttribute("data-hold-price-mode") || "sell",
+            );
             return;
           }
           const armBtn = event.target.closest("[data-sell-arm]");
