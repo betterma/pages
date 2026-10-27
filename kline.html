@@ -2348,6 +2348,35 @@
         flex-shrink: 0;
         width: 100%;
       }
+      .nail-head-actions-left,
+      .nail-head-actions-right {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+      }
+      .nail-head-actions-right {
+        margin-left: auto;
+      }
+      .nail-head-actions .nail-icon-btn {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid transparent;
+      }
+      .nail-head-actions .nail-icon-btn svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+      }
+      .nail-head-actions #nailAttentionFilterBtn.is-active {
+        border-color: color-mix(in srgb, #c45c26 45%, transparent);
+        background: color-mix(in srgb, #c45c26 16%, transparent);
+        color: #c45c26;
+      }
       .nail-head-primary-actions {
         display: flex;
         align-items: center;
@@ -2791,16 +2820,34 @@
         justify-content: space-between;
         gap: 8px;
       }
+      .nail-hold-sym-wrap {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 8px;
+        min-width: 0;
+      }
       .nail-hold-sym {
         font-weight: 750;
         font-size: 14px;
         color: #1c1c1e;
+      }
+      .nail-hold-px {
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(28, 28, 30, 0.55);
+        font-variant-numeric: tabular-nums;
       }
       .nail-hold-meta {
         color: rgba(28, 28, 30, 0.62);
         font-size: 11px;
         font-variant-numeric: tabular-nums;
         line-height: 1.45;
+      }
+      .nail-hold-qty-hint {
+        margin-top: 2px;
+        font-size: 11px;
+        color: rgba(28, 28, 30, 0.55);
+        font-variant-numeric: tabular-nums;
       }
       .nail-hold-actions button {
         border: none;
@@ -3529,6 +3576,13 @@
         white-space: pre-wrap;
         word-break: break-word;
       }
+      .nail-note .nail-note-attention {
+        color: #c45c26;
+        background: color-mix(in srgb, #c45c26 18%, transparent);
+        font-weight: 750;
+        padding: 0 2px;
+        border-radius: 3px;
+      }
       .nail-note-editor {
         position: fixed;
         inset: 0;
@@ -3589,6 +3643,21 @@
         display: flex;
         align-items: center;
         gap: 8px;
+      }
+      .nail-note-attention-opt {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 14px;
+        padding: 10px 12px;
+        border: 1px solid var(--separator);
+        border-radius: 10px;
+        font-size: 13px;
+        color: var(--label);
+      }
+      .nail-note-attention-opt input {
+        width: 16px;
+        height: 16px;
       }
       .nail-note-editor-actions {
         display: flex;
@@ -4182,12 +4251,21 @@
         flex: 0 1 auto;
         min-width: 3.5em;
         max-width: 8em;
-        padding: 0 6px;
+        height: 36px;
+        padding: 0 8px;
+        border: none;
+        border-radius: 9px;
+        background: transparent;
+        color: inherit;
         font-size: 14px;
         font-weight: 700;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        cursor: pointer;
+      }
+      .card-focus-bar .card-focus-label:hover {
+        background: var(--fill, rgba(90, 106, 104, 0.1));
       }
       .card-focus-bar button {
         flex: 1 1 0;
@@ -6373,70 +6451,96 @@
           </div>
           </div>
           <div class="nail-head-actions">
-            <button
-              type="button"
-              id="nailAutoPinBtn"
-              aria-expanded="false"
-              aria-controls="nailAutoPinPopover"
-            >
-              自动盯
-            </button>
-            <button
-              type="button"
-              id="nailRadarBtn"
-              aria-expanded="false"
-              aria-controls="nailRadarPopover"
-              title="冲榜雷达（24h 排名）"
-            >
-              雷达
-            </button>
-            <button
-              type="button"
-              class="nail-notice-entry"
-              id="nailNoticeEntry"
-              title="近 24h 荧光绿通知"
-            >
-              <svg
-                class="nail-notice-bell"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+            <div class="nail-head-actions-left">
+              <button
+                type="button"
+                class="nail-icon-btn"
+                id="nailAutoPinBtn"
+                aria-expanded="false"
+                aria-controls="nailAutoPinPopover"
+                title="自动盯记录"
+                aria-label="自动盯"
               >
-                <path d="M6 9a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-              </svg>
-              通知
-              <span class="nail-notice-entry-meta" id="nailNoticeEntryMeta"></span>
-            </button>
-            <button
-              type="button"
-              class="nail-notice-entry"
-              id="nailHoldBtn"
-              aria-expanded="false"
-              aria-controls="nailHoldPopover"
-              title="指定币种持仓余额"
-            >
-              <svg
-                class="nail-notice-bell"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="nail-icon-btn"
+                id="nailRadarBtn"
+                aria-expanded="false"
+                aria-controls="nailRadarPopover"
+                title="冲榜雷达（24h 排名）"
+                aria-label="雷达"
               >
-                <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z" />
-                <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
-                <path d="M12 12v4" />
-                <path d="M10 14h4" />
-              </svg>
-              持有
-            </button>
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="9" />
+                  <circle cx="12" cy="12" r="5" />
+                  <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+                  <path d="M12 12 18.5 7" />
+                </svg>
+              </button>
+            </div>
+            <div class="nail-head-actions-right">
+              <button
+                type="button"
+                class="nail-notice-entry"
+                id="nailNoticeEntry"
+                title="近 24h 荧光绿通知"
+              >
+                <svg
+                  class="nail-notice-bell"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M6 9a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                </svg>
+                通知
+                <span class="nail-notice-entry-meta" id="nailNoticeEntryMeta"></span>
+              </button>
+              <button
+                type="button"
+                class="nail-notice-entry"
+                id="nailHoldBtn"
+                aria-expanded="false"
+                aria-controls="nailHoldPopover"
+                title="指定币种持仓余额"
+              >
+                <svg
+                  class="nail-notice-bell"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2Z" />
+                  <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+                  <path d="M12 12v4" />
+                  <path d="M10 14h4" />
+                </svg>
+                持有
+              </button>
+              <button
+                type="button"
+                class="nail-notice-entry"
+                id="nailAttentionFilterBtn"
+                aria-pressed="false"
+                title="只显示便签含「注意时」的钉子"
+              >
+                注意时
+              </button>
+            </div>
           </div>
           <div class="nail-auto-pin-popover" id="nailAutoPinPopover" hidden>
             <div class="nail-auto-pin-popover-title">自动盯记录</div>
@@ -7023,7 +7127,14 @@
       >
         ×
       </button>
-      <span class="card-focus-label" id="cardFocusLabel">—</span>
+      <button
+        type="button"
+        class="card-focus-label"
+        id="cardFocusLabel"
+        title="点击复制名称"
+      >
+        —
+      </button>
       <button type="button" data-focus-action="nail">钉</button>
       <button type="button" data-focus-action="zoom">放大</button>
       <button type="button" data-focus-action="refresh">刷新</button>
@@ -7098,7 +7209,7 @@
         <h3 id="nailNoteEditorTitle">编辑便签</h3>
         <textarea
           id="nailNoteEditorText"
-          maxlength="40"
+          maxlength="60"
           placeholder="价格和备注，例如 0.01 到位观察"
           aria-label="便签内容"
         ></textarea>
@@ -7113,6 +7224,10 @@
             按照此刻时间
           </label>
         </fieldset>
+        <label class="nail-note-attention-opt">
+          <input type="checkbox" id="nailNoteAttentionCheck" />
+          注意时（保存时追加「注意时 + 现价」）
+        </label>
         <div class="nail-note-editor-actions">
           <button type="button" id="nailNoteEditorCancel">取消</button>
           <button type="submit" id="nailNoteEditorSave" class="is-primary">
@@ -7373,6 +7488,7 @@
       const selectedNailSymbols = new Set();
       const NAIL_RISING_FILTER_KEY = "kline-nail-rising-filter-v1";
       let nailRisingFilterOn = true;
+      let nailAttentionFilterOn = false;
       try {
         const savedNailRising = localStorage.getItem(NAIL_RISING_FILTER_KEY);
         if (savedNailRising === "0") nailRisingFilterOn = false;
@@ -10518,15 +10634,23 @@
           (nailHoldingsState.balances && nailHoldingsState.balances[asset]) ||
           {};
         const free = Number(row.free);
-        return Number.isFinite(free) && free > 0 ? free : 0;
+        if (!(Number.isFinite(free) && free > 0)) return 0;
+        const price = holdingsSpotPrice(symbol);
+        if (Number.isFinite(price) && free * price < 0.01) return 0;
+        return free;
       }
 
       function holdingsTotalUsdt(symbol) {
-        const free = holdingsFreeQty(symbol);
+        const asset = holdingsBaseAsset(symbol);
+        const row =
+          (nailHoldingsState.balances && nailHoldingsState.balances[asset]) ||
+          {};
+        const free = Number(row.free);
+        if (!(Number.isFinite(free) && free > 0)) return 0;
         const price = holdingsSpotPrice(symbol);
-        if (!(free > 0)) return 0;
         if (!Number.isFinite(price)) return NaN;
-        return free * price;
+        const total = free * price;
+        return total < 0.01 ? 0 : total;
       }
 
       function renderNailHoldList() {
@@ -10602,14 +10726,25 @@
             </div>`;
               }
               const row = balances[asset] || {};
-              const freeNum = Number(row.free) || 0;
-              const free = formatHoldingsQty(row.free);
-              const locked = formatHoldingsQty(row.locked);
+              const rawFree = Number(row.free) || 0;
               const px = holdingsSpotPrice(symbol);
-              const total = holdingsTotalUsdt(symbol);
-              const totalText = Number.isFinite(total)
-                ? formatHoldingsUsdt(total)
-                : "--";
+              const rawTotal =
+                rawFree > 0 && Number.isFinite(px) ? rawFree * px : NaN;
+              const isDust =
+                Number.isFinite(rawTotal) && rawTotal > 0 && rawTotal < 0.01;
+              const freeNum = isDust ? 0 : rawFree;
+              const total = isDust
+                ? 0
+                : Number.isFinite(rawTotal)
+                  ? rawTotal
+                  : holdingsTotalUsdt(symbol);
+              const free = isDust ? "0" : formatHoldingsQty(row.free);
+              const locked = formatHoldingsQty(row.locked);
+              const totalText = isDust
+                ? "0"
+                : Number.isFinite(total)
+                  ? formatHoldingsUsdt(total)
+                  : "--";
               const pxText = Number.isFinite(px) ? formatHoldingsUsdt(px) : "--";
               const canSell = freeNum > 0;
               const sell = sellBySymbol.get(String(symbol).toUpperCase());
@@ -10620,6 +10755,11 @@
               const buyPct = buy ? Number(buy.buyPercent) || 50 : 50;
               const maxBuy =
                 buy && Number(buy.maxBuy) > 0 ? String(buy.maxBuy) : "";
+              const sellPlanQty = freeNum * (sellPct / 100);
+              const buySpendHint = (() => {
+                const usdtFreeNum = Number(usdtBal.free) || 0;
+                return usdtFreeNum * (buyPct / 100);
+              })();
               const statusBits = [];
               if (sell) statusBits.push(describeHoldTaskStatus("sell", sell));
               if (buy) statusBits.push(describeHoldTaskStatus("buy", buy));
@@ -10637,13 +10777,17 @@
                 ? `<button type="button" class="is-sell" data-hold-open-sell="${escapeHtml(symbol)}">设置卖出</button>
                    <button type="button" class="is-buy" data-hold-open-buy="${escapeHtml(symbol)}">买入</button>`
                 : `<button type="button" class="is-buy" data-hold-open-buy="${escapeHtml(symbol)}">买入</button>`;
-              return `<div class="nail-hold-row" data-hold-symbol="${escapeHtml(symbol)}">
+              return `<div class="nail-hold-row" data-hold-symbol="${escapeHtml(symbol)}" data-hold-free="${escapeHtml(String(freeNum))}" data-hold-usdt="${escapeHtml(String(Number(usdtBal.free) || 0))}">
               <div class="nail-hold-row-top">
-                <span class="nail-hold-sym">${escapeHtml(asset)}</span>
+                <span class="nail-hold-sym-wrap">
+                  <span class="nail-hold-sym">${escapeHtml(asset)}</span>
+                  <span class="nail-hold-px">${escapeHtml(pxText)}</span>
+                </span>
                 <span class="nail-hold-actions"><button type="button" data-hold-remove="${escapeHtml(symbol)}">移除</button></span>
               </div>
-              <div class="nail-hold-meta">数量 ${escapeHtml(free)} · 总金额 ≈ ${escapeHtml(totalText)} USDT</div>
-              <div class="nail-hold-meta">现价 ${escapeHtml(pxText)} · 冻结 ${escapeHtml(locked)}</div>
+              <div class="nail-hold-meta">数量 ${escapeHtml(free)}</div>
+              <div class="nail-hold-meta">总金额 ≈ ${escapeHtml(totalText)} USDT</div>
+              <div class="nail-hold-meta">冻结 ${escapeHtml(locked)}</div>
               <div class="nail-hold-ops">${ops}</div>
               <div class="nail-hold-panel" data-hold-panel="sell" hidden>
                 <div class="nail-hold-panel-title">设置卖出 · ${escapeHtml(asset)}</div>
@@ -10657,6 +10801,7 @@
                 <div>
                   <div class="nail-hold-pct-line"><span>卖出比例</span><span data-sell-pct-label="${escapeHtml(symbol)}">${escapeHtml(String(sellPct))}%</span></div>
                   <input type="range" min="1" max="100" step="1" value="${escapeHtml(String(sellPct))}" data-sell-pct="${escapeHtml(symbol)}" />
+                  <div class="nail-hold-qty-hint" data-sell-qty-hint="${escapeHtml(symbol)}">可用 ${escapeHtml(formatHoldingsQty(freeNum))} · 本单约 ${escapeHtml(formatHoldingsQty(sellPlanQty))}</div>
                 </div>
                 <div class="nail-hold-panel-actions">
                   <button type="button" data-hold-cancel-panel="${escapeHtml(symbol)}">取消</button>
@@ -10675,6 +10820,7 @@
                 <div>
                   <div class="nail-hold-pct-line"><span>使用 USDT 比例</span><span data-buy-pct-label="${escapeHtml(symbol)}">${escapeHtml(String(buyPct))}%</span></div>
                   <input type="range" min="1" max="100" step="1" value="${escapeHtml(String(buyPct))}" data-buy-pct="${escapeHtml(symbol)}" />
+                  <div class="nail-hold-qty-hint" data-buy-qty-hint="${escapeHtml(symbol)}">可用 USDT ${escapeHtml(usdtFree)} · 本单约 ${escapeHtml(formatHoldingsUsdt(buySpendHint))} USDT</div>
                 </div>
                 <div class="nail-hold-panel-actions">
                   <button type="button" data-hold-cancel-panel="${escapeHtml(symbol)}">取消</button>
@@ -11053,6 +11199,9 @@
               updatedAt: now,
               lastError: null,
               skipReason: null,
+              wouldSell: null,
+              lastQty: null,
+              lastPrice: null,
             };
             if (idx >= 0) tasks[idx] = { ...tasks[idx], ...nextTask };
             else tasks.unshift(nextTask);
@@ -11167,6 +11316,9 @@
                 updatedAt: now,
                 lastError: null,
                 skipReason: null,
+                wouldBuy: null,
+                lastQty: null,
+                lastPrice: null,
               };
               if (idx >= 0) tasks[idx] = { ...tasks[idx], ...nextTask };
               else tasks.unshift(nextTask);
@@ -17652,7 +17804,10 @@
         }
         bar.hidden = false;
         document.body.classList.add("has-card-focus");
-        if (labelEl) labelEl.textContent = key.replace(/USDT$/i, "");
+        if (labelEl) {
+          labelEl.textContent = key.replace(/USDT$/i, "");
+          labelEl.dataset.copySymbol = key;
+        }
       }
 
       function setFocusBarBusy(on, activeBtn, busyLabel) {
@@ -18576,14 +18731,13 @@
 
       async function openNailNoticeDrawer(options) {
         const opts = options || {};
+        // 打开通知页时默认筛「蓝」并刷新一次（相对通知线上涨）。
+        nailNoticeDeltaFilter = "up";
         nailNoticeDeBlueEnabled = readLocalNailNoticeDeBlue();
+        syncNailNoticeDeltaFilterUi();
         syncNailNoticeDeBlueUi();
-        await refreshNailGreenNotices();
-        renderNailNoticeList();
+        await reloadNailNoticeList();
         setNailNoticeDrawerMode("open");
-        requestAnimationFrame(() => {
-          updateNailNoticeScrollPct({ flash: false });
-        });
         if (!opts.skipMarkRead) {
           void markNailNoticesRead();
         }
@@ -19601,12 +19755,44 @@
         renderNailDrawer();
       }
 
+      function formatNailNoteHtml(note) {
+        const text = String(note || "");
+        if (!text) return "";
+        return escapeHtml(text).replace(
+          /注意时/g,
+          '<mark class="nail-note-attention">注意时</mark>',
+        );
+      }
+
+      function nailNoteHasAttention(note) {
+        return String(note || "").includes("注意时");
+      }
+
+      function syncNailAttentionFilterUi() {
+        const btn = document.getElementById("nailAttentionFilterBtn");
+        if (!btn) return;
+        btn.classList.toggle("is-active", !!nailAttentionFilterOn);
+        btn.setAttribute(
+          "aria-pressed",
+          nailAttentionFilterOn ? "true" : "false",
+        );
+      }
+
+      function setNailAttentionFilter(on) {
+        nailAttentionFilterOn = !!on;
+        syncNailAttentionFilterUi();
+        renderNailDrawer();
+      }
+
       function nailDrawerVisibleItems() {
         const all = Array.isArray(nailItems) ? nailItems : [];
         const interval = CONFIG.KLINE_INTERVAL || "4h";
         let items = nailRisingFilterOn
           ? all.filter((item) => hasWindowGain(item.symbol, interval))
           : all.slice();
+        if (nailAttentionFilterOn) {
+          items = items.filter((item) => nailNoteHasAttention(item && item.note));
+        }
         if (nailSortMode === "alertGreen") {
           items = items.slice().sort((a, b) => {
             const ap = a.pinned ? 0 : 1;
@@ -19787,6 +19973,7 @@
         const badge = document.getElementById("nailTabCount");
         const meta = document.getElementById("nailMeta");
         syncNailRisingFilterUi();
+        syncNailAttentionFilterUi();
         syncNailSortUi();
         const allItems = Array.isArray(nailItems) ? nailItems : [];
         const items = nailDrawerVisibleItems();
@@ -19809,6 +19996,10 @@
                 : "置顶 / 长按拖动排序";
           if (!total) {
             meta.textContent = `复制名称后新增 · ${sortHint}`;
+          } else if (nailAttentionFilterOn && nailRisingFilterOn) {
+            meta.textContent = `注意时·上涨 ${n}/${total} · ${sortHint}`;
+          } else if (nailAttentionFilterOn) {
+            meta.textContent = `注意时 ${n}/${total} · ${sortHint}`;
           } else if (nailRisingFilterOn) {
             meta.textContent = `窗口上涨 ${n}/${total} · ${sortHint}`;
           } else {
@@ -19835,9 +20026,11 @@
         }
         if (!n) {
           abortNailKlines();
-          listEl.innerHTML = nailRisingFilterOn
-            ? '<div class="nail-empty">当前没有窗口上涨的钉子 · 可关闭上方开关查看全部</div>'
-            : '<div class="nail-empty">还没有钉子</div>';
+          listEl.innerHTML = nailAttentionFilterOn
+            ? '<div class="nail-empty">没有便签含「注意时」的钉子 · 再点「注意时」可关闭筛选</div>'
+            : nailRisingFilterOn
+              ? '<div class="nail-empty">当前没有窗口上涨的钉子 · 可关闭上方开关查看全部</div>'
+              : '<div class="nail-empty">还没有钉子</div>';
           applyFocusActionChrome();
           syncNailSelectUi();
           return;
@@ -19888,7 +20081,7 @@
               veil,
               `</div>`,
               note
-                ? `<p class="nail-note" data-nail-note-display="${symbol}">${escapeHtml(note)}</p>`
+                ? `<p class="nail-note" data-nail-note-display="${symbol}">${formatNailNoteHtml(note)}</p>`
                 : "",
               check,
               `</article>`,
@@ -20488,6 +20681,10 @@
         nailNoteEditorSymbol = key;
         if (title) title.textContent = `编辑 ${key.replace(/USDT$/i, "")} 便签`;
         text.value = String(item.note || "").trim();
+        const attentionCheck = document.getElementById("nailNoteAttentionCheck");
+        if (attentionCheck) {
+          attentionCheck.checked = nailNoteHasAttention(item.note);
+        }
         editor.querySelectorAll('input[name="nailNoteTimeMode"]').forEach((radio) => {
           radio.checked = radio.value === nailNoteTimeMode;
         });
@@ -20572,16 +20769,35 @@
         }
       }
 
-      async function saveNailNote(symbol, note, timeMode) {
+      async function saveNailNote(symbol, note, timeMode, options) {
+        const opts = options || {};
         const key = WatchFavorites.nailSymbolKey
           ? WatchFavorites.nailSymbolKey(symbol)
           : String(symbol || "")
               .trim()
               .toUpperCase();
         if (!key) return false;
-        const text = String(note || "")
-          .trim()
-          .slice(0, 40);
+        let text = String(note || "").trim();
+        if (opts.appendAttention) {
+          let price = Number(marketMap[key]?.price);
+          if (!(price > 0)) {
+            try {
+              await fetchBinanceTickerForSymbol(key);
+              price = Number(marketMap[key]?.price);
+            } catch (error) {
+              console.warn("attention note price failed", error);
+            }
+          }
+          const priceText =
+            price > 0 ? formatPinPrice(price) : "--";
+          const tag = `注意时 ${priceText}`;
+          if (!text.includes(tag)) {
+            text = `${text} ${tag}`.trim();
+          } else if (!nailNoteHasAttention(text)) {
+            text = `${text} 注意时`.trim();
+          }
+        }
+        text = text.slice(0, 60);
         const current = (nailItems || []).find(
           (item) => String(item.symbol || "").toUpperCase() === key,
         );
@@ -23095,6 +23311,10 @@
           }
           if (nailNoteEditorCancel) nailNoteEditorCancel.disabled = true;
           if (nailNoteEditorText) nailNoteEditorText.disabled = true;
+          const attentionCheckEl = document.getElementById(
+            "nailNoteAttentionCheck",
+          );
+          if (attentionCheckEl) attentionCheckEl.disabled = true;
           nailNoteEditor
             .querySelectorAll('input[name="nailNoteTimeMode"]')
             .forEach((radio) => {
@@ -23105,6 +23325,11 @@
               nailNoteEditorSymbol,
               nailNoteEditorText ? nailNoteEditorText.value : "",
               mode,
+              {
+                appendAttention: !!(
+                  attentionCheckEl && attentionCheckEl.checked
+                ),
+              },
             );
             if (saved) {
               nailNoteEditorSaving = false;
@@ -23120,6 +23345,7 @@
             }
             if (nailNoteEditorCancel) nailNoteEditorCancel.disabled = false;
             if (nailNoteEditorText) nailNoteEditorText.disabled = false;
+            if (attentionCheckEl) attentionCheckEl.disabled = false;
             nailNoteEditor
               .querySelectorAll('input[name="nailNoteTimeMode"]')
               .forEach((radio) => {
@@ -23319,6 +23545,15 @@
               `[data-sell-pct-label="${sym}"]`,
             );
             if (label) label.textContent = `${sellRange.value}%`;
+            const row = sellRange.closest(".nail-hold-row");
+            const free = Number(row && row.getAttribute("data-hold-free")) || 0;
+            const hint = nailHoldList.querySelector(
+              `[data-sell-qty-hint="${sym}"]`,
+            );
+            if (hint) {
+              const plan = free * (Number(sellRange.value) / 100);
+              hint.textContent = `可用 ${formatHoldingsQty(free)} · 本单约 ${formatHoldingsQty(plan)}`;
+            }
             return;
           }
           const buyRange = event.target.closest("[data-buy-pct]");
@@ -23328,6 +23563,15 @@
               `[data-buy-pct-label="${sym}"]`,
             );
             if (label) label.textContent = `${buyRange.value}%`;
+            const row = buyRange.closest(".nail-hold-row");
+            const usdt = Number(row && row.getAttribute("data-hold-usdt")) || 0;
+            const hint = nailHoldList.querySelector(
+              `[data-buy-qty-hint="${sym}"]`,
+            );
+            if (hint) {
+              const spend = usdt * (Number(buyRange.value) / 100);
+              hint.textContent = `可用 USDT ${formatHoldingsQty(usdt)} · 本单约 ${formatHoldingsUsdt(spend)} USDT`;
+            }
           }
         });
         nailHoldList.addEventListener("click", (event) => {
@@ -23417,6 +23661,36 @@
         nailBuyLiveSwitch.addEventListener("click", () => {
           const on = nailBuyLiveSwitch.getAttribute("aria-checked") === "true";
           void setNailTradeLive("buy", !on);
+        });
+      }
+      const nailAttentionFilterBtn = document.getElementById(
+        "nailAttentionFilterBtn",
+      );
+      if (nailAttentionFilterBtn) {
+        nailAttentionFilterBtn.addEventListener("click", () => {
+          setNailAttentionFilter(!nailAttentionFilterOn);
+        });
+        syncNailAttentionFilterUi();
+      }
+      const cardFocusLabelBtn = document.getElementById("cardFocusLabel");
+      if (cardFocusLabelBtn) {
+        cardFocusLabelBtn.addEventListener("click", async () => {
+          const key = String(
+            cardFocusLabelBtn.dataset.copySymbol ||
+              cardFocusLabelBtn.textContent ||
+              "",
+          )
+            .trim()
+            .toUpperCase();
+          const label = key.replace(/USDT$/i, "") || key;
+          if (!label || label === "—") return;
+          try {
+            await navigator.clipboard.writeText(label);
+            showToast(`已复制 ${label}`);
+          } catch (error) {
+            console.warn("copy focus label failed", error);
+            showToast("复制失败");
+          }
         });
       }
       document.addEventListener("click", (event) => {
