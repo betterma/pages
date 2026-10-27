@@ -3532,10 +3532,8 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        cursor: pointer;
-        text-decoration: underline;
-        text-decoration-style: dotted;
-        text-underline-offset: 2px;
+        cursor: copy;
+        text-decoration: none;
       }
       .nail-price {
         display: flex;
@@ -20082,7 +20080,7 @@
               nailSelectMode
                 ? ""
                 : `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "取消置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
-              `<button type="button" class="nail-name" data-copy="${label}" title="点击复制">${label}${tag}</button>`,
+              `<button type="button" class="nail-name" data-nail-copy-name="${label}" data-copy="${label}" title="点击复制名称">${label}${tag}</button>`,
               nailSelectMode
                 ? ""
                 : `<button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线" aria-label="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button>`,
@@ -20158,6 +20156,27 @@
         let startX = 0;
         let startY = 0;
         let moved = false;
+        // 捕获阶段优先处理名称复制，避免被其它冒泡逻辑抢走。
+        listEl.addEventListener(
+          "click",
+          (event) => {
+            const nameBtn = event.target.closest(
+              ".nail-name[data-nail-copy-name], .nail-name[data-copy]",
+            );
+            if (!nameBtn || !listEl.contains(nameBtn)) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const raw =
+              nameBtn.getAttribute("data-nail-copy-name") ||
+              nameBtn.getAttribute("data-copy") ||
+              "";
+            const text = String(raw || "")
+              .trim()
+              .replace(/USDT$/i, "");
+            void copyName(text || nameBtn.textContent);
+          },
+          true,
+        );
         listEl.addEventListener(
           "pointerdown",
           (event) => {
@@ -21173,6 +21192,7 @@
         }
       }
 
+      /** 旧「钉子名 → 跳主页」已停用；若仍有调用，改为只复制名称。 */
       function jumpNailToSymbol(symbol) {
         const key = String(
           WatchFavorites.nailSymbolKey
@@ -21182,57 +21202,7 @@
           .trim()
           .toUpperCase();
         if (!key) return;
-        setNailDrawerOpen(false);
-        const label = key.replace(/USDT$/i, "");
-        if (isJijiView() || isNotesRankOpen()) {
-          notesRankFocusSymbol = key;
-          const scroll = document.getElementById("notesRankScroll");
-          const card = scroll
-            ? scroll.querySelector(
-                `.notes-rank-kcard[data-jump="${CSS.escape ? CSS.escape(key) : key}"]`,
-              )
-            : null;
-          const row = scroll
-            ? scroll.querySelector(
-                `tr[data-symbol="${CSS.escape ? CSS.escape(key) : key}"]`,
-              )
-            : null;
-          if (card) {
-            if (!notesRankKlineView) {
-              notesRankKlineView = true;
-              persistNotesRankView();
-              syncNotesRankViewUi();
-              requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                  void paintNotesRankKlines();
-                });
-              });
-            }
-            scroll
-              .querySelectorAll("tr.is-focus, .notes-rank-kcard.is-focus")
-              .forEach((el) => el.classList.remove("is-focus"));
-            card.classList.add("is-focus");
-            setTimeout(() => {
-              card.scrollIntoView({ behavior: "smooth", block: "center" });
-            }, 40);
-          } else if (row) {
-            if (notesRankKlineView) {
-              notesRankKlineView = false;
-              persistNotesRankView();
-              syncNotesRankViewUi();
-            }
-            scroll
-              .querySelectorAll("tr.is-focus, .notes-rank-kcard.is-focus")
-              .forEach((el) => el.classList.remove("is-focus"));
-            row.classList.add("is-focus");
-            row.scrollIntoView({ behavior: "smooth", block: "center" });
-          } else if (isJijiView()) {
-            showToast(`${label} 当前排行没有这张图`);
-          }
-          if (!isJijiView()) jumpToNotifySymbol(key);
-          return;
-        }
-        jumpToNotifySymbol(key);
+        void copyName(key.replace(/USDT$/i, "") || key);
       }
 
       function notifyDismissStorageKey() {
@@ -23229,13 +23199,21 @@
             return;
           }
           // 钉子名点击：只复制名称（暂不跳回主页 K 线）
-          const nameBtn = event.target.closest(".nail-name[data-copy]");
+          const nameBtn = event.target.closest(
+            ".nail-name[data-nail-copy-name], .nail-name[data-copy]",
+          );
           if (nameBtn) {
             event.preventDefault();
             event.stopPropagation();
-            void copyName(
-              nameBtn.getAttribute("data-copy") || nameBtn.textContent,
-            );
+            const raw =
+              nameBtn.getAttribute("data-nail-copy-name") ||
+              nameBtn.getAttribute("data-copy") ||
+              "";
+            const text = String(raw || "")
+              .trim()
+              .replace(/USDT$/i, "");
+            void copyName(text || nameBtn.textContent);
+            return;
           }
         });
         // 蒙蔽双击揭开暂时关闭；恢复时把 NAIL_BROWSE_MASK_ENABLED 改回 true 即可
