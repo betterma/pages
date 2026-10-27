@@ -738,19 +738,27 @@ function formatNailNotePrice(value) {
   return n.toPrecision(4);
 }
 
+const AUTO_PIN_NAIL_SOURCES = new Set([
+  'auto-cloud',
+  'auto-rising',
+  'auto-rewarm',
+]);
+
+function isAutoPinSource(source) {
+  return AUTO_PIN_NAIL_SOURCES.has(String(source || '').trim());
+}
+
 /**
- * 仅「本轮新自动盯」写钉子/刷新便签。
- * 不再把「已自动盯但用户删过钉子」的币补回去（尊重 dismissedNails）。
+ * 本轮新自动盯 → 写/刷新钉子便签；并补齐「已自动盯、钉子页却没有」的旧漏钉。
+ * 补漏尊重 dismissedNails（用户删过的不补）；新自动盯会清掉 dismissed 再钉入。
+ * 便签价优先现价（tickers），没有才回退 pinPrice。
  */
-async function saveAutoPinNails(now, newcomers, pins) {
-  const symbols = [
-    ...new Set(
-      (newcomers || [])
-        .map((symbol) => String(symbol || '').trim().toUpperCase())
-        .filter(Boolean),
-    ),
-  ];
-  if (!symbols.length) return [];
+async function saveAutoPinNails(now, newcomers, pins, priceBySymbol) {
+  const forceSet = new Set(
+    (newcomers || [])
+      .map((symbol) => String(symbol || '').trim().toUpperCase())
+      .filter(Boolean),
+  );
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const file = await loadJson(CONFIG.NAILS_PATH);
@@ -770,15 +778,52 @@ async function saveAutoPinNails(now, newcomers, pins) {
         .map((symbol) => String(symbol || '').trim().toUpperCase())
         .filter(Boolean),
     );
+    const backfillSet = new Set();
+    (pins || []).forEach((row) => {
+      if (!row || !isAutoPinSource(row.source)) return;
+      const key = String(row.symbol || '')
+        .trim()
+        .toUpperCase();
+      if (!key || bySymbol.has(key) || dismissed.has(key)) return;
+      backfillSet.add(key);
+    });
+    const symbols = [
+      ...new Set([...forceSet, ...backfillSet]),
+    ];
+    if (!symbols.length) return [];
+
+    let prices = priceBySymbol && typeof priceBySymbol === 'object'
+      ? priceBySymbol
+      : null;
+    if (!prices) {
+      try {
+        prices = await fetchBinanceTickers(symbols);
+      } catch (error) {
+        console.warn(
+          'auto-pin nails price fetch failed',
+          error && error.message ? error.message : error,
+        );
+        prices = {};
+      }
+    }
+
     const added = [];
     const updated = [];
     for (const symbol of symbols) {
-      // 新自动盯：清掉「曾手动删钉」标记，允许重新钉入。
-      dismissed.delete(symbol);
-      const price = pinPriceOf(pins, symbol);
+      const force = forceSet.has(symbol);
+      if (force) {
+        // 新自动盯：清掉「曾手动删钉」标记，允许重新钉入。
+        dismissed.delete(symbol);
+      } else if (dismissed.has(symbol) || bySymbol.has(symbol)) {
+        continue;
+      }
+      const live = prices && prices[symbol] && Number(prices[symbol].price);
+      const price =
+        Number.isFinite(live) && live > 0 ? live : pinPriceOf(pins, symbol);
       const note = formatNailNotePrice(price);
       const existing = bySymbol.get(symbol) || null;
       if (existing) {
+        if (!force) continue;
         updated.push({
           ...existing,
           symbol,
@@ -826,6 +871,7 @@ async function saveAutoPinNails(now, newcomers, pins) {
     const browseRevealed = Array.isArray(file.data && file.data.browseRevealed)
       ? file.data.browseRevealed
       : [];
+    const backfillCount = added.filter((row) => !forceSet.has(row.symbol)).length;
     try {
       await saveJson(
         CONFIG.NAILS_PATH,
@@ -838,7 +884,11 @@ async function saveAutoPinNails(now, newcomers, pins) {
           dismissedNails: [...dismissed],
         },
         file.sha,
-        'Auto-pin nails +' + added.length + ' ~' + updated.length,
+        'Auto-pin nails +' +
+          added.length +
+          ' ~' +
+          updated.length +
+          (backfillCount ? ' backfill ' + backfillCount : ''),
       );
       return [...added, ...updated];
     } catch (error) {
@@ -1238,7 +1288,7 @@ async function main(event, context) {
       autoPinMomNotes = [];
     }
   }
-  // 仅本轮新自动盯写钉子；用户删过的不补回。
+  // 本轮新自动盯写钉子；并补齐已自动盯却漏钉的旧数据（用户删过的仍不补）。
   try {
     autoPinNails = await saveAutoPinNails(now, autoPinned, pins);
     if (autoPinNails.length) {
@@ -1246,7 +1296,8 @@ async function main(event, context) {
         'auto-pin nails',
         JSON.stringify({
           count: autoPinNails.length,
-          sample: autoPinNails.slice(0, 8).map((row) => row.symbol),
+          newcomers: autoPinned.length,
+          sample: autoPinNails.slice(0, 12).map((row) => row.symbol),
         }),
       );
     }
