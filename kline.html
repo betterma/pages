@@ -2827,9 +2827,18 @@
         min-width: 0;
       }
       .nail-hold-sym {
+        border: none;
+        background: transparent;
+        padding: 0;
         font-weight: 750;
         font-size: 14px;
         color: #1c1c1e;
+        cursor: pointer;
+        text-align: left;
+      }
+      .nail-hold-sym:hover {
+        color: var(--accent, #2f8f6e);
+        text-decoration: underline;
       }
       .nail-hold-px {
         font-size: 11px;
@@ -10719,10 +10728,14 @@
                 const totalText = formatHoldingsUsdt(usdtBal.free);
                 return `<div class="nail-hold-row" data-hold-symbol="${escapeHtml(symbol)}">
               <div class="nail-hold-row-top">
-                <span class="nail-hold-sym">USDT</span>
+                <span class="nail-hold-sym-wrap">
+                  <button type="button" class="nail-hold-sym" data-hold-jump="${escapeHtml(symbol)}" title="跳到钉子 K 线">USDT</button>
+                </span>
                 <span class="nail-hold-actions"><button type="button" data-hold-remove="${escapeHtml(symbol)}">移除</button></span>
               </div>
-              <div class="nail-hold-meta">数量 ${escapeHtml(qtyText)} · 总金额 ≈ ${escapeHtml(totalText)} USDT · 冻结 ${escapeHtml(formatHoldingsQty(usdtBal.locked))}</div>
+              <div class="nail-hold-meta">数量 ${escapeHtml(qtyText)}</div>
+              <div class="nail-hold-meta">总金额 ≈ ${escapeHtml(totalText)} USDT</div>
+              <div class="nail-hold-meta">冻结 ${escapeHtml(formatHoldingsQty(usdtBal.locked))}</div>
             </div>`;
               }
               const row = balances[asset] || {};
@@ -10780,7 +10793,7 @@
               return `<div class="nail-hold-row" data-hold-symbol="${escapeHtml(symbol)}" data-hold-free="${escapeHtml(String(freeNum))}" data-hold-usdt="${escapeHtml(String(Number(usdtBal.free) || 0))}">
               <div class="nail-hold-row-top">
                 <span class="nail-hold-sym-wrap">
-                  <span class="nail-hold-sym">${escapeHtml(asset)}</span>
+                  <button type="button" class="nail-hold-sym" data-hold-jump="${escapeHtml(symbol)}" title="跳到钉子 K 线">${escapeHtml(asset)}</button>
                   <span class="nail-hold-px">${escapeHtml(pxText)}</span>
                 </span>
                 <span class="nail-hold-actions"><button type="button" data-hold-remove="${escapeHtml(symbol)}">移除</button></span>
@@ -19205,13 +19218,15 @@
       function openNailDrawerAtSymbol(symbol) {
         const key = String(symbol || "").trim().toUpperCase();
         if (!key) return;
-        if (
-          nailRisingFilterOn &&
-          !nailDrawerVisibleItems().some(
+        const visibleHas = () =>
+          nailDrawerVisibleItems().some(
             (item) => String(item.symbol || "").toUpperCase() === key,
-          )
-        ) {
+          );
+        if (nailRisingFilterOn && !visibleHas()) {
           setNailRisingFilter(false);
+        }
+        if (nailAttentionFilterOn && !visibleHas()) {
+          setNailAttentionFilter(false);
         }
         setNailDrawerOpen(true);
         requestAnimationFrame(() => {
@@ -23575,6 +23590,13 @@
           }
         });
         nailHoldList.addEventListener("click", (event) => {
+          const jumpBtn = event.target.closest("[data-hold-jump]");
+          if (jumpBtn) {
+            const sym = jumpBtn.getAttribute("data-hold-jump");
+            void setNailHoldPopoverOpen(false);
+            openNailDrawerAtSymbol(sym);
+            return;
+          }
           const removeBtn = event.target.closest("[data-hold-remove]");
           if (removeBtn) {
             void removeNailHoldingSymbol(
