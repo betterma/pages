@@ -20082,7 +20082,7 @@
               nailSelectMode
                 ? ""
                 : `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "取消置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
-              `<button type="button" class="nail-name" data-nail-jump="${symbol}" title="跳到 K 线">${label}${tag}</button>`,
+              `<button type="button" class="nail-name" data-copy="${label}" title="点击复制">${label}${tag}</button>`,
               nailSelectMode
                 ? ""
                 : `<button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线" aria-label="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button>`,
@@ -23228,9 +23228,14 @@
             void openKlineZoom(zoomBtn.getAttribute("data-kline-zoom"));
             return;
           }
-          const jumpBtn = event.target.closest("[data-nail-jump]");
-          if (jumpBtn) {
-            jumpNailToSymbol(jumpBtn.getAttribute("data-nail-jump"));
+          // 钉子名点击：只复制名称（暂不跳回主页 K 线）
+          const nameBtn = event.target.closest(".nail-name[data-copy]");
+          if (nameBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            void copyName(
+              nameBtn.getAttribute("data-copy") || nameBtn.textContent,
+            );
           }
         });
         // 蒙蔽双击揭开暂时关闭；恢复时把 NAIL_BROWSE_MASK_ENABLED 改回 true 即可
