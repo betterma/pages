@@ -6809,6 +6809,13 @@
           </button>
           <button
             type="button"
+            id="nailBatchAttentionBtn"
+            title="追加「注意时 + 现价」到便签，保留原时间"
+          >
+            注意时
+          </button>
+          <button
+            type="button"
             class="is-danger"
             id="nailBatchDeleteBtn"
             title="删除选中的钉子"
@@ -16391,6 +16398,7 @@
         noteMarks,
         alertMark,
         deltaMark,
+        options,
       ) {
         const rect = canvas.getBoundingClientRect();
         const width = Math.max(1, Math.floor(rect.width));
@@ -16411,6 +16419,8 @@
         const notes = Array.isArray(noteMarks) ? noteMarks : [];
         const alertPrice = Number(alertMark && alertMark.price);
         const hasAlert = Number.isFinite(alertPrice) && alertPrice > 0;
+        // 钉子「注意时」筛选：超过注意线（便签水位）的部分染蓝。
+        const attentionBlue = !!(options && options.attentionBlue) && hasAlert;
         // 通知线：推送时价格；红蓝相对此线。缺省时用 openTime 那根收盘兜底。
         let notifyPrice = Number(deltaMark && deltaMark.notifyPrice);
         const deltaFromOpen = Number(deltaMark && deltaMark.fromOpenTime) || 0;
@@ -16482,7 +16492,9 @@
         if (hasAlert) {
           const y = yOf(alertPrice);
           ctx.save();
-          ctx.strokeStyle = "rgba(62, 207, 142, 0.7)";
+          ctx.strokeStyle = attentionBlue
+            ? "rgba(58, 127, 196, 0.85)"
+            : "rgba(62, 207, 142, 0.7)";
           ctx.lineWidth = 1;
           ctx.setLineDash([4, 3]);
           ctx.beginPath();
@@ -16512,8 +16524,14 @@
           const up = candle.close >= candle.open;
           const base = up ? "#8a9a96" : "#9a8e88";
           const inDelta = deltaFromIndex >= 0 && index >= deltaFromIndex;
+          const inAttention =
+            attentionBlue &&
+            alertFromIndex >= 0 &&
+            index >= alertFromIndex;
           // 通知线起不再染绿，只染蓝/红；绿仅保留在通知线之前。
+          // 「注意时」筛选开启时改染蓝，不再叠荧光绿。
           const useAlert =
+            !attentionBlue &&
             !inDelta &&
             hasAlert &&
             up &&
@@ -16521,7 +16539,7 @@
             index >= alertGreenRange.from &&
             index < alertGreenRange.until;
 
-          // 先灰底；通知线起按通知线染蓝/红；此前可叠荧光绿。
+          // 先灰底；注意时/通知线起再按水位或通知线叠色。
           strokeCandleWick(
             ctx,
             x,
@@ -16543,6 +16561,30 @@
             base,
             base,
           );
+
+          if (inAttention) {
+            strokeCandleWick(
+              ctx,
+              x,
+              candle.high,
+              candle.low,
+              alertPrice,
+              yOf,
+              base,
+              NAIL_DELTA_BLUE,
+            );
+            fillCandleBody(
+              ctx,
+              x,
+              bodyW,
+              candle.open,
+              candle.close,
+              alertPrice,
+              yOf,
+              base,
+              NAIL_DELTA_BLUE,
+            );
+          }
 
           if (inDelta) {
             const belowColor = deltaUp ? base : NAIL_DELTA_RED;
@@ -19558,6 +19600,7 @@
         const pinBtn = document.getElementById("nailBatchPinBtn");
         const unpinBtn = document.getElementById("nailBatchUnpinBtn");
         const notePriceBtn = document.getElementById("nailBatchNotePriceBtn");
+        const attentionBtn = document.getElementById("nailBatchAttentionBtn");
         const delBtn = document.getElementById("nailBatchDeleteBtn");
         const listEl = document.getElementById("nailList");
         const n = selectedNailSymbols.size;
@@ -19581,6 +19624,10 @@
         if (notePriceBtn) {
           notePriceBtn.disabled = n === 0 || busy;
           notePriceBtn.textContent = n > 0 ? `便签现价 (${n})` : "便签现价";
+        }
+        if (attentionBtn) {
+          attentionBtn.disabled = n === 0 || busy;
+          attentionBtn.textContent = n > 0 ? `注意时 (${n})` : "注意时";
         }
         if (delBtn) {
           delBtn.disabled = n === 0 || busy;
@@ -19673,6 +19720,91 @@
         } catch (error) {
           console.warn(error);
           showToast(error.message || "批量便签现价失败");
+        }
+      }
+
+      async function applyAttentionNotesToSelectedNails() {
+        const symbols = [...selectedNailSymbols];
+        if (!symbols.length) {
+          showToast("先选中要加注意时的钉子");
+          return;
+        }
+        if (nailSaving) {
+          showToast("钉子保存中…");
+          return;
+        }
+        try {
+          try {
+            await loadBinanceTicker();
+          } catch (error) {
+            console.warn("nail attention-note ticker refresh failed", error);
+          }
+          const updates = [];
+          let skipped = 0;
+          for (const symbol of symbols) {
+            const key = String(symbol || "")
+              .trim()
+              .toUpperCase();
+            if (!key) continue;
+            const current = (nailItems || []).find(
+              (item) => String(item.symbol || "").toUpperCase() === key,
+            );
+            if (!current) {
+              skipped += 1;
+              continue;
+            }
+            let text = String(current.note || "").trim();
+            const price = Number(marketMap[key]?.price);
+            const priceText =
+              Number.isFinite(price) && price > 0
+                ? formatPinPrice(price)
+                : "--";
+            const tag = `注意时 ${priceText}`;
+            if (!text.includes(tag)) {
+              text = `${text} ${tag}`.trim();
+            } else if (!nailNoteHasAttention(text)) {
+              text = `${text} 注意时`.trim();
+            }
+            text = text.slice(0, 60);
+            if (String(current.note || "").trim() === text) {
+              skipped += 1;
+              continue;
+            }
+            const hasExistingNote = !!String(current.note || "").trim();
+            // 保留原时间：已有便签沿用 noteAt；原本无便签才用此刻。
+            const noteAt = hasExistingNote
+              ? Number(current.noteAt) || 0
+              : Date.now();
+            updates.push({ key, text, noteAt });
+          }
+          if (!updates.length) {
+            showToast(
+              skipped
+                ? `无需更新（已含相同注意时 ${skipped}）`
+                : "没有可写的注意时便签",
+            );
+            return;
+          }
+          await persistNails(
+            (list) =>
+              updates.reduce(
+                (acc, row) =>
+                  WatchFavorites.setNailNote(acc, row.key, row.text, {
+                    noteAt: row.noteAt,
+                  }),
+                list,
+              ),
+            `Nail attention notes x${updates.length}`,
+            { loadingText: `注意时 ${updates.length}…` },
+          );
+          setNailSelectMode(false);
+          const parts = [`已追加注意时 ${updates.length} 个（保留原时间）`];
+          if (skipped > 0) parts.push(`掠过 ${skipped}`);
+          showToast(parts.join(" · "));
+          if (isNailDrawerOpen()) void paintNailKlines();
+        } catch (error) {
+          console.warn(error);
+          showToast(error.message || "批量注意时失败");
         }
       }
 
@@ -20144,6 +20276,8 @@
           pin ? pin.pinnedAt : null,
           notes,
           alertMark,
+          null,
+          { attentionBlue: !!nailAttentionFilterOn },
         );
         if (nailSortMode !== "order") applyNailListOrder();
         return true;
@@ -20611,6 +20745,8 @@
               pin ? pin.pinnedAt : null,
               notes,
               alertMark,
+              null,
+              { attentionBlue: !!nailAttentionFilterOn },
             );
           } catch (error) {
             if (error && error.name === "AbortError") return;
@@ -23457,6 +23593,14 @@
       if (nailBatchNotePriceBtn) {
         nailBatchNotePriceBtn.addEventListener("click", () => {
           void applyCurrentPriceNotesToSelectedNails();
+        });
+      }
+      const nailBatchAttentionBtn = document.getElementById(
+        "nailBatchAttentionBtn",
+      );
+      if (nailBatchAttentionBtn) {
+        nailBatchAttentionBtn.addEventListener("click", () => {
+          void applyAttentionNotesToSelectedNails();
         });
       }
       const nailBatchDeleteBtn = document.getElementById("nailBatchDeleteBtn");
