@@ -10987,6 +10987,7 @@
 
           renderNailHoldList();
           syncNailHoldLiveSwitches();
+          if (isNailDrawerOpen()) applyNailListOrder();
           if (!silent) {
             showToast(
               `已刷新 · ${symbols.length} 币 / 卖任务 ${(nailSellTasksState.tasks || []).length} / 买任务 ${(nailBuyTasksState.tasks || []).length}`,
@@ -18903,6 +18904,8 @@
               void paintNailKlines();
             });
           });
+          // 持有优先排序依赖余额；静默拉一次，回填后再重排。
+          void reloadNailHoldings({ silent: true });
           await refreshNailGreenNotices();
           if (nailGreenUnreadCount() > 0 && nailNoticeMode === "closed") {
             void openNailNoticeDrawer();
@@ -18919,6 +18922,7 @@
             void paintNailKlines();
           });
         });
+        void reloadNailHoldings({ silent: true });
         await refreshNailGreenNotices();
         if (nailGreenUnreadCount() > 0 && nailNoticeMode === "closed") {
           void openNailNoticeDrawer();
@@ -19929,6 +19933,10 @@
         renderNailDrawer();
       }
 
+      function nailSymbolIsHeld(symbol) {
+        return holdingsFreeQty(symbol) > 0;
+      }
+
       function nailDrawerVisibleItems() {
         const all = Array.isArray(nailItems) ? nailItems : [];
         const interval = CONFIG.KLINE_INTERVAL || "4h";
@@ -19973,6 +19981,12 @@
             return (a.order || 0) - (b.order || 0);
           });
         }
+        // 当前持有永远最前（稳定排序，组内保持上面规则 / 原 order），不论是否置顶。
+        items = items.slice().sort((a, b) => {
+          const ha = nailSymbolIsHeld(a && a.symbol) ? 0 : 1;
+          const hb = nailSymbolIsHeld(b && b.symbol) ? 0 : 1;
+          return ha - hb;
+        });
         return items;
       }
 
@@ -20097,16 +20111,15 @@
         else hideNailScrollPct(true);
       }
 
-      /** 展示排序下只挪 DOM，避免整表重绘打断已画好的 K 线。 */
+      /** 只挪 DOM 重排（持有优先 / 展示排序），避免整表重绘打断已画好的 K 线。 */
       function applyNailListOrder() {
-        if (nailSortMode === "order") return;
         const grid = document.querySelector("#nailList .nail-grid");
         if (!grid) return;
         nailDrawerVisibleItems().forEach((item) => {
           const key = String(item.symbol || "").toUpperCase();
           if (!key) return;
           const card = grid.querySelector(
-            `.nail-kcard[data-nail-symbol="${key}"]`,
+            `.nail-kcard[data-nail-symbol="${CSS.escape ? CSS.escape(key) : key}"]`,
           );
           if (card) grid.appendChild(card);
         });
@@ -20135,10 +20148,10 @@
         if (meta) {
           const sortHint =
             nailSortMode === "alertGreen"
-              ? "置顶优先 · 绿色面积排序"
+              ? "持有优先 · 置顶 · 绿色面积"
               : nailSortMode === "change24h"
-                ? "置顶优先 · 24h涨幅排序"
-                : "置顶 / 长按拖动排序";
+                ? "持有优先 · 置顶 · 24h涨幅"
+                : "持有优先 · 置顶 / 长按拖动";
           if (!total) {
             meta.textContent = `复制名称后新增 · ${sortHint}`;
           } else if (nailAttentionFilterOn && nailRisingFilterOn) {
