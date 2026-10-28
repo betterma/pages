@@ -6424,7 +6424,7 @@
           <div class="nail-head-mainline">
           <div class="nail-head-title-block">
             <div class="nail-head-title-line">
-              <h3>钉子</h3>
+              <h3 title="双击滚动到顶部">钉子</h3>
               <button
                 type="button"
                 class="nail-settings-btn"
@@ -23526,6 +23526,15 @@
                 radio.disabled = false;
               });
           }
+        });
+      }
+      const nailTitle = document.querySelector("#nailDrawer .nail-head h3");
+      if (nailTitle) {
+        nailTitle.addEventListener("dblclick", () => {
+          document.getElementById("nailList")?.scrollTo({
+            top: 0,
+            behavior: "smooth",
+          });
         });
       }
       const nailSettingsBtn = document.getElementById("nailSettingsBtn");
