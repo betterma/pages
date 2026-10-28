@@ -23528,9 +23528,16 @@
           }
         });
       }
-      const nailTitle = document.querySelector("#nailDrawer .nail-head h3");
-      if (nailTitle) {
-        nailTitle.addEventListener("dblclick", () => {
+      const nailHead = document.querySelector("#nailDrawer .nail-head");
+      if (nailHead) {
+        nailHead.addEventListener("dblclick", (event) => {
+          if (
+            event.target.closest(
+              "button, input, textarea, select, a, .nail-settings-popover",
+            )
+          ) {
+            return;
+          }
           document.getElementById("nailList")?.scrollTo({
             top: 0,
             behavior: "smooth",
