@@ -1244,25 +1244,50 @@
         });
       }
 
-      function isLocalDevHost() {
-        const host = String(location.hostname || "").toLowerCase();
-        return (
-          host === "localhost" ||
-          host === "127.0.0.1" ||
-          host === "[::1]" ||
-          host.endsWith(".local")
-        );
+      function okxGithubToken() {
+        try {
+          if (
+            window.GithubTokenVault &&
+            typeof window.GithubTokenVault.getToken === "function"
+          ) {
+            return String(window.GithubTokenVault.getToken() || "").trim();
+          }
+        } catch (error) {
+          /* ignore */
+        }
+        return "";
       }
 
-      async function loadCandlesCacheFromRaw(signal) {
-        const token =
-          window.GithubTokenVault &&
-          typeof window.GithubTokenVault.getToken === "function"
-            ? window.GithubTokenVault.getToken()
-            : "";
-        if (!token) {
-          throw new Error("缺少 GitHub Token，无法读 raw 缓存");
+      /** Contents API 用 raw 媒体类型，避免 ~900KB 再 base64 放大导致 Failed to fetch。 */
+      async function loadCandlesCacheFromGithubRawMedia(signal) {
+        const token = okxGithubToken();
+        if (!token) throw new Error("缺少 GitHub Token");
+        const url = `https://api.github.com/repos/${CONFIG.GITHUB_REPO}/contents/${CONFIG.CANDLES_PATH}?ref=main&t=${Date.now()}`;
+        const response = await fetch(url, {
+          signal,
+          cache: "no-store",
+          headers: {
+            Accept: "application/vnd.github.raw+json",
+            Authorization: `Bearer ${token}`,
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(
+            `GitHub raw ${response.status} ${text.slice(0, 120)}`,
+          );
         }
+        const data = await response.json();
+        if (!(data && data.updatedAt)) {
+          throw new Error("GitHub raw 无 updatedAt");
+        }
+        return parseCandlesPayload(data, "github");
+      }
+
+      async function loadCandlesCacheFromRawCdn(signal) {
+        const token = okxGithubToken();
+        if (!token) throw new Error("缺少 GitHub Token");
         const url = `https://raw.githubusercontent.com/${CONFIG.GITHUB_REPO}/main/${CONFIG.CANDLES_PATH}?t=${Date.now()}`;
         const response = await fetch(url, {
           signal,
@@ -1273,80 +1298,64 @@
           },
         });
         if (!response.ok) {
-          throw new Error(`raw candles-cache ${response.status}`);
+          throw new Error(`raw.githubusercontent ${response.status}`);
         }
         const data = await response.json();
         if (!(data && data.updatedAt)) {
-          throw new Error("raw candles-cache 无 updatedAt");
+          throw new Error("raw.githubusercontent 无 updatedAt");
         }
         return parseCandlesPayload(data, "github-raw");
       }
 
+      async function loadCandlesCacheFromSite(signal) {
+        const response = await fetch(`./candles-cache.json?t=${Date.now()}`, {
+          signal,
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          throw new Error(`站点缓存 ${response.status}`);
+        }
+        const data = await response.json();
+        if (!(data && data.updatedAt)) {
+          throw new Error("站点缓存无 updatedAt");
+        }
+        return parseCandlesPayload(data, "local");
+      }
+
       async function loadCandlesCache(signal) {
-        let lastError = null;
-        // 1) GitHub Contents API（带重试）— 始终拿 main 最新
-        for (let attempt = 0; attempt < 3; attempt += 1) {
-          try {
+        const loaders = [
+          loadCandlesCacheFromGithubRawMedia,
+          async (sig) => {
             const file = await OkxFavorites.fetchJsonFile({
               repo: CONFIG.GITHUB_REPO,
               path: CONFIG.CANDLES_PATH,
             });
-            if (signal && signal.aborted) {
+            if (sig && sig.aborted) {
               throw new DOMException("Aborted", "AbortError");
             }
-            if (file && file.data && file.data.updatedAt) {
-              return parseCandlesPayload(file.data, "github");
+            if (!(file && file.data && file.data.updatedAt)) {
+              throw new Error("GitHub Contents 返回空缓存");
             }
-            lastError = new Error("GitHub API 返回空缓存");
-          } catch (error) {
-            if (error && error.name === "AbortError") throw error;
-            lastError = error;
-            console.warn(
-              `GitHub candles-cache attempt ${attempt + 1} failed`,
-              error,
-            );
-            await new Promise((resolve) =>
-              setTimeout(resolve, 250 * (attempt + 1)),
-            );
-          }
-        }
-
-        // 2) raw.githubusercontent（同样带 Token + 防缓存），避开 Pages CDN
-        try {
-          return await loadCandlesCacheFromRaw(signal);
-        } catch (error) {
-          if (error && error.name === "AbortError") throw error;
-          lastError = error;
-          console.warn("raw candles-cache failed", error);
-        }
-
-        // 3) 仅本机开发才允许读站点静态文件（线上 CDN 容易卡旧版，禁止当正式数据）
-        if (isLocalDevHost()) {
+            return parseCandlesPayload(file.data, "github");
+          },
+          loadCandlesCacheFromRawCdn,
+          loadCandlesCacheFromSite,
+        ];
+        let lastError = null;
+        for (let i = 0; i < loaders.length; i += 1) {
           try {
-            const response = await fetch(
-              `./candles-cache.json?t=${Date.now()}`,
-              {
-                signal,
-                cache: "no-store",
-              },
-            );
-            if (response.ok) {
-              const data = await response.json();
-              if (data && data.updatedAt) {
-                return parseCandlesPayload(data, "local");
-              }
-            }
+            const cache = await loaders[i](signal);
+            if (cache && cache.updatedAt) return cache;
           } catch (error) {
             if (error && error.name === "AbortError") throw error;
             lastError = error;
+            console.warn(`candles-cache loader ${i + 1} failed`, error);
           }
         }
-
         throw new Error(
           (lastError && lastError.message
             ? `${lastError.message} · `
-            : "") +
-            "读不到最新 GitHub K 线缓存（已跳过站点静态兜底，避免 CDN 旧文件）",
+            : "") + "读不到 GitHub K 线缓存",
         );
       }
 
@@ -1720,7 +1729,9 @@
             cache.source === "github-raw"
               ? " · raw"
               : cache.source === "local"
-                ? " · 本地开发文件"
+                ? ageMin != null && ageMin >= 90
+                  ? " · 站点文件(可能过期，GitHub 暂不可达)"
+                  : " · 站点文件"
                 : "";
           setStatus(
             true,
