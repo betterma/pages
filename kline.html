@@ -15862,7 +15862,7 @@
           }));
       }
 
-      /** 取便签中从左到右第一个数字作为价格，后续数字仅作备注文本。 */
+      /** 取便签中从左到右第一个数字作为价格（原便签水位 / 荧光绿），后续数字仅作备注。 */
       function parseNailNoteAlertPrice(note) {
         const text = String(note || "").trim();
         if (!text) return null;
@@ -15872,7 +15872,19 @@
         return Number.isFinite(n) && n > 0 ? n : null;
       }
 
-      function nailAlertMarkForSymbol(symbol) {
+      /** 「注意时」后的价格（注意线 / 染蓝水位）；没有则返回 null。 */
+      function parseNailNoteAttentionPrice(note) {
+        const text = String(note || "").trim();
+        if (!text || !text.includes("注意时")) return null;
+        const match = text.match(
+          /注意时\s*(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/,
+        );
+        if (!match) return null;
+        const n = Number(match[1]);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      }
+
+      function nailAlertMarkForSymbol(symbol, options) {
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
@@ -15881,7 +15893,14 @@
           (item) => String(item.symbol || "").toUpperCase() === key,
         );
         if (!nail) return null;
-        const price = parseNailNoteAlertPrice(nail.note);
+        const preferAttention = !!(options && options.preferAttention);
+        const attentionPrice = preferAttention
+          ? parseNailNoteAttentionPrice(nail.note)
+          : null;
+        const price =
+          Number.isFinite(attentionPrice) && attentionPrice > 0
+            ? attentionPrice
+            : parseNailNoteAlertPrice(nail.note);
         if (!Number.isFinite(price) || price <= 0) return null;
         return {
           price,
@@ -20273,14 +20292,18 @@
         const candles = await fetchKlines(key, chartInterval());
         const pin = pinItemBySymbol(key);
         const notes = notesMarksForSymbol(key);
-        const alertMark = nailAlertMarkForSymbol(key);
+        const attentionBlue = !!nailAttentionFilterOn;
+        const alertMark = nailAlertMarkForSymbol(key, {
+          preferAttention: attentionBlue,
+        });
         rememberNailAlertGreenScore(
           key,
           canvas,
           candles,
           pin ? pin.pinPrice : null,
           notes,
-          alertMark,
+          // 绿色面积仍按原便签第一价，不受注意时筛选影响
+          nailAlertMarkForSymbol(key),
         );
         drawKline(
           canvas,
@@ -20290,7 +20313,7 @@
           notes,
           alertMark,
           null,
-          { attentionBlue: !!nailAttentionFilterOn },
+          { attentionBlue },
         );
         if (nailSortMode !== "order") applyNailListOrder();
         return true;
@@ -20742,14 +20765,18 @@
             if (nailKlineAbort !== controller) return;
             const pin = pinItemBySymbol(symbol);
             const notes = notesMarksForSymbol(symbol);
-            const alertMark = nailAlertMarkForSymbol(symbol);
+            const attentionBlue = !!nailAttentionFilterOn;
+            const alertMark = nailAlertMarkForSymbol(symbol, {
+              preferAttention: attentionBlue,
+            });
             rememberNailAlertGreenScore(
               symbol,
               canvas,
               candles,
               pin ? pin.pinPrice : null,
               notes,
-              alertMark,
+              // 绿色面积仍按原便签第一价，不受注意时筛选影响
+              nailAlertMarkForSymbol(symbol),
             );
             drawKline(
               canvas,
@@ -20759,7 +20786,7 @@
               notes,
               alertMark,
               null,
-              { attentionBlue: !!nailAttentionFilterOn },
+              { attentionBlue },
             );
           } catch (error) {
             if (error && error.name === "AbortError") return;
