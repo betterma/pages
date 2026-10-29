@@ -18056,7 +18056,12 @@
           const btn = document.querySelector('#cardFocusBar [data-focus-action="notice-select"]');
           if (btn) btn.textContent = nailNoticeSelectMode ? "完成多选 (" + selectedNailNoticeSymbols.size + ")" : "多选";
           const list = document.getElementById("nailNoticeList");
-          if (list) list.classList.toggle("is-selecting", nailNoticeSelectMode);
+          if (list) {
+            list.classList.toggle("is-selecting", nailNoticeSelectMode);
+            if (!nailNoticeSelectMode) {
+              list.querySelectorAll(".nail-notice-card.is-selected").forEach((card) => card.classList.remove("is-selected"));
+            }
+          }
           showToast(nailNoticeSelectMode ? "多选已开启，点击通知卡片选择币种" : "已退出多选");
           return;
         }
