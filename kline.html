@@ -18737,10 +18737,51 @@
         }
       }
 
+      // 刷新通知名单前记录正在阅读的卡片；列表整体重绘后恢复锚点，避免跳回顶部。
+      function captureNailNoticeScrollAnchor() {
+        const listEl = document.getElementById("nailNoticeList");
+        if (!listEl) return null;
+        const listRect = listEl.getBoundingClientRect();
+        const cards = [...listEl.querySelectorAll(".nail-notice-card[data-notice-id]")];
+        const anchor = cards.find((card) => {
+          const rect = card.getBoundingClientRect();
+          return rect.bottom > listRect.top && rect.top < listRect.bottom;
+        });
+        return {
+          scrollTop: listEl.scrollTop,
+          id: anchor ? anchor.getAttribute("data-notice-id") : "",
+          offset: anchor ? anchor.getBoundingClientRect().top - listRect.top : 0,
+        };
+      }
+
+      function restoreNailNoticeScrollAnchor(anchor) {
+        const listEl = document.getElementById("nailNoticeList");
+        if (!listEl || !anchor) return;
+        requestAnimationFrame(() => {
+          if (anchor.id) {
+            const card = [...listEl.querySelectorAll(".nail-notice-card[data-notice-id]")].find(
+              (item) => item.getAttribute("data-notice-id") === anchor.id,
+            );
+            if (card) {
+              const listRect = listEl.getBoundingClientRect();
+              const currentOffset = card.getBoundingClientRect().top - listRect.top;
+              listEl.scrollTop += currentOffset - anchor.offset;
+              return;
+            }
+          }
+          listEl.scrollTop = Math.min(
+            anchor.scrollTop,
+            Math.max(0, listEl.scrollHeight - listEl.clientHeight),
+          );
+        });
+      }
+
       async function reloadNailNoticeList(options) {
         const opts = options || {};
+        const scrollAnchor = captureNailNoticeScrollAnchor();
         await refreshNailGreenNotices();
         renderNailNoticeList();
+        restoreNailNoticeScrollAnchor(scrollAnchor);
         if (opts.toast) showToast(opts.toast);
         requestAnimationFrame(() => {
           updateNailNoticeScrollPct({ flash: false });
@@ -18813,6 +18854,48 @@
         await reloadNailNoticeList();
       }
 
+      async function fetchNailNoticeLatestPrices(symbols) {
+        const keys = [...new Set((symbols || []).map((symbol) =>
+          String(symbol || "").trim().toUpperCase()
+        ).filter(Boolean))];
+        const prices = new Map();
+        if (!keys.length) return prices;
+        // 批量取最新成交价，避免每张通知卡单独请求；分批控制 URL 长度和接口负载。
+        for (let start = 0; start < keys.length; start += 50) {
+          const batch = keys.slice(start, start + 50);
+          const query = encodeURIComponent(JSON.stringify(batch));
+          const endpoints = [
+            `https://data-api.binance.vision/api/v3/ticker/price?symbols=${query}`,
+            `https://api.binance.com/api/v3/ticker/price?symbols=${query}`,
+          ];
+          let lastError = null;
+          for (const url of endpoints) {
+            try {
+              const response = await fetch(url, { cache: "no-store" });
+              if (!response.ok) {
+                lastError = await errorFromHttpResponse(response, "币安最新价格");
+                continue;
+              }
+              const payload = await response.json();
+              const rows = Array.isArray(payload) ? payload : [payload];
+              rows.forEach((row) => {
+                const symbol = String(row && row.symbol || "").toUpperCase();
+                const price = Number(row && row.price);
+                if (symbol && Number.isFinite(price) && price > 0) {
+                  prices.set(symbol, price);
+                }
+              });
+              lastError = null;
+              break;
+            } catch (error) {
+              lastError = error;
+            }
+          }
+          if (lastError) console.warn("批量获取通知现价失败", lastError);
+        }
+        return prices;
+      }
+
       async function paintNailNoticeCharts(options) {
         const onlySymbol = String(options && options.symbol || "")
           .trim()
@@ -18840,6 +18923,9 @@
         const deBlue =
           nailNoticeDeBlueEnabled && nailNoticeDeltaFilter === "up";
         try {
+          const latestPrices = await fetchNailNoticeLatestPrices(
+            canvases.map((canvas) => canvas.getAttribute("data-notice-chart")),
+          );
           const paintOne = async (canvas) => {
             const symbol = String(
               canvas.getAttribute("data-notice-chart") || "",
@@ -18864,25 +18950,31 @@
                   notifyPrice = Number(candles[atIdx].close) || 0;
                 }
               }
-              const latestClose =
+              const klineClose =
                 candles.length > 0
                   ? Number(candles[candles.length - 1].close)
                   : NaN;
+              // 现价优先使用币安最新成交价；批量行情暂时缺失时才回退到 K 线 close。
+              const latestPrice = latestPrices.get(symbol);
+              const currentPrice =
+                Number.isFinite(latestPrice) && latestPrice > 0
+                  ? latestPrice
+                  : klineClose;
               const liveEl = canvas
                 .closest(".nail-notice-card")
                 ?.querySelector("[data-notice-live]");
               if (
                 liveEl &&
-                Number.isFinite(latestClose) &&
-                latestClose > 0
+                Number.isFinite(currentPrice) &&
+                currentPrice > 0
               ) {
-                liveEl.textContent = formatPinPrice(latestClose);
+                liveEl.textContent = formatPinPrice(currentPrice);
               }
               const deltaEl = canvas
                 .closest(".nail-notice-card")
                 ?.querySelector("[data-notice-delta]");
               const card = canvas.closest(".nail-notice-card");
-              const delta = formatNoticeDeltaPct(notifyPrice, latestClose);
+              const delta = formatNoticeDeltaPct(notifyPrice, currentPrice);
               if (deltaEl) {
                 if (delta) {
                   deltaEl.textContent = delta.text;
