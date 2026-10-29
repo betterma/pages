@@ -16603,30 +16603,6 @@
             base,
           );
 
-          if (inAttention) {
-            strokeCandleWick(
-              ctx,
-              x,
-              candle.high,
-              candle.low,
-              alertPrice,
-              yOf,
-              base,
-              NAIL_DELTA_BLUE,
-            );
-            fillCandleBody(
-              ctx,
-              x,
-              bodyW,
-              candle.open,
-              candle.close,
-              alertPrice,
-              yOf,
-              base,
-              NAIL_DELTA_BLUE,
-            );
-          }
-
           if (inDelta) {
             const belowColor = deltaUp ? base : NAIL_DELTA_RED;
             const aboveColor = deltaUp ? NAIL_DELTA_BLUE : base;
