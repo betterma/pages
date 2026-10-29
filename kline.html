@@ -3165,6 +3165,7 @@
         flex: 1 1 auto;
         min-height: 0;
         overflow: auto;
+        overflow-anchor: none;
         padding: 8px 12px 16px;
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -18757,7 +18758,11 @@
       function restoreNailNoticeScrollAnchor(anchor) {
         const listEl = document.getElementById("nailNoticeList");
         if (!listEl || !anchor) return;
-        requestAnimationFrame(() => {
+        // 列表是独立滚动容器；禁用浏览器自动锚定，避免与手动恢复互相覆盖。
+        listEl.style.overflowAnchor = "none";
+        const restore = () => {
+          if (!listEl.isConnected) return;
+          let restoredByAnchor = false;
           if (anchor.id) {
             const card = [...listEl.querySelectorAll(".nail-notice-card[data-notice-id]")].find(
               (item) => item.getAttribute("data-notice-id") === anchor.id,
@@ -18766,13 +18771,21 @@
               const listRect = listEl.getBoundingClientRect();
               const currentOffset = card.getBoundingClientRect().top - listRect.top;
               listEl.scrollTop += currentOffset - anchor.offset;
-              return;
+              restoredByAnchor = true;
             }
           }
-          listEl.scrollTop = Math.min(
-            anchor.scrollTop,
-            Math.max(0, listEl.scrollHeight - listEl.clientHeight),
-          );
+          if (!restoredByAnchor) {
+            listEl.scrollTop = Math.min(
+              anchor.scrollTop,
+              Math.max(0, listEl.scrollHeight - listEl.clientHeight),
+            );
+          }
+        };
+        // innerHTML 替换、抽屉布局和首帧绘图可能分属不同帧，连续校正两次。
+        restore();
+        requestAnimationFrame(() => {
+          restore();
+          requestAnimationFrame(restore);
         });
       }
 
