@@ -19094,6 +19094,28 @@
               .toUpperCase() === key,
         );
         if (!canvas) return false;
+
+        // 先独立刷新并写入现价，避免 K 线绘图正忙时被排队逻辑延后，
+        // 造成底部「刷新」看似成功、卡片现价却仍停留在旧值。
+        const prices = await fetchNailNoticeLatestPrices([key]);
+        const latestPrice = prices.get(key);
+        const card = canvas.closest(".nail-notice-card");
+        if (Number.isFinite(latestPrice) && latestPrice > 0 && card) {
+          const liveEl = card.querySelector("[data-notice-live]");
+          if (liveEl) liveEl.textContent = formatPinPrice(latestPrice);
+          const notifyPrice = Number(canvas.getAttribute("data-notice-notify"));
+          const deltaEl = card.querySelector("[data-notice-delta]");
+          const delta = formatNoticeDeltaPct(notifyPrice, latestPrice);
+          if (deltaEl) {
+            deltaEl.textContent = delta ? delta.text : "";
+            deltaEl.classList.toggle("is-up", !!delta && delta.up);
+            deltaEl.classList.toggle("is-down", !!delta && !delta.up);
+          }
+          card.setAttribute("data-notice-dir", delta ? (delta.up ? "up" : "down") : "flat");
+          applyNailNoticeDeltaFilter();
+        }
+
+        // 现价单独请求不依赖 K 线缓存；图表则清缓存后重取最新 K 线。
         klineFetchCache.delete(`${key}|4h|18`);
         await paintNailNoticeCharts({ symbol: key });
         return true;
