@@ -3180,6 +3180,8 @@
         color: var(--secondary);
         font-size: 13px;
       }
+      .nail-notice-card.is-selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+      #nailNoticeList.is-selecting .nail-notice-card { cursor: pointer; }
       .nail-notice-card {
         border: 0.5px solid var(--separator);
         border-radius: 10px;
@@ -4280,7 +4282,7 @@
         z-index: 140;
         width: min(340px, calc(100vw - 16px));
       }
-      .card-focus-bar.is-notice-scope [data-focus-action]:not([data-focus-action="refresh"]) {
+      .card-focus-bar.is-notice-scope [data-focus-action]:not([data-focus-action="refresh"]):not([data-focus-action="notice-pin"]):not([data-focus-action="notice-select"]) {
         display: none;
       }
       .card-focus-bar.is-nail-scope [data-focus-action="nail"],
@@ -7216,6 +7218,8 @@
       <button type="button" data-focus-action="nail">钉</button>
       <button type="button" data-focus-action="zoom">放大</button>
       <button type="button" data-focus-action="refresh">刷新</button>
+      <button type="button" data-focus-action="notice-pin">置顶</button>
+      <button type="button" data-focus-action="notice-select">多选</button>
       <button type="button" data-focus-action="nail-note">便签</button>
       <button type="button" data-focus-action="nail-calc">计算</button>
       <button type="button" class="is-primary" data-focus-action="more">
@@ -18101,6 +18105,20 @@
         const card = focusCardEl(symbol);
         const activeBtn =
           bar && bar.querySelector('[data-focus-action="' + action + '"]');
+        if (focusActionScope === "notice" && action === "notice-select") {
+          nailNoticeSelectMode = !nailNoticeSelectMode;
+          if (!nailNoticeSelectMode) selectedNailNoticeSymbols.clear();
+          const btn = document.querySelector('#cardFocusBar [data-focus-action="notice-select"]');
+          if (btn) btn.textContent = nailNoticeSelectMode ? "完成多选 (" + selectedNailNoticeSymbols.size + ")" : "多选";
+          const list = document.getElementById("nailNoticeList");
+          if (list) list.classList.toggle("is-selecting", nailNoticeSelectMode);
+          showToast(nailNoticeSelectMode ? "多选已开启，点击通知卡片选择币种" : "已退出多选");
+          return;
+        }
+        if (focusActionScope === "notice" && action === "notice-pin") {
+          await pinSelectedNailNotices();
+          return;
+        }
         if (action === "more") {
           if (!card) {
             showToast("当前列表找不到该币卡片");
@@ -18414,6 +18432,8 @@
       let nailGreenNoticesReadAt = 0;
       // 最近一次实际渲染到通知列表的数据签名；行情轮询时若名单没变，不重建 DOM。
       let nailNoticeRenderedSignature = "";
+      let nailNoticeSelectMode = false;
+      const selectedNailNoticeSymbols = new Set();
       let nailNoticeMode = "closed"; // closed | open
       const NAIL_NOTICE_AUTO_REFRESH_KEY = "kline-nail-notice-auto-refresh-v1";
       const NAIL_NOTICE_AUTO_REFRESH_MS = 10 * 1000;
@@ -18649,7 +18669,7 @@
             const kind =
               item.kind === "首绿" || item.kind === "续绿" ? item.kind : "";
             return [
-              `<article class="nail-notice-card" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}">`,
+              `<article class="nail-notice-card${selectedNailNoticeSymbols.has(String(item.symbol || "").toUpperCase()) ? " is-selected" : ""}" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}">`,
               `<div class="nail-notice-card-top">`,
               `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}${kind ? ` · ${escapeHtml(kind)}` : ""}</button>`,
               `<span class="nail-notice-card-stamps">${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
@@ -18666,6 +18686,12 @@
           .join("");
         listEl.querySelectorAll("[data-notice-jump]").forEach((btn) => {
           btn.addEventListener("click", (event) => {
+            if (nailNoticeSelectMode) {
+              event.preventDefault();
+              event.stopPropagation();
+              toggleNailNoticeSelection(btn.getAttribute("data-notice-jump"));
+              return;
+            }
             event.preventDefault();
             event.stopPropagation();
             jumpNailNoticeToSymbol(btn.getAttribute("data-notice-jump"));
@@ -18682,6 +18708,43 @@
         syncNailNoticeDeltaFilterUi();
         applyNailNoticeDeltaFilter();
         void paintNailNoticeCharts();
+      }
+
+      function toggleNailNoticeSelection(symbol) {
+        const key = String(symbol || "").trim().toUpperCase();
+        if (!key) return;
+        if (selectedNailNoticeSymbols.has(key)) selectedNailNoticeSymbols.delete(key);
+        else selectedNailNoticeSymbols.add(key);
+        const list = document.getElementById("nailNoticeList");
+        if (list) list.querySelectorAll(".nail-notice-card[data-notice-symbol]").forEach((card) => {
+          card.classList.toggle("is-selected", selectedNailNoticeSymbols.has(String(card.dataset.noticeSymbol || "").toUpperCase()));
+        });
+        const btn = document.querySelector('#cardFocusBar [data-focus-action="notice-select"]');
+        if (btn) btn.textContent = nailNoticeSelectMode ? "完成多选 (" + selectedNailNoticeSymbols.size + ")" : "多选";
+      }
+
+      async function pinSelectedNailNotices() {
+        const symbols = nailNoticeSelectMode
+          ? [...selectedNailNoticeSymbols]
+          : (focusActionSymbol ? [focusActionSymbol] : []);
+        if (!symbols.length) { showToast("先选中要置顶的通知币种"); return; }
+        try {
+          await addFreshNailsWithPriceNotes(symbols, {
+            emptyText: "先选中要置顶的通知币种",
+            message: "Pin notice nails x" + symbols.length,
+            loadingText: "置顶到钉子…",
+          });
+          selectedNailNoticeSymbols.clear();
+          nailNoticeSelectMode = false;
+          const list = document.getElementById("nailNoticeList");
+          if (list) list.querySelectorAll(".nail-notice-card.is-selected").forEach((card) => card.classList.remove("is-selected"));
+          const btn = document.querySelector('#cardFocusBar [data-focus-action="notice-select"]');
+          if (btn) btn.textContent = "多选";
+          if (list) list.classList.remove("is-selecting");
+        } catch (error) {
+          console.error(error);
+          showToast(error.message || "置顶到钉子失败");
+        }
       }
 
       function formatNoticeDeltaPct(notifyPrice, latestClose) {
