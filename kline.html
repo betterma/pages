@@ -2372,11 +2372,6 @@
         height: 16px;
         display: block;
       }
-      .nail-head-actions #nailAttentionFilterBtn.is-active {
-        border-color: color-mix(in srgb, #c45c26 45%, transparent);
-        background: color-mix(in srgb, #c45c26 16%, transparent);
-        color: #c45c26;
-      }
       .nail-head-primary-actions {
         display: flex;
         align-items: center;
@@ -6578,15 +6573,6 @@
                 </svg>
                 持有
               </button>
-              <button
-                type="button"
-                class="nail-notice-entry"
-                id="nailAttentionFilterBtn"
-                aria-pressed="false"
-                title="只显示便签含「注意时」的钉子"
-              >
-                注意时
-              </button>
             </div>
           </div>
           <div class="nail-auto-pin-popover" id="nailAutoPinPopover" hidden>
@@ -6858,13 +6844,6 @@
             title="以当前现价写入便签（荧光绿从此刻起算）"
           >
             便签现价
-          </button>
-          <button
-            type="button"
-            id="nailBatchAttentionBtn"
-            title="追加「注意时 + 现价」到便签，保留原时间"
-          >
-            注意时
           </button>
           <button
             type="button"
@@ -7306,10 +7285,6 @@
             按照此刻时间
           </label>
         </fieldset>
-        <label class="nail-note-attention-opt">
-          <input type="checkbox" id="nailNoteAttentionCheck" />
-          注意时（保存时追加「注意时 + 现价」）
-        </label>
         <div class="nail-note-editor-actions">
           <button type="button" id="nailNoteEditorCancel">取消</button>
           <button type="submit" id="nailNoteEditorSave" class="is-primary">
@@ -7570,7 +7545,6 @@
       const selectedNailSymbols = new Set();
       const NAIL_RISING_FILTER_KEY = "kline-nail-rising-filter-v1";
       let nailRisingFilterOn = true;
-      let nailAttentionFilterOn = false;
       try {
         const savedNailRising = localStorage.getItem(NAIL_RISING_FILTER_KEY);
         if (savedNailRising === "0") nailRisingFilterOn = false;
@@ -15948,18 +15922,6 @@
         return Number.isFinite(n) && n > 0 ? n : null;
       }
 
-      /** 「注意时」后的价格（注意线 / 染蓝水位）；没有则返回 null。 */
-      function parseNailNoteAttentionPrice(note) {
-        const text = String(note || "").trim();
-        if (!text || !text.includes("注意时")) return null;
-        const match = text.match(
-          /注意时\s*(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/,
-        );
-        if (!match) return null;
-        const n = Number(match[1]);
-        return Number.isFinite(n) && n > 0 ? n : null;
-      }
-
       function nailAlertMarkForSymbol(symbol, options) {
         const key = String(symbol || "")
           .trim()
@@ -15969,14 +15931,7 @@
           (item) => String(item.symbol || "").toUpperCase() === key,
         );
         if (!nail) return null;
-        const preferAttention = !!(options && options.preferAttention);
-        const attentionPrice = preferAttention
-          ? parseNailNoteAttentionPrice(nail.note)
-          : null;
-        const price =
-          Number.isFinite(attentionPrice) && attentionPrice > 0
-            ? attentionPrice
-            : parseNailNoteAlertPrice(nail.note);
+        const price = parseNailNoteAlertPrice(nail.note);
         if (!Number.isFinite(price) || price <= 0) return null;
         return {
           price,
@@ -16515,8 +16470,7 @@
         const notes = Array.isArray(noteMarks) ? noteMarks : [];
         const alertPrice = Number(alertMark && alertMark.price);
         const hasAlert = Number.isFinite(alertPrice) && alertPrice > 0;
-        // 钉子「注意时」筛选：超过注意线（便签水位）的部分染蓝。
-        const attentionBlue = !!(options && options.attentionBlue) && hasAlert;
+        const attentionBlue = false;
         // 通知线：推送时价格；红蓝相对此线。缺省时用 openTime 那根收盘兜底。
         let notifyPrice = Number(deltaMark && deltaMark.notifyPrice);
         const deltaFromOpen = Number(deltaMark && deltaMark.fromOpenTime) || 0;
@@ -16625,7 +16579,6 @@
             alertFromIndex >= 0 &&
             index >= alertFromIndex;
           // 通知线起不再染绿，只染蓝/红；绿仅保留在通知线之前。
-          // 「注意时」筛选开启时改染蓝，不再叠荧光绿。
           const useAlert =
             !attentionBlue &&
             !inDelta &&
@@ -19729,9 +19682,6 @@
         if (nailRisingFilterOn && !visibleHas()) {
           setNailRisingFilter(false);
         }
-        if (nailAttentionFilterOn && !visibleHas()) {
-          setNailAttentionFilter(false);
-        }
         setNailDrawerOpen(true);
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
@@ -20064,7 +20014,6 @@
         const pinBtn = document.getElementById("nailBatchPinBtn");
         const unpinBtn = document.getElementById("nailBatchUnpinBtn");
         const notePriceBtn = document.getElementById("nailBatchNotePriceBtn");
-        const attentionBtn = document.getElementById("nailBatchAttentionBtn");
         const delBtn = document.getElementById("nailBatchDeleteBtn");
         const listEl = document.getElementById("nailList");
         const n = selectedNailSymbols.size;
@@ -20088,10 +20037,6 @@
         if (notePriceBtn) {
           notePriceBtn.disabled = n === 0 || busy;
           notePriceBtn.textContent = n > 0 ? `便签现价 (${n})` : "便签现价";
-        }
-        if (attentionBtn) {
-          attentionBtn.disabled = n === 0 || busy;
-          attentionBtn.textContent = n > 0 ? `注意时 (${n})` : "注意时";
         }
         if (delBtn) {
           delBtn.disabled = n === 0 || busy;
@@ -20184,91 +20129,6 @@
         } catch (error) {
           console.warn(error);
           showToast(error.message || "批量便签现价失败");
-        }
-      }
-
-      async function applyAttentionNotesToSelectedNails() {
-        const symbols = [...selectedNailSymbols];
-        if (!symbols.length) {
-          showToast("先选中要加注意时的钉子");
-          return;
-        }
-        if (nailSaving) {
-          showToast("钉子保存中…");
-          return;
-        }
-        try {
-          try {
-            await loadBinanceTicker();
-          } catch (error) {
-            console.warn("nail attention-note ticker refresh failed", error);
-          }
-          const updates = [];
-          let skipped = 0;
-          for (const symbol of symbols) {
-            const key = String(symbol || "")
-              .trim()
-              .toUpperCase();
-            if (!key) continue;
-            const current = (nailItems || []).find(
-              (item) => String(item.symbol || "").toUpperCase() === key,
-            );
-            if (!current) {
-              skipped += 1;
-              continue;
-            }
-            let text = String(current.note || "").trim();
-            const price = Number(marketMap[key]?.price);
-            const priceText =
-              Number.isFinite(price) && price > 0
-                ? formatPinPrice(price)
-                : "--";
-            const tag = `注意时 ${priceText}`;
-            if (!text.includes(tag)) {
-              text = `${text} ${tag}`.trim();
-            } else if (!nailNoteHasAttention(text)) {
-              text = `${text} 注意时`.trim();
-            }
-            text = text.slice(0, 60);
-            if (String(current.note || "").trim() === text) {
-              skipped += 1;
-              continue;
-            }
-            const hasExistingNote = !!String(current.note || "").trim();
-            // 保留原时间：已有便签沿用 noteAt；原本无便签才用此刻。
-            const noteAt = hasExistingNote
-              ? Number(current.noteAt) || 0
-              : Date.now();
-            updates.push({ key, text, noteAt });
-          }
-          if (!updates.length) {
-            showToast(
-              skipped
-                ? `无需更新（已含相同注意时 ${skipped}）`
-                : "没有可写的注意时便签",
-            );
-            return;
-          }
-          await persistNails(
-            (list) =>
-              updates.reduce(
-                (acc, row) =>
-                  WatchFavorites.setNailNote(acc, row.key, row.text, {
-                    noteAt: row.noteAt,
-                  }),
-                list,
-              ),
-            `Nail attention notes x${updates.length}`,
-            { loadingText: `注意时 ${updates.length}…` },
-          );
-          setNailSelectMode(false);
-          const parts = [`已追加注意时 ${updates.length} 个（保留原时间）`];
-          if (skipped > 0) parts.push(`掠过 ${skipped}`);
-          showToast(parts.join(" · "));
-          if (isNailDrawerOpen()) void paintNailKlines();
-        } catch (error) {
-          console.warn(error);
-          showToast(error.message || "批量注意时失败");
         }
       }
 
@@ -20373,26 +20233,6 @@
         );
       }
 
-      function nailNoteHasAttention(note) {
-        return String(note || "").includes("注意时");
-      }
-
-      function syncNailAttentionFilterUi() {
-        const btn = document.getElementById("nailAttentionFilterBtn");
-        if (!btn) return;
-        btn.classList.toggle("is-active", !!nailAttentionFilterOn);
-        btn.setAttribute(
-          "aria-pressed",
-          nailAttentionFilterOn ? "true" : "false",
-        );
-      }
-
-      function setNailAttentionFilter(on) {
-        nailAttentionFilterOn = !!on;
-        syncNailAttentionFilterUi();
-        renderNailDrawer();
-      }
-
       function nailSymbolIsHeld(symbol) {
         return holdingsFreeQty(symbol) > 0;
       }
@@ -20403,9 +20243,6 @@
         let items = nailRisingFilterOn
           ? all.filter((item) => hasWindowGain(item.symbol, interval))
           : all.slice();
-        if (nailAttentionFilterOn) {
-          items = items.filter((item) => nailNoteHasAttention(item && item.note));
-        }
         if (nailSortMode === "alertGreen") {
           items = items.slice().sort((a, b) => {
             const ap = a.pinned ? 0 : 1;
@@ -20614,10 +20451,6 @@
                 : "持有优先 · 置顶 / 长按拖动";
           if (!total) {
             meta.textContent = `复制名称后新增 · ${sortHint}`;
-          } else if (nailAttentionFilterOn && nailRisingFilterOn) {
-            meta.textContent = `注意时·上涨 ${n}/${total} · ${sortHint}`;
-          } else if (nailAttentionFilterOn) {
-            meta.textContent = `注意时 ${n}/${total} · ${sortHint}`;
           } else if (nailRisingFilterOn) {
             meta.textContent = `窗口上涨 ${n}/${total} · ${sortHint}`;
           } else {
@@ -20644,11 +20477,9 @@
         }
         if (!n) {
           abortNailKlines();
-          listEl.innerHTML = nailAttentionFilterOn
-            ? '<div class="nail-empty">没有便签含「注意时」的钉子 · 再点「注意时」可关闭筛选</div>'
-            : nailRisingFilterOn
-              ? '<div class="nail-empty">当前没有窗口上涨的钉子 · 可关闭上方开关查看全部</div>'
-              : '<div class="nail-empty">还没有钉子</div>';
+          listEl.innerHTML = nailRisingFilterOn
+            ? '<div class="nail-empty">当前没有窗口上涨的钉子 · 可关闭上方开关查看全部</div>'
+            : '<div class="nail-empty">还没有钉子</div>';
           applyFocusActionChrome();
           syncNailSelectUi();
           return;
@@ -20733,10 +20564,8 @@
         const candles = await fetchKlines(key, chartInterval());
         const pin = pinItemBySymbol(key);
         const notes = notesMarksForSymbol(key);
-        const attentionBlue = !!nailAttentionFilterOn;
-        const alertMark = nailAlertMarkForSymbol(key, {
-          preferAttention: attentionBlue,
-        });
+        const attentionBlue = false;
+        const alertMark = nailAlertMarkForSymbol(key);
         rememberNailAlertGreenScore(
           key,
           canvas,
@@ -21283,18 +21112,15 @@
             if (nailKlineAbort !== controller) return;
             const pin = pinItemBySymbol(symbol);
             const notes = notesMarksForSymbol(symbol);
-            const attentionBlue = !!nailAttentionFilterOn;
-            const alertMark = nailAlertMarkForSymbol(symbol, {
-              preferAttention: attentionBlue,
-            });
+            const attentionBlue = false;
+            const alertMark = nailAlertMarkForSymbol(symbol);
             rememberNailAlertGreenScore(
               symbol,
               canvas,
               candles,
               pin ? pin.pinPrice : null,
               notes,
-              // 绿色面积仍按原便签第一价，不受注意时筛选影响
-              nailAlertMarkForSymbol(symbol),
+                nailAlertMarkForSymbol(symbol),
             );
             drawKline(
               canvas,
@@ -21409,10 +21235,6 @@
         nailNoteEditorSymbol = key;
         if (title) title.textContent = `编辑 ${key.replace(/USDT$/i, "")} 便签`;
         text.value = String(item.note || "").trim();
-        const attentionCheck = document.getElementById("nailNoteAttentionCheck");
-        if (attentionCheck) {
-          attentionCheck.checked = nailNoteHasAttention(item.note);
-        }
         editor.querySelectorAll('input[name="nailNoteTimeMode"]').forEach((radio) => {
           radio.checked = radio.value === nailNoteTimeMode;
         });
@@ -21506,25 +21328,6 @@
               .toUpperCase();
         if (!key) return false;
         let text = String(note || "").trim();
-        if (opts.appendAttention) {
-          let price = Number(marketMap[key]?.price);
-          if (!(price > 0)) {
-            try {
-              await fetchBinanceTickerForSymbol(key);
-              price = Number(marketMap[key]?.price);
-            } catch (error) {
-              console.warn("attention note price failed", error);
-            }
-          }
-          const priceText =
-            price > 0 ? formatPinPrice(price) : "--";
-          const tag = `注意时 ${priceText}`;
-          if (!text.includes(tag)) {
-            text = `${text} ${tag}`.trim();
-          } else if (!nailNoteHasAttention(text)) {
-            text = `${text} 注意时`.trim();
-          }
-        }
         text = text.slice(0, 60);
         const current = (nailItems || []).find(
           (item) => String(item.symbol || "").toUpperCase() === key,
@@ -24005,11 +23808,7 @@
           }
           if (nailNoteEditorCancel) nailNoteEditorCancel.disabled = true;
           if (nailNoteEditorText) nailNoteEditorText.disabled = true;
-          const attentionCheckEl = document.getElementById(
-            "nailNoteAttentionCheck",
-          );
-          if (attentionCheckEl) attentionCheckEl.disabled = true;
-          nailNoteEditor
+nailNoteEditor
             .querySelectorAll('input[name="nailNoteTimeMode"]')
             .forEach((radio) => {
               radio.disabled = true;
@@ -24019,12 +23818,8 @@
               nailNoteEditorSymbol,
               nailNoteEditorText ? nailNoteEditorText.value : "",
               mode,
-              {
-                appendAttention: !!(
-                  attentionCheckEl && attentionCheckEl.checked
-                ),
-              },
-            );
+              {},
+);
             if (saved) {
               nailNoteEditorSaving = false;
               closeNailNoteEditor();
@@ -24039,8 +23834,7 @@
             }
             if (nailNoteEditorCancel) nailNoteEditorCancel.disabled = false;
             if (nailNoteEditorText) nailNoteEditorText.disabled = false;
-            if (attentionCheckEl) attentionCheckEl.disabled = false;
-            nailNoteEditor
+nailNoteEditor
               .querySelectorAll('input[name="nailNoteTimeMode"]')
               .forEach((radio) => {
                 radio.disabled = false;
@@ -24178,14 +23972,6 @@
       if (nailBatchNotePriceBtn) {
         nailBatchNotePriceBtn.addEventListener("click", () => {
           void applyCurrentPriceNotesToSelectedNails();
-        });
-      }
-      const nailBatchAttentionBtn = document.getElementById(
-        "nailBatchAttentionBtn",
-      );
-      if (nailBatchAttentionBtn) {
-        nailBatchAttentionBtn.addEventListener("click", () => {
-          void applyAttentionNotesToSelectedNails();
         });
       }
       const nailBatchDeleteBtn = document.getElementById("nailBatchDeleteBtn");
@@ -24396,15 +24182,6 @@
           const on = nailBuyLiveSwitch.getAttribute("aria-checked") === "true";
           void setNailTradeLive("buy", !on);
         });
-      }
-      const nailAttentionFilterBtn = document.getElementById(
-        "nailAttentionFilterBtn",
-      );
-      if (nailAttentionFilterBtn) {
-        nailAttentionFilterBtn.addEventListener("click", () => {
-          setNailAttentionFilter(!nailAttentionFilterOn);
-        });
-        syncNailAttentionFilterUi();
       }
       const cardFocusLabelBtn = document.getElementById("cardFocusLabel");
       if (cardFocusLabelBtn) {
