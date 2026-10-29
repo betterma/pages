@@ -18865,8 +18865,8 @@
           const batch = keys.slice(start, start + 50);
           const query = encodeURIComponent(JSON.stringify(batch));
           const endpoints = [
-            `https://data-api.binance.vision/api/v3/ticker/price?symbols=${query}`,
-            `https://api.binance.com/api/v3/ticker/price?symbols=${query}`,
+            `https://data-api.binance.vision/api/v3/ticker/24hr?symbols=${query}`,
+            `https://api.binance.com/api/v3/ticker/24hr?symbols=${query}`,
           ];
           let lastError = null;
           for (const url of endpoints) {
@@ -18880,7 +18880,7 @@
               const rows = Array.isArray(payload) ? payload : [payload];
               rows.forEach((row) => {
                 const symbol = String(row && row.symbol || "").toUpperCase();
-                const price = Number(row && row.price);
+                const price = Number(row && row.lastPrice);
                 if (symbol && Number.isFinite(price) && price > 0) {
                   prices.set(symbol, price);
                 }
