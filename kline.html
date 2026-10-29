@@ -3067,6 +3067,32 @@
         margin: 0;
         font-size: 16px;
       }
+      .nail-notice-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .nail-notice-auto-refresh {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: 0 0 auto;
+        color: var(--secondary);
+        font-size: 10px;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-notice-auto-refresh .nail-switch {
+        width: 40px;
+        height: 24px;
+      }
+      .nail-notice-auto-refresh .nail-switch::after {
+        width: 18px;
+        height: 18px;
+      }
+      .nail-notice-auto-refresh .nail-switch[aria-checked="true"]::after {
+        transform: translateX(16px);
+      }
       .nail-notice-head p {
         margin: 4px 0 0;
         font-size: 12px;
@@ -3159,6 +3185,10 @@
         background: color-mix(in srgb, var(--elevated) 88%, transparent);
         padding: 6px 8px 8px;
         min-width: 0;
+      }
+      .nail-notice-card.is-focus {
+        outline: 2px solid var(--accent, #2f8f6e);
+        outline-offset: 2px;
       }
       .nail-notice-card.is-delta-filtered {
         display: none;
@@ -4244,6 +4274,13 @@
       }
       .card-focus-bar.is-nail-scope {
         z-index: 130;
+      }
+      .card-focus-bar.is-notice-scope {
+        z-index: 140;
+        width: min(340px, calc(100vw - 16px));
+      }
+      .card-focus-bar.is-notice-scope [data-focus-action]:not([data-focus-action="refresh"]) {
+        display: none;
       }
       .card-focus-bar.is-nail-scope [data-focus-action="nail"],
       .card-focus-bar.is-nail-scope [data-focus-action="zoom"],
@@ -6679,6 +6716,18 @@
                 </button>
               </div>
             </div>
+                <div class="nail-rising-row">
+                  <span>默认打开通知页面</span>
+                  <button
+                    type="button"
+                    class="nail-switch"
+                    id="nailDefaultNoticeOnEnter"
+                    role="switch"
+                    aria-checked="false"
+                    title="每次进入钉子页时自动打开通知"
+                    aria-label="默认打开通知页面"
+                  ></button>
+                </div>
             <div class="nail-rising-row">
               <span>当前窗口上涨</span>
               <button
@@ -6843,7 +6892,21 @@
       >
         <div class="nail-notice-head">
           <div>
-            <h3 id="nailNoticeTitle">荧光绿通知</h3>
+              <div class="nail-notice-title-row">
+                <h3 id="nailNoticeTitle">荧光绿通知</h3>
+                <div class="nail-notice-auto-refresh">
+                  <span>10秒</span>
+                  <button
+                    type="button"
+                    class="nail-switch"
+                    id="nailNoticeAutoRefresh"
+                    role="switch"
+                    aria-checked="true"
+                    aria-label="通知定时刷新"
+                    title="通知页打开时每10秒刷新"
+                  ></button>
+                </div>
+              </div>
             <p id="nailNoticeMeta">当前 4h 窗 · 最新在上</p>
           </div>
           <div class="nail-notice-head-actions">
@@ -7532,6 +7595,14 @@
           localStorage.getItem(NAIL_AUTO_REFRESH_KEY) === "1";
       } catch (_) {
         nailAutoRefreshEnabled = false;
+      }
+      const NAIL_DEFAULT_NOTICE_ON_ENTER_KEY = "kline-nail-default-notice-on-enter-v1";
+      let nailDefaultNoticeOnEnter = false;
+      try {
+        nailDefaultNoticeOnEnter =
+          localStorage.getItem(NAIL_DEFAULT_NOTICE_ON_ENTER_KEY) === "1";
+      } catch (_) {
+        nailDefaultNoticeOnEnter = false;
       }
       const NAIL_AUTO_REFRESH_TOP_MS = 5000;
       const NAIL_AUTO_REFRESH_ALL_MS = 15000;
@@ -17853,7 +17924,9 @@
           : "";
         const scope = key ? focusActionScope || "main" : null;
         document
-          .querySelectorAll(".kline-card.is-focus, .nail-kcard.is-focus")
+          .querySelectorAll(
+            ".kline-card.is-focus, .nail-kcard.is-focus, .nail-notice-card.is-focus",
+          )
           .forEach((card) => {
             card.classList.remove("is-focus");
           });
@@ -17865,12 +17938,26 @@
           document
             .querySelectorAll(`#nailList .nail-kcard[data-nail-symbol="${key}"]`)
             .forEach((card) => card.classList.add("is-focus"));
+        } else if (key && scope === "notice") {
+          document
+            .querySelectorAll("#nailNoticeList .nail-notice-card[data-notice-symbol]")
+            .forEach((card) => {
+              if (String(card.dataset.noticeSymbol || "").toUpperCase() === key) {
+                card.classList.add("is-focus");
+              }
+            });
         }
         const bar = document.getElementById("cardFocusBar");
         const labelEl = document.getElementById("cardFocusLabel");
         if (!bar) return;
         bar.classList.toggle("is-nail-scope", scope === "nail");
-        if (!key || pinSelectMode || (scope === "nail" && !isNailDrawerOpen())) {
+        bar.classList.toggle("is-notice-scope", scope === "notice");
+        if (
+          !key ||
+          pinSelectMode ||
+          (scope === "nail" && !isNailDrawerOpen()) ||
+          (scope === "notice" && nailNoticeMode !== "open")
+        ) {
           bar.hidden = true;
           document.body.classList.remove("has-card-focus");
           return;
@@ -17913,8 +18000,8 @@
           .toUpperCase();
         focusActionSymbol = key || null;
         focusActionScope = key
-          ? scope === "nail"
-            ? "nail"
+          ? scope === "nail" || scope === "notice"
+            ? scope
             : "main"
           : null;
         applyFocusActionChrome();
@@ -17925,7 +18012,8 @@
           .trim()
           .toUpperCase();
         if (!key) return;
-        const nextScope = scope === "nail" ? "nail" : "main";
+        const nextScope =
+          scope === "nail" || scope === "notice" ? scope : "main";
         if (focusActionSymbol === key && focusActionScope === nextScope) {
           setFocusActionSymbol(null);
         } else {
@@ -17942,6 +18030,16 @@
           .trim()
           .toUpperCase();
         if (!key) return null;
+        if (focusActionScope === "notice") {
+          return (
+            [...document.querySelectorAll(
+              "#nailNoticeList .nail-notice-card[data-notice-symbol]",
+            )].find(
+              (card) =>
+                String(card.dataset.noticeSymbol || "").toUpperCase() === key,
+            ) || null
+          );
+        }
         return (
           document.querySelector(`.kline-card.is-focus[data-symbol="${key}"]`) ||
           document.querySelector(`.kline-card[data-symbol="${key}"]`)
@@ -18033,6 +18131,12 @@
               const ok = await refreshSingleNailKline(symbol);
               if (!ok) {
                 showToast("钉子列表找不到该币");
+                return;
+              }
+            } else if (focusActionScope === "notice") {
+              const ok = await refreshNailNoticeChart(symbol);
+              if (!ok) {
+                showToast("通知列表找不到这张 K 线");
                 return;
               }
             } else {
@@ -18308,6 +18412,20 @@
       let nailGreenNotices = [];
       let nailGreenNoticesReadAt = 0;
       let nailNoticeMode = "closed"; // closed | open
+      const NAIL_NOTICE_AUTO_REFRESH_KEY = "kline-nail-notice-auto-refresh-v1";
+      const NAIL_NOTICE_AUTO_REFRESH_MS = 10 * 1000;
+      let nailNoticeAutoRefreshEnabled = true;
+      try {
+        const savedNoticeAutoRefresh = localStorage.getItem(
+          NAIL_NOTICE_AUTO_REFRESH_KEY,
+        );
+        nailNoticeAutoRefreshEnabled =
+          savedNoticeAutoRefresh == null || savedNoticeAutoRefresh === "1";
+      } catch (_) {
+        nailNoticeAutoRefreshEnabled = true;
+      }
+      let nailNoticeAutoRefreshTimer = null;
+      let nailNoticeAutoRefreshBusy = false;
       let nailNoticeChartsBusy = false;
       let nailNoticeChartsQueued = false;
       let nailNoticeDeltaFilter = "all"; // all | up | down
@@ -18485,6 +18603,7 @@
             : "当前 4h 窗暂无通知";
         }
         if (!items.length) {
+          if (focusActionScope === "notice") setFocusActionSymbol(null);
           listEl.innerHTML =
             '<div class="nail-notice-empty">暂无荧光绿通知</div>';
           return;
@@ -18523,6 +18642,14 @@
             jumpNailNoticeToSymbol(btn.getAttribute("data-notice-jump"));
           });
         });
+        if (focusActionScope === "notice") {
+          const stillVisible = items.some(
+            (item) =>
+              String(item.symbol || "").toUpperCase() === focusActionSymbol,
+          );
+          if (stillVisible) applyFocusActionChrome();
+          else setFocusActionSymbol(null);
+        }
         syncNailNoticeDeltaFilterUi();
         applyNailNoticeDeltaFilter();
         void paintNailNoticeCharts();
@@ -18620,6 +18747,60 @@
         });
       }
 
+      function syncNailNoticeAutoRefreshUi() {
+        const toggle = document.getElementById("nailNoticeAutoRefresh");
+        if (toggle) {
+          toggle.setAttribute(
+            "aria-checked",
+            nailNoticeAutoRefreshEnabled ? "true" : "false",
+          );
+        }
+      }
+
+      function stopNailNoticeAutoRefresh() {
+        if (nailNoticeAutoRefreshTimer) {
+          window.clearInterval(nailNoticeAutoRefreshTimer);
+          nailNoticeAutoRefreshTimer = null;
+        }
+      }
+
+      function startNailNoticeAutoRefresh() {
+        if (
+          !nailNoticeAutoRefreshEnabled ||
+          nailNoticeMode !== "open" ||
+          document.visibilityState === "hidden" ||
+          nailNoticeAutoRefreshTimer
+        ) {
+          return;
+        }
+        nailNoticeAutoRefreshTimer = window.setInterval(async () => {
+          if (nailNoticeAutoRefreshBusy || nailNoticeMode !== "open") return;
+          nailNoticeAutoRefreshBusy = true;
+          try {
+            await reloadNailNoticeList();
+          } catch (error) {
+            console.warn("定时刷新通知失败", error);
+          } finally {
+            nailNoticeAutoRefreshBusy = false;
+          }
+        }, NAIL_NOTICE_AUTO_REFRESH_MS);
+      }
+
+      function setNailNoticeAutoRefreshEnabled(enabled) {
+        nailNoticeAutoRefreshEnabled = !!enabled;
+        try {
+          localStorage.setItem(
+            NAIL_NOTICE_AUTO_REFRESH_KEY,
+            nailNoticeAutoRefreshEnabled ? "1" : "0",
+          );
+        } catch (_) {
+          /* ignore */
+        }
+        syncNailNoticeAutoRefreshUi();
+        if (nailNoticeAutoRefreshEnabled) startNailNoticeAutoRefresh();
+        else stopNailNoticeAutoRefresh();
+      }
+
       async function setNailNoticeDeltaFilter(mode) {
         nailNoticeDeltaFilter =
           mode === "up" || mode === "down" ? mode : "all";
@@ -18632,7 +18813,10 @@
         await reloadNailNoticeList();
       }
 
-      async function paintNailNoticeCharts() {
+      async function paintNailNoticeCharts(options) {
+        const onlySymbol = String(options && options.symbol || "")
+          .trim()
+          .toUpperCase();
         if (nailNoticeChartsBusy) {
           nailNoticeChartsQueued = true;
           return;
@@ -18641,7 +18825,14 @@
           ...document.querySelectorAll(
             "#nailNoticeList canvas[data-notice-chart]",
           ),
-        ];
+        ].filter((canvas) => {
+          if (!onlySymbol) return true;
+          return (
+            String(canvas.getAttribute("data-notice-chart") || "")
+              .trim()
+              .toUpperCase() === onlySymbol
+          );
+        });
         if (!canvases.length) return;
         nailNoticeChartsBusy = true;
         nailNoticeChartsQueued = false;
@@ -18754,6 +18945,27 @@
         }
       }
 
+      async function refreshNailNoticeChart(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || nailNoticeMode !== "open") return false;
+        const canvas = [
+          ...document.querySelectorAll(
+            "#nailNoticeList canvas[data-notice-chart]",
+          ),
+        ].find(
+          (item) =>
+            String(item.getAttribute("data-notice-chart") || "")
+              .trim()
+              .toUpperCase() === key,
+        );
+        if (!canvas) return false;
+        klineFetchCache.delete(`${key}|4h|18`);
+        await paintNailNoticeCharts({ symbol: key });
+        return true;
+      }
+
       async function markNailNoticesRead() {
         const now = Date.now();
         const latest = (nailGreenNotices || []).reduce(
@@ -18799,6 +19011,13 @@
         const show = next === "open";
         drawer.hidden = !show;
         drawer.setAttribute("aria-hidden", show ? "false" : "true");
+        if (show) {
+          if (focusActionScope === "nail") setFocusActionSymbol(null);
+          startNailNoticeAutoRefresh();
+        } else {
+          if (focusActionScope === "notice") setFocusActionSymbol(null);
+          stopNailNoticeAutoRefresh();
+        }
         syncBodyScrollLock();
       }
 
@@ -18925,10 +19144,7 @@
           });
           // 持有优先排序依赖余额；静默拉一次，回填后再重排。
           void reloadNailHoldings({ silent: true });
-          await refreshNailGreenNotices();
-          if (nailGreenUnreadCount() > 0 && nailNoticeMode === "closed") {
-            void openNailNoticeDrawer();
-          }
+          await maybeOpenNailNoticeOnEntry();
           void maybeShowNailDailyResetPrompt();
           return;
         }
@@ -18942,11 +19158,18 @@
           });
         });
         void reloadNailHoldings({ silent: true });
+        await maybeOpenNailNoticeOnEntry();
+        void maybeShowNailDailyResetPrompt();
+      }
+
+      async function maybeOpenNailNoticeOnEntry() {
         await refreshNailGreenNotices();
-        if (nailGreenUnreadCount() > 0 && nailNoticeMode === "closed") {
+        if (
+          (nailDefaultNoticeOnEnter || nailGreenUnreadCount() > 0) &&
+          nailNoticeMode === "closed"
+        ) {
           void openNailNoticeDrawer();
         }
-        void maybeShowNailDailyResetPrompt();
       }
 
       function stopNailDailyResetCountdown() {
@@ -20334,6 +20557,59 @@
               ".nail-name[data-nail-copy-name], .nail-name[data-copy]",
             );
             if (!nameBtn || !listEl.contains(nameBtn)) return;
+
+          function bindNailNoticeFocusSelect(root) {
+            if (!root || root.dataset.noticeFocusBound === "1") return;
+            root.dataset.noticeFocusBound = "1";
+            let startX = 0;
+            let startY = 0;
+            let moved = false;
+            let tracking = false;
+            root.addEventListener(
+              "pointerdown",
+              (event) => {
+                if (event.pointerType === "mouse" && event.button !== 0) return;
+                if (event.target.closest("button, a, input")) {
+                  tracking = false;
+                  return;
+                }
+                if (!event.target.closest(".nail-notice-card[data-notice-symbol]")) {
+                  tracking = false;
+                  return;
+                }
+                startX = event.clientX;
+                startY = event.clientY;
+                moved = false;
+                tracking = true;
+              },
+              { passive: true },
+            );
+            root.addEventListener(
+              "pointermove",
+              (event) => {
+                if (!tracking) return;
+                const dx = event.clientX - startX;
+                const dy = event.clientY - startY;
+                if (dx * dx + dy * dy > 64) moved = true;
+              },
+              { passive: true },
+            );
+            root.addEventListener("pointerup", () => {
+              tracking = false;
+            });
+            root.addEventListener("pointercancel", () => {
+              tracking = false;
+              moved = true;
+            });
+            root.addEventListener("click", (event) => {
+              if (event.target.closest("button, a, input") || moved) return;
+              const card = event.target.closest(
+                ".nail-notice-card[data-notice-symbol]",
+              );
+              if (!card || !root.contains(card)) return;
+              toggleFocusActionSymbol(card.dataset.noticeSymbol, "notice");
+            });
+          }
             event.preventDefault();
             event.stopPropagation();
             const raw =
@@ -20498,6 +20774,30 @@
         syncNailAutoRefreshUi();
         if (nailAutoRefreshEnabled) startNailAutoRefresh();
         else stopNailAutoRefresh();
+      }
+
+      function syncNailDefaultNoticeSwitch() {
+        const toggle = document.getElementById("nailDefaultNoticeOnEnter");
+        if (toggle) {
+          toggle.setAttribute(
+            "aria-checked",
+            nailDefaultNoticeOnEnter ? "true" : "false",
+          );
+        }
+      }
+
+      function setNailDefaultNoticeOnEnter(enabled) {
+        nailDefaultNoticeOnEnter = !!enabled;
+        try {
+          localStorage.setItem(
+            NAIL_DEFAULT_NOTICE_ON_ENTER_KEY,
+            nailDefaultNoticeOnEnter ? "1" : "0",
+          );
+        } catch (_) {
+          /* ignore */
+        }
+        if (nailDefaultNoticeOnEnter) setNailAutoRefreshEnabled(false);
+        syncNailDefaultNoticeSwitch();
       }
 
       async function refreshNailVisibleTickers(limit) {
@@ -23018,11 +23318,13 @@
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "hidden") {
           stopNailAutoRefresh();
+          stopNailNoticeAutoRefresh();
           markEggChromeSeenFromDom();
           return;
         }
         if (document.visibilityState === "visible") {
           startNailAutoRefresh();
+          startNailNoticeAutoRefresh();
           refreshNotifyFloat({ silent: true });
           maybeRefreshDataOnFocus();
           scheduleBreakHighTick();
@@ -23579,6 +23881,15 @@
           );
         });
       }
+      const nailDefaultNoticeSwitch = document.getElementById(
+        "nailDefaultNoticeOnEnter",
+      );
+      if (nailDefaultNoticeSwitch) {
+        syncNailDefaultNoticeSwitch();
+        nailDefaultNoticeSwitch.addEventListener("click", () => {
+          setNailDefaultNoticeOnEnter(!nailDefaultNoticeOnEnter);
+        });
+      }
       const nailRisingFilter = document.getElementById("nailRisingFilter");
       if (nailRisingFilter) {
         syncNailRisingFilterUi();
@@ -23950,6 +24261,15 @@
           setNailNoticeDeBlueEnabled(!nailNoticeDeBlueEnabled);
         });
       }
+      const nailNoticeAutoRefresh = document.getElementById(
+        "nailNoticeAutoRefresh",
+      );
+      if (nailNoticeAutoRefresh) {
+        syncNailNoticeAutoRefreshUi();
+        nailNoticeAutoRefresh.addEventListener("click", () => {
+          setNailNoticeAutoRefreshEnabled(!nailNoticeAutoRefreshEnabled);
+        });
+      }
       const nailNoticeRefreshBtn = document.getElementById(
         "nailNoticeRefreshBtn",
       );
@@ -23960,6 +24280,7 @@
       }
       const nailNoticeListScroll = document.getElementById("nailNoticeList");
       if (nailNoticeListScroll) {
+        bindNailNoticeFocusSelect(nailNoticeListScroll);
         bindPullToRefresh(nailNoticeListScroll, () =>
           reloadNailNoticeList({ toast: "通知已刷新" }),
         );
