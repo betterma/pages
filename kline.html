@@ -16470,7 +16470,6 @@
         const notes = Array.isArray(noteMarks) ? noteMarks : [];
         const alertPrice = Number(alertMark && alertMark.price);
         const hasAlert = Number.isFinite(alertPrice) && alertPrice > 0;
-        const attentionBlue = false;
         // 通知线：推送时价格；红蓝相对此线。缺省时用 openTime 那根收盘兜底。
         let notifyPrice = Number(deltaMark && deltaMark.notifyPrice);
         const deltaFromOpen = Number(deltaMark && deltaMark.fromOpenTime) || 0;
@@ -16542,9 +16541,7 @@
         if (hasAlert) {
           const y = yOf(alertPrice);
           ctx.save();
-          ctx.strokeStyle = attentionBlue
-            ? "rgba(58, 127, 196, 0.85)"
-            : "rgba(62, 207, 142, 0.7)";
+          ctx.strokeStyle = "rgba(62, 207, 142, 0.7)";
           ctx.lineWidth = 1;
           ctx.setLineDash([4, 3]);
           ctx.beginPath();
@@ -16574,13 +16571,8 @@
           const up = candle.close >= candle.open;
           const base = up ? "#8a9a96" : "#9a8e88";
           const inDelta = deltaFromIndex >= 0 && index >= deltaFromIndex;
-          const inAttention =
-            attentionBlue &&
-            alertFromIndex >= 0 &&
-            index >= alertFromIndex;
-          // 通知线起不再染绿，只染蓝/红；绿仅保留在通知线之前。
+// 通知线起不再染绿，只染蓝/红；绿仅保留在通知线之前。
           const useAlert =
-            !attentionBlue &&
             !inDelta &&
             hasAlert &&
             up &&
@@ -18637,6 +18629,13 @@
             ].join("");
           })
           .join("");
+        listEl.querySelectorAll(".nail-notice-card[data-notice-symbol]").forEach((card) => {
+          card.addEventListener("click", (event) => {
+            if (!nailNoticeSelectMode || event.target.closest("button")) return;
+            event.preventDefault();
+            toggleNailNoticeSelection(card.dataset.noticeSymbol);
+          });
+        });
         listEl.querySelectorAll("[data-notice-jump]").forEach((btn) => {
           btn.addEventListener("click", (event) => {
             if (nailNoticeSelectMode) {
