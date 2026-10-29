@@ -18412,6 +18412,8 @@
 
       let nailGreenNotices = [];
       let nailGreenNoticesReadAt = 0;
+      // 最近一次实际渲染到通知列表的数据签名；行情轮询时若名单没变，不重建 DOM。
+      let nailNoticeRenderedSignature = "";
       let nailNoticeMode = "closed"; // closed | open
       const NAIL_NOTICE_AUTO_REFRESH_KEY = "kline-nail-notice-auto-refresh-v1";
       const NAIL_NOTICE_AUTO_REFRESH_MS = 10 * 1000;
@@ -18603,10 +18605,36 @@
             ? `当前 4h 窗 · ${items.length} 条 · 最新在上`
             : "当前 4h 窗暂无通知";
         }
+        // 10 秒轮询主要更新现价和 K 线。名单内容未变时保留原卡片 DOM，
+        // 避免 innerHTML 重建导致独立滚动容器回到顶部。
+        const signature = JSON.stringify({
+          readAt: Number(nailGreenNoticesReadAt) || 0,
+          items: items.map((item) => ({
+            id: item.id || `${item.symbol}:${item.openTime}`,
+            symbol: item.symbol,
+            label: item.label || "",
+            at: Number(item.at) || 0,
+            openTime: Number(item.openTime) || 0,
+            kind: item.kind || "",
+            alertPrice: Number(item.alertPrice) || 0,
+            notifyPrice: Number(item.notifyPrice) || 0,
+            interval: item.interval || "4h",
+            noteAt: Number(item.noteAt) || 0,
+          })),
+        });
+        if (signature === nailNoticeRenderedSignature) {
+          syncNailNoticeDeltaFilterUi();
+          applyNailNoticeDeltaFilter();
+          void paintNailNoticeCharts();
+          return;
+        }
+        nailNoticeRenderedSignature = signature;
         if (!items.length) {
           if (focusActionScope === "notice") setFocusActionSymbol(null);
-          listEl.innerHTML =
-            '<div class="nail-notice-empty">暂无荧光绿通知</div>';
+          if (listEl.querySelector(".nail-notice-empty") == null) {
+            listEl.innerHTML =
+              '<div class="nail-notice-empty">暂无荧光绿通知</div>';
+          }
           return;
         }
         listEl.innerHTML = items
