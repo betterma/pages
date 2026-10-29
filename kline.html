@@ -20557,59 +20557,6 @@
               ".nail-name[data-nail-copy-name], .nail-name[data-copy]",
             );
             if (!nameBtn || !listEl.contains(nameBtn)) return;
-
-          function bindNailNoticeFocusSelect(root) {
-            if (!root || root.dataset.noticeFocusBound === "1") return;
-            root.dataset.noticeFocusBound = "1";
-            let startX = 0;
-            let startY = 0;
-            let moved = false;
-            let tracking = false;
-            root.addEventListener(
-              "pointerdown",
-              (event) => {
-                if (event.pointerType === "mouse" && event.button !== 0) return;
-                if (event.target.closest("button, a, input")) {
-                  tracking = false;
-                  return;
-                }
-                if (!event.target.closest(".nail-notice-card[data-notice-symbol]")) {
-                  tracking = false;
-                  return;
-                }
-                startX = event.clientX;
-                startY = event.clientY;
-                moved = false;
-                tracking = true;
-              },
-              { passive: true },
-            );
-            root.addEventListener(
-              "pointermove",
-              (event) => {
-                if (!tracking) return;
-                const dx = event.clientX - startX;
-                const dy = event.clientY - startY;
-                if (dx * dx + dy * dy > 64) moved = true;
-              },
-              { passive: true },
-            );
-            root.addEventListener("pointerup", () => {
-              tracking = false;
-            });
-            root.addEventListener("pointercancel", () => {
-              tracking = false;
-              moved = true;
-            });
-            root.addEventListener("click", (event) => {
-              if (event.target.closest("button, a, input") || moved) return;
-              const card = event.target.closest(
-                ".nail-notice-card[data-notice-symbol]",
-              );
-              if (!card || !root.contains(card)) return;
-              toggleFocusActionSymbol(card.dataset.noticeSymbol, "notice");
-            });
-          }
             event.preventDefault();
             event.stopPropagation();
             const raw =
@@ -20656,6 +20603,59 @@
             card.getAttribute("data-nail-symbol"),
             "nail",
           );
+        });
+      }
+
+      function bindNailNoticeFocusSelect(root) {
+        if (!root || root.dataset.noticeFocusBound === "1") return;
+        root.dataset.noticeFocusBound = "1";
+        let startX = 0;
+        let startY = 0;
+        let moved = false;
+        let tracking = false;
+        root.addEventListener(
+          "pointerdown",
+          (event) => {
+            if (event.pointerType === "mouse" && event.button !== 0) return;
+            if (event.target.closest("button, a, input")) {
+              tracking = false;
+              return;
+            }
+            if (!event.target.closest(".nail-notice-card[data-notice-symbol]")) {
+              tracking = false;
+              return;
+            }
+            startX = event.clientX;
+            startY = event.clientY;
+            moved = false;
+            tracking = true;
+          },
+          { passive: true },
+        );
+        root.addEventListener(
+          "pointermove",
+          (event) => {
+            if (!tracking) return;
+            const dx = event.clientX - startX;
+            const dy = event.clientY - startY;
+            if (dx * dx + dy * dy > 64) moved = true;
+          },
+          { passive: true },
+        );
+        root.addEventListener("pointerup", () => {
+          tracking = false;
+        });
+        root.addEventListener("pointercancel", () => {
+          tracking = false;
+          moved = true;
+        });
+        root.addEventListener("click", (event) => {
+          if (event.target.closest("button, a, input") || moved) return;
+          const card = event.target.closest(
+            ".nail-notice-card[data-notice-symbol]",
+          );
+          if (!card || !root.contains(card)) return;
+          toggleFocusActionSymbol(card.dataset.noticeSymbol, "notice");
         });
       }
 
