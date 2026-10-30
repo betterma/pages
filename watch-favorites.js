@@ -34,7 +34,15 @@
   const NOTES_RANK_SNAPS_PATH = "watch-notes-rank-snaps.json";
   const NOTES_RANK_PREFS_PATH = "watch-notes-rank-prefs.json";
   const HOME_PREFS_PATH = "watch-home-prefs.json";
-  const HOME_PREFS_DEFAULT = { home: "market", updatedAt: 0 };
+  /** 观察池 / 自动盯：24h 涨幅前 N（默认 30，页面与云函数共用）。 */
+  const WATCH_POOL_RANK_DEFAULT = 30;
+  const WATCH_POOL_RANK_MIN = 10;
+  const WATCH_POOL_RANK_MAX = 100;
+  const HOME_PREFS_DEFAULT = {
+    home: "market",
+    watchPoolRank: WATCH_POOL_RANK_DEFAULT,
+    updatedAt: 0,
+  };
   const PRICE_ALERTS_PATH = "watch-price-alerts.json";
   const LEGACY_DATA_PATH = "watch-data.json";
   const PIN_TTL_MS = 12 * 60 * 60 * 1000;
@@ -2188,11 +2196,25 @@
       : "market";
   }
 
+  function normalizeWatchPoolRank(raw) {
+    const n = Math.floor(Number(raw));
+    if (!Number.isFinite(n)) return WATCH_POOL_RANK_DEFAULT;
+    return Math.min(
+      WATCH_POOL_RANK_MAX,
+      Math.max(WATCH_POOL_RANK_MIN, n),
+    );
+  }
+
   function normalizeHomePrefs(raw) {
     const base =
       raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
     return {
       home: normalizeHomePref(base.home),
+      watchPoolRank: normalizeWatchPoolRank(
+        base.watchPoolRank != null
+          ? base.watchPoolRank
+          : HOME_PREFS_DEFAULT.watchPoolRank,
+      ),
       updatedAt: Number.isFinite(Number(base.updatedAt))
         ? Number(base.updatedAt)
         : 0,
@@ -2203,6 +2225,7 @@
     const next = normalizeHomePrefs(prefs);
     return {
       home: next.home,
+      watchPoolRank: next.watchPoolRank,
       updatedAt: next.updatedAt || Date.now(),
     };
   }
@@ -3884,6 +3907,10 @@
     patchNotesRankPrefs,
     HOME_PREFS_PATH,
     HOME_PREFS_DEFAULT,
+    WATCH_POOL_RANK_DEFAULT,
+    WATCH_POOL_RANK_MIN,
+    WATCH_POOL_RANK_MAX,
+    normalizeWatchPoolRank,
     normalizeHomePref,
     normalizeHomePrefs,
     serializeHomePrefs,

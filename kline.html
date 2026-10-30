@@ -2340,6 +2340,40 @@
       .nail-settings-popover .nail-auto-refresh-block:last-child .nail-rising-row {
         border-bottom: none;
       }
+      .nail-pool-rank-edit {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: 0 0 auto;
+      }
+      .nail-pool-rank-edit input {
+        width: 56px;
+        height: 28px;
+        padding: 0 6px;
+        border: 1px solid var(--separator);
+        border-radius: 8px;
+        background: var(--bg, var(--grouped));
+        color: var(--label);
+        font: inherit;
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+      }
+      .nail-pool-rank-edit button {
+        height: 28px;
+        padding: 0 10px;
+        border: none;
+        border-radius: 8px;
+        background: var(--fill);
+        color: var(--label);
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .nail-pool-rank-edit button:disabled {
+        opacity: 0.5;
+        cursor: wait;
+      }
       .nail-head-actions {
         display: flex;
         flex-wrap: wrap;
@@ -6696,18 +6730,37 @@
                 </button>
               </div>
             </div>
-                <div class="nail-rising-row">
-                  <span>默认打开通知页面</span>
-                  <button
-                    type="button"
-                    class="nail-switch"
-                    id="nailDefaultNoticeOnEnter"
-                    role="switch"
-                    aria-checked="false"
-                    title="每次进入钉子页时自动打开通知"
-                    aria-label="默认打开通知页面"
-                  ></button>
-                </div>
+            <div class="nail-rising-row nail-pool-rank-row">
+              <span title="24h 涨幅前 N 进入观察池 / 自动盯；与云函数共用，默认 30">观察池前 N</span>
+              <div class="nail-pool-rank-edit">
+                <input
+                  type="number"
+                  id="nailWatchPoolRankInput"
+                  min="10"
+                  max="100"
+                  step="1"
+                  value="30"
+                  inputmode="numeric"
+                  aria-label="观察池前 N"
+                  title="10–100，默认 30；保存后页面立刻生效，云函数约 5 分钟内跟上"
+                />
+                <button type="button" id="nailWatchPoolRankSave" title="保存到 GitHub（手机桌面同步）">
+                  保存
+                </button>
+              </div>
+            </div>
+            <div class="nail-rising-row">
+              <span>默认打开通知页面</span>
+              <button
+                type="button"
+                class="nail-switch"
+                id="nailDefaultNoticeOnEnter"
+                role="switch"
+                aria-checked="false"
+                title="每次进入钉子页时自动打开通知"
+                aria-label="默认打开通知页面"
+              ></button>
+            </div>
             <div class="nail-rising-row">
               <span>当前窗口上涨</span>
               <button
@@ -18415,7 +18468,75 @@
       let homePref = "market"; // market | nails（启动首页，GitHub）
       let homePrefUpdatedAt = 0;
       let homePrefSaving = false;
+      let watchPoolRankSaving = false;
       const HOME_PREFS_LOCAL_KEY = "kline-home-pref-v1";
+      const WATCH_POOL_RANK_LOCAL_KEY = "kline-watch-pool-rank-v1";
+
+      function watchPoolRankBounds() {
+        const def =
+          (WatchFavorites && WatchFavorites.WATCH_POOL_RANK_DEFAULT) || 30;
+        const min =
+          (WatchFavorites && WatchFavorites.WATCH_POOL_RANK_MIN) || 10;
+        const max =
+          (WatchFavorites && WatchFavorites.WATCH_POOL_RANK_MAX) || 100;
+        return { def, min, max };
+      }
+
+      function normalizeWatchPoolRankLocal(raw) {
+        if (
+          WatchFavorites &&
+          typeof WatchFavorites.normalizeWatchPoolRank === "function"
+        ) {
+          return WatchFavorites.normalizeWatchPoolRank(raw);
+        }
+        const { def, min, max } = watchPoolRankBounds();
+        const n = Math.floor(Number(raw));
+        if (!Number.isFinite(n)) return def;
+        return Math.min(max, Math.max(min, n));
+      }
+
+      function getWatchPoolRank() {
+        return normalizeWatchPoolRankLocal(
+          CONFIG.WATCH_POOL_RANK != null
+            ? CONFIG.WATCH_POOL_RANK
+            : watchPoolRankBounds().def,
+        );
+      }
+
+      function syncWatchPoolRankUi() {
+        const input = document.getElementById("nailWatchPoolRankInput");
+        if (input && document.activeElement !== input) {
+          input.value = String(getWatchPoolRank());
+        }
+      }
+
+      function applyWatchPoolRank(next, options) {
+        const opts = options || {};
+        const rank = normalizeWatchPoolRankLocal(next);
+        const prev = Number(CONFIG.WATCH_POOL_RANK) || 30;
+        CONFIG.WATCH_POOL_RANK = rank;
+        try {
+          localStorage.setItem(WATCH_POOL_RANK_LOCAL_KEY, String(rank));
+        } catch (_) {
+          /* ignore */
+        }
+        syncWatchPoolRankUi();
+        if (opts.rebuild !== false && rank !== prev) {
+          try {
+            updateWatchPool();
+          } catch (error) {
+            console.warn("updateWatchPool after rank change failed", error);
+          }
+          try {
+            if (typeof renderNailRadarTable === "function") {
+              renderNailRadarTable();
+            }
+          } catch (_) {
+            /* ignore */
+          }
+        }
+        return rank;
+      }
 
       function readLocalHomePref() {
         try {
@@ -18432,6 +18553,10 @@
             return {
               home: parsed.home,
               updatedAt: Number(parsed.updatedAt) || 0,
+              watchPoolRank:
+                parsed.watchPoolRank != null
+                  ? normalizeWatchPoolRankLocal(parsed.watchPoolRank)
+                  : null,
             };
           }
         } catch (_) {
@@ -18445,6 +18570,18 @@
         if (localHome) {
           homePref = localHome.home;
           homePrefUpdatedAt = localHome.updatedAt;
+          if (localHome.watchPoolRank != null) {
+            applyWatchPoolRank(localHome.watchPoolRank, { rebuild: false });
+          }
+        } else {
+          try {
+            const savedRank = localStorage.getItem(WATCH_POOL_RANK_LOCAL_KEY);
+            if (savedRank != null && savedRank !== "") {
+              applyWatchPoolRank(savedRank, { rebuild: false });
+            }
+          } catch (_) {
+            /* ignore */
+          }
         }
       }
       document.body.dataset.activeView = activeView;
@@ -19606,6 +19743,7 @@
             HOME_PREFS_LOCAL_KEY,
             JSON.stringify({
               home: homePref,
+              watchPoolRank: getWatchPoolRank(),
               updatedAt: homePrefUpdatedAt,
             }),
           );
@@ -19617,11 +19755,17 @@
 
       async function loadHomePrefsShared() {
         const local = readLocalHomePref();
-        if (local) applyHomePref(local.home, local.updatedAt || Date.now());
+        if (local) {
+          applyHomePref(local.home, local.updatedAt || Date.now());
+          if (local.watchPoolRank != null) {
+            applyWatchPoolRank(local.watchPoolRank, { rebuild: false });
+          }
+        }
         if (
           !WatchFavorites ||
           typeof WatchFavorites.loadHomePrefsRaw !== "function"
         ) {
+          syncWatchPoolRankUi();
           return false;
         }
         try {
@@ -19636,14 +19780,21 @@
             // 取较新一侧，避免 GitHub 未写上时用旧的 market 盖掉本地钉子首页。
             if (remoteAt >= localAt) {
               applyHomePref(remote.prefs.home, remoteAt || Date.now());
+              if (remote.prefs.watchPoolRank != null) {
+                applyWatchPoolRank(remote.prefs.watchPoolRank);
+              }
             } else if (localAt > remoteAt) {
               void flushHomePref(homePref);
+            } else if (remote.prefs.watchPoolRank != null) {
+              applyWatchPoolRank(remote.prefs.watchPoolRank);
             }
+            syncWatchPoolRankUi();
             return true;
           }
         } catch (error) {
           console.warn("load home prefs failed", error);
         }
+        syncWatchPoolRankUi();
         return false;
       }
 
@@ -19667,8 +19818,10 @@
             path:
               WatchFavorites.HOME_PREFS_PATH || "watch-home-prefs.json",
             message: `Home pref ${home}`,
-            mutate: () => ({
+            mutate: (base) => ({
+              ...base,
               home,
+              watchPoolRank: getWatchPoolRank(),
               updatedAt: homePrefUpdatedAt || Date.now(),
             }),
           });
@@ -19678,6 +19831,45 @@
         } finally {
           homePrefSaving = false;
         }
+      }
+
+      async function flushWatchPoolRank(rawRank) {
+        const rank = applyWatchPoolRank(rawRank);
+        if (
+          !WatchFavorites ||
+          typeof WatchFavorites.patchHomePrefs !== "function" ||
+          watchPoolRankSaving
+        ) {
+          showToast(`观察池前 ${rank}（未同步到云端）`);
+          return rank;
+        }
+        watchPoolRankSaving = true;
+        const btn = document.getElementById("nailWatchPoolRankSave");
+        if (btn) btn.disabled = true;
+        try {
+          await WatchFavorites.patchHomePrefs({
+            repo: CONFIG.GITHUB_REPO,
+            path:
+              WatchFavorites.HOME_PREFS_PATH || "watch-home-prefs.json",
+            message: `Watch pool rank ${rank}`,
+            mutate: (base) => ({
+              ...base,
+              home: getHomePref(),
+              watchPoolRank: rank,
+              updatedAt: Date.now(),
+            }),
+          });
+          homePrefUpdatedAt = Date.now();
+          applyHomePref(homePref, homePrefUpdatedAt);
+          showToast(`观察池已设为前 ${rank}`);
+        } catch (error) {
+          console.warn("persist watch pool rank failed", error);
+          showToast(error.message || "观察池前 N 保存失败");
+        } finally {
+          watchPoolRankSaving = false;
+          if (btn) btn.disabled = false;
+        }
+        return rank;
       }
 
       function setActiveView(view, options) {
@@ -23993,6 +24185,29 @@
           showToast(
             next === "nails" ? "启动首页：钉子" : "启动首页：行情",
           );
+        });
+      }
+      const nailWatchPoolRankInput = document.getElementById(
+        "nailWatchPoolRankInput",
+      );
+      const nailWatchPoolRankSave = document.getElementById(
+        "nailWatchPoolRankSave",
+      );
+      syncWatchPoolRankUi();
+      if (nailWatchPoolRankSave) {
+        nailWatchPoolRankSave.addEventListener("click", () => {
+          const raw =
+            nailWatchPoolRankInput && nailWatchPoolRankInput.value != null
+              ? nailWatchPoolRankInput.value
+              : getWatchPoolRank();
+          void flushWatchPoolRank(raw);
+        });
+      }
+      if (nailWatchPoolRankInput) {
+        nailWatchPoolRankInput.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          void flushWatchPoolRank(nailWatchPoolRankInput.value);
         });
       }
       const nailDefaultNoticeSwitch = document.getElementById(

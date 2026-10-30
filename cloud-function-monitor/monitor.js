@@ -25,7 +25,12 @@ const CONFIG = {
   GH_BACKFILL_MS: Number(process.env.GH_BACKFILL_MS || 6 * 60 * 60 * 1000),
   GH_BACKFILL_CONCURRENCY: Number(process.env.GH_BACKFILL_CONCURRENCY || 4),
   TOP20: 20,
-  WATCH_POOL_RANK: 30,
+  HOME_PREFS_PATH: process.env.HOME_PREFS_PATH || 'watch-home-prefs.json',
+  WATCH_POOL_RANK_DEFAULT: 30,
+  WATCH_POOL_RANK_MIN: 10,
+  WATCH_POOL_RANK_MAX: 100,
+  // 可被 watch-home-prefs.json 的 watchPoolRank 覆盖（与 kline / auto-pin 共用）。
+  WATCH_POOL_RANK: Number(process.env.WATCH_POOL_RANK || 30),
   MAX_EVENTS: 300,
   DURATION_MS: {
     '15m': 15 * 60 * 1000,
@@ -279,6 +284,28 @@ function updateWatchPool(history, marketMap, watchPool, blacklist) {
   }
 
   return nextPool;
+}
+
+function normalizeWatchPoolRank(raw) {
+  const def = CONFIG.WATCH_POOL_RANK_DEFAULT;
+  const min = CONFIG.WATCH_POOL_RANK_MIN;
+  const max = CONFIG.WATCH_POOL_RANK_MAX;
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n)) return def;
+  return Math.min(max, Math.max(min, n));
+}
+
+async function loadWatchPoolRankFromPrefs() {
+  try {
+    const file = await loadGithubJsonFile(CONFIG.HOME_PREFS_PATH);
+    const data = file && file.data;
+    if (data && data.watchPoolRank != null) {
+      return normalizeWatchPoolRank(data.watchPoolRank);
+    }
+  } catch (error) {
+    console.warn('load watch-home-prefs watchPoolRank failed', error);
+  }
+  return normalizeWatchPoolRank(CONFIG.WATCH_POOL_RANK);
 }
 
 async function loadGithubJsonFile(path) {
@@ -1054,6 +1081,9 @@ async function runMonitorOnce() {
   )
     ? state.selectedDimension
     : CONFIG.SELECTED_DIMENSION;
+
+  CONFIG.WATCH_POOL_RANK = await loadWatchPoolRankFromPrefs();
+  console.log(`monitor watchPoolRank=${CONFIG.WATCH_POOL_RANK}`);
 
   const [data, trading] = await Promise.all([
     fetchBinanceTicker(),

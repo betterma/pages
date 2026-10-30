@@ -18,6 +18,11 @@ const CONFIG = {
   DATA_PATH: process.env.DATA_PATH || 'watch-data.json',
   BLACKLIST_PATH: process.env.BLACKLIST_PATH || 'watch-blacklist.json',
   PINS_PATH: process.env.PINS_PATH || 'watch-pins.json',
+  HOME_PREFS_PATH: process.env.HOME_PREFS_PATH || 'watch-home-prefs.json',
+  WATCH_POOL_RANK_DEFAULT: 30,
+  WATCH_POOL_RANK_MIN: 10,
+  WATCH_POOL_RANK_MAX: 100,
+  // 可被 watch-home-prefs.json 的 watchPoolRank 覆盖（页面设置里改）。
   WATCH_POOL_RANK: Number(process.env.WATCH_POOL_RANK || 30),
   WINDOW_INTERVAL: process.env.PIN_WINDOW_INTERVAL || '4h',
   WINDOW_TOLERANCE_MS: Number(process.env.WINDOW_TOLERANCE_MS || 2 * 60 * 1000),
@@ -31,6 +36,28 @@ const CONFIG = {
     String(process.env.AUTO_PIN_ENABLED === undefined ? '1' : process.env.AUTO_PIN_ENABLED) !==
     '0',
 };
+
+function normalizeWatchPoolRank(raw) {
+  const def = CONFIG.WATCH_POOL_RANK_DEFAULT;
+  const min = CONFIG.WATCH_POOL_RANK_MIN;
+  const max = CONFIG.WATCH_POOL_RANK_MAX;
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n)) return def;
+  return Math.min(max, Math.max(min, n));
+}
+
+async function loadWatchPoolRankFromPrefs() {
+  try {
+    const file = await loadJson(CONFIG.HOME_PREFS_PATH);
+    const data = file && file.data;
+    if (data && data.watchPoolRank != null) {
+      return normalizeWatchPoolRank(data.watchPoolRank);
+    }
+  } catch (error) {
+    console.warn('load watch-home-prefs watchPoolRank failed', error);
+  }
+  return normalizeWatchPoolRank(CONFIG.WATCH_POOL_RANK);
+}
 
 const DURATION_MS = {
   '15m': 15 * 60 * 1000,
@@ -361,10 +388,12 @@ async function runAutoPin(options) {
     return emptyResult(pins, prevSnap, seeded, events);
   }
 
-  const [watchData, blacklist] = await Promise.all([
+  const [watchData, blacklist, poolRank] = await Promise.all([
     fetchWatchData(),
     loadBlacklistSet(),
+    loadWatchPoolRankFromPrefs(),
   ]);
+  CONFIG.WATCH_POOL_RANK = poolRank;
   const history = Array.isArray(watchData && watchData.history)
     ? watchData.history
     : [];
@@ -379,6 +408,10 @@ async function runAutoPin(options) {
   const marketMap = await fetchBinanceTickers(null);
 
   const watchPool = buildWatchPool(history, marketMap, seedPool, blacklist);
+  console.log(
+    'auto-pin watchPoolRank',
+    JSON.stringify({ rank: CONFIG.WATCH_POOL_RANK, pool: watchPool.size }),
+  );
   const zone = listRisingZone(history, marketMap, watchPool, blacklist);
 
   if (!seeded) {
