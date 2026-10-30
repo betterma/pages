@@ -18973,6 +18973,8 @@
           nailNoticeDeBlueEnabled = readLocalNailNoticeDeBlue();
         }
         syncNailNoticeDeltaFilterUi();
+        // 先立刻按新筛选显隐，避免「按钮已是全部、卡片仍被蓝筛 pending 藏住」的竞态。
+        applyNailNoticeDeltaFilter();
         // 名单不变，只重画算涨跌；保留滚动。
         await paintNailNoticeCharts({ force: true });
       }
@@ -19106,6 +19108,12 @@
               );
             } catch (error) {
               console.warn("notice chart failed", symbol, error);
+              // 失败也写入方向，避免蓝/红筛选下一直 pending 被藏死。
+              const card = canvas.closest(".nail-notice-card");
+              if (card && !card.getAttribute("data-notice-dir")) {
+                card.setAttribute("data-notice-dir", "flat");
+                applyNailNoticeDeltaFilter();
+              }
             }
           };
           // 并发画全部通知图（限并发，避免串行只画前几张 / 一次打爆限流）。
