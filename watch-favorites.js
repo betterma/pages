@@ -200,14 +200,17 @@
     const repo = options.repo || DEFAULT_REPO;
     const path = options.path;
     const token = options.token || getGithubToken();
+    const ref = options.ref ? String(options.ref) : "main";
     const response = await fetch(
-      `https://api.github.com/repos/${repo}/contents/${path}?t=${Date.now()}`,
+      `https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}?ref=${encodeURIComponent(ref)}&t=${Date.now()}`,
       {
         cache: "no-store",
         headers: {
           Accept: "application/vnd.github+json",
           Authorization: `Bearer ${token}`,
           "X-GitHub-Api-Version": "2022-11-28",
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
         },
       },
     );
@@ -1498,6 +1501,59 @@
     const repo = (options && options.repo) || DEFAULT_REPO;
     const path =
       (options && options.path) || NAIL_GREEN_NOTICES_PATH;
+    const force = !!(options && options.force);
+    // 强制刷新：先钉最新 commit 再读，避开 Contents /main 偶发旧副本。
+    if (force) {
+      try {
+        const commitSha = await getMainCommitSha({
+          repo,
+          token: options && options.token,
+        });
+        try {
+          const current = await fetchJsonFile({
+            repo,
+            path,
+            token: options && options.token,
+            ref: commitSha,
+          });
+          if (current.data) {
+            return {
+              items: normalizeNailGreenNotices(
+                current.data.items || current.data,
+              ),
+              readAt: Number(current.data.readAt) || 0,
+              updatedAt: Number(current.data.updatedAt) || null,
+              sha: current.sha,
+              source: "api-commit",
+              commitSha,
+            };
+          }
+        } catch (error) {
+          console.warn(
+            "loadNailGreenNotices force api-commit failed, trying raw",
+            error,
+          );
+        }
+        const response = await fetchRawJsonByCommit({
+          repo,
+          path,
+          commitSha,
+        });
+        if (response.ok) {
+          const data = await response.json();
+          return {
+            items: normalizeNailGreenNotices(data.items || data),
+            readAt: Number(data.readAt) || 0,
+            updatedAt: Number(data.updatedAt) || null,
+            sha: null,
+            source: "raw-commit",
+            commitSha,
+          };
+        }
+      } catch (error) {
+        console.warn("loadNailGreenNotices force path failed", error);
+      }
+    }
     try {
       const current = await fetchJsonFile({
         repo,
@@ -1534,6 +1590,7 @@
           updatedAt: Number(data.updatedAt) || null,
           sha: null,
           source: "raw-commit",
+          commitSha,
         };
       }
     } catch (error) {
