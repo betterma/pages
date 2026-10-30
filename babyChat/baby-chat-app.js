@@ -20,7 +20,18 @@
     el.textContent = message;
     el.classList.add("show");
     clearTimeout(toast._t);
-    toast._t = setTimeout(() => el.classList.remove("show"), 2600);
+    toast._t = setTimeout(() => el.classList.remove("show"), 2400);
+  }
+
+  function showFlash(message) {
+    const el = $("flash");
+    if (!el) return;
+    el.hidden = false;
+    el.textContent = message;
+    clearTimeout(showFlash._t);
+    showFlash._t = setTimeout(() => {
+      el.hidden = true;
+    }, 4200);
   }
 
   function escapeHtml(text) {
@@ -42,14 +53,24 @@
     }).format(new Date(ms));
   }
 
+  function pickEveningSummary() {
+    const summaries =
+      state.data && state.data.summaries && typeof state.data.summaries === "object"
+        ? state.data.summaries
+        : {};
+    const today = BabyChatStore.shanghaiDate();
+    if (summaries[today]) return summaries[today];
+    const keys = Object.keys(summaries).sort();
+    if (!keys.length) return null;
+    return summaries[keys[keys.length - 1]];
+  }
+
   function setLoading(show, title, sub) {
     const overlay = $("loadingOverlay");
-    const titleEl = $("loadingTitle");
-    const subEl = $("loadingSub");
     if (!overlay) return;
     if (show) {
-      if (titleEl) titleEl.textContent = title || "处理中";
-      if (subEl) subEl.textContent = sub || "请稍候…";
+      $("loadingTitle").textContent = title || "处理中";
+      $("loadingSub").textContent = sub || "请稍候…";
       overlay.hidden = false;
       document.body.classList.add("is-loading");
     } else {
@@ -60,13 +81,10 @@
 
   function setBusy(busy, title, sub) {
     state.busy = !!busy;
-    const send = $("btnSendText");
-    const voice = $("btnVoice");
-    const refresh = $("btnRefresh");
-    if (send) send.disabled = state.busy;
-    if (voice) voice.disabled = state.busy;
-    if (refresh) refresh.disabled = state.busy;
-    if ($("inputText")) $("inputText").disabled = state.busy;
+    ["btnSendText", "btnVoice", "inputText"].forEach((id) => {
+      const el = $(id);
+      if (el) el.disabled = state.busy;
+    });
     $("voiceMeta").textContent = busy ? title || "处理中…" : "";
     setLoading(busy, title, sub);
   }
@@ -98,41 +116,103 @@
     await withLoading("同步中", "正在拉取最新记录…", run);
   }
 
-  function todayStats() {
-    const date = BabyChatStore.shanghaiDate();
-    let ml = 0;
-    let feeds = 0;
-    (state.data.entries || []).forEach((e) => {
-      if (!e || e.date !== date || e.chatOnly) return;
-      ml += Number(e.mlTotal) || 0;
-      feeds += Number(e.feedCount) || 0;
-    });
-    return { ml, feeds, date };
+  function entryLabel(e) {
+    if (!e) return "";
+    if (e.chatOnly) return e.notes || e.text || "闲聊";
+    const parts = [];
+    if (e.feedCount) {
+      parts.push(
+        e.mlTotal
+          ? `喂奶 ${e.feedCount}次 / ${e.mlTotal}ml`
+          : `喂奶 ${e.feedCount}次`,
+      );
+    }
+    if (e.peeCount) parts.push(`小便 ${e.peeCount}次`);
+    if (e.poopCount) parts.push(`大便 ${e.poopCount}次`);
+    if (e.sleepCount || e.sleepMinutes) {
+      parts.push(
+        e.sleepMinutes
+          ? `睡眠约${e.sleepMinutes}分钟`
+          : `睡眠 ${e.sleepCount}次`,
+      );
+    }
+    if (!parts.length && Array.isArray(e.events) && e.events.length) {
+      return BabyChatAI.summarizeParse({ events: e.events, notes: e.notes });
+    }
+    return parts.join(" · ") || e.text || "记录";
   }
 
-  function renderHeader() {
-    const cfg = state.data.config || {};
-    $("brandName").textContent = cfg.name || "葫芦宝";
-    const days = BabyChatStore.ageDaysOn(
-      cfg.birthDate,
-      BabyChatStore.shanghaiDate(),
+  function renderSummary() {
+    const body = $("summaryBody");
+    if (!state.data) {
+      body.textContent = "加载中…";
+      return;
+    }
+    const totals = BabyChatStore.aggregateToday(state.data.entries);
+    if (!totals.entryCount) {
+      body.innerHTML =
+        '今天还没有记录<span class="summary-hint">点这里可查看/修改明细</span>';
+      return;
+    }
+    const rows = [];
+    rows.push(
+      `<div class="dim"><span>喂奶</span><span>${totals.feedCount} 次${totals.mlTotal ? ` · ${totals.mlTotal} ml` : ""}</span></div>`,
     );
-    const label = BabyChatStore.ageLabel(days);
-    const src =
-      state.source === "api" || state.source === "raw"
-        ? "已同步"
-        : state.source === "local"
-          ? "本地预览"
-          : "未连接";
-    $("ageLine").innerHTML = `<span class="status-dot"></span>${label} · ${src}`;
-    const stats = todayStats();
-    $("todayMl").textContent = `${stats.ml} ml`;
-    $("todayFeeds").textContent = String(stats.feeds);
-    $("syncHint").textContent =
-      "文字/语音在网页即时解析并自动入库；可随时改记录。每晚 20:00 云函数推微信总结。";
+    rows.push(
+      `<div class="dim"><span>小便</span><span>${totals.peeCount} 次</span></div>`,
+    );
+    rows.push(
+      `<div class="dim"><span>大便</span><span>${totals.poopCount} 次</span></div>`,
+    );
+    if (totals.sleepMinutes || totals.sleepCount) {
+      rows.push(
+        `<div class="dim"><span>睡眠</span><span>${
+          totals.sleepMinutes
+            ? `约 ${totals.sleepMinutes} 分钟`
+            : `${totals.sleepCount} 次`
+        }</span></div>`,
+      );
+    }
+    if (totals.chatCount) {
+      rows.push(
+        `<div class="dim"><span>闲聊备注</span><span>${totals.chatCount} 条</span></div>`,
+      );
+    }
+    rows.push(
+      `<div class="summary-hint">共 ${totals.entryCount} 条 · 点这里可改明细</div>`,
+    );
+    body.innerHTML = rows.join("");
   }
 
-  function renderToday() {
+  function renderEvening() {
+    const body = $("eveningBody");
+    if (!body) return;
+    if (!state.data) {
+      body.className = "evening-body is-empty";
+      body.textContent = "加载中…";
+      return;
+    }
+    const item = pickEveningSummary();
+    if (!item) {
+      body.className = "evening-body is-empty";
+      body.textContent = "今晚 20:00 后生成，也会推到微信";
+      return;
+    }
+    const today = BabyChatStore.shanghaiDate();
+    const isToday = item.date === today;
+    const text = String(item.content || item.narrative || "").trim();
+    const pushState = item.pushedAt
+      ? `已推送微信 · ${formatTime(item.pushedAt)}`
+      : item.pushError
+        ? `未推送：${item.pushError}`
+        : "已生成，待推送微信";
+    body.className = "evening-body";
+    body.innerHTML = `${escapeHtml(text)}<div class="evening-meta">${escapeHtml(
+      isToday ? `今日 · ${pushState}` : `${item.date || ""} · ${pushState}`,
+    )}</div>`;
+  }
+
+  function renderTodayList() {
     const list = $("todayList");
     const date = BabyChatStore.shanghaiDate();
     const items = (state.data.entries || [])
@@ -146,37 +226,28 @@
     list.innerHTML = items
       .map((e) => {
         if (state.editingId === e.id) {
-          const events = Array.isArray(e.events) ? e.events : [];
-          const eventRows =
-            events.length > 0
-              ? events
-                  .map((ev, idx) => {
-                    return `<div class="event-row">
-                      <input data-ev="${idx}" data-field="ml" type="number" min="0" step="1" value="${ev.ml != null ? escapeHtml(ev.ml) : ""}" placeholder="ml" />
-                      <select data-ev="${idx}" data-field="method">
-                        <option value="unknown" ${ev.method === "unknown" ? "selected" : ""}>方式不明</option>
-                        <option value="bottle" ${ev.method === "bottle" ? "selected" : ""}>奶瓶</option>
-                        <option value="breast" ${ev.method === "breast" ? "selected" : ""}>母乳</option>
-                      </select>
-                      <span class="meta">${ev.estimated ? "约" : ""}</span>
-                    </div>`;
-                  })
-                  .join("")
-              : '<div class="meta">无喂奶事件</div>';
           return `<div class="card edit-card" data-id="${escapeHtml(e.id)}">
-            <div class="title">编辑记录</div>
-            <div class="field">
-              <label>原文</label>
+            <div class="field"><label>原文</label>
               <input class="text-input" type="text" value="${escapeHtml(e.text || "")}" />
             </div>
-            <div class="field">
-              <label>备注</label>
+            <div class="field"><label>备注</label>
               <input class="notes-input" type="text" value="${escapeHtml(e.notes || "")}" />
             </div>
-            <div class="events-edit">${eventRows}</div>
+            <div class="events-edit">
+              <div class="event-row">
+                <input data-field="feedCount" type="number" min="0" value="${Number(e.feedCount) || 0}" placeholder="喂奶次数" />
+                <input data-field="mlTotal" type="number" min="0" value="${Number(e.mlTotal) || 0}" placeholder="ml" />
+                <span class="meta">奶</span>
+              </div>
+              <div class="event-row">
+                <input data-field="peeCount" type="number" min="0" value="${Number(e.peeCount) || 0}" placeholder="小便" />
+                <input data-field="poopCount" type="number" min="0" value="${Number(e.poopCount) || 0}" placeholder="大便" />
+                <span class="meta">尿便</span>
+              </div>
+            </div>
             <label class="meta" style="display:flex;gap:8px;align-items:center;margin-top:10px">
               <input type="checkbox" class="chat-only" ${e.chatOnly ? "checked" : ""} />
-              仅闲聊（不计入奶量）
+              仅闲聊
             </label>
             <div class="row">
               <button type="button" class="primary btn-save-edit" data-id="${escapeHtml(e.id)}">保存</button>
@@ -185,14 +256,10 @@
             </div>
           </div>`;
         }
-        const title = e.chatOnly
-          ? "闲聊"
-          : `奶 ${e.mlTotal || 0} ml / ${e.feedCount || 0} 顿`;
         return `<div class="card">
-          <div class="title">${escapeHtml(title)}</div>
+          <div class="title">${escapeHtml(entryLabel(e))}</div>
           <div class="meta">${escapeHtml(formatTime(e.at))} · ${escapeHtml(e.source || "")}</div>
           <div style="margin-top:8px">${escapeHtml(e.text || "")}</div>
-          ${e.notes ? `<div class="meta" style="margin-top:6px">${escapeHtml(e.notes)}</div>` : ""}
           <div class="row">
             <button type="button" class="secondary btn-edit" data-id="${escapeHtml(e.id)}">修改</button>
           </div>
@@ -201,51 +268,46 @@
       .join("");
   }
 
-  function renderSummary() {
-    const box = $("summaryBox");
-    const keys = Object.keys(state.data.summaries || {}).sort();
-    if (!keys.length) {
-      box.className = "summary-box empty";
-      box.textContent = "暂无";
-      return;
-    }
-    const last = state.data.summaries[keys[keys.length - 1]];
-    box.className = "summary-box";
-    const pushState = last.pushedAt
-      ? `已推送 ${formatTime(last.pushedAt)}`
-      : last.pushError
-        ? `未推送：${last.pushError}`
-        : "已生成，待推送";
-    box.textContent = `${last.content || last.narrative || ""}\n\n—— ${pushState}`;
-  }
-
   function render() {
     if (!state.data) return;
-    renderHeader();
-    renderToday();
     renderSummary();
+    renderEvening();
+    if (!$("detailSheet").hidden) renderTodayList();
   }
 
-  async function saveEntryFromParse(options) {
-    const opts = options || {};
-    const text = String(opts.text || "").trim();
+  function openSheet() {
+    $("detailSheet").hidden = false;
+    renderTodayList();
+  }
+
+  function closeSheet() {
+    state.editingId = null;
+    $("detailSheet").hidden = true;
+  }
+
+  function buildEntry(opts) {
     const parse = opts.parse || {};
-    const source = opts.source || "text";
-    const date = BabyChatStore.shanghaiDate();
-    const stats = BabyChatStore.feedStats(parse.events || []);
-    const id = BabyChatStore.newId("e");
-    const entry = {
-      id,
+    const stats = BabyChatStore.eventStats(parse.events || []);
+    return {
+      id: BabyChatStore.newId("e"),
       at: Date.now(),
-      date,
-      source,
-      text,
+      date: BabyChatStore.shanghaiDate(),
+      source: opts.source || "text",
+      text: String(opts.text || "").trim(),
       chatOnly: Boolean(parse.chatOnly),
       events: Array.isArray(parse.events) ? parse.events : [],
       notes: String(parse.notes || ""),
       mlTotal: stats.mlTotal,
       feedCount: stats.feedCount,
+      peeCount: stats.peeCount,
+      poopCount: stats.poopCount,
+      sleepMinutes: stats.sleepMinutes,
+      sleepCount: stats.sleepCount,
     };
+  }
+
+  async function saveEntryFromParse(options) {
+    const entry = buildEntry(options);
     await BabyChatStore.patch((data) => {
       data.entries = data.entries || [];
       data.entries.push(entry);
@@ -267,9 +329,11 @@
         progress("正在保存", "写入今日记录…");
         await saveEntryFromParse({ text, parse, source: "text" });
         $("inputText").value = "";
-        progress("同步中", "刷新列表…");
+        progress("同步中", "更新总结…");
         await reload({ silent: true });
-        toast(parse.chatOnly ? "已记闲聊" : "已自动入库");
+        const tip = BabyChatAI.summarizeParse(parse);
+        showFlash(`已记：${tip}`);
+        toast("已记录");
       });
     } catch (error) {
       toast(error.message || "提交失败");
@@ -300,14 +364,11 @@
         progress("正在解析", "理解口语内容…");
         const parse = await BabyChatAI.parseDiaryText(asrText);
         progress("正在保存", "写入今日记录…");
-        await saveEntryFromParse({
-          text: asrText,
-          parse,
-          source: "voice",
-        });
-        progress("同步中", "刷新列表…");
+        await saveEntryFromParse({ text: asrText, parse, source: "voice" });
+        progress("同步中", "更新总结…");
         await reload({ silent: true });
-        toast(parse.chatOnly ? "语音闲聊已记" : "语音已自动入库");
+        showFlash(`已记：${BabyChatAI.summarizeParse(parse)}`);
+        toast("已记录");
       });
     } catch (error) {
       toast(error.message || "语音处理失败");
@@ -370,33 +431,27 @@
   }
 
   function readEditCard(card) {
+    const num = (sel) => {
+      const el = card.querySelector(`[data-field="${sel}"]`);
+      const n = Number(el && el.value);
+      return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
+    };
+    const chatOnly = card.querySelector(".chat-only");
     const textInput = card.querySelector(".text-input");
     const notes = card.querySelector(".notes-input");
-    const chatOnly = card.querySelector(".chat-only");
-    const eventRows = [...card.querySelectorAll(".event-row")];
-    const events = eventRows.map((row) => {
-      const mlInput = row.querySelector('[data-field="ml"]');
-      const methodInput = row.querySelector('[data-field="method"]');
-      const ml = Number(mlInput && mlInput.value);
-      return {
-        type: "feed",
-        ml: Number.isFinite(ml) && ml > 0 ? Math.round(ml) : null,
-        method: (methodInput && methodInput.value) || "unknown",
-        estimated: false,
-      };
-    });
-    const onlyChat = !!(chatOnly && chatOnly.checked);
     return {
       text: textInput ? String(textInput.value || "").trim() : "",
       notes: notes ? String(notes.value || "").trim() : "",
-      chatOnly: onlyChat,
-      events: onlyChat ? [] : events,
+      chatOnly: !!(chatOnly && chatOnly.checked),
+      feedCount: num("feedCount"),
+      mlTotal: num("mlTotal"),
+      peeCount: num("peeCount"),
+      poopCount: num("poopCount"),
     };
   }
 
   async function saveEdit(id, card) {
     const edits = readEditCard(card);
-    const stats = BabyChatStore.feedStats(edits.events);
     await withLoading("保存修改", "正在写入…", async (progress) => {
       await BabyChatStore.patch((data) => {
         const entry = (data.entries || []).find((e) => e && e.id === id);
@@ -404,47 +459,78 @@
         entry.text = edits.text;
         entry.notes = edits.notes;
         entry.chatOnly = edits.chatOnly;
-        entry.events = edits.events;
-        entry.mlTotal = stats.mlTotal;
-        entry.feedCount = stats.feedCount;
+        if (edits.chatOnly) {
+          entry.events = [];
+          entry.feedCount = 0;
+          entry.mlTotal = 0;
+          entry.peeCount = 0;
+          entry.poopCount = 0;
+        } else {
+          entry.feedCount = edits.feedCount;
+          entry.mlTotal = edits.mlTotal;
+          entry.peeCount = edits.peeCount;
+          entry.poopCount = edits.poopCount;
+          const events = [];
+          if (edits.feedCount) {
+            events.push({
+              type: "feed",
+              count: edits.feedCount,
+              ml: edits.mlTotal || null,
+              method: "unknown",
+              estimated: false,
+            });
+          }
+          if (edits.peeCount) {
+            events.push({ type: "pee", count: edits.peeCount });
+          }
+          if (edits.poopCount) {
+            events.push({ type: "poop", count: edits.poopCount });
+          }
+          entry.events = events;
+        }
         return data;
       }, "baby-chat: edit entry");
       state.editingId = null;
-      progress("同步中", "刷新列表…");
+      progress("同步中", "更新总结…");
       await reload({ silent: true });
-      toast("已保存修改");
+      toast("已保存");
     });
   }
 
   async function deleteEntry(id) {
-    await withLoading("删除中", "正在更新记录…", async (progress) => {
+    await withLoading("删除中", "正在更新…", async (progress) => {
       await BabyChatStore.patch((data) => {
         data.entries = (data.entries || []).filter((e) => e && e.id !== id);
         return data;
       }, "baby-chat: delete entry");
       state.editingId = null;
-      progress("同步中", "刷新列表…");
+      progress("同步中", "更新总结…");
       await reload({ silent: true });
       toast("已删除");
     });
   }
 
-  function bindList() {
+  function bind() {
+    $("btnSendText").addEventListener("click", () => submitText());
+    $("summaryPanel").addEventListener("click", () => {
+      if (!state.busy) openSheet();
+    });
+    $("sheetClose").addEventListener("click", closeSheet);
+    $("sheetBackdrop").addEventListener("click", closeSheet);
+
     $("todayList").addEventListener("click", async (event) => {
       const target = event.target;
-      if (!(target instanceof HTMLElement)) return;
-      if (state.busy) return;
+      if (!(target instanceof HTMLElement) || state.busy) return;
       const id = target.getAttribute("data-id");
       try {
         if (target.classList.contains("btn-edit") && id) {
           state.editingId = id;
-          renderToday();
+          renderTodayList();
         } else if (target.classList.contains("btn-cancel-edit")) {
           state.editingId = null;
-          renderToday();
+          renderTodayList();
         } else if (target.classList.contains("btn-save-edit") && id) {
-          const card = target.closest(".edit-card");
-          await saveEdit(id, card);
+          await saveEdit(id, target.closest(".edit-card"));
         } else if (target.classList.contains("btn-delete") && id) {
           if (!window.confirm("删除这条记录？")) return;
           await deleteEntry(id);
@@ -453,9 +539,7 @@
         toast(error.message || "操作失败");
       }
     });
-  }
 
-  function bindVoiceButton() {
     const btn = $("btnVoice");
     const start = (event) => {
       event.preventDefault();
@@ -474,25 +558,14 @@
   }
 
   async function boot() {
-    bindList();
-    bindVoiceButton();
-    $("btnSendText").addEventListener("click", () => {
-      submitText();
-    });
-    $("btnRefresh").addEventListener("click", () => {
-      if (state.busy) return;
-      reload()
-        .then(() => toast("已刷新"))
-        .catch((error) => toast(error.message || "刷新失败"));
-    });
+    bind();
     try {
-      await withLoading("加载中", "正在打开日记…", async () => {
+      await withLoading("加载中", "正在打开…", async () => {
         await reload({ silent: true });
       });
     } catch (error) {
       toast(error.message || "加载失败");
-      $("ageLine").innerHTML =
-        '<span class="status-dot warn"></span>加载失败，请检查网络';
+      $("summaryBody").textContent = "加载失败，请检查网络或配置";
     }
   }
 

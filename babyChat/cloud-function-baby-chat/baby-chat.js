@@ -147,12 +147,32 @@ function aggregateDay(entries, dateStr) {
   const dayEntries = (entries || []).filter((e) => e && e.date === dateStr);
   let mlTotal = 0;
   let feedCount = 0;
+  let peeCount = 0;
+  let poopCount = 0;
+  let sleepMinutes = 0;
   const notes = [];
   const chats = [];
   dayEntries.forEach((e) => {
     if (!e.chatOnly) {
       mlTotal += Number(e.mlTotal) || 0;
       feedCount += Number(e.feedCount) || 0;
+      peeCount += Number(e.peeCount) || 0;
+      poopCount += Number(e.poopCount) || 0;
+      sleepMinutes += Number(e.sleepMinutes) || 0;
+      if (Array.isArray(e.events)) {
+        e.events.forEach((ev) => {
+          if (!ev) return;
+          const c = Number(ev.count);
+          const count = Number.isFinite(c) && c > 0 ? Math.round(c) : 1;
+          if (ev.type === 'pee' && !e.peeCount) peeCount += count;
+          if (ev.type === 'poop' && !e.poopCount) poopCount += count;
+          if (ev.type === 'feed' && !e.feedCount) {
+            feedCount += count;
+            const ml = Number(ev.ml);
+            if (Number.isFinite(ml) && ml > 0 && !e.mlTotal) mlTotal += Math.round(ml);
+          }
+        });
+      }
     }
     if (e.notes) notes.push(String(e.notes));
     if (e.chatOnly && e.text) chats.push(String(e.text));
@@ -162,6 +182,9 @@ function aggregateDay(entries, dateStr) {
     dayEntries,
     mlTotal,
     feedCount,
+    peeCount,
+    poopCount,
+    sleepMinutes,
     notes: notes.slice(0, 20),
     chats: chats.slice(0, 10),
   };
@@ -199,6 +222,9 @@ async function maybePushDailySummary(data, nowMs) {
       ageLabel: label,
       feedCount: agg.feedCount,
       mlTotal: agg.mlTotal,
+      peeCount: agg.peeCount,
+      poopCount: agg.poopCount,
+      sleepMinutes: agg.sleepMinutes,
       milestones,
       notes: agg.notes,
       chats: agg.chats,
@@ -206,7 +232,7 @@ async function maybePushDailySummary(data, nowMs) {
     });
   } catch (error) {
     narrative = agg.dayEntries.length
-      ? `今天共记录 ${agg.dayEntries.length} 条。奶量 ${agg.mlTotal} ml / ${agg.feedCount} 顿。`
+      ? `今天共记录 ${agg.dayEntries.length} 条。喂奶 ${agg.feedCount} 次${agg.mlTotal ? ` / ${agg.mlTotal}ml` : ''}，小便 ${agg.peeCount} 次，大便 ${agg.poopCount} 次。`
       : '今天还没有记录。';
     console.warn('narrative fallback', error && error.message);
   }
@@ -218,7 +244,12 @@ async function maybePushDailySummary(data, nowMs) {
   if (milestones.length) {
     lines.push(`纪念：${milestones.join(' · ')}`);
   }
-  lines.push(`今日奶量：${agg.mlTotal} ml / ${agg.feedCount} 顿`);
+  lines.push(
+    `喂奶：${agg.feedCount} 次${agg.mlTotal ? ` · ${agg.mlTotal} ml` : ''}`,
+  );
+  lines.push(`小便：${agg.peeCount} 次`);
+  lines.push(`大便：${agg.poopCount} 次`);
+  if (agg.sleepMinutes) lines.push(`睡眠：约 ${agg.sleepMinutes} 分钟`);
   lines.push('');
   lines.push(narrative);
 
@@ -229,6 +260,9 @@ async function maybePushDailySummary(data, nowMs) {
     ageDays: days,
     feedCount: agg.feedCount,
     mlTotal: agg.mlTotal,
+    peeCount: agg.peeCount,
+    poopCount: agg.poopCount,
+    sleepMinutes: agg.sleepMinutes,
     milestones,
     narrative,
     content,

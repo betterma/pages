@@ -6,72 +6,64 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <title>宝宝日记 · 口语记录</title>
+    <title>宝宝日记</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&family=Noto+Serif+SC:wght@600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="./baby-chat.css" />
   </head>
   <body>
     <div class="app">
-      <header class="topbar">
-        <div>
-          <h1 class="brand" id="brandName">葫芦宝</h1>
-          <p class="age-line" id="ageLine">
-            <span class="status-dot warn"></span>加载中…
-          </p>
-        </div>
-        <button type="button" class="icon-btn" id="btnRefresh">刷新</button>
-      </header>
-
-      <section class="panel">
-        <div class="stats">
-          <div class="stat">
-            <div class="label">今日奶量</div>
-            <div class="value" id="todayMl">0 ml</div>
+      <main class="stage">
+        <div class="compose-wrap">
+          <p class="flash" id="flash" hidden></p>
+          <textarea
+            id="inputText"
+            rows="3"
+            placeholder="随便说，例如：刚才尿了一次 / 上午拉了两次 / 喂了一次奶"
+          ></textarea>
+          <div class="compose-actions">
+            <button type="button" class="btn-text" id="btnSendText">发送</button>
+            <button type="button" class="btn-voice" id="btnVoice">按住说话</button>
           </div>
-          <div class="stat">
-            <div class="label">今日顿数</div>
-            <div class="value" id="todayFeeds">0</div>
-          </div>
+          <p class="voice-meta" id="voiceMeta"></p>
         </div>
-        <p class="hint" id="syncHint" style="margin: 12px 0 0">
-          文字/语音在网页即时解析并自动入库；可随时改记录。每晚 20:00 云函数推微信总结。
-        </p>
+      </main>
+
+      <section class="summary-panel" id="summaryPanel">
+        <div class="summary-label">截至目前</div>
+        <div class="summary-body" id="summaryBody">今天还没有记录</div>
       </section>
 
-      <section class="panel compose">
-        <h2>记一笔</h2>
-        <textarea
-          id="inputText"
-          placeholder="口语随便说，例如：中午喂了大概 120，下午有点闹"
-        ></textarea>
-        <div class="row">
-          <button type="button" class="primary" id="btnSendText">发送文字</button>
-          <button type="button" class="secondary" id="btnVoice">按住说话</button>
-        </div>
-        <p class="meta" id="voiceMeta" style="margin-top: 10px"></p>
+      <section class="evening-panel" id="eveningPanel">
+        <div class="summary-label">晚间总结</div>
+        <div class="evening-body" id="eveningBody">今晚 20:00 后生成，也会推到微信</div>
       </section>
+    </div>
 
-      <section class="panel">
-        <h2>今日记录</h2>
-        <div class="list" id="todayList">
-          <div class="empty">还没有记录</div>
+    <div class="sheet" id="detailSheet" hidden>
+      <div class="sheet-backdrop" id="sheetBackdrop"></div>
+      <div class="sheet-card">
+        <div class="sheet-head">
+          <h2>今日明细</h2>
+          <button type="button" class="sheet-close" id="sheetClose">关闭</button>
         </div>
-      </section>
-
-      <section class="panel">
-        <h2>最近总结</h2>
-        <div id="summaryBox" class="summary-box empty">暂无</div>
-      </section>
+        <div class="list" id="todayList"></div>
+      </div>
     </div>
 
     <div class="toast" id="toast"></div>
 
-    <div class="loading-overlay" id="loadingOverlay" hidden aria-live="polite" aria-busy="true">
+    <div
+      class="loading-overlay"
+      id="loadingOverlay"
+      hidden
+      aria-live="polite"
+      aria-busy="true"
+    >
       <div class="loading-card">
         <div class="loading-spinner" aria-hidden="true"></div>
         <div class="loading-title" id="loadingTitle">处理中</div>

@@ -1,6 +1,8 @@
 (function (global) {
   "use strict";
 
+  const EVENT_TYPES = new Set(["feed", "pee", "poop", "sleep", "other"]);
+
   function cfg() {
     return global.BabyChatConfig || {};
   }
@@ -78,40 +80,63 @@
     return null;
   }
 
+  function normalizeEvent(item) {
+    if (!item || typeof item !== "object") return null;
+    let type = String(item.type || "").toLowerCase();
+    // 口语别名
+    if (type === "urine" || type === "wee" || type === "尿") type = "pee";
+    if (type === "stool" || type === "diaper_poop" || type === "便" || type === "拉")
+      type = "poop";
+    if (type === "milk" || type === "nursing" || type === "喂奶") type = "feed";
+    if (!EVENT_TYPES.has(type)) return null;
+
+    const countRaw = item.count == null || item.count === "" ? 1 : Number(item.count);
+    const count =
+      Number.isFinite(countRaw) && countRaw > 0 ? Math.round(countRaw) : 1;
+
+    if (type === "feed") {
+      const mlRaw = item.ml == null || item.ml === "" ? null : Number(item.ml);
+      const ml = Number.isFinite(mlRaw) && mlRaw > 0 ? Math.round(mlRaw) : null;
+      const methodRaw = String(item.method || "unknown").toLowerCase();
+      const method =
+        methodRaw === "bottle" || methodRaw === "breast" ? methodRaw : "unknown";
+      return {
+        type: "feed",
+        count,
+        ml,
+        method,
+        estimated: Boolean(item.estimated),
+      };
+    }
+
+    if (type === "sleep") {
+      const minutesRaw =
+        item.minutes == null || item.minutes === "" ? null : Number(item.minutes);
+      const minutes =
+        Number.isFinite(minutesRaw) && minutesRaw > 0
+          ? Math.round(minutesRaw)
+          : null;
+      return { type: "sleep", count, minutes };
+    }
+
+    return { type, count };
+  }
+
   function normalizeParse(raw) {
     const intent = String(raw.intent || "other").toLowerCase();
     const events = Array.isArray(raw.events)
-      ? raw.events
-          .map((item) => {
-            if (!item || typeof item !== "object") return null;
-            const type = String(item.type || "feed").toLowerCase();
-            if (type !== "feed") return null;
-            const mlRaw =
-              item.ml == null || item.ml === "" ? null : Number(item.ml);
-            const ml =
-              Number.isFinite(mlRaw) && mlRaw > 0 ? Math.round(mlRaw) : null;
-            const methodRaw = String(item.method || "unknown").toLowerCase();
-            const method =
-              methodRaw === "bottle" || methodRaw === "breast"
-                ? methodRaw
-                : "unknown";
-            return {
-              type: "feed",
-              ml,
-              method,
-              estimated: Boolean(item.estimated),
-            };
-          })
-          .filter(Boolean)
+      ? raw.events.map(normalizeEvent).filter(Boolean)
       : [];
     const chatOnly =
       raw.chatOnly === true ||
       (events.length === 0 && (intent === "chat" || intent === "other"));
     const confidenceRaw = Number(raw.confidence);
     return {
-      intent: ["feeding", "mixed", "chat", "other"].includes(intent)
+      intent: ["care", "feeding", "mixed", "chat", "other"].includes(intent)
         ? intent
-        : "other",
+        : events.length
+          ? "care"
+          : "other",
       chatOnly,
       confidence: Number.isFinite(confidenceRaw)
         ? Math.max(0, Math.min(1, confidenceRaw))
@@ -119,6 +144,32 @@
       notes: raw.notes != null ? String(raw.notes).trim() : "",
       events: chatOnly ? [] : events,
     };
+  }
+
+  function summarizeParse(parse) {
+    const parts = [];
+    (parse.events || []).forEach((ev) => {
+      if (!ev) return;
+      if (ev.type === "feed") {
+        const ml =
+          ev.ml != null ? `${ev.ml}ml` : ev.count > 1 ? `${ev.count}次` : "1次";
+        parts.push(ev.ml != null ? `喂奶 ${ml}` : `喂奶 ${ev.count || 1}次`);
+      } else if (ev.type === "pee") {
+        parts.push(`小便 ${ev.count || 1}次`);
+      } else if (ev.type === "poop") {
+        parts.push(`大便 ${ev.count || 1}次`);
+      } else if (ev.type === "sleep") {
+        parts.push(
+          ev.minutes != null ? `睡眠约${ev.minutes}分钟` : `睡眠 ${ev.count || 1}次`,
+        );
+      } else {
+        parts.push("其他护理");
+      }
+    });
+    if (!parts.length) {
+      return parse.notes || parse.chatOnly ? "闲聊/备注" : "已记录";
+    }
+    return parts.join(" · ");
   }
 
   async function transcribeAudio(dataUri) {
@@ -151,17 +202,21 @@
     const input = String(text || "").trim();
     if (!input) throw new Error("文本为空");
     const system = [
-      "你是宝妈口语日记解析器。从中文口语里提取宝宝护理事实；闲聊单独标记。",
+      "你是宝妈口语日记解析器。从中文口语提取宝宝护理事实（不限奶量）。",
       "只输出一个 JSON 对象，不要 Markdown，不要解释。",
       "字段：",
-      '{"intent":"feeding|mixed|chat|other","chatOnly":boolean,"confidence":0-1,',
-      '"notes":"非喂养备注或闲聊摘要","events":[{"type":"feed","ml":number|null,',
-      '"method":"bottle|breast|unknown","estimated":boolean}]}',
+      '{"intent":"care|feeding|mixed|chat|other","chatOnly":boolean,"confidence":0-1,',
+      '"notes":"补充说明","events":[...]}',
+      "events 单项 type 只能是：feed | pee | poop | sleep | other",
+      "feed: {type,count,ml,method,estimated} ml可空；method=bottle|breast|unknown",
+      "pee/poop/other: {type,count}",
+      "sleep: {type,count,minutes} minutes可空",
       "规则：",
-      "1) 无明确喂养/护理事实时 chatOnly=true，events=[]。",
-      "2) ml 只在明确或可合理估计时填写；「半瓶」等标 estimated=true。",
-      "3) 无法判断 ml 时 ml=null，不要编造。",
-      "4) notes 保留情绪/闲聊，勿把数字只写在 notes。",
+      "1) 「刚才尿了一次」→ pee count=1；「上午拉了两次」→ poop count=2",
+      "2) 「刚才喂了一次奶」→ feed count=1，ml=null（未说毫升不要编）",
+      "3) 「喂了120」→ feed ml=120 count=1",
+      "4) 一句可含多事件；无护理事实则 chatOnly=true、events=[]",
+      "5) count 默认 1；半瓶等估量标 estimated=true",
     ].join("\n");
     const result = await chatCompletions({
       model,
@@ -182,5 +237,6 @@
     transcribeAudio,
     parseDiaryText,
     normalizeParse,
+    summarizeParse,
   };
 })(typeof window !== "undefined" ? window : globalThis);

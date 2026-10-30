@@ -344,16 +344,92 @@
     return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   }
 
-  function feedStats(events) {
+  function eventStats(events) {
     let mlTotal = 0;
     let feedCount = 0;
+    let peeCount = 0;
+    let poopCount = 0;
+    let sleepMinutes = 0;
+    let sleepCount = 0;
     (events || []).forEach((ev) => {
-      if (!ev || ev.type !== "feed") return;
-      feedCount += 1;
-      const ml = Number(ev.ml);
-      if (Number.isFinite(ml) && ml > 0) mlTotal += Math.round(ml);
+      if (!ev || !ev.type) return;
+      const countRaw = Number(ev.count);
+      const count =
+        Number.isFinite(countRaw) && countRaw > 0 ? Math.round(countRaw) : 1;
+      if (ev.type === "feed") {
+        feedCount += count;
+        const ml = Number(ev.ml);
+        if (Number.isFinite(ml) && ml > 0) mlTotal += Math.round(ml);
+      } else if (ev.type === "pee") {
+        peeCount += count;
+      } else if (ev.type === "poop") {
+        poopCount += count;
+      } else if (ev.type === "sleep") {
+        sleepCount += count;
+        const minutes = Number(ev.minutes);
+        if (Number.isFinite(minutes) && minutes > 0) {
+          sleepMinutes += Math.round(minutes);
+        }
+      }
     });
-    return { mlTotal, feedCount };
+    return {
+      mlTotal,
+      feedCount,
+      peeCount,
+      poopCount,
+      sleepMinutes,
+      sleepCount,
+    };
+  }
+
+  /** @deprecated use eventStats */
+  function feedStats(events) {
+    const s = eventStats(events);
+    return { mlTotal: s.mlTotal, feedCount: s.feedCount };
+  }
+
+  function aggregateToday(entries, dateStr) {
+    const date = dateStr || shanghaiDate();
+    const totals = {
+      feedCount: 0,
+      mlTotal: 0,
+      peeCount: 0,
+      poopCount: 0,
+      sleepMinutes: 0,
+      sleepCount: 0,
+      chatCount: 0,
+      entryCount: 0,
+    };
+    (entries || []).forEach((e) => {
+      if (!e || e.date !== date) return;
+      totals.entryCount += 1;
+      if (e.chatOnly) {
+        totals.chatCount += 1;
+        return;
+      }
+      totals.feedCount += Number(e.feedCount) || 0;
+      totals.mlTotal += Number(e.mlTotal) || 0;
+      totals.peeCount += Number(e.peeCount) || 0;
+      totals.poopCount += Number(e.poopCount) || 0;
+      totals.sleepMinutes += Number(e.sleepMinutes) || 0;
+      totals.sleepCount += Number(e.sleepCount) || 0;
+      // 兼容旧条目只有 events
+      if (
+        !e.feedCount &&
+        !e.peeCount &&
+        !e.poopCount &&
+        Array.isArray(e.events)
+      ) {
+        const s = eventStats(e.events);
+        totals.feedCount += s.feedCount;
+        totals.mlTotal += s.mlTotal;
+        totals.peeCount += s.peeCount;
+        totals.poopCount += s.poopCount;
+        totals.sleepMinutes += s.sleepMinutes;
+        totals.sleepCount += s.sleepCount;
+      }
+    });
+    return totals;
   }
 
   global.BabyChatStore = {
@@ -367,5 +443,7 @@
     ageLabel,
     newId,
     feedStats,
+    eventStats,
+    aggregateToday,
   };
 })(typeof window !== "undefined" ? window : globalThis);

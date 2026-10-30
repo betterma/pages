@@ -185,8 +185,8 @@ async function writeDailyNarrative(payload, options) {
   );
   const system = [
     '你是温和的宝宝日记助手。根据给定事实写今日短总结。',
-    '要求：中文，5～8 句内；不要改动或质疑给定的奶量数字与顿数；',
-    '不要医疗建议；闲聊可轻轻带过；不要标题，不要列表符号堆砌。',
+    '要求：中文，5～8 句内；不要改动喂奶/小便/大便/睡眠等给定数字；',
+    '可以自然带过各维度；不要医疗建议；闲聊可轻轻带过；不要标题，不要列表符号堆砌。',
   ].join('');
 
   const result = await chatCompletions({
