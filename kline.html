@@ -18489,7 +18489,8 @@
         );
       }
 
-      async function refreshNailGreenNotices() {
+      async function refreshNailGreenNotices(options) {
+        const opts = options || {};
         if (
           !WatchFavorites ||
           typeof WatchFavorites.loadNailGreenNoticesRaw !== "function"
@@ -18505,7 +18506,22 @@
             path:
               WatchFavorites.NAIL_GREEN_NOTICES_PATH ||
               "watch-nail-green-notices.json",
+            force: !!opts.force,
           });
+          // 强制刷新却读空：多半是瞬时失败，保留旧名单，避免列表被清空。
+          if (
+            opts.force &&
+            state &&
+            state.source === "empty" &&
+            (nailGreenNotices || []).length
+          ) {
+            syncNailNoticeEntryUi();
+            return {
+              items: nailGreenNotices,
+              readAt: nailGreenNoticesReadAt,
+              stale: true,
+            };
+          }
           const raw = state.items || [];
           const filtered = filterNailNoticesCurrentWindow(raw);
           nailGreenNotices = filtered;
@@ -18538,7 +18554,11 @@
         } catch (error) {
           console.warn("load nail green notices failed", error);
           syncNailNoticeEntryUi();
-          return { items: nailGreenNotices, readAt: nailGreenNoticesReadAt };
+          return {
+            items: nailGreenNotices,
+            readAt: nailGreenNoticesReadAt,
+            error,
+          };
         }
       }
 
@@ -18906,10 +18926,11 @@
         const hadCards = !!(
           listEl && listEl.querySelector(".nail-notice-card")
         );
-        await refreshNailGreenNotices();
+        // 手动/下拉刷新：强制读最新 commit，并强制重渲列表（定时刷新仍可软更新保滚动）。
+        const manual = !!(opts.force || opts.forceRender);
+        const loaded = await refreshNailGreenNotices({ force: manual });
         const nextSig = nailNoticeListSignature(nailGreenNotices);
-        // 名单未变：只重画 K 线/现价，保留滚动位置，避免定时刷新把人甩回顶部。
-        if (opts.forceRender || prevSig !== nextSig || !hadCards) {
+        if (opts.forceRender || manual || prevSig !== nextSig || !hadCards) {
           renderNailNoticeList();
           requestAnimationFrame(() => {
             if (listEl) listEl.scrollTop = scrollTop;
@@ -18933,7 +18954,22 @@
             updateNailNoticeScrollPct({ flash: false });
           });
         }
-        if (opts.toast) showToast(opts.toast);
+        if (opts.toast) {
+          if (loaded && loaded.error) {
+            showToast(
+              loaded.error.message || "通知刷新失败，仍显示旧名单",
+            );
+          } else if (loaded && loaded.stale) {
+            showToast("通知拉取失败，仍显示旧名单");
+          } else {
+            const n = (nailGreenNotices || []).length;
+            showToast(
+              typeof opts.toast === "string" && opts.toast !== "通知已刷新"
+                ? opts.toast
+                : `通知已刷新 · ${n} 条`,
+            );
+          }
+        }
       }
 
       function stopNailNoticeAutoRefresh() {
@@ -19230,12 +19266,12 @@
 
       async function openNailNoticeDrawer(options) {
         const opts = options || {};
-        // 打开通知页时默认筛「蓝」并刷新一次（相对通知线上涨）。
+        // 打开通知页时默认筛「蓝」并强制拉最新名单（相对通知线上涨）。
         nailNoticeDeltaFilter = "up";
         nailNoticeDeBlueEnabled = readLocalNailNoticeDeBlue();
         syncNailNoticeDeltaFilterUi();
         syncNailNoticeDeBlueUi();
-        await reloadNailNoticeList();
+        await reloadNailNoticeList({ force: true, forceRender: true });
         setNailNoticeDrawerMode("open");
         if (!opts.skipMarkRead) {
           void markNailNoticesRead();
@@ -24327,7 +24363,11 @@
       );
       if (nailNoticeRefreshBtn) {
         nailNoticeRefreshBtn.addEventListener("click", async () => {
-          await reloadNailNoticeList({ toast: "通知已刷新" });
+          await reloadNailNoticeList({
+            force: true,
+            forceRender: true,
+            toast: "通知已刷新",
+          });
         });
       }
       const nailNoticeSelectBtn = document.getElementById("nailNoticeSelectBtn");
@@ -24364,7 +24404,11 @@
       if (nailNoticeListScroll) {
         bindNailNoticeFocusSelect(nailNoticeListScroll);
         bindPullToRefresh(nailNoticeListScroll, () =>
-          reloadNailNoticeList({ toast: "通知已刷新" }),
+          reloadNailNoticeList({
+            force: true,
+            forceRender: true,
+            toast: "通知已刷新",
+          }),
         );
         nailNoticeListScroll.addEventListener(
           "scroll",
