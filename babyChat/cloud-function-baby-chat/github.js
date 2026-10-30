@@ -143,39 +143,37 @@ function truncateUtf8(text, maxBytes) {
   return buf.slice(0, end).toString('utf8');
 }
 
-async function sendPushPlus(options) {
-  const opts = options || {};
-  const token = String(opts.token || process.env.PUSHPLUS_TOKEN || '').trim();
-  if (!token) throw new Error('Missing PUSHPLUS_TOKEN');
-  const title = truncateUtf8(String(opts.title || '宝宝日记'), 100);
-  const content = String(opts.content || '').trim();
-  if (!content) throw new Error('PushPlus content empty');
+const DEFAULT_WECOM_WEBHOOK =
+  'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=b053ba52-f6f3-4f40-b14c-f42c94be39e0';
+
+async function sendWecomMarkdown(content, webhookUrl) {
+  const webhook = String(
+    webhookUrl || process.env.WECOM_WEBHOOK_URL || DEFAULT_WECOM_WEBHOOK,
+  ).trim();
+  if (!webhook) throw new Error('Missing WeCom webhook URL');
+  const text = String(content || '').trim();
+  if (!text) throw new Error('WeCom content empty');
   const body = JSON.stringify({
-    token,
-    title,
-    content: truncateUtf8(content, 8000),
-    template: 'txt',
-    channel: 'wechat',
+    msgtype: 'markdown',
+    markdown: { content: truncateUtf8(text, 4000) },
   });
-  const response = await requestRaw('https://www.pushplus.plus/send', {
+  const response = await requestRaw(webhook, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body,
   });
   const raw = response.text();
   if (!response.ok) {
-    throw new Error(`PushPlus HTTP ${response.status} ${raw.slice(0, 200)}`);
+    throw new Error(`WeCom HTTP ${response.status} ${raw.slice(0, 200)}`);
   }
   let data = {};
   try {
     data = JSON.parse(raw || '{}');
   } catch (error) {
-    throw new Error(`PushPlus bad JSON ${raw.slice(0, 200)}`);
+    throw new Error(`WeCom bad JSON ${raw.slice(0, 200)}`);
   }
-  if (Number(data.code) !== 200) {
-    throw new Error(
-      `PushPlus code ${data.code}: ${data.msg || data.message || ''}`,
-    );
+  if (data.errcode && data.errcode !== 0) {
+    throw new Error(`WeCom errcode ${data.errcode}: ${data.errmsg || ''}`);
   }
   return data;
 }
@@ -183,7 +181,8 @@ async function sendPushPlus(options) {
 module.exports = {
   loadJson,
   saveJson,
-  sendPushPlus,
+  sendWecomMarkdown,
+  DEFAULT_WECOM_WEBHOOK,
   requestRaw,
   utf8ByteLength,
   truncateUtf8,

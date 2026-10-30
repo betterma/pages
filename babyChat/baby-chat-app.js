@@ -190,7 +190,7 @@
     const item = pickEveningSummary();
     if (!item) {
       body.className = "evening-body is-empty";
-      body.textContent = "今晚 20:00 后生成，也会推到微信";
+      body.textContent = "今晚 22:00 后生成，也会推到企业微信";
       return;
     }
     const today = BabyChatStore.shanghaiDate();

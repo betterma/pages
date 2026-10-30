@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * 仅负责每晚总结 + PushPlus。
+ * 仅负责每晚总结 + 企业微信群机器人。
  * 语音/文字解析已改到网页即时完成。
  */
 const { getUserData, diagSources } = require('./runtime-env');
-const { loadJson, saveJson, sendPushPlus } = require('./github');
+const { loadJson, saveJson, sendWecomMarkdown } = require('./github');
 const { writeDailyNarrative } = require('./dashscope');
 
 const DATA_PATH =
@@ -191,7 +191,7 @@ function aggregateDay(entries, dateStr) {
 }
 
 async function maybePushDailySummary(data, nowMs) {
-  const summaryHour = Number(process.env.BABY_SUMMARY_HOUR || 20);
+  const summaryHour = Number(process.env.BABY_SUMMARY_HOUR || 22);
   const parts = shanghaiParts(nowMs);
   if (parts.hour < summaryHour) {
     return { skipped: true, reason: `before ${summaryHour}:00` };
@@ -253,7 +253,9 @@ async function maybePushDailySummary(data, nowMs) {
   lines.push('');
   lines.push(narrative);
 
+  const title = `${name}今日小结 · ${label}`;
   const content = lines.join('\n');
+  const markdown = [`### ${title}`, content].join('\n');
   const summary = {
     date: parts.date,
     ageLabel: label,
@@ -265,26 +267,14 @@ async function maybePushDailySummary(data, nowMs) {
     sleepMinutes: agg.sleepMinutes,
     milestones,
     narrative,
-    content,
+    content: markdown,
     pushedAt: null,
     pushError: null,
     createdAt: Date.now(),
   };
 
-  const token = String(process.env.PUSHPLUS_TOKEN || '').trim();
-  if (!token) {
-    summary.pushError = 'PUSHPLUS_TOKEN empty';
-    data.summaries[parts.date] = summary;
-    console.warn('summary ready but PushPlus skipped: no token');
-    return { skipped: false, pushed: false, summary };
-  }
-
   try {
-    await sendPushPlus({
-      token,
-      title: `${name}今日小结 · ${label}`,
-      content,
-    });
+    await sendWecomMarkdown(markdown);
     summary.pushedAt = Date.now();
     data.state.lastSummaryDate = parts.date;
     data.summaries[parts.date] = summary;
@@ -292,7 +282,7 @@ async function maybePushDailySummary(data, nowMs) {
   } catch (error) {
     summary.pushError = error && error.message ? error.message : String(error);
     data.summaries[parts.date] = summary;
-    console.warn('PushPlus failed', summary.pushError);
+    console.warn('WeCom failed', summary.pushError);
     return { skipped: false, pushed: false, summary };
   }
 }
@@ -306,8 +296,10 @@ async function main(event, context) {
     getUserData(context, 'BAILIAN_API_KEY');
   if (dash) process.env.DASHSCOPE_API_KEY = dash;
 
-  const push = getUserData(context, 'PUSHPLUS_TOKEN');
-  if (push) process.env.PUSHPLUS_TOKEN = push;
+  const wecom =
+    getUserData(context, 'WECOM_WEBHOOK_URL') ||
+    getUserData(context, 'WECOM_WEBHOOK');
+  if (wecom) process.env.WECOM_WEBHOOK_URL = wecom;
 
   const llmModel = getUserData(context, 'BABY_LLM_MODEL');
   if (llmModel) process.env.BABY_LLM_MODEL = llmModel;
@@ -322,7 +314,7 @@ async function main(event, context) {
       diagSources(context, [
         'GITHUB_TOKEN',
         'DASHSCOPE_API_KEY',
-        'PUSHPLUS_TOKEN',
+        'WECOM_WEBHOOK_URL',
         'BABY_LLM_MODEL',
         'BABY_SUMMARY_HOUR',
       ]),
