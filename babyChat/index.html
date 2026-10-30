@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>宝宝日记 · 口语记录</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600&family=Noto+Serif+SC:wght@600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./baby-chat.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div>
+          <h1 class="brand" id="brandName">葫芦宝</h1>
+          <p class="age-line" id="ageLine">
+            <span class="status-dot warn"></span>加载中…
+          </p>
+        </div>
+        <button type="button" class="icon-btn" id="btnRefresh">刷新</button>
+      </header>
+
+      <section class="panel">
+        <div class="stats">
+          <div class="stat">
+            <div class="label">今日奶量</div>
+            <div class="value" id="todayMl">0 ml</div>
+          </div>
+          <div class="stat">
+            <div class="label">今日顿数</div>
+            <div class="value" id="todayFeeds">0</div>
+          </div>
+        </div>
+        <p class="hint" id="syncHint" style="margin: 12px 0 0">
+          云函数仅定时跑：提交后需等解析（通常几分钟内）。微信只收每晚总结。
+        </p>
+      </section>
+
+      <section class="panel compose">
+        <h2>记一笔</h2>
+        <textarea
+          id="inputText"
+          placeholder="口语随便说，例如：中午喂了大概 120，下午有点闹"
+        ></textarea>
+        <div class="row">
+          <button type="button" class="primary" id="btnSendText">发送文字</button>
+          <button type="button" class="secondary" id="btnVoice">按住说话</button>
+        </div>
+        <p class="meta" id="voiceMeta" style="margin-top: 10px"></p>
+      </section>
+
+      <section class="panel">
+        <h2>待确认</h2>
+        <div class="list" id="pendingList">
+          <div class="empty">暂无待确认</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>今日已确认</h2>
+        <div class="list" id="todayList">
+          <div class="empty">还没有记录</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>最近总结</h2>
+        <div id="summaryBox" class="summary-box empty">暂无</div>
+      </section>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="../github-token-vault.js"></script>
+    <script src="./baby-chat-store.js"></script>
+    <script src="./baby-chat-app.js"></script>
+  </body>
+</html>
