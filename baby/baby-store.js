@@ -282,13 +282,10 @@
         repo,
         token: opts.token,
       });
-      const url = `https://raw.githubusercontent.com/${repo}/${commitSha}/${path}`;
+      // 不要加 Cache-Control/Pragma：跨域预检易 CORS 失败；靠 no-store + 路径钉 commit。
+      const url = `https://raw.githubusercontent.com/${repo}/${commitSha}/${path}?t=${Date.now()}`;
       const response = await fetch(url, {
         cache: "no-store",
-        headers: {
-          "Cache-Control": "no-cache",
-          Pragma: "no-cache",
-        },
       });
       if (response.ok) {
         const data = await response.json();
