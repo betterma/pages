@@ -212,8 +212,29 @@
     const opts = options || {};
     const path = opts.path || DATA_PATH;
     const repo = opts.repo || getRepo();
+    // preferApi：写入后必须走 Contents API，raw CDN 会滞后导致「已成功但汇总不更新」
+    const preferApi = opts.preferApi !== false;
 
-    // 公开 raw：打开即读，不弹密码
+    if (preferApi) {
+      try {
+        const token = await getGithubTokenAsync();
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token,
+        });
+        if (current.data) {
+          return {
+            data: normalizeData(current.data),
+            sha: current.sha,
+            source: "api",
+          };
+        }
+      } catch (error) {
+        console.warn("baby-chat load api failed", error);
+      }
+    }
+
     try {
       const url = `https://raw.githubusercontent.com/${repo}/main/${path}?t=${Date.now()}`;
       const response = await fetch(url, { cache: "no-store" });
@@ -228,22 +249,24 @@
       console.warn("baby-chat load raw failed", error);
     }
 
-    try {
-      const token = await getGithubTokenAsync();
-      const current = await fetchJsonFile({
-        repo,
-        path,
-        token,
-      });
-      if (current.data) {
-        return {
-          data: normalizeData(current.data),
-          sha: current.sha,
-          source: "api",
-        };
+    if (!preferApi) {
+      try {
+        const token = await getGithubTokenAsync();
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token,
+        });
+        if (current.data) {
+          return {
+            data: normalizeData(current.data),
+            sha: current.sha,
+            source: "api",
+          };
+        }
+      } catch (error) {
+        console.warn("baby-chat load api failed", error);
       }
-    } catch (error) {
-      console.warn("baby-chat load api failed", error);
     }
 
     try {

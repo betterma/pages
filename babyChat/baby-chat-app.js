@@ -306,14 +306,20 @@
     };
   }
 
+  function applyData(data, source) {
+    state.data = BabyChatStore.normalizeData(data);
+    state.source = source || "api";
+    render();
+  }
+
   async function saveEntryFromParse(options) {
     const entry = buildEntry(options);
-    await BabyChatStore.patch((data) => {
+    const saved = await BabyChatStore.patch((data) => {
       data.entries = data.entries || [];
       data.entries.push(entry);
       return data;
     }, "baby-chat: add entry");
-    return entry;
+    return { entry, data: saved && saved.data };
   }
 
   async function submitText() {
@@ -327,10 +333,14 @@
       await withLoading("正在解析", "理解口语内容…", async (progress) => {
         const parse = await BabyChatAI.parseDiaryText(text);
         progress("正在保存", "写入今日记录…");
-        await saveEntryFromParse({ text, parse, source: "text" });
+        const saved = await saveEntryFromParse({ text, parse, source: "text" });
         $("inputText").value = "";
-        progress("同步中", "更新总结…");
-        await reload({ silent: true });
+        if (saved.data) {
+          applyData(saved.data, "api");
+        } else {
+          progress("同步中", "更新总结…");
+          await reload({ silent: true });
+        }
         const tip = BabyChatAI.summarizeParse(parse);
         showFlash(`已记：${tip}`);
         toast("已记录");
@@ -364,9 +374,17 @@
         progress("正在解析", "理解口语内容…");
         const parse = await BabyChatAI.parseDiaryText(asrText);
         progress("正在保存", "写入今日记录…");
-        await saveEntryFromParse({ text: asrText, parse, source: "voice" });
-        progress("同步中", "更新总结…");
-        await reload({ silent: true });
+        const saved = await saveEntryFromParse({
+          text: asrText,
+          parse,
+          source: "voice",
+        });
+        if (saved.data) {
+          applyData(saved.data, "api");
+        } else {
+          progress("同步中", "更新总结…");
+          await reload({ silent: true });
+        }
         showFlash(`已记：${BabyChatAI.summarizeParse(parse)}`);
         toast("已记录");
       });
@@ -452,8 +470,8 @@
 
   async function saveEdit(id, card) {
     const edits = readEditCard(card);
-    await withLoading("保存修改", "正在写入…", async (progress) => {
-      await BabyChatStore.patch((data) => {
+    await withLoading("保存修改", "正在写入…", async () => {
+      const saved = await BabyChatStore.patch((data) => {
         const entry = (data.entries || []).find((e) => e && e.id === id);
         if (!entry) return data;
         entry.text = edits.text;
@@ -491,21 +509,21 @@
         return data;
       }, "baby-chat: edit entry");
       state.editingId = null;
-      progress("同步中", "更新总结…");
-      await reload({ silent: true });
+      if (saved && saved.data) applyData(saved.data, "api");
+      else await reload({ silent: true });
       toast("已保存");
     });
   }
 
   async function deleteEntry(id) {
-    await withLoading("删除中", "正在更新…", async (progress) => {
-      await BabyChatStore.patch((data) => {
+    await withLoading("删除中", "正在更新…", async () => {
+      const saved = await BabyChatStore.patch((data) => {
         data.entries = (data.entries || []).filter((e) => e && e.id !== id);
         return data;
       }, "baby-chat: delete entry");
       state.editingId = null;
-      progress("同步中", "更新总结…");
-      await reload({ silent: true });
+      if (saved && saved.data) applyData(saved.data, "api");
+      else await reload({ silent: true });
       toast("已删除");
     });
   }
