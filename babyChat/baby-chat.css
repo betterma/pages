@@ -38,6 +38,70 @@ body {
 .app {
   max-width: 520px;
   margin: 0 auto;
+  transition: filter 0.2s ease, opacity 0.2s ease;
+}
+
+body.is-loading .app {
+  filter: blur(2.5px) saturate(0.85);
+  opacity: 0.72;
+  pointer-events: none;
+  user-select: none;
+}
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(31, 42, 36, 0.28);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.loading-overlay[hidden] {
+  display: none !important;
+}
+
+.loading-card {
+  min-width: min(280px, 86vw);
+  max-width: 360px;
+  padding: 22px 20px 20px;
+  border-radius: 18px;
+  background: rgba(255, 252, 246, 0.96);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.loading-spinner {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  border: 3px solid rgba(47, 111, 94, 0.18);
+  border-top-color: var(--accent);
+  animation: baby-spin 0.75s linear infinite;
+}
+
+.loading-title {
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.loading-sub {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+@keyframes baby-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .topbar {
@@ -109,6 +173,11 @@ button,
   border-radius: 999px;
   padding: 11px 16px;
   cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .primary {

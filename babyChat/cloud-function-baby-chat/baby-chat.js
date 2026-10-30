@@ -1,12 +1,12 @@
 'use strict';
 
+/**
+ * 仅负责每晚总结 + PushPlus。
+ * 语音/文字解析已改到网页即时完成。
+ */
 const { getUserData, diagSources } = require('./runtime-env');
 const { loadJson, saveJson, sendPushPlus } = require('./github');
-const {
-  transcribeAudio,
-  parseDiaryText,
-  writeDailyNarrative,
-} = require('./dashscope');
+const { writeDailyNarrative } = require('./dashscope');
 
 const DATA_PATH =
   process.env.BABY_CHAT_DATA_PATH || 'babyChat/baby-chat-data.json';
@@ -79,19 +79,6 @@ function ageLabel(days) {
   return `${months}月${rem}天`;
 }
 
-function feedStatsFromEvents(events) {
-  let mlTotal = 0;
-  let feedCount = 0;
-  (events || []).forEach((ev) => {
-    if (!ev || ev.type !== 'feed') return;
-    feedCount += 1;
-    if (Number.isFinite(Number(ev.ml)) && Number(ev.ml) > 0) {
-      mlTotal += Math.round(Number(ev.ml));
-    }
-  });
-  return { mlTotal, feedCount };
-}
-
 function normalizeData(raw) {
   const base = emptyData();
   if (!raw || typeof raw !== 'object') return base;
@@ -116,11 +103,7 @@ function normalizeData(raw) {
 }
 
 function trimStore(data) {
-  const maxQueue = Number(process.env.BABY_QUEUE_KEEP || 80);
   const maxEntries = Number(process.env.BABY_ENTRY_KEEP || 400);
-  if (data.queue.length > maxQueue) {
-    data.queue = data.queue.slice(data.queue.length - maxQueue);
-  }
   if (data.entries.length > maxEntries) {
     data.entries = data.entries.slice(data.entries.length - maxEntries);
   }
@@ -132,6 +115,10 @@ function trimStore(data) {
       .forEach((key) => {
         delete data.summaries[key];
       });
+  }
+  // 网页已不走 queue；清理残留避免 JSON 膨胀
+  if (Array.isArray(data.queue) && data.queue.length) {
+    data.queue = [];
   }
 }
 
@@ -149,58 +136,11 @@ async function saveWithRetry(path, mutator, message) {
       return next;
     } catch (error) {
       lastError = error;
-      if (error && error.code === 'conflict') {
-        continue;
-      }
+      if (error && error.code === 'conflict') continue;
       throw error;
     }
   }
   throw lastError || new Error('saveWithRetry failed');
-}
-
-async function processRawItem(item) {
-  const next = { ...item };
-  let text = String(next.rawText || '').trim();
-  if (next.source === 'voice' && next.audioDataUri) {
-    const asr = await transcribeAudio(next.audioDataUri, {
-      language: 'zh',
-      enableItn: true,
-    });
-    next.asrText = asr;
-    text = asr;
-    next.audioDataUri = null;
-  }
-  if (!text) {
-    next.status = 'error';
-    next.error = '无可用文本';
-    next.audioDataUri = null;
-    return next;
-  }
-  next.rawText = text;
-  const parsed = await parseDiaryText(text);
-  next.parse = parsed;
-  next.status = 'parsed';
-  next.error = '';
-  next.parsedAt = Date.now();
-  return next;
-}
-
-function queueItemToEntry(item, dateStr) {
-  const parse = item.parse || {};
-  const events = Array.isArray(parse.events) ? parse.events : [];
-  const stats = feedStatsFromEvents(events);
-  return {
-    id: item.id,
-    at: item.confirmedAt || item.parsedAt || item.createdAt || Date.now(),
-    date: dateStr,
-    source: item.source || 'text',
-    text: String(item.rawText || item.asrText || ''),
-    chatOnly: Boolean(parse.chatOnly),
-    events,
-    notes: String(parse.notes || ''),
-    mlTotal: stats.mlTotal,
-    feedCount: stats.feedCount,
-  };
 }
 
 function aggregateDay(entries, dateStr) {
@@ -228,7 +168,7 @@ function aggregateDay(entries, dateStr) {
 }
 
 async function maybePushDailySummary(data, nowMs) {
-  const summaryHour = Number(process.env.BABY_SUMMARY_HOUR || 21);
+  const summaryHour = Number(process.env.BABY_SUMMARY_HOUR || 20);
   const parts = shanghaiParts(nowMs);
   if (parts.hour < summaryHour) {
     return { skipped: true, reason: `before ${summaryHour}:00` };
@@ -236,9 +176,6 @@ async function maybePushDailySummary(data, nowMs) {
   const existing = data.summaries[parts.date];
   if (existing && existing.pushedAt) {
     return { skipped: true, reason: 'already pushed' };
-  }
-  if (data.state.lastSummaryDate === parts.date && existing && existing.pushedAt) {
-    return { skipped: true, reason: 'state says done' };
   }
 
   const days = ageDaysOn(data.config.birthDate, parts.date);
@@ -270,7 +207,7 @@ async function maybePushDailySummary(data, nowMs) {
   } catch (error) {
     narrative = agg.dayEntries.length
       ? `今天共记录 ${agg.dayEntries.length} 条。奶量 ${agg.mlTotal} ml / ${agg.feedCount} 顿。`
-      : '今天还没有确认的记录。';
+      : '今天还没有记录。';
     console.warn('narrative fallback', error && error.message);
   }
 
@@ -340,8 +277,6 @@ async function main(event, context) {
 
   const llmModel = getUserData(context, 'BABY_LLM_MODEL');
   if (llmModel) process.env.BABY_LLM_MODEL = llmModel;
-  const asrModel = getUserData(context, 'BABY_ASR_MODEL');
-  if (asrModel) process.env.BABY_ASR_MODEL = asrModel;
   const summaryHour = getUserData(context, 'BABY_SUMMARY_HOUR');
   if (summaryHour) process.env.BABY_SUMMARY_HOUR = summaryHour;
   const baseUrl = getUserData(context, 'DASHSCOPE_BASE_URL');
@@ -355,7 +290,7 @@ async function main(event, context) {
         'DASHSCOPE_API_KEY',
         'PUSHPLUS_TOKEN',
         'BABY_LLM_MODEL',
-        'BABY_ASR_MODEL',
+        'BABY_SUMMARY_HOUR',
       ]),
     ),
   );
@@ -363,62 +298,20 @@ async function main(event, context) {
   if (!process.env.GITHUB_TOKEN) {
     throw new Error('Missing GITHUB_TOKEN');
   }
-  if (!process.env.DASHSCOPE_API_KEY) {
-    throw new Error('Missing DASHSCOPE_API_KEY');
-  }
 
-  const maxRaw = Number(process.env.BABY_PROCESS_MAX || 5);
   const nowMs = Date.now();
-  const result = {
-    processed: 0,
-    errors: [],
-    summary: null,
-  };
+  const result = { summary: null };
 
   await saveWithRetry(
     DATA_PATH,
     async (data) => {
-      const rawItems = data.queue.filter((q) => q && q.status === 'raw');
-      for (const item of rawItems.slice(0, maxRaw)) {
-        try {
-          const updated = await processRawItem(item);
-          const idx = data.queue.findIndex((q) => q && q.id === item.id);
-          if (idx >= 0) data.queue[idx] = updated;
-          result.processed += 1;
-        } catch (error) {
-          const msg = error && error.message ? error.message : String(error);
-          result.errors.push({ id: item.id, error: msg });
-          const idx = data.queue.findIndex((q) => q && q.id === item.id);
-          if (idx >= 0) {
-            data.queue[idx] = {
-              ...data.queue[idx],
-              status: 'error',
-              error: msg.slice(0, 300),
-              audioDataUri: null,
-            };
-          }
-        }
-      }
-
-      // Move newly confirmed queue items into entries (page may set status=confirmed)
-      const confirmed = data.queue.filter((q) => q && q.status === 'confirmed');
-      confirmed.forEach((item) => {
-        if (data.entries.some((e) => e && e.id === item.id)) {
-          item.status = 'archived';
-          return;
-        }
-        const parts = shanghaiParts(item.confirmedAt || item.createdAt || nowMs);
-        data.entries.push(queueItemToEntry(item, parts.date));
-        item.status = 'archived';
-        item.audioDataUri = null;
-      });
-
+      // 无 DashScope 时仍可写兜底文案并尝试推送
       const summaryResult = await maybePushDailySummary(data, nowMs);
       result.summary = summaryResult;
       data.state.lastRunAt = nowMs;
       return data;
     },
-    'baby-chat: process queue / daily summary',
+    'baby-chat: daily summary only',
   );
 
   console.log('baby-chat done', JSON.stringify(result));
@@ -432,5 +325,4 @@ module.exports = {
   ageDaysOn,
   ageLabel,
   shanghaiParts,
-  feedStatsFromEvents,
 };

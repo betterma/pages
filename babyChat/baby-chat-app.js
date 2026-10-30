@@ -1,8 +1,7 @@
 (function () {
   "use strict";
 
-  const MAX_AUDIO_CHARS = 1200000; // ~0.9MB base64 budget for GitHub JSON
-  const POLL_MS = 12000;
+  const MAX_AUDIO_CHARS = 1800000;
 
   const state = {
     data: null,
@@ -10,7 +9,8 @@
     recording: false,
     mediaRecorder: null,
     chunks: [],
-    pollTimer: null,
+    busy: false,
+    editingId: null,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -20,7 +20,7 @@
     el.textContent = message;
     el.classList.add("show");
     clearTimeout(toast._t);
-    toast._t = setTimeout(() => el.classList.remove("show"), 2400);
+    toast._t = setTimeout(() => el.classList.remove("show"), 2600);
   }
 
   function escapeHtml(text) {
@@ -42,19 +42,60 @@
     }).format(new Date(ms));
   }
 
-  async function ensureVault() {
-    if (!globalThis.GithubTokenVault) {
-      throw new Error("缺少 github-token-vault.js");
+  function setLoading(show, title, sub) {
+    const overlay = $("loadingOverlay");
+    const titleEl = $("loadingTitle");
+    const subEl = $("loadingSub");
+    if (!overlay) return;
+    if (show) {
+      if (titleEl) titleEl.textContent = title || "处理中";
+      if (subEl) subEl.textContent = sub || "请稍候…";
+      overlay.hidden = false;
+      document.body.classList.add("is-loading");
+    } else {
+      overlay.hidden = true;
+      document.body.classList.remove("is-loading");
     }
-    await globalThis.GithubTokenVault.ensureUnlocked();
   }
 
-  async function reload() {
-    await ensureVault();
-    const loaded = await BabyChatStore.loadRaw();
-    state.data = loaded.data;
-    state.source = loaded.source;
-    render();
+  function setBusy(busy, title, sub) {
+    state.busy = !!busy;
+    const send = $("btnSendText");
+    const voice = $("btnVoice");
+    const refresh = $("btnRefresh");
+    if (send) send.disabled = state.busy;
+    if (voice) voice.disabled = state.busy;
+    if (refresh) refresh.disabled = state.busy;
+    if ($("inputText")) $("inputText").disabled = state.busy;
+    $("voiceMeta").textContent = busy ? title || "处理中…" : "";
+    setLoading(busy, title, sub);
+  }
+
+  async function withLoading(title, sub, work) {
+    if (state.busy) return null;
+    setBusy(true, title, sub);
+    try {
+      return await work((nextTitle, nextSub) => {
+        setBusy(true, nextTitle || title, nextSub || sub);
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reload(options) {
+    const opts = options || {};
+    const run = async () => {
+      const loaded = await BabyChatStore.loadRaw();
+      state.data = loaded.data;
+      state.source = loaded.source;
+      render();
+    };
+    if (opts.silent || state.busy) {
+      await run();
+      return;
+    }
+    await withLoading("同步中", "正在拉取最新记录…", run);
   }
 
   function todayStats() {
@@ -78,7 +119,7 @@
     );
     const label = BabyChatStore.ageLabel(days);
     const src =
-      state.source === "api"
+      state.source === "api" || state.source === "raw"
         ? "已同步"
         : state.source === "local"
           ? "本地预览"
@@ -87,85 +128,8 @@
     const stats = todayStats();
     $("todayMl").textContent = `${stats.ml} ml`;
     $("todayFeeds").textContent = String(stats.feeds);
-    const lastRun = state.data.state && state.data.state.lastRunAt;
-    $("syncHint").textContent = lastRun
-      ? `云函数最近跑过：${formatTime(lastRun)}。提交后等定时解析（通常几分钟）。微信只收每晚总结。`
-      : "云函数仅定时跑：提交后需等解析（通常几分钟内）。微信只收每晚总结。";
-  }
-
-  function pendingItems() {
-    return (state.data.queue || []).filter(
-      (q) =>
-        q &&
-        (q.status === "raw" ||
-          q.status === "parsed" ||
-          q.status === "error"),
-    );
-  }
-
-  function renderPending() {
-    const list = $("pendingList");
-    const items = pendingItems().slice().reverse();
-    if (!items.length) {
-      list.innerHTML = '<div class="empty">暂无待确认</div>';
-      return;
-    }
-    list.innerHTML = items
-      .map((item) => {
-        if (item.status === "raw") {
-          return `<div class="card" data-id="${escapeHtml(item.id)}">
-            <div class="title"><span class="badge warn">解析中</span>${escapeHtml(item.source === "voice" ? "语音" : "文字")}</div>
-            <div class="meta">${escapeHtml(formatTime(item.createdAt))}</div>
-            <div style="margin-top:8px">${escapeHtml(item.rawText || "（语音排队中，等云函数转写）")}</div>
-          </div>`;
-        }
-        if (item.status === "error") {
-          return `<div class="card" data-id="${escapeHtml(item.id)}">
-            <div class="title"><span class="badge err">失败</span></div>
-            <div class="meta">${escapeHtml(item.error || "未知错误")}</div>
-            <div class="row">
-              <button type="button" class="secondary btn-dismiss" data-id="${escapeHtml(item.id)}">忽略</button>
-            </div>
-          </div>`;
-        }
-        const parse = item.parse || {};
-        const events = Array.isArray(parse.events) ? parse.events : [];
-        const eventRows =
-          events.length > 0
-            ? events
-                .map((ev, idx) => {
-                  return `<div class="event-row">
-                    <input data-ev="${idx}" data-field="ml" type="number" min="0" step="1" value="${ev.ml != null ? escapeHtml(ev.ml) : ""}" placeholder="ml" />
-                    <select data-ev="${idx}" data-field="method">
-                      <option value="unknown" ${ev.method === "unknown" ? "selected" : ""}>方式不明</option>
-                      <option value="bottle" ${ev.method === "bottle" ? "selected" : ""}>奶瓶</option>
-                      <option value="breast" ${ev.method === "breast" ? "selected" : ""}>母乳</option>
-                    </select>
-                    <span class="meta">${ev.estimated ? "约" : ""}</span>
-                  </div>`;
-                })
-                .join("")
-            : '<div class="meta">无喂奶事件（可能是闲聊）</div>';
-        return `<div class="card confirm-card" data-id="${escapeHtml(item.id)}">
-          <div class="title"><span class="badge">待确认</span>${parse.chatOnly ? "闲聊" : "记账"}</div>
-          <div class="meta">${escapeHtml(formatTime(item.parsedAt || item.createdAt))} · 置信 ${Math.round((Number(parse.confidence) || 0) * 100)}%</div>
-          <div style="margin-top:8px">${escapeHtml(item.rawText || item.asrText || "")}</div>
-          <div class="field">
-            <label>备注 / 闲聊</label>
-            <input class="notes-input" type="text" value="${escapeHtml(parse.notes || "")}" />
-          </div>
-          <div class="events-edit">${eventRows}</div>
-          <label class="meta" style="display:flex;gap:8px;align-items:center;margin-top:10px">
-            <input type="checkbox" class="chat-only" ${parse.chatOnly ? "checked" : ""} />
-            仅闲聊（不计入奶量）
-          </label>
-          <div class="row">
-            <button type="button" class="primary btn-confirm" data-id="${escapeHtml(item.id)}">确认入库</button>
-            <button type="button" class="danger btn-reject" data-id="${escapeHtml(item.id)}">丢弃</button>
-          </div>
-        </div>`;
-      })
-      .join("");
+    $("syncHint").textContent =
+      "文字/语音在网页即时解析并自动入库；可随时改记录。每晚 20:00 云函数推微信总结。";
   }
 
   function renderToday() {
@@ -181,6 +145,46 @@
     }
     list.innerHTML = items
       .map((e) => {
+        if (state.editingId === e.id) {
+          const events = Array.isArray(e.events) ? e.events : [];
+          const eventRows =
+            events.length > 0
+              ? events
+                  .map((ev, idx) => {
+                    return `<div class="event-row">
+                      <input data-ev="${idx}" data-field="ml" type="number" min="0" step="1" value="${ev.ml != null ? escapeHtml(ev.ml) : ""}" placeholder="ml" />
+                      <select data-ev="${idx}" data-field="method">
+                        <option value="unknown" ${ev.method === "unknown" ? "selected" : ""}>方式不明</option>
+                        <option value="bottle" ${ev.method === "bottle" ? "selected" : ""}>奶瓶</option>
+                        <option value="breast" ${ev.method === "breast" ? "selected" : ""}>母乳</option>
+                      </select>
+                      <span class="meta">${ev.estimated ? "约" : ""}</span>
+                    </div>`;
+                  })
+                  .join("")
+              : '<div class="meta">无喂奶事件</div>';
+          return `<div class="card edit-card" data-id="${escapeHtml(e.id)}">
+            <div class="title">编辑记录</div>
+            <div class="field">
+              <label>原文</label>
+              <input class="text-input" type="text" value="${escapeHtml(e.text || "")}" />
+            </div>
+            <div class="field">
+              <label>备注</label>
+              <input class="notes-input" type="text" value="${escapeHtml(e.notes || "")}" />
+            </div>
+            <div class="events-edit">${eventRows}</div>
+            <label class="meta" style="display:flex;gap:8px;align-items:center;margin-top:10px">
+              <input type="checkbox" class="chat-only" ${e.chatOnly ? "checked" : ""} />
+              仅闲聊（不计入奶量）
+            </label>
+            <div class="row">
+              <button type="button" class="primary btn-save-edit" data-id="${escapeHtml(e.id)}">保存</button>
+              <button type="button" class="secondary btn-cancel-edit">取消</button>
+              <button type="button" class="danger btn-delete" data-id="${escapeHtml(e.id)}">删除</button>
+            </div>
+          </div>`;
+        }
         const title = e.chatOnly
           ? "闲聊"
           : `奶 ${e.mlTotal || 0} ml / ${e.feedCount || 0} 顿`;
@@ -189,6 +193,9 @@
           <div class="meta">${escapeHtml(formatTime(e.at))} · ${escapeHtml(e.source || "")}</div>
           <div style="margin-top:8px">${escapeHtml(e.text || "")}</div>
           ${e.notes ? `<div class="meta" style="margin-top:6px">${escapeHtml(e.notes)}</div>` : ""}
+          <div class="row">
+            <button type="button" class="secondary btn-edit" data-id="${escapeHtml(e.id)}">修改</button>
+          </div>
         </div>`;
       })
       .join("");
@@ -215,40 +222,55 @@
   function render() {
     if (!state.data) return;
     renderHeader();
-    renderPending();
     renderToday();
     renderSummary();
   }
 
-  async function enqueue(payload) {
+  async function saveEntryFromParse(options) {
+    const opts = options || {};
+    const text = String(opts.text || "").trim();
+    const parse = opts.parse || {};
+    const source = opts.source || "text";
+    const date = BabyChatStore.shanghaiDate();
+    const stats = BabyChatStore.feedStats(parse.events || []);
+    const id = BabyChatStore.newId("e");
+    const entry = {
+      id,
+      at: Date.now(),
+      date,
+      source,
+      text,
+      chatOnly: Boolean(parse.chatOnly),
+      events: Array.isArray(parse.events) ? parse.events : [],
+      notes: String(parse.notes || ""),
+      mlTotal: stats.mlTotal,
+      feedCount: stats.feedCount,
+    };
     await BabyChatStore.patch((data) => {
-      data.queue = data.queue || [];
-      data.queue.push(payload);
+      data.entries = data.entries || [];
+      data.entries.push(entry);
       return data;
-    }, "baby-chat: enqueue");
-    await reload();
+    }, "baby-chat: add entry");
+    return entry;
   }
 
-  async function sendText() {
+  async function submitText() {
+    if (state.busy) return;
     const text = String($("inputText").value || "").trim();
     if (!text) {
       toast("先说点什么");
       return;
     }
     try {
-      await enqueue({
-        id: BabyChatStore.newId("q"),
-        createdAt: Date.now(),
-        source: "text",
-        status: "raw",
-        rawText: text,
-        audioDataUri: null,
-        asrText: "",
-        parse: null,
-        error: "",
+      await withLoading("正在解析", "理解口语内容…", async (progress) => {
+        const parse = await BabyChatAI.parseDiaryText(text);
+        progress("正在保存", "写入今日记录…");
+        await saveEntryFromParse({ text, parse, source: "text" });
+        $("inputText").value = "";
+        progress("同步中", "刷新列表…");
+        await reload({ silent: true });
+        toast(parse.chatOnly ? "已记闲聊" : "已自动入库");
       });
-      $("inputText").value = "";
-      toast("已提交，等待云函数解析");
     } catch (error) {
       toast(error.message || "提交失败");
     }
@@ -263,27 +285,37 @@
     });
   }
 
-  async function sendVoiceBlob(blob) {
-    const dataUri = await blobToDataUri(blob);
-    if (dataUri.length > MAX_AUDIO_CHARS) {
-      throw new Error("录音太长，请说短一点再试");
+  async function submitVoiceBlob(blob) {
+    try {
+      await withLoading("处理录音", "读取音频…", async (progress) => {
+        const dataUri = await blobToDataUri(blob);
+        if (dataUri.length > MAX_AUDIO_CHARS) {
+          throw new Error("录音太长，请说短一点");
+        }
+        progress("语音转写中", "正在听写内容…");
+        const asrText = await BabyChatAI.transcribeAudio(dataUri);
+        if (!String(asrText || "").trim()) {
+          throw new Error("没听清，请再说一次");
+        }
+        progress("正在解析", "理解口语内容…");
+        const parse = await BabyChatAI.parseDiaryText(asrText);
+        progress("正在保存", "写入今日记录…");
+        await saveEntryFromParse({
+          text: asrText,
+          parse,
+          source: "voice",
+        });
+        progress("同步中", "刷新列表…");
+        await reload({ silent: true });
+        toast(parse.chatOnly ? "语音闲聊已记" : "语音已自动入库");
+      });
+    } catch (error) {
+      toast(error.message || "语音处理失败");
     }
-    await enqueue({
-      id: BabyChatStore.newId("q"),
-      createdAt: Date.now(),
-      source: "voice",
-      status: "raw",
-      rawText: "",
-      audioDataUri: dataUri,
-      asrText: "",
-      parse: null,
-      error: "",
-    });
-    toast("语音已提交，等待转写+解析");
   }
 
   async function startRecording() {
-    if (state.recording) return;
+    if (state.recording || state.busy) return;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       toast("当前浏览器不支持录音");
       return;
@@ -309,11 +341,7 @@
           type: recorder.mimeType || "audio/webm",
         });
         state.chunks = [];
-        try {
-          await sendVoiceBlob(blob);
-        } catch (error) {
-          toast(error.message || "上传语音失败");
-        }
+        await submitVoiceBlob(blob);
       };
       state.mediaRecorder = recorder;
       state.recording = true;
@@ -339,10 +367,10 @@
     const btn = $("btnVoice");
     btn.classList.remove("recording");
     btn.textContent = "按住说话";
-    $("voiceMeta").textContent = "";
   }
 
-  function readConfirmCard(card) {
+  function readEditCard(card) {
+    const textInput = card.querySelector(".text-input");
     const notes = card.querySelector(".notes-input");
     const chatOnly = card.querySelector(".chat-only");
     const eventRows = [...card.querySelectorAll(".event-row")];
@@ -357,88 +385,69 @@
         estimated: false,
       };
     });
+    const onlyChat = !!(chatOnly && chatOnly.checked);
     return {
+      text: textInput ? String(textInput.value || "").trim() : "",
       notes: notes ? String(notes.value || "").trim() : "",
-      chatOnly: !!(chatOnly && chatOnly.checked),
-      events: chatOnly && chatOnly.checked ? [] : events,
+      chatOnly: onlyChat,
+      events: onlyChat ? [] : events,
     };
   }
 
-  async function confirmItem(id, card) {
-    const edits = readConfirmCard(card);
-    const date = BabyChatStore.shanghaiDate();
-    await BabyChatStore.patch((data) => {
-      const item = (data.queue || []).find((q) => q && q.id === id);
-      if (!item || item.status !== "parsed") return data;
-      const parse = Object.assign({}, item.parse || {}, {
-        notes: edits.notes,
-        chatOnly: edits.chatOnly,
-        events: edits.events,
-        intent: edits.chatOnly ? "chat" : item.parse && item.parse.intent,
-      });
-      item.parse = parse;
-      item.status = "archived";
-      item.confirmedAt = Date.now();
-      item.audioDataUri = null;
-      const stats = BabyChatStore.feedStats(parse.events);
-      data.entries = data.entries || [];
-      if (!data.entries.some((e) => e && e.id === id)) {
-        data.entries.push({
-          id,
-          at: item.confirmedAt,
-          date,
-          source: item.source || "text",
-          text: String(item.rawText || item.asrText || ""),
-          chatOnly: Boolean(parse.chatOnly),
-          events: parse.events || [],
-          notes: String(parse.notes || ""),
-          mlTotal: stats.mlTotal,
-          feedCount: stats.feedCount,
-        });
-      }
-      return data;
-    }, "baby-chat: confirm entry");
-    await reload();
-    toast("已确认");
+  async function saveEdit(id, card) {
+    const edits = readEditCard(card);
+    const stats = BabyChatStore.feedStats(edits.events);
+    await withLoading("保存修改", "正在写入…", async (progress) => {
+      await BabyChatStore.patch((data) => {
+        const entry = (data.entries || []).find((e) => e && e.id === id);
+        if (!entry) return data;
+        entry.text = edits.text;
+        entry.notes = edits.notes;
+        entry.chatOnly = edits.chatOnly;
+        entry.events = edits.events;
+        entry.mlTotal = stats.mlTotal;
+        entry.feedCount = stats.feedCount;
+        return data;
+      }, "baby-chat: edit entry");
+      state.editingId = null;
+      progress("同步中", "刷新列表…");
+      await reload({ silent: true });
+      toast("已保存修改");
+    });
   }
 
-  async function rejectItem(id) {
-    await BabyChatStore.patch((data) => {
-      const item = (data.queue || []).find((q) => q && q.id === id);
-      if (!item) return data;
-      item.status = "rejected";
-      item.audioDataUri = null;
-      return data;
-    }, "baby-chat: reject");
-    await reload();
-    toast("已丢弃");
+  async function deleteEntry(id) {
+    await withLoading("删除中", "正在更新记录…", async (progress) => {
+      await BabyChatStore.patch((data) => {
+        data.entries = (data.entries || []).filter((e) => e && e.id !== id);
+        return data;
+      }, "baby-chat: delete entry");
+      state.editingId = null;
+      progress("同步中", "刷新列表…");
+      await reload({ silent: true });
+      toast("已删除");
+    });
   }
 
-  async function dismissError(id) {
-    await BabyChatStore.patch((data) => {
-      const item = (data.queue || []).find((q) => q && q.id === id);
-      if (!item) return data;
-      item.status = "rejected";
-      item.audioDataUri = null;
-      return data;
-    }, "baby-chat: dismiss error");
-    await reload();
-  }
-
-  function bindPendingClicks() {
-    $("pendingList").addEventListener("click", async (event) => {
+  function bindList() {
+    $("todayList").addEventListener("click", async (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      if (state.busy) return;
       const id = target.getAttribute("data-id");
-      if (!id) return;
       try {
-        if (target.classList.contains("btn-confirm")) {
-          const card = target.closest(".confirm-card");
-          await confirmItem(id, card);
-        } else if (target.classList.contains("btn-reject")) {
-          await rejectItem(id);
-        } else if (target.classList.contains("btn-dismiss")) {
-          await dismissError(id);
+        if (target.classList.contains("btn-edit") && id) {
+          state.editingId = id;
+          renderToday();
+        } else if (target.classList.contains("btn-cancel-edit")) {
+          state.editingId = null;
+          renderToday();
+        } else if (target.classList.contains("btn-save-edit") && id) {
+          const card = target.closest(".edit-card");
+          await saveEdit(id, card);
+        } else if (target.classList.contains("btn-delete") && id) {
+          if (!window.confirm("删除这条记录？")) return;
+          await deleteEntry(id);
         }
       } catch (error) {
         toast(error.message || "操作失败");
@@ -465,26 +474,26 @@
   }
 
   async function boot() {
-    bindPendingClicks();
+    bindList();
     bindVoiceButton();
     $("btnSendText").addEventListener("click", () => {
-      sendText().catch((error) => toast(error.message || "发送失败"));
+      submitText();
     });
     $("btnRefresh").addEventListener("click", () => {
+      if (state.busy) return;
       reload()
         .then(() => toast("已刷新"))
         .catch((error) => toast(error.message || "刷新失败"));
     });
     try {
-      await reload();
+      await withLoading("加载中", "正在打开日记…", async () => {
+        await reload({ silent: true });
+      });
     } catch (error) {
       toast(error.message || "加载失败");
       $("ageLine").innerHTML =
-        '<span class="status-dot warn"></span>请先解锁 GitHub 保险库';
+        '<span class="status-dot warn"></span>加载失败，请检查网络';
     }
-    state.pollTimer = setInterval(() => {
-      reload().catch(() => {});
-    }, POLL_MS);
   }
 
   boot();

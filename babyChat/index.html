@@ -39,7 +39,7 @@
           </div>
         </div>
         <p class="hint" id="syncHint" style="margin: 12px 0 0">
-          云函数仅定时跑：提交后需等解析（通常几分钟内）。微信只收每晚总结。
+          文字/语音在网页即时解析并自动入库；可随时改记录。每晚 20:00 云函数推微信总结。
         </p>
       </section>
 
@@ -57,14 +57,7 @@
       </section>
 
       <section class="panel">
-        <h2>待确认</h2>
-        <div class="list" id="pendingList">
-          <div class="empty">暂无待确认</div>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>今日已确认</h2>
+        <h2>今日记录</h2>
         <div class="list" id="todayList">
           <div class="empty">还没有记录</div>
         </div>
@@ -78,7 +71,17 @@
 
     <div class="toast" id="toast"></div>
 
+    <div class="loading-overlay" id="loadingOverlay" hidden aria-live="polite" aria-busy="true">
+      <div class="loading-card">
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <div class="loading-title" id="loadingTitle">处理中</div>
+        <div class="loading-sub" id="loadingSub">请稍候…</div>
+      </div>
+    </div>
+
     <script src="../github-token-vault.js"></script>
+    <script src="./baby-chat-config.js"></script>
+    <script src="./baby-chat-ai.js"></script>
     <script src="./baby-chat-store.js"></script>
     <script src="./baby-chat-app.js"></script>
   </body>

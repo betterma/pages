@@ -5,16 +5,62 @@
   const DATA_PATH = "babyChat/baby-chat-data.json";
 
   function getGithubToken() {
+    const cfg =
+      (typeof globalThis !== "undefined" && globalThis.BabyChatConfig) ||
+      (typeof window !== "undefined" && window.BabyChatConfig) ||
+      null;
+    const fromCfg = cfg && String(cfg.GITHUB_TOKEN || "").trim();
+    if (fromCfg) return fromCfg;
+
     const vault =
       (typeof globalThis !== "undefined" && globalThis.GithubTokenVault) ||
       (typeof window !== "undefined" && window.GithubTokenVault) ||
       null;
-    if (!vault || typeof vault.getToken !== "function") {
-      throw new Error(
-        "GithubTokenVault 未加载：请先引入 github-token-vault.js 并解锁",
-      );
+    if (vault && typeof vault.isUnlocked === "function" && vault.isUnlocked()) {
+      return vault.getToken();
     }
-    return vault.getToken();
+    if (vault && typeof vault.tryAutoUnlock === "function") {
+      // sync path: tryAutoUnlock is async — callers use getGithubTokenAsync
+    }
+    throw new Error(
+      "请在 baby-chat-config.js 填写 GITHUB_TOKEN（打开页无需密码）",
+    );
+  }
+
+  async function getGithubTokenAsync() {
+    const cfg =
+      (typeof globalThis !== "undefined" && globalThis.BabyChatConfig) ||
+      (typeof window !== "undefined" && window.BabyChatConfig) ||
+      null;
+    const fromCfg = cfg && String(cfg.GITHUB_TOKEN || "").trim();
+    if (fromCfg) return fromCfg;
+
+    const vault =
+      (typeof globalThis !== "undefined" && globalThis.GithubTokenVault) ||
+      (typeof window !== "undefined" && window.GithubTokenVault) ||
+      null;
+    if (vault && typeof vault.tryAutoUnlock === "function") {
+      try {
+        const ok = await vault.tryAutoUnlock();
+        if (ok) return vault.getToken();
+      } catch (error) {
+        /* never prompt */
+      }
+    }
+    if (vault && typeof vault.isUnlocked === "function" && vault.isUnlocked()) {
+      return vault.getToken();
+    }
+    throw new Error(
+      "请在 baby-chat-config.js 填写 GITHUB_TOKEN（打开页无需密码）",
+    );
+  }
+
+  function getRepo() {
+    const cfg =
+      (typeof globalThis !== "undefined" && globalThis.BabyChatConfig) ||
+      (typeof window !== "undefined" && window.BabyChatConfig) ||
+      null;
+    return (cfg && cfg.GITHUB_REPO) || DEFAULT_REPO;
   }
 
   function encodeBase64Utf8(text) {
@@ -74,9 +120,9 @@
   }
 
   async function fetchJsonFile(options) {
-    const repo = options.repo || DEFAULT_REPO;
+    const repo = options.repo || getRepo();
     const path = options.path;
-    const token = options.token || getGithubToken();
+    const token = options.token || (await getGithubTokenAsync());
     const response = await fetch(
       `https://api.github.com/repos/${repo}/contents/${path}?t=${Date.now()}`,
       {
@@ -126,9 +172,9 @@
   }
 
   async function writeJsonFile(options) {
-    const repo = options.repo || DEFAULT_REPO;
+    const repo = options.repo || getRepo();
     const path = options.path;
-    const token = options.token || getGithubToken();
+    const token = options.token || (await getGithubTokenAsync());
     const payload = {
       message: options.message || `Update ${path}`,
       content: encodeBase64Utf8(JSON.stringify(options.data, null, 2)),
@@ -165,11 +211,29 @@
   async function loadRaw(options) {
     const opts = options || {};
     const path = opts.path || DATA_PATH;
+    const repo = opts.repo || getRepo();
+
+    // 公开 raw：打开即读，不弹密码
     try {
+      const url = `https://raw.githubusercontent.com/${repo}/main/${path}?t=${Date.now()}`;
+      const response = await fetch(url, { cache: "no-store" });
+      if (response.ok) {
+        return {
+          data: normalizeData(await response.json()),
+          sha: null,
+          source: "raw",
+        };
+      }
+    } catch (error) {
+      console.warn("baby-chat load raw failed", error);
+    }
+
+    try {
+      const token = await getGithubTokenAsync();
       const current = await fetchJsonFile({
-        repo: opts.repo,
+        repo,
         path,
-        token: opts.token,
+        token,
       });
       if (current.data) {
         return {
@@ -203,41 +267,31 @@
   async function patch(mutator, message) {
     let lastError = null;
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      const loaded = await loadRaw();
-      if (!loaded.sha && loaded.source !== "api") {
-        // create file on remote
-        const data = normalizeData(loaded.data);
-        const next = await mutator(data);
-        if (!next) return { data, sha: null };
-        next.updatedAt = Date.now();
-        try {
-          const saved = await writeJsonFile({
-            path: DATA_PATH,
-            data: next,
-            sha: null,
-            message: message || "baby-chat: create",
-          });
-          return {
-            data: next,
-            sha: saved && saved.content && saved.content.sha,
-          };
-        } catch (error) {
-          lastError = error;
-          if (error && error.code === "conflict") continue;
-          throw error;
-        }
+      const token = await getGithubTokenAsync();
+      let remote;
+      try {
+        remote = await fetchJsonFile({
+          path: DATA_PATH,
+          token,
+        });
+      } catch (error) {
+        remote = { data: null, sha: null };
       }
 
-      const data = normalizeData(loaded.data);
+      const data = normalizeData(
+        remote.data || (await loadRaw()).data || emptyData(),
+      );
       const next = await mutator(data);
-      if (!next) return { data, sha: loaded.sha };
+      if (!next) return { data, sha: remote.sha };
       next.updatedAt = Date.now();
       try {
         const saved = await writeJsonFile({
           path: DATA_PATH,
           data: next,
-          sha: loaded.sha,
-          message: message || "baby-chat: update",
+          sha: remote.sha,
+          token,
+          message:
+            message || (remote.sha ? "baby-chat: update" : "baby-chat: create"),
         });
         return {
           data: next,

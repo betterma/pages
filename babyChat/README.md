@@ -1,24 +1,31 @@
 # 宝宝日记（口语 + 语音）
 
-手机网页录入，微信只收每晚总结。
+手机网页**即时**解析（ASR/LLM 在浏览器），自动入库；可改可删。  
+云函数只负责 **北京时间 20:00** 后推微信每日总结。
+
+## 配置（必做一次）
+
+编辑 `baby-chat-config.js`：
+
+```js
+DASHSCOPE_API_KEY: "sk-...",  // 百炼 Key
+GITHUB_TOKEN: "ghp_...",      // 能写本仓库的 Token
+```
+
+填好后打开页面**不需要输入密码**。
 
 ## 怎么用
 
-1. 打开本目录 `index.html`（需能加载上级 `github-token-vault.js`，并解锁仓库密码）
-2. 发文字，或按住说话
-3. 等定时云函数解析（状态变「待确认」）→ 改数字 / 标闲聊 → 确认入库
-4. 每晚（默认北京时间 21:00 后）云函数写当日总结；配置了 PushPlus 则推到微信（含月龄、奶量）
+1. 打开 `index.html` / Pages 上的 `babyChat/`
+2. 发文字或按住说话 → 几秒内解析并自动出现在「今日记录」
+3. 点「修改」可改 ml / 备注 / 标闲聊，或删除
+4. 每晚 20:00 后云函数汇总并 PushPlus 推微信（需云函数配好 `PUSHPLUS_TOKEN`）
 
-## 目录
+## 云函数
 
-| 路径 | 作用 |
-|------|------|
-| `index.html` 等 | 手机录入页 |
-| `baby-chat-data.json` | 共享数据（GitHub） |
-| `cloud-function-baby-chat/` | **新建**定时云函数整包 |
-
-云函数部署见 `cloud-function-baby-chat/README.md`。
+见 `cloud-function-baby-chat/README.md`。  
+重新整包上传后，建议环境变量 `BABY_SUMMARY_HOUR=20`（代码默认已是 20）。
 
 ## 与 `baby/` 的关系
 
-`baby/` 是成长手册（身高体重月记）。本目录是**每日口语喂养日记**，互不替代。
+`baby/` = 成长手册；本目录 = 每日喂养口语日记。
