@@ -201,8 +201,8 @@
     const path = options.path;
     const token = options.token || getGithubToken();
     const ref = options.ref ? String(options.ref) : "main";
-    // 不要加 Cache-Control/Pragma 请求头：会触发 CORS 预检且 GitHub 未必放行。
-    // 防缓存靠 cache:'no-store' + t= 时间戳即可。
+    // 不要加 Cache-Control/Pragma 请求头：跨域会触发 CORS 预检，GitHub 未必放行。
+    // 防缓存靠 cache:'no-store' + t= 时间戳。
     const response = await fetch(
       `https://api.github.com/repos/${repo}/contents/${encodeURIComponent(path).replace(/%2F/g, "/")}?ref=${encodeURIComponent(ref)}&t=${Date.now()}`,
       {
