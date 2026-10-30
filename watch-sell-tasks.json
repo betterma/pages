@@ -1,5 +1,5 @@
 {
-  "updatedAt": 1793352539743,
+  "updatedAt": 1793352600610,
   "live": true,
   "tasks": [
     {
@@ -12,11 +12,17 @@
       "openOrderId": null,
       "lastPrice": null,
       "lastQty": null,
-      "wouldSell": null,
-      "skipReason": null,
+      "wouldSell": {
+        "free": 77859.063,
+        "qty": 77859,
+        "bid": 0.005086,
+        "minSell": 0.005091,
+        "price": null
+      },
+      "skipReason": "below-minSell",
       "lastError": null,
       "createdAt": 1793352539741,
-      "updatedAt": 1793352539741
+      "updatedAt": 1793352633185
     }
   ]
 }
