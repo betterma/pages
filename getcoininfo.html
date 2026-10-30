@@ -1132,10 +1132,6 @@
             try {
                 const response = await fetch(`./toWatch.json?t=${Date.now()}`, {
                     cache: 'no-store',
-                    headers: {
-                        'Cache-Control': 'no-cache',
-                        Pragma: 'no-cache',
-                    },
                 });
                 if (!response.ok) throw new Error('无法读取 toWatch.json');
                 const raw = await response.json();
