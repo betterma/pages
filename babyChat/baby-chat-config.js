@@ -13,7 +13,7 @@
     BABY_LLM_MODEL: "qwen-plus",
     BABY_ASR_MODEL: "qwen3-asr-flash",
     DASHSCOPE_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    // GitHub 写入 Token（有则不再弹保险库密码）
+    // GitHub 写入 Token（推荐填写；空则首次会走保险库解锁并记住到本机）
     GITHUB_TOKEN: "",
     GITHUB_REPO: "betterma/pages",
   };

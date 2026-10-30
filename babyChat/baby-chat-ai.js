@@ -167,7 +167,7 @@
       }
     });
     if (!parts.length) {
-      return parse.notes || parse.chatOnly ? "闲聊/备注" : "已记录";
+      return parse.notes || parse.chatOnly ? "备注" : "已记录";
     }
     return parts.join(" · ");
   }

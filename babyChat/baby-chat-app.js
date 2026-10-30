@@ -118,7 +118,7 @@
 
   function entryLabel(e) {
     if (!e) return "";
-    if (e.chatOnly) return e.notes || e.text || "闲聊";
+    if (e.chatOnly) return e.notes || e.text || "备注";
     const parts = [];
     if (e.feedCount) {
       parts.push(
@@ -173,11 +173,6 @@
         }</span></div>`,
       );
     }
-    if (totals.chatCount) {
-      rows.push(
-        `<div class="dim"><span>闲聊备注</span><span>${totals.chatCount} 条</span></div>`,
-      );
-    }
     rows.push(
       `<div class="summary-hint">共 ${totals.entryCount} 条 · 点这里可改明细</div>`,
     );
@@ -227,32 +222,31 @@
       .map((e) => {
         if (state.editingId === e.id) {
           return `<div class="card edit-card" data-id="${escapeHtml(e.id)}">
-            <div class="field"><label>原文</label>
+            <div class="field">
+              <label>原文</label>
               <input class="text-input" type="text" value="${escapeHtml(e.text || "")}" />
             </div>
-            <div class="field"><label>备注</label>
-              <input class="notes-input" type="text" value="${escapeHtml(e.notes || "")}" />
-            </div>
-            <div class="events-edit">
-              <div class="event-row">
-                <input data-field="feedCount" type="number" min="0" value="${Number(e.feedCount) || 0}" placeholder="喂奶次数" />
-                <input data-field="mlTotal" type="number" min="0" value="${Number(e.mlTotal) || 0}" placeholder="ml" />
-                <span class="meta">奶</span>
+            <div class="edit-grid">
+              <div class="field">
+                <label>喂奶次数</label>
+                <input data-field="feedCount" type="number" min="0" step="1" value="${Number(e.feedCount) || 0}" />
               </div>
-              <div class="event-row">
-                <input data-field="peeCount" type="number" min="0" value="${Number(e.peeCount) || 0}" placeholder="小便" />
-                <input data-field="poopCount" type="number" min="0" value="${Number(e.poopCount) || 0}" placeholder="大便" />
-                <span class="meta">尿便</span>
+              <div class="field">
+                <label>奶量 (ml)</label>
+                <input data-field="mlTotal" type="number" min="0" step="1" value="${Number(e.mlTotal) || 0}" />
+              </div>
+              <div class="field">
+                <label>小便次数</label>
+                <input data-field="peeCount" type="number" min="0" step="1" value="${Number(e.peeCount) || 0}" />
+              </div>
+              <div class="field">
+                <label>大便次数</label>
+                <input data-field="poopCount" type="number" min="0" step="1" value="${Number(e.poopCount) || 0}" />
               </div>
             </div>
-            <label class="meta" style="display:flex;gap:8px;align-items:center;margin-top:10px">
-              <input type="checkbox" class="chat-only" ${e.chatOnly ? "checked" : ""} />
-              仅闲聊
-            </label>
             <div class="row">
               <button type="button" class="primary btn-save-edit" data-id="${escapeHtml(e.id)}">保存</button>
-              <button type="button" class="secondary btn-cancel-edit">取消</button>
-              <button type="button" class="danger btn-delete" data-id="${escapeHtml(e.id)}">删除</button>
+              <button type="button" class="secondary btn-cancel-edit" data-id="${escapeHtml(e.id)}">取消</button>
             </div>
           </div>`;
         }
@@ -262,6 +256,7 @@
           <div style="margin-top:8px">${escapeHtml(e.text || "")}</div>
           <div class="row">
             <button type="button" class="secondary btn-edit" data-id="${escapeHtml(e.id)}">修改</button>
+            <button type="button" class="danger btn-delete" data-id="${escapeHtml(e.id)}">删除</button>
           </div>
         </div>`;
       })
@@ -454,13 +449,9 @@
       const n = Number(el && el.value);
       return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
     };
-    const chatOnly = card.querySelector(".chat-only");
     const textInput = card.querySelector(".text-input");
-    const notes = card.querySelector(".notes-input");
     return {
       text: textInput ? String(textInput.value || "").trim() : "",
-      notes: notes ? String(notes.value || "").trim() : "",
-      chatOnly: !!(chatOnly && chatOnly.checked),
       feedCount: num("feedCount"),
       mlTotal: num("mlTotal"),
       peeCount: num("peeCount"),
@@ -469,63 +460,61 @@
   }
 
   async function saveEdit(id, card) {
+    if (!card) throw new Error("找不到编辑卡片");
     const edits = readEditCard(card);
-    await withLoading("保存修改", "正在写入…", async () => {
-      const saved = await BabyChatStore.patch((data) => {
-        const entry = (data.entries || []).find((e) => e && e.id === id);
-        if (!entry) return data;
-        entry.text = edits.text;
-        entry.notes = edits.notes;
-        entry.chatOnly = edits.chatOnly;
-        if (edits.chatOnly) {
-          entry.events = [];
-          entry.feedCount = 0;
-          entry.mlTotal = 0;
-          entry.peeCount = 0;
-          entry.poopCount = 0;
-        } else {
-          entry.feedCount = edits.feedCount;
-          entry.mlTotal = edits.mlTotal;
-          entry.peeCount = edits.peeCount;
-          entry.poopCount = edits.poopCount;
-          const events = [];
-          if (edits.feedCount) {
-            events.push({
-              type: "feed",
-              count: edits.feedCount,
-              ml: edits.mlTotal || null,
-              method: "unknown",
-              estimated: false,
-            });
-          }
-          if (edits.peeCount) {
-            events.push({ type: "pee", count: edits.peeCount });
-          }
-          if (edits.poopCount) {
-            events.push({ type: "poop", count: edits.poopCount });
-          }
-          entry.events = events;
-        }
-        return data;
-      }, "baby-chat: edit entry");
-      state.editingId = null;
-      if (saved && saved.data) applyData(saved.data, "api");
-      else await reload({ silent: true });
-      toast("已保存");
-    });
+    const saved = await BabyChatStore.patch((data) => {
+      const entry = (data.entries || []).find((e) => e && e.id === id);
+      if (!entry) return data;
+      entry.text = edits.text;
+      entry.chatOnly = false;
+      entry.notes = entry.notes || "";
+      entry.feedCount = edits.feedCount;
+      entry.mlTotal = edits.mlTotal;
+      entry.peeCount = edits.peeCount;
+      entry.poopCount = edits.poopCount;
+      const events = [];
+      if (edits.feedCount) {
+        events.push({
+          type: "feed",
+          count: edits.feedCount,
+          ml: edits.mlTotal || null,
+          method: "unknown",
+          estimated: false,
+        });
+      }
+      if (edits.peeCount) {
+        events.push({ type: "pee", count: edits.peeCount });
+      }
+      if (edits.poopCount) {
+        events.push({ type: "poop", count: edits.poopCount });
+      }
+      entry.events = events;
+      if (!events.length && !edits.text) {
+        entry.chatOnly = true;
+      }
+      return data;
+    }, "baby-chat: edit entry");
+    state.editingId = null;
+    if (saved && saved.data) applyData(saved.data, "api");
+    else await reload({ silent: true });
+    renderTodayList();
+    toast("已保存");
   }
 
   async function deleteEntry(id) {
-    await withLoading("删除中", "正在更新…", async () => {
-      const saved = await BabyChatStore.patch((data) => {
-        data.entries = (data.entries || []).filter((e) => e && e.id !== id);
-        return data;
-      }, "baby-chat: delete entry");
-      state.editingId = null;
-      if (saved && saved.data) applyData(saved.data, "api");
-      else await reload({ silent: true });
-      toast("已删除");
-    });
+    const saved = await BabyChatStore.patch((data) => {
+      const before = (data.entries || []).length;
+      data.entries = (data.entries || []).filter((e) => e && e.id !== id);
+      if (data.entries.length === before) {
+        throw new Error("未找到要删除的记录");
+      }
+      return data;
+    }, "baby-chat: delete entry");
+    if (state.editingId === id) state.editingId = null;
+    if (saved && saved.data) applyData(saved.data, "api");
+    else await reload({ silent: true });
+    renderTodayList();
+    toast("已删除");
   }
 
   function bind() {
@@ -539,19 +528,28 @@
     $("todayList").addEventListener("click", async (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement) || state.busy) return;
-      const id = target.getAttribute("data-id");
+      const btn = target.closest("button");
+      if (!btn) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const id = btn.getAttribute("data-id");
       try {
-        if (target.classList.contains("btn-edit") && id) {
+        if (btn.classList.contains("btn-edit") && id) {
           state.editingId = id;
           renderTodayList();
-        } else if (target.classList.contains("btn-cancel-edit")) {
+        } else if (btn.classList.contains("btn-cancel-edit")) {
           state.editingId = null;
           renderTodayList();
-        } else if (target.classList.contains("btn-save-edit") && id) {
-          await saveEdit(id, target.closest(".edit-card"));
-        } else if (target.classList.contains("btn-delete") && id) {
-          if (!window.confirm("删除这条记录？")) return;
-          await deleteEntry(id);
+        } else if (btn.classList.contains("btn-save-edit") && id) {
+          await withLoading("保存修改", "正在写入…", async () => {
+            await saveEdit(id, btn.closest(".edit-card"));
+          });
+        } else if (btn.classList.contains("btn-delete") && id) {
+          const ok = window.confirm("确定删除这条记录？");
+          if (!ok) return;
+          await withLoading("删除中", "正在更新…", async () => {
+            await deleteEntry(id);
+          });
         }
       } catch (error) {
         toast(error.message || "操作失败");

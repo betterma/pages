@@ -4,54 +4,102 @@
   const DEFAULT_REPO = "betterma/pages";
   const DATA_PATH = "babyChat/baby-chat-data.json";
 
-  function getGithubToken() {
+  const LS_TOKEN_KEY = "baby-chat-gh-token-v1";
+
+  function readLocalToken() {
+    try {
+      return String(localStorage.getItem(LS_TOKEN_KEY) || "").trim();
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function writeLocalToken(token) {
+    try {
+      const value = String(token || "").trim();
+      if (value) localStorage.setItem(LS_TOKEN_KEY, value);
+      else localStorage.removeItem(LS_TOKEN_KEY);
+    } catch (error) {
+      /* ignore */
+    }
+  }
+
+  function tokenFromConfig() {
     const cfg =
       (typeof globalThis !== "undefined" && globalThis.BabyChatConfig) ||
       (typeof window !== "undefined" && window.BabyChatConfig) ||
       null;
-    const fromCfg = cfg && String(cfg.GITHUB_TOKEN || "").trim();
-    if (fromCfg) return fromCfg;
+    return cfg && String(cfg.GITHUB_TOKEN || "").trim();
+  }
 
-    const vault =
+  function getVault() {
+    return (
       (typeof globalThis !== "undefined" && globalThis.GithubTokenVault) ||
       (typeof window !== "undefined" && window.GithubTokenVault) ||
-      null;
-    if (vault && typeof vault.isUnlocked === "function" && vault.isUnlocked()) {
-      return vault.getToken();
-    }
-    if (vault && typeof vault.tryAutoUnlock === "function") {
-      // sync path: tryAutoUnlock is async — callers use getGithubTokenAsync
-    }
-    throw new Error(
-      "请在 baby-chat-config.js 填写 GITHUB_TOKEN（打开页无需密码）",
+      null
     );
   }
 
-  async function getGithubTokenAsync() {
-    const cfg =
-      (typeof globalThis !== "undefined" && globalThis.BabyChatConfig) ||
-      (typeof window !== "undefined" && window.BabyChatConfig) ||
-      null;
-    const fromCfg = cfg && String(cfg.GITHUB_TOKEN || "").trim();
+  function getGithubToken() {
+    const fromCfg = tokenFromConfig();
     if (fromCfg) return fromCfg;
-
-    const vault =
-      (typeof globalThis !== "undefined" && globalThis.GithubTokenVault) ||
-      (typeof window !== "undefined" && window.GithubTokenVault) ||
-      null;
-    if (vault && typeof vault.tryAutoUnlock === "function") {
-      try {
-        const ok = await vault.tryAutoUnlock();
-        if (ok) return vault.getToken();
-      } catch (error) {
-        /* never prompt */
-      }
-    }
+    const local = readLocalToken();
+    if (local) return local;
+    const vault = getVault();
     if (vault && typeof vault.isUnlocked === "function" && vault.isUnlocked()) {
       return vault.getToken();
     }
+    throw new Error("GitHub Token 未就绪，请稍后重试或填写 baby-chat-config.js");
+  }
+
+  async function getGithubTokenAsync() {
+    const fromCfg = tokenFromConfig();
+    if (fromCfg) return fromCfg;
+
+    const local = readLocalToken();
+    if (local) return local;
+
+    const vault = getVault();
+    if (vault && typeof vault.tryAutoUnlock === "function") {
+      try {
+        const ok = await vault.tryAutoUnlock();
+        if (ok) {
+          const token = String(vault.getToken() || "").trim();
+          if (token) {
+            writeLocalToken(token);
+            return token;
+          }
+        }
+      } catch (error) {
+        /* continue */
+      }
+    }
+    if (vault && typeof vault.isUnlocked === "function" && vault.isUnlocked()) {
+      const token = String(vault.getToken() || "").trim();
+      if (token) {
+        writeLocalToken(token);
+        return token;
+      }
+    }
+    // 配置未填时：用与 kline 相同的保险库解锁一次，并记住到本机
+    if (vault && typeof vault.ensureUnlocked === "function") {
+      try {
+        await vault.ensureUnlocked();
+        const token = String(vault.getToken() || "").trim();
+        if (token) {
+          writeLocalToken(token);
+          return token;
+        }
+      } catch (error) {
+        throw new Error(
+          error && error.message
+            ? error.message
+            : "请在 baby-chat-config.js 填写 GITHUB_TOKEN，或解锁 GitHub 保险库",
+        );
+      }
+    }
     throw new Error(
-      "请在 baby-chat-config.js 填写 GITHUB_TOKEN（打开页无需密码）",
+      "请在 baby-chat-config.js 填写 GITHUB_TOKEN，或确保已引入 github-token-vault.js",
     );
   }
 
