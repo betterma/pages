@@ -443,13 +443,11 @@ async function runHoldingsSync(options) {
       at: now,
     };
     result.updated += 1;
-    // 余额归零：清买入价 P（固定止损由页面/卖出任务自然 qty-too-small 或手清）
+    // 余额归零：清买入价 P，并丢掉该币固定止损（限价卖出计划保留到用户手清/移除）
     if (symbol !== 'USDT' && row.free <= 0 && row.locked <= 0) {
-      if (entryPrices[symbol]) {
-        delete entryPrices[symbol];
-        flatSymbols.push(symbol);
-      }
+      if (entryPrices[symbol]) delete entryPrices[symbol];
       if (stopCancel[symbol]) delete stopCancel[symbol];
+      flatSymbols.push(symbol);
     }
   });
   // 买入任务需要 USDT 可用额；无论关注列表是否含 USDT 都回填。

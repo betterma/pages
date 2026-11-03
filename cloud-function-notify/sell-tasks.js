@@ -164,8 +164,8 @@ async function pollOpenOrder(task, context) {
 }
 
 async function planAndMaybePlace(task, context, live) {
-  const isStop =
-    String(task.kind || '') === 'stop' || task.orderType === 'MARKET';
+  // 只认 kind=stop；勿用 orderType 误伤其它任务
+  const isStop = String(task.kind || '') === 'stop';
   const filters = await spot.getSymbolFilters(task.symbol, context);
   const asset = baseAssetOf(task.symbol);
   const free = await spot.getFreeBalance(asset, context);
@@ -417,43 +417,45 @@ async function runSellTasks(options) {
   }
 
   let changed = false;
-  // 跳空：同币若已触及 -5%，本轮只打 stop5，跳过 stop3。
+  // 同币先跑 stop5 再 stop3，便于跳空时 -5% 成功后接管 -3%。
   const stopSkipIds = new Set();
-  const armedStops = state.tasks.filter(
-    (t) =>
-      t &&
-      t.kind === 'stop' &&
-      t.enabled !== false &&
-      (t.status === 'armed' || t.status === 'error' || t.status === 'partial') &&
-      !t.openOrderId,
-  );
-  const bySym = new Map();
-  armedStops.forEach((t) => {
-    const key = String(t.symbol || '').toUpperCase();
-    if (!bySym.has(key)) bySym.set(key, []);
-    bySym.get(key).push(t);
-  });
-  for (const [, list] of bySym) {
-    const s5 = list.find((t) => t.stopKey === 'stop5');
-    const s3 = list.find((t) => t.stopKey === 'stop3');
-    if (!s5 || !s3) continue;
-    const trigger5 = Number(s5.triggerPrice);
-    if (!(trigger5 > 0)) continue;
-    try {
-      const book = await spot.getBookTicker(s5.symbol, context);
-      const bid = Number(book.bidPrice);
-      if (Number.isFinite(bid) && bid > 0 && bid <= trigger5) {
-        stopSkipIds.add(s3.id);
-        s3.skipReason = 'superseded-by-stop5';
-        s3.updatedAt = now;
-        changed = true;
-      }
-    } catch (_) {
-      /* ignore book peek */
+  const orderedTasks = state.tasks.slice().sort((a, b) => {
+    if (!a || !b) return 0;
+    const aStop = a.kind === 'stop' ? 1 : 0;
+    const bStop = b.kind === 'stop' ? 1 : 0;
+    if (aStop !== bStop) return bStop - aStop;
+    if (a.kind === 'stop' && b.kind === 'stop' && a.symbol === b.symbol) {
+      const ar = a.stopKey === 'stop5' ? 0 : a.stopKey === 'stop3' ? 1 : 2;
+      const br = b.stopKey === 'stop5' ? 0 : b.stopKey === 'stop3' ? 1 : 2;
+      return ar - br;
     }
+    return 0;
+  });
+
+  function supersedeStop3(symbol, permanent) {
+    const key = String(symbol || '').toUpperCase();
+    state.tasks.forEach((other) => {
+      if (
+        other &&
+        String(other.symbol).toUpperCase() === key &&
+        other.kind === 'stop' &&
+        other.stopKey === 'stop3' &&
+        !other.openOrderId
+      ) {
+        stopSkipIds.add(other.id);
+        other.skipReason = 'superseded-by-stop5';
+        other.updatedAt = now;
+        // 仅真下单成交后才丢掉 -3%；dry-run 只本轮跳过，避免模拟把档位删光
+        if (permanent) {
+          other._removeAfterFill = true;
+          other.status = 'canceled';
+          other.enabled = false;
+        }
+      }
+    });
   }
 
-  for (const task of state.tasks) {
+  for (const task of orderedTasks) {
     if (task.status === 'filled' || task.status === 'done') continue;
     result.checked += 1;
     try {
@@ -468,17 +470,51 @@ async function runSellTasks(options) {
         if (task.openOrderId) {
           const poll = await pollOpenOrder(task, context);
           changed = true;
-          if (poll === 'filled') result.filled += 1;
+          if (poll === 'filled') {
+            result.filled += 1;
+            if (task.kind === 'stop' && task.stopKey === 'stop5') {
+              supersedeStop3(task.symbol, true);
+            }
+          }
         }
         continue;
       }
       if (task.openOrderId) {
         const poll = await pollOpenOrder(task, context);
         changed = true;
-        if (poll === 'filled') result.filled += 1;
+        if (poll === 'filled') {
+          result.filled += 1;
+          if (task.kind === 'stop' && task.stopKey === 'stop5') {
+            supersedeStop3(task.symbol, true);
+          }
+        }
         continue;
       }
       if (stopSkipIds.has(task.id)) {
+        changed = true;
+        result.skippedTask += 1;
+        continue;
+      }
+      // -5% 已挂单未完结时，不要再打 -3%
+      if (
+        task.kind === 'stop' &&
+        task.stopKey === 'stop3' &&
+        state.tasks.some(
+          (t) =>
+            t &&
+            t.kind === 'stop' &&
+            t.stopKey === 'stop5' &&
+            String(t.symbol).toUpperCase() ===
+              String(task.symbol).toUpperCase() &&
+            (t.openOrderId ||
+              t.status === 'order_open' ||
+              t.status === 'partial' ||
+              t.status === 'cancel_requested'),
+        )
+      ) {
+        task.skipReason = 'superseded-by-stop5';
+        task.updatedAt = now;
+        changed = true;
         result.skippedTask += 1;
         continue;
       }
@@ -489,26 +525,20 @@ async function runSellTasks(options) {
       ) {
         const action = await planAndMaybePlace(task, context, live);
         changed = true;
-        if (action === 'dry-run') result.dryRun += 1;
-        else if (action === 'placed') result.placed += 1;
-        else if (action === 'filled') {
-          result.filled += 1;
-          // -5% 全出后丢掉同币未完成的 -3% 固定档
+        if (action === 'dry-run') {
+          result.dryRun += 1;
           if (task.kind === 'stop' && task.stopKey === 'stop5') {
-            state.tasks.forEach((other) => {
-              if (
-                other &&
-                other.symbol === task.symbol &&
-                other.kind === 'stop' &&
-                other.stopKey === 'stop3' &&
-                !other.openOrderId
-              ) {
-                other._removeAfterFill = true;
-                other.status = 'canceled';
-                other.enabled = false;
-                other.skipReason = 'superseded-by-stop5';
-              }
-            });
+            supersedeStop3(task.symbol, false);
+          }
+        } else if (action === 'placed') {
+          result.placed += 1;
+          if (task.kind === 'stop' && task.stopKey === 'stop5') {
+            supersedeStop3(task.symbol, false);
+          }
+        } else if (action === 'filled') {
+          result.filled += 1;
+          if (task.kind === 'stop' && task.stopKey === 'stop5') {
+            supersedeStop3(task.symbol, true);
           }
         } else if (action === 'skip') result.skippedTask += 1;
       }

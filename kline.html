@@ -11482,24 +11482,28 @@
             message: `Entry price ${key} ${price}`,
             mutate: (state) => {
               const entryPrices = { ...(state.entryPrices || {}) };
-              const stopCancel = { ...(state.stopCancel || {}) };
+              // 保留 stopCancel：已取消的固定档不会因改 P 自动复活
               entryPrices[key] = {
                 price,
                 at: now,
                 source: "manual",
               };
-              // 改 P：清空该币取消标记，重新种两档固定止损
-              if (stopCancel[key]) delete stopCancel[key];
               const symbols = Array.isArray(state.symbols)
                 ? state.symbols.slice()
                 : [];
               if (!symbols.includes(key)) symbols.push(key);
-              return { ...state, symbols, entryPrices, stopCancel };
+              return { ...state, symbols, entryPrices };
             },
           });
           nailHoldingsState = holdResult.state || nailHoldingsState;
+          const cancel =
+            (nailHoldingsState.stopCancel &&
+              nailHoldingsState.stopCancel[key]) ||
+            {};
 
-          const stops = buildFixedStopTasks(key, price, now);
+          const stops = buildFixedStopTasks(key, price, now).filter(
+            (stop) => !cancel[stop.stopKey],
+          );
           const sellResult = await WatchFavorites.patchSellTasks({
             repo: CONFIG.GITHUB_REPO,
             message: `Seed stop tasks ${key}`,
@@ -11532,8 +11536,11 @@
           });
           nailSellTasksState = sellResult.state || nailSellTasksState;
           renderNailHoldList();
+          const seeded = stops.map((s) => s.stopKey).join("/");
           showToast(
-            `${holdingsBaseAsset(key)} 买入价 ${formatHoldingsPriceInput(price)} · 已加 -3%/-5% 止损`,
+            seeded
+              ? `${holdingsBaseAsset(key)} 买入价 ${formatHoldingsPriceInput(price)} · 止损 ${seeded}`
+              : `${holdingsBaseAsset(key)} 买入价已存（固定止损档均已取消，未重挂）`,
           );
           return true;
         } catch (error) {

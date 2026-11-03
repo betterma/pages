@@ -54,7 +54,8 @@ function buildStopTask(symbol, stopKey, entryPrice, now) {
 }
 
 /**
- * 写入/刷新固定止损（尊重 stopCancel；改 P 时应先清空该币 cancel）。
+ * 写入/刷新固定止损（尊重 stopCancel，不复活已取消档）。
+ * 买入成交路径可先清 stopCancel 再调用；页面改 P 应传入现有 stopCancel。
  * @returns {object[]} next tasks
  */
 function upsertFixedStopTasks(tasks, symbol, entryPrice, stopCancel, now) {
