@@ -15,6 +15,8 @@
 
   const DEFAULT_REPO = "betterma/pages";
   const FAVORITES_PATH = "okx/favorites.json";
+  /** 流水线 / 自选 NEW 角标默认保留时长 */
+  const NEW_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
   const CHAINS = {
     "501": { id: "501", code: "SOL", label: "Solana" },
@@ -76,6 +78,9 @@
     const dextScore = normalizeDextScore(
       item.dextScore != null ? item.dextScore : item.score,
     );
+    const newUntilRaw = Number(item.newUntil);
+    const newUntil =
+      Number.isFinite(newUntilRaw) && newUntilRaw > 0 ? newUntilRaw : 0;
     return {
       chainIndex,
       tokenContractAddress,
@@ -85,7 +90,14 @@
         : 0,
       source: item.source ? String(item.source) : "manual",
       dextScore,
+      newUntil,
     };
+  }
+
+  function isNewItem(item, now) {
+    const until = Number(item && item.newUntil);
+    const ts = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+    return Number.isFinite(until) && until > ts;
   }
 
   function shortLabel(address) {
@@ -125,6 +137,14 @@
         ) {
           normalized = { ...normalized, dextScore: prev.dextScore };
         }
+        if (prev && !isNewItem(normalized) && isNewItem(prev)) {
+          normalized = { ...normalized, newUntil: prev.newUntil };
+        } else if (
+          prev &&
+          Number(prev.newUntil) > Number(normalized.newUntil || 0)
+        ) {
+          normalized = { ...normalized, newUntil: prev.newUntil };
+        }
         map.set(key, normalized);
       }
     });
@@ -148,6 +168,7 @@
           source: item.source || "manual",
         };
         if (item.dextScore != null) row.dextScore = item.dextScore;
+        if (isNewItem(item)) row.newUntil = Number(item.newUntil);
         return row;
       }),
     };
@@ -303,7 +324,15 @@
     return data;
   }
 
-  function addItems(list, incoming, source) {
+  function addItems(list, incoming, source, options) {
+    const opts = options && typeof options === "object" ? options : {};
+    const markNew = Boolean(opts.markNew);
+    const ttl =
+      Number.isFinite(Number(opts.newTtlMs)) && Number(opts.newTtlMs) > 0
+        ? Number(opts.newTtlMs)
+        : NEW_TTL_MS;
+    const stamp = Date.now();
+    const newUntil = markNew ? stamp + ttl : 0;
     const next = normalizeList(list);
     const map = new Map(
       next.map((item) => [
@@ -312,21 +341,33 @@
       ]),
     );
     const added = [];
+    const skipped = [];
     normalizeList(incoming).forEach((item) => {
       const key = tokenKey(item.chainIndex, item.tokenContractAddress);
       if (!key) return;
-      if (map.has(key)) return;
+      if (map.has(key)) {
+        skipped.push(map.get(key));
+        return;
+      }
       const row = {
         ...item,
-        addedAt: Date.now(),
+        addedAt: stamp,
         source: source || item.source || "manual",
       };
+      if (newUntil) {
+        row.newUntil = newUntil;
+      } else if (isNewItem(item, stamp)) {
+        row.newUntil = Number(item.newUntil);
+      } else {
+        row.newUntil = 0;
+      }
       map.set(key, row);
       added.push(row);
     });
     return {
       items: [...map.values()].sort((a, b) => b.addedAt - a.addedAt),
       added,
+      skipped,
     };
   }
 
@@ -388,12 +429,14 @@
   return {
     CHAINS,
     FAVORITES_PATH,
+    NEW_TTL_MS,
     tokenKey,
     normalizeAddress,
     normalizeList,
     serializeList,
     setItemScore,
     normalizeDextScore,
+    isNewItem,
     loadFavorites,
     saveFavorites,
     addItems,

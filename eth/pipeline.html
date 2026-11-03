@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Robinhood 流水线 · 对比→筛选→自选</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --ink: #1e293b;
+      --muted: #64748b;
+      --line: #c7d7f0;
+      --card: #ffffff;
+      --primary: #4361ee;
+      --primary-hover: #3a56d4;
+      --ok: #047857;
+      --warn: #b45309;
+      --err: #b91c1c;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", "PingFang SC", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+      padding: 1rem 1rem 2.5rem;
+    }
+    .shell { max-width: 920px; margin: 0 auto; }
+    .nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .nav a {
+      display: inline-block;
+      padding: 0.45rem 0.85rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #fff;
+      background: var(--primary);
+    }
+    .nav a.secondary {
+      background: transparent;
+      color: var(--primary);
+      border: 1px solid var(--primary);
+    }
+    h1 {
+      font-size: 1.45rem;
+      margin-bottom: 0.35rem;
+    }
+    .lede {
+      color: var(--muted);
+      font-size: 0.92rem;
+      margin-bottom: 1.1rem;
+    }
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin-bottom: 0.4rem;
+    }
+    textarea {
+      width: 100%;
+      min-height: 160px;
+      padding: 0.75rem;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.85rem;
+      resize: vertical;
+      background: #f8fafc;
+      color: var(--ink);
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+      margin-top: 0.75rem;
+    }
+    button {
+      border: 0;
+      border-radius: 6px;
+      padding: 0.55rem 1rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    #runBtn { background: var(--primary); color: #fff; }
+    #runBtn:hover:not(:disabled) { background: var(--primary-hover); }
+    #cancelBtn { background: #fee2e2; color: var(--err); }
+    #clearBtn { background: #eef2ff; color: var(--primary); }
+    .steps {
+      list-style: none;
+      display: grid;
+      gap: 0.45rem;
+    }
+    .steps li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.55rem;
+      padding: 0.55rem 0.65rem;
+      border-radius: 8px;
+      background: #f8fafc;
+      border: 1px solid transparent;
+      font-size: 0.9rem;
+    }
+    .steps li.is-active {
+      border-color: var(--primary);
+      background: #e0e7ff;
+    }
+    .steps li.is-done { color: var(--ok); }
+    .steps li.is-error { color: var(--err); background: #fef2f2; }
+    .steps li.is-skip { color: var(--muted); }
+    .step-mark {
+      flex-shrink: 0;
+      width: 1.35rem;
+      text-align: center;
+      font-weight: 700;
+    }
+    .log {
+      margin-top: 0.75rem;
+      max-height: 180px;
+      overflow: auto;
+      font-family: ui-monospace, Consolas, monospace;
+      font-size: 0.78rem;
+      color: var(--muted);
+      white-space: pre-wrap;
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 0.65rem;
+      border: 1px solid var(--line);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 0.45rem 0.35rem;
+      text-align: left;
+    }
+    th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .pill {
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.3rem 0.55rem;
+      border-radius: 999px;
+      background: #e0e7ff;
+      color: var(--primary);
+    }
+    .pill.warn { background: #ffedd5; color: var(--warn); }
+    .pill.err { background: #fee2e2; color: var(--err); }
+    .empty {
+      color: var(--muted);
+      padding: 1.2rem 0;
+      text-align: center;
+    }
+    .hint {
+      margin-top: 0.55rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="nav">
+      <a href="../index.html">总导航</a>
+      <a class="secondary" href="../eth-index.html">旧三步发现</a>
+      <a class="secondary" href="../solana/pipeline.html">Solana 流水线</a>
+      <a class="secondary" href="../okx/kline.html">OKX 自选</a>
+    </div>
+
+    <h1>Robinhood 流水线</h1>
+    <p class="lede">
+      粘贴合约 → 自动对比 eth/toAll、DexScreener 筛 ≥$5M、整表覆盖 eth/toWatch、合并 toAll、写入 OKX 自选 RH（NEW 保留 7 天）。
+    </p>
+
+    <div class="panel">
+      <label for="addresses">合约地址（每行一个）</label>
+      <textarea id="addresses" placeholder="粘贴 Robinhood 合约地址，每行一个…"></textarea>
+      <div class="actions">
+        <button type="button" id="runBtn">开始流水线</button>
+        <button type="button" id="cancelBtn" disabled>取消</button>
+        <button type="button" id="clearBtn">清空</button>
+      </div>
+      <p class="hint">市值接口：DexScreener · chain=robinhood · 每批最多 30 个。已在 toAll 中的地址会跳过查询。</p>
+    </div>
+
+    <div class="panel">
+      <label>进度</label>
+      <ol class="steps" id="steps">
+        <li data-step="parse"><span class="step-mark">1</span><span class="step-text">解析 / 本批去重</span></li>
+        <li data-step="compare"><span class="step-mark">2</span><span class="step-text">对比 toAll，找出新地址</span></li>
+        <li data-step="query"><span class="step-mark">3</span><span class="step-text">DexScreener 获取详情</span></li>
+        <li data-step="filter"><span class="step-mark">4</span><span class="step-text">筛市值 ≥ $5M</span></li>
+        <li data-step="watch"><span class="step-mark">5</span><span class="step-text">整表覆盖 eth/toWatch.json</span></li>
+        <li data-step="all"><span class="step-mark">6</span><span class="step-text">合并写入 eth/toAll.json</span></li>
+        <li data-step="okx"><span class="step-mark">7</span><span class="step-text">写入 OKX favorites RH（打 NEW）</span></li>
+      </ol>
+      <div class="log" id="log" aria-live="polite"></div>
+    </div>
+
+    <div class="panel">
+      <label>结果</label>
+      <div class="summary" id="summary"></div>
+      <div id="results"><div class="empty">跑完后这里显示达标币种</div></div>
+    </div>
+  </div>
+
+  <script src="../github-token-vault.js"></script>
+  <script src="../okx/favorites.js"></script>
+  <script>
+    "use strict";
+
+    const CONFIG = {
+      CHAIN_INDEX: "4663",
+      DS_CHAIN: "robinhood",
+      DS_BASE: "https://api.dexscreener.com",
+      BATCH_SIZE: 30,
+      BATCH_DELAY: 400,
+      GITHUB_REPO: "betterma/pages",
+      TO_ALL_PATH: "eth/toAll.json",
+      TO_WATCH_PATH: "eth/toWatch.json",
+      TO_ALL_URL: "./toAll.json",
+      MIN_MCAP: 5_000_000,
+    };
+
+    const STEP_ORDER = [
+      "parse",
+      "compare",
+      "query",
+      "filter",
+      "watch",
+      "all",
+      "okx",
+    ];
+
+    const addressesEl = document.getElementById("addresses");
+    const runBtn = document.getElementById("runBtn");
+    const cancelBtn = document.getElementById("cancelBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const logEl = document.getElementById("log");
+    const summaryEl = document.getElementById("summary");
+    const resultsEl = document.getElementById("results");
+
+    let running = false;
+    let cancelRequested = false;
+
+    function githubToken() {
+      if (!window.GithubTokenVault) {
+        throw new Error("GithubTokenVault 未加载");
+      }
+      return window.GithubTokenVault.getToken();
+    }
+
+    function appendLog(line) {
+      const stamp = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+      logEl.textContent += `[${stamp}] ${line}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function resetSteps() {
+      document.querySelectorAll("#steps li").forEach((li) => {
+        li.classList.remove("is-active", "is-done", "is-error", "is-skip");
+        const mark = li.querySelector(".step-mark");
+        const idx = STEP_ORDER.indexOf(li.dataset.step);
+        if (mark) mark.textContent = String(idx + 1);
+      });
+    }
+
+    function setStep(id, state, text) {
+      const li = document.querySelector(`#steps li[data-step="${id}"]`);
+      if (!li) return;
+      li.classList.remove("is-active", "is-done", "is-error", "is-skip");
+      if (state) li.classList.add(`is-${state}`);
+      const textEl = li.querySelector(".step-text");
+      if (text && textEl) textEl.textContent = text;
+      const mark = li.querySelector(".step-mark");
+      if (!mark) return;
+      if (state === "done") mark.textContent = "✓";
+      else if (state === "error") mark.textContent = "!";
+      else if (state === "skip") mark.textContent = "–";
+      else if (state === "active") mark.textContent = "…";
+    }
+
+    function formatNumber(n) {
+      const num = Number(n);
+      if (!Number.isFinite(num)) return "-";
+      if (num >= 1e9) return (num / 1e9).toFixed(2) + "B";
+      if (num >= 1e6) return (num / 1e6).toFixed(2) + "M";
+      if (num >= 1e3) return (num / 1e3).toFixed(1) + "K";
+      return String(Math.round(num));
+    }
+
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    function throwIfCancelled() {
+      if (cancelRequested) {
+        const err = new Error("已取消");
+        err.code = "CANCELLED";
+        throw err;
+      }
+    }
+
+    function normalizeAddr(addr) {
+      return String(addr || "").trim().toLowerCase();
+    }
+
+    function parseAddresses(text) {
+      const seen = new Set();
+      const list = [];
+      String(text || "")
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line && !line.startsWith("#"))
+        .forEach((line) => {
+          const addr = normalizeAddr(line.split(/[\s,|]+/)[0]);
+          if (!addr || seen.has(addr)) return;
+          seen.add(addr);
+          list.push(addr);
+        });
+      return list;
+    }
+
+    async function loadToAll() {
+      try {
+        const response = await fetch(`${CONFIG.TO_ALL_URL}?t=${Date.now()}`, {
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        const list = Array.isArray(data) ? data : [];
+        return list.map((item) => normalizeAddr(item)).filter(Boolean);
+      } catch (error) {
+        appendLog(`读取 toAll 失败，按空历史继续：${error.message}`);
+        return [];
+      }
+    }
+
+    function encodeBase64Utf8(text) {
+      const bytes = new TextEncoder().encode(text);
+      let binary = "";
+      bytes.forEach((b) => {
+        binary += String.fromCharCode(b);
+      });
+      return btoa(binary);
+    }
+
+    async function writeGithubJson(path, data, message) {
+      await window.GithubTokenVault.ensureUnlocked();
+      const token = githubToken();
+      const getResponse = await fetch(
+        `https://api.github.com/repos/${CONFIG.GITHUB_REPO}/contents/${path}?t=${Date.now()}`,
+        {
+          cache: "no-store",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
+        },
+      );
+      let sha = null;
+      if (getResponse.status === 404) {
+        sha = null;
+      } else if (!getResponse.ok) {
+        const text = await getResponse.text();
+        throw new Error(
+          `读取 ${path} 失败: ${getResponse.status} ${text.slice(0, 160)}`,
+        );
+      } else {
+        const file = await getResponse.json();
+        sha = file.sha;
+      }
+      const body = {
+        message: message || `Update ${path}`,
+        content: encodeBase64Utf8(JSON.stringify(data, null, 2)),
+      };
+      if (sha) body.sha = sha;
+      const putResponse = await fetch(
+        `https://api.github.com/repos/${CONFIG.GITHUB_REPO}/contents/${path}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "Content-Type": "application/json",
+            "X-GitHub-Api-Version": "2022-11-28",
+          },
+          body: JSON.stringify(body),
+        },
+      );
+      if (!putResponse.ok) {
+        const text = await putResponse.text();
+        throw new Error(
+          `写入 ${path} 失败: ${putResponse.status} ${text.slice(0, 200)}`,
+        );
+      }
+      return putResponse.json();
+    }
+
+    function pickBestPair(pairs, address) {
+      const target = normalizeAddr(address);
+      const list = (Array.isArray(pairs) ? pairs : []).filter((p) => {
+        if (!p || p.chainId !== CONFIG.DS_CHAIN) return false;
+        const base = normalizeAddr(p.baseToken && p.baseToken.address);
+        const quote = normalizeAddr(p.quoteToken && p.quoteToken.address);
+        return base === target || quote === target;
+      });
+      if (!list.length) return null;
+      list.sort((a, b) => {
+        const la = Number(a.liquidity && a.liquidity.usd) || 0;
+        const lb = Number(b.liquidity && b.liquidity.usd) || 0;
+        return lb - la;
+      });
+      return list[0];
+    }
+
+    function pairToResult(address, pair) {
+      if (!pair) {
+        return { address, success: false, error: "DexScreener 未收录" };
+      }
+      const target = normalizeAddr(address);
+      const base = normalizeAddr(pair.baseToken && pair.baseToken.address);
+      const isBase = base === target;
+      const token = isBase ? pair.baseToken : pair.quoteToken;
+      const mcap = Number(pair.marketCap);
+      const fdv = Number(pair.fdv);
+      const price = Number(pair.priceUsd);
+      const liquidity = Number(pair.liquidity && pair.liquidity.usd);
+      const volume = Number(pair.volume && pair.volume.h24);
+      return {
+        address,
+        success: true,
+        symbol: (token && token.symbol) || "-",
+        market_cap: Number.isFinite(mcap) ? mcap : null,
+        price: Number.isFinite(price) ? price : null,
+        fdv: Number.isFinite(fdv) ? fdv : null,
+        liquidity: Number.isFinite(liquidity) ? liquidity : null,
+        volume_24h: Number.isFinite(volume) ? volume : null,
+        holders: null,
+      };
+    }
+
+    async function fetchTokenBatch(addresses) {
+      const joined = addresses.join(",");
+      const url = `${CONFIG.DS_BASE}/tokens/v1/${CONFIG.DS_CHAIN}/${joined}`;
+      const response = await fetch(url);
+      if (response.status === 429) throw new Error("HTTP 429");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    }
+
+    async function batchQuery(addresses) {
+      const results = [];
+      const totalBatches = Math.ceil(addresses.length / CONFIG.BATCH_SIZE) || 1;
+
+      for (let i = 0; i < addresses.length; i += CONFIG.BATCH_SIZE) {
+        throwIfCancelled();
+        const chunk = addresses.slice(i, i + CONFIG.BATCH_SIZE);
+        const batchNo = Math.floor(i / CONFIG.BATCH_SIZE) + 1;
+        setStep(
+          "query",
+          "active",
+          `DexScreener 批次 ${batchNo}/${totalBatches}（${chunk.length} 个）`,
+        );
+        appendLog(`查询批次 ${batchNo}/${totalBatches} · ${chunk.length} 个`);
+
+        let pairs = null;
+        let attempt = 0;
+        while (attempt < 3) {
+          throwIfCancelled();
+          try {
+            pairs = await fetchTokenBatch(chunk);
+            break;
+          } catch (err) {
+            attempt += 1;
+            if (attempt >= 3) {
+              chunk.forEach((addr) => {
+                results.push({
+                  address: addr,
+                  success: false,
+                  error: err.message || String(err),
+                });
+              });
+              pairs = null;
+              break;
+            }
+            const wait = Math.pow(2, attempt) * 1000;
+            appendLog(`限流/失败，${wait}ms 后重试 (${attempt}/3)`);
+            await sleep(wait);
+          }
+        }
+
+        if (pairs) {
+          const byAddr = new Map();
+          chunk.forEach((addr) => byAddr.set(normalizeAddr(addr), []));
+          for (const pair of pairs) {
+            const base = normalizeAddr(pair.baseToken && pair.baseToken.address);
+            const quote = normalizeAddr(
+              pair.quoteToken && pair.quoteToken.address,
+            );
+            if (byAddr.has(base)) byAddr.get(base).push(pair);
+            if (byAddr.has(quote)) byAddr.get(quote).push(pair);
+          }
+          for (const addr of chunk) {
+            const best = pickBestPair(byAddr.get(normalizeAddr(addr)) || [], addr);
+            const row = pairToResult(addr, best);
+            if (
+              row.success &&
+              (row.market_cap === null || Number.isNaN(row.market_cap))
+            ) {
+              results.push({
+                address: addr,
+                success: false,
+                error: "无市值数据",
+              });
+            } else {
+              results.push(row);
+            }
+          }
+        }
+
+        if (i + CONFIG.BATCH_SIZE < addresses.length) {
+          await sleep(CONFIG.BATCH_DELAY);
+        }
+      }
+      return results;
+    }
+
+    function renderResults(qualified) {
+      summaryEl.innerHTML = "";
+      if (!qualified.length) {
+        resultsEl.innerHTML = '<div class="empty">本批无 ≥$5M 币种</div>';
+        return;
+      }
+      const rows = qualified
+        .slice()
+        .sort((a, b) => Number(b.market_cap) - Number(a.market_cap))
+        .map(
+          (item) => `<tr>
+            <td>${item.symbol || "-"}</td>
+            <td title="${item.address}">${item.address.slice(0, 6)}…${item.address.slice(-4)}</td>
+            <td class="num">$${formatNumber(item.market_cap)}</td>
+            <td class="num">${item.price != null ? "$" + Number(item.price).toFixed(6) : "-"}</td>
+          </tr>`,
+        )
+        .join("");
+      resultsEl.innerHTML = `<table>
+        <thead><tr><th>符号</th><th>合约</th><th class="num">市值</th><th class="num">价格</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    }
+
+    function pill(text, cls) {
+      const span = document.createElement("span");
+      span.className = "pill" + (cls ? " " + cls : "");
+      span.textContent = text;
+      return span;
+    }
+
+    async function runPipeline() {
+      if (running) return;
+      running = true;
+      cancelRequested = false;
+      runBtn.disabled = true;
+      cancelBtn.disabled = false;
+      logEl.textContent = "";
+      summaryEl.innerHTML = "";
+      resultsEl.innerHTML = '<div class="empty">运行中…</div>';
+      resetSteps();
+
+      try {
+        await window.GithubTokenVault.ensureUnlocked();
+
+        setStep("parse", "active", "解析 / 本批去重");
+        const parsed = parseAddresses(addressesEl.value);
+        if (!parsed.length) throw new Error("没有有效合约地址");
+        setStep("parse", "done", `解析完成 · 本批 ${parsed.length} 个（已去重）`);
+        appendLog(`本批去重后 ${parsed.length} 个地址`);
+
+        setStep("compare", "active", "对比 toAll…");
+        const history = await loadToAll();
+        const historySet = new Set(history);
+        const fresh = parsed.filter((addr) => !historySet.has(addr));
+        const known = parsed.length - fresh.length;
+        setStep(
+          "compare",
+          "done",
+          `对比完成 · 新 ${fresh.length} · 已见 ${known}`,
+        );
+        appendLog(`toAll 历史 ${history.length} · 新地址 ${fresh.length}`);
+
+        if (!fresh.length) {
+          setStep("query", "skip", "无新地址，跳过 DexScreener");
+          setStep("filter", "skip", "无新地址可筛选");
+          setStep("watch", "skip", "无新达标，跳过 toWatch");
+          setStep("all", "skip", "无新达标，跳过 toAll");
+          setStep("okx", "skip", "无新达标，跳过 OKX");
+          resultsEl.innerHTML =
+            '<div class="empty">本批地址均已在 eth/toAll 中</div>';
+          summaryEl.appendChild(pill(`输入 ${parsed.length}`));
+          summaryEl.appendChild(pill(`已见 ${known}`, "warn"));
+          appendLog("无需写入。");
+          return;
+        }
+
+        setStep("query", "active", "DexScreener 获取详情…");
+        const queryResults = await batchQuery(fresh);
+        const ok = queryResults.filter((r) => r.success).length;
+        const fail = queryResults.length - ok;
+        setStep("query", "done", `详情完成 · 成功 ${ok} · 失败 ${fail}`);
+
+        setStep("filter", "active", "筛市值 ≥ $5M");
+        const withCap = queryResults.filter(
+          (r) =>
+            r.success &&
+            typeof r.market_cap === "number" &&
+            !Number.isNaN(r.market_cap),
+        );
+        const qualified = withCap.filter(
+          (r) => r.market_cap >= CONFIG.MIN_MCAP,
+        );
+        const discarded = withCap.length - qualified.length;
+        setStep(
+          "filter",
+          "done",
+          `筛选完成 · 达标 ${qualified.length} · 丢弃 <$5M ${discarded}`,
+        );
+        appendLog(
+          `有市值 ${withCap.length} · ≥$5M ${qualified.length} · 丢弃 ${discarded}`,
+        );
+
+        renderResults(qualified);
+        summaryEl.appendChild(pill(`新地址 ${fresh.length}`));
+        summaryEl.appendChild(pill(`达标 ${qualified.length}`));
+        if (discarded) summaryEl.appendChild(pill(`丢弃 ${discarded}`, "warn"));
+        if (fail) summaryEl.appendChild(pill(`失败 ${fail}`, "err"));
+
+        setStep("watch", "active", "整表覆盖 eth/toWatch.json");
+        throwIfCancelled();
+        const watchItems = qualified
+          .slice()
+          .sort((a, b) => Number(b.market_cap) - Number(a.market_cap))
+          .map((item) => ({
+            address: item.address,
+            symbol: item.symbol,
+            market_cap: item.market_cap,
+            price: item.price,
+            fdv: item.fdv,
+            liquidity: item.liquidity,
+            volume_24h: item.volume_24h,
+            holders: item.holders,
+          }));
+        await writeGithubJson(
+          CONFIG.TO_WATCH_PATH,
+          { updatedAt: Date.now(), items: watchItems },
+          `RH pipeline overwrite toWatch · ${watchItems.length}`,
+        );
+        setStep("watch", "done", `toWatch 已覆盖 · ${watchItems.length} 条`);
+        appendLog(`eth/toWatch.json 覆盖写入 ${watchItems.length} 条`);
+
+        setStep("all", "active", "合并写入 eth/toAll.json");
+        throwIfCancelled();
+        const qualifiedAddrs = watchItems.map((item) => item.address);
+        const merged = [...new Set([...history, ...qualifiedAddrs])];
+        await writeGithubJson(
+          CONFIG.TO_ALL_PATH,
+          merged,
+          `RH pipeline merge toAll · +${qualifiedAddrs.length}`,
+        );
+        setStep(
+          "all",
+          "done",
+          `toAll 已合并 · 现 ${merged.length}（+${qualifiedAddrs.length}）`,
+        );
+        appendLog(`eth/toAll.json 现 ${merged.length} 个地址`);
+
+        setStep("okx", "active", "写入 OKX favorites…");
+        throwIfCancelled();
+        if (!watchItems.length) {
+          setStep("okx", "skip", "无达标币，跳过 OKX");
+        } else {
+          const loaded = await OkxFavorites.loadFavorites();
+          const incoming = watchItems.map((item) => ({
+            chainIndex: CONFIG.CHAIN_INDEX,
+            tokenContractAddress: item.address,
+            symbol: item.symbol,
+            source: "pipeline",
+          }));
+          const result = OkxFavorites.addItems(
+            loaded.items,
+            incoming,
+            "pipeline",
+            { markNew: true },
+          );
+          await OkxFavorites.saveFavorites(result.items, {
+            sha: loaded.sha,
+            message: `RH pipeline → OKX favorites · +${result.added.length}`,
+          });
+          setStep(
+            "okx",
+            "done",
+            `OKX 自选 · 新加 ${result.added.length} · 已存在跳过 ${result.skipped.length}`,
+          );
+          appendLog(
+            `favorites 新加 ${result.added.length}，跳过已存在 ${result.skipped.length}；NEW 约 7 天`,
+          );
+          summaryEl.appendChild(pill(`OKX 新加 ${result.added.length}`));
+          if (result.skipped.length) {
+            summaryEl.appendChild(
+              pill(`已在自选 ${result.skipped.length}`, "warn"),
+            );
+          }
+        }
+
+        appendLog("流水线完成。可打开 OKX 自选 Robinhood tab 查看 NEW。");
+      } catch (error) {
+        const cancelled = error && error.code === "CANCELLED";
+        appendLog((cancelled ? "取消：" : "失败：") + (error.message || error));
+        const active = document.querySelector("#steps li.is-active");
+        if (active) {
+          setStep(
+            active.dataset.step,
+            "error",
+            active.querySelector(".step-text").textContent,
+          );
+        }
+        if (!cancelled) {
+          summaryEl.appendChild(pill(error.message || "失败", "err"));
+        }
+      } finally {
+        running = false;
+        runBtn.disabled = false;
+        cancelBtn.disabled = true;
+      }
+    }
+
+    runBtn.addEventListener("click", () => {
+      runPipeline();
+    });
+    cancelBtn.addEventListener("click", () => {
+      cancelRequested = true;
+      appendLog("正在取消…");
+    });
+    clearBtn.addEventListener("click", () => {
+      if (running) return;
+      addressesEl.value = "";
+      logEl.textContent = "";
+      summaryEl.innerHTML = "";
+      resultsEl.innerHTML = '<div class="empty">跑完后这里显示达标币种</div>';
+      resetSteps();
+    });
+  </script>
+</body>
+</html>

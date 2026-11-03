@@ -291,6 +291,23 @@
         outline-offset: 1px;
         box-shadow: 0 0 0 1px rgba(113, 139, 136, 0.28);
       }
+      .kline-card.is-new {
+        border-color: #e8b89a;
+      }
+      .new-badge {
+        display: inline-block;
+        margin-left: 4px;
+        padding: 0 4px;
+        border-radius: 3px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        line-height: 1.35;
+        vertical-align: middle;
+        color: #9a3412;
+        background: #ffedd5;
+        border: 1px solid #fdba74;
+      }
       .remove-card-btn {
         border: 0;
         background: transparent;
@@ -1153,10 +1170,55 @@
         });
       }
 
+      /** OKX API 无 3D；有 1D 时本地合成，兼容尚未跑完云函数的旧缓存。 */
+      function synthesize3DFromDaily(daily) {
+        const list = Array.isArray(daily) ? daily : [];
+        if (!list.length) return [];
+        const out = [];
+        for (let i = 0; i < list.length; i += 3) {
+          const chunk = list.slice(i, i + 3);
+          if (!chunk.length) continue;
+          const first = chunk[0];
+          const last = chunk[chunk.length - 1];
+          let high = Number(first.high);
+          let low = Number(first.low);
+          let volume = 0;
+          chunk.forEach((c) => {
+            const h = Number(c.high);
+            const l = Number(c.low);
+            if (Number.isFinite(h)) {
+              high = Number.isFinite(high) ? Math.max(high, h) : h;
+            }
+            if (Number.isFinite(l)) {
+              low = Number.isFinite(low) ? Math.min(low, l) : l;
+            }
+            volume += Number(c.volume) || 0;
+          });
+          out.push({
+            time: Number(first.time) || 0,
+            open: Number(first.open),
+            high,
+            low,
+            close: Number(last.close),
+            volume,
+          });
+        }
+        return out;
+      }
+
       function candlesForToken(row) {
         if (!row) return [];
-        if (row.candlesByBar && Array.isArray(row.candlesByBar[activeBar])) {
-          return row.candlesByBar[activeBar];
+        const byBar = row.candlesByBar;
+        if (byBar && Array.isArray(byBar[activeBar]) && byBar[activeBar].length) {
+          return byBar[activeBar];
+        }
+        if (
+          activeBar === "3D" &&
+          byBar &&
+          Array.isArray(byBar["1D"]) &&
+          byBar["1D"].length
+        ) {
+          return synthesize3DFromDaily(byBar["1D"]);
         }
         // 旧缓存：只有单一 candles 数组，仅在 4H 时可用
         if (
@@ -1429,8 +1491,21 @@
           if (Number.isFinite(change) && change > 0) rising.push(packed);
           else falling.push(packed);
         });
-        rising.sort((a, b) => (b.change || 0) - (a.change || 0));
-        falling.sort((a, b) => (a.change || 0) - (b.change || 0));
+        const newFirst = (a, b) => {
+          const an = OkxFavorites.isNewItem(a.item) ? 1 : 0;
+          const bn = OkxFavorites.isNewItem(b.item) ? 1 : 0;
+          return bn - an;
+        };
+        rising.sort((a, b) => {
+          const byNew = newFirst(a, b);
+          if (byNew) return byNew;
+          return (b.change || 0) - (a.change || 0);
+        });
+        falling.sort((a, b) => {
+          const byNew = newFirst(a, b);
+          if (byNew) return byNew;
+          return (a.change || 0) - (b.change || 0);
+        });
         return { rising, falling };
       }
 
@@ -1472,6 +1547,11 @@
           : "";
         const focused =
           focusCardKey && focusCardKey === packed.key ? " is-focus" : "";
+        const isNew = OkxFavorites.isNewItem(item);
+        const newClass = isNew ? " is-new" : "";
+        const newBadge = isNew
+          ? `<span class="new-badge" title="流水线新加入，约 7 天后自动消失">NEW</span>`
+          : "";
         const score = OkxFavorites.normalizeDextScore(item.dextScore);
         const hasScore = score != null;
         const scoreClass =
@@ -1486,10 +1566,10 @@
           ? `<button type="button" class="dext-score ${scoreClass}" data-score-edit title="DexTools 评分 ${score}（点击修改）">评分 <span class="dext-score-val">${score}</span></button>`
           : "";
         return [
-          `<div class="kline-card${focused}" data-key="${packed.key}" data-chain="${item.chainIndex}" data-address="${item.tokenContractAddress}">`,
+          `<div class="kline-card${focused}${newClass}" data-key="${packed.key}" data-chain="${item.chainIndex}" data-address="${item.tokenContractAddress}">`,
           `<div class="kline-card-head">`,
           `<div class="kline-card-title">`,
-          `<span class="symbol-left">${logoHtml}<button type="button" class="symbol-copy" data-copy="${item.tokenContractAddress}" title="点击复制合约">${label}<span class="chain-tag">${chain}</span></button></span>`,
+          `<span class="symbol-left">${logoHtml}<button type="button" class="symbol-copy" data-copy="${item.tokenContractAddress}" title="点击复制合约">${label}${newBadge}<span class="chain-tag">${chain}</span></button></span>`,
           `<button type="button" class="remove-card-btn" title="移出自选" aria-label="移出自选">⊖</button>`,
           `</div>`,
           `<div class="kline-card-meta">`,

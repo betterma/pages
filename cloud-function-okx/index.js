@@ -27,10 +27,19 @@ const {
   saveJson,
 } = require('./github');
 
-const BARS = String(process.env.OKX_CANDLE_BARS || '15m,2H,4H,1D,3D,1W')
+// OKX DEX /market/candles 不支持 3D；3D 由 1D 合成。1W 支持。
+const RAW_BARS = String(process.env.OKX_CANDLE_BARS || '15m,2H,4H,1D,1W')
   .split(',')
   .map((item) => item.trim())
   .filter(Boolean);
+const BARS = RAW_BARS.filter((bar) => bar !== '3D');
+const OUTPUT_BARS = (() => {
+  const out = BARS.slice();
+  if (out.includes('1D') && !out.includes('3D')) {
+    out.splice(out.indexOf('1D') + 1, 0, '3D');
+  }
+  return out;
+})();
 
 const BAR_LIMITS = {
   '15m': 192, // ~2 天
@@ -85,6 +94,8 @@ function normalizeFavorites(data) {
         ? tokenContractAddress
         : tokenContractAddress.toLowerCase();
     const key = `${chainIndex}:${address}`;
+    const newUntil = Number(item.newUntil);
+    const dextScore = Number(item.dextScore != null ? item.dextScore : item.score);
     map.set(key, {
       chainIndex,
       tokenContractAddress: address,
@@ -93,6 +104,12 @@ function normalizeFavorites(data) {
         ? Number(item.addedAt)
         : Date.now(),
       source: item.source ? String(item.source) : 'manual',
+      newUntil:
+        Number.isFinite(newUntil) && newUntil > Date.now() ? newUntil : 0,
+      dextScore:
+        Number.isFinite(dextScore) && dextScore >= 0 && dextScore <= 99
+          ? Math.round(dextScore)
+          : null,
     });
   });
   return [...map.values()];
@@ -215,11 +232,13 @@ function buildSlimPayload(raw) {
   return {
     updatedAt: Number(raw && raw.updatedAt) || Date.now(),
     source: 'github-slim',
-    bars: Array.isArray(raw && raw.bars) ? raw.bars.slice() : BARS.slice(),
+    bars: Array.isArray(raw && raw.bars) ? raw.bars.slice() : OUTPUT_BARS.slice(),
     barLimits:
       raw && raw.barLimits && typeof raw.barLimits === 'object'
         ? raw.barLimits
-        : Object.fromEntries(BARS.map((bar) => [bar, limitForBar(bar)])),
+        : Object.fromEntries(
+            OUTPUT_BARS.map((bar) => [bar, limitForBar(bar)]),
+          ),
     tokenCount: Number(raw && raw.tokenCount) || Object.keys(tokens).length,
     okCount: Number(raw && raw.okCount) || 0,
     failCount: Number(raw && raw.failCount) || 0,
@@ -229,10 +248,73 @@ function buildSlimPayload(raw) {
   };
 }
 
-/** 超限时先丢掉长周期，再截短 15m。 */
+/** 用日线合成 3 日线（OKX API 无 3D）。 */
+function synthesize3DFromDaily(daily) {
+  const list = Array.isArray(daily) ? daily : [];
+  if (!list.length) return [];
+  const out = [];
+  for (let i = 0; i < list.length; i += 3) {
+    const chunk = list.slice(i, i + 3);
+    if (!chunk.length) continue;
+    const first = chunk[0];
+    const last = chunk[chunk.length - 1];
+    let high = Number(first.high);
+    let low = Number(first.low);
+    let volume = 0;
+    chunk.forEach((c) => {
+      const h = Number(c.high);
+      const l = Number(c.low);
+      if (Number.isFinite(h)) high = Number.isFinite(high) ? Math.max(high, h) : h;
+      if (Number.isFinite(l)) low = Number.isFinite(low) ? Math.min(low, l) : l;
+      volume += Number(c.volume) || 0;
+    });
+    out.push({
+      time: Number(first.time) || 0,
+      open: Number(first.open),
+      high,
+      low,
+      close: Number(last.close),
+      volume,
+    });
+  }
+  return out;
+}
+
+function ensureSynthesized3D(byBar) {
+  const bars =
+    byBar && typeof byBar === 'object' ? byBar : {};
+  const daily = Array.isArray(bars['1D']) ? bars['1D'] : [];
+  if (daily.length) {
+    bars['3D'] = synthesize3DFromDaily(daily);
+  }
+  return bars;
+}
+
+/** 超限：先狠砍 15m，再砍 2H，尽量保住 1D/1W/3D。 */
 function shrinkSlimPayload(payload) {
   const next = JSON.parse(JSON.stringify(payload));
-  const dropOrder = ['1W', '3D', '2H'];
+  let guard = 0;
+  while (
+    Buffer.byteLength(JSON.stringify(next), 'utf8') > GH_MAX_BYTES &&
+    guard < 10
+  ) {
+    guard += 1;
+    let trimmed = false;
+    Object.values(next.tokens || {}).forEach((row) => {
+      const list = row.candlesByBar && row.candlesByBar['15m'];
+      if (Array.isArray(list) && list.length > 36) {
+        row.candlesByBar['15m'] = list.slice(-Math.ceil(list.length * 0.7));
+        trimmed = true;
+      }
+    });
+    if (trimmed) {
+      console.warn('candles slim trimmed 15m length');
+      continue;
+    }
+    break;
+  }
+  // 仍超：丢掉 2H（页面还有 15m/4H），再必要时丢 1W；3D 可由 1D 重建
+  const dropOrder = ['2H', '1W'];
   for (const bar of dropOrder) {
     const bytes = Buffer.byteLength(JSON.stringify(next), 'utf8');
     if (bytes <= GH_MAX_BYTES) break;
@@ -248,19 +330,13 @@ function shrinkSlimPayload(payload) {
       console.warn(`candles slim dropped bar ${bar} to fit GitHub limit`);
     }
   }
-  let guard = 0;
-  while (
-    Buffer.byteLength(JSON.stringify(next), 'utf8') > GH_MAX_BYTES &&
-    guard < 8
-  ) {
-    guard += 1;
-    Object.values(next.tokens || {}).forEach((row) => {
-      const list = row.candlesByBar && row.candlesByBar['15m'];
-      if (Array.isArray(list) && list.length > 48) {
-        row.candlesByBar['15m'] = list.slice(-Math.ceil(list.length * 0.75));
-      }
-    });
-    console.warn('candles slim trimmed 15m length');
+  Object.values(next.tokens || {}).forEach((row) => {
+    if (row && row.candlesByBar) {
+      row.candlesByBar = ensureSynthesized3D(row.candlesByBar);
+    }
+  });
+  if (!(next.bars || []).includes('3D') && (next.bars || []).includes('1D')) {
+    next.bars = [...next.bars, '3D'];
   }
   const bytes = Buffer.byteLength(JSON.stringify(next), 'utf8');
   if (bytes > GH_MAX_BYTES) {
@@ -344,6 +420,13 @@ async function fetchBarsForToken(token, previous) {
     if (index + 1 < BARS.length) await sleep(BAR_GAP_MS);
   }
 
+  ensureSynthesized3D(byBar);
+  if (Array.isArray(byBar['3D']) && byBar['3D'].length) {
+    okBars += 1;
+  } else if (errors['3D'] == null && !Array.isArray(byBar['1D'])) {
+    errors['3D'] = 'no-1D-to-synthesize';
+  }
+
   return { byBar, errors, okBars, reused };
 }
 
@@ -370,7 +453,7 @@ async function syncCandlesCache() {
   const favoritesFile = await loadJson(FAVORITES_PATH);
   const tokens = normalizeFavorites(favoritesFile.data);
   console.log(
-    `okx-candles favorites=${tokens.length} bars=${BARS.join(',')} path=${CANDLES_PATH}`,
+    `okx-candles favorites=${tokens.length} fetch=${BARS.join(',')} out=${OUTPUT_BARS.join(',')} path=${CANDLES_PATH}`,
   );
 
   let previous = null;
@@ -475,7 +558,7 @@ async function syncCandlesCache() {
       renamed += 1;
     }
 
-    nextFavorites.push({
+    const favRow = {
       chainIndex: token.chainIndex,
       tokenContractAddress: token.tokenContractAddress,
       symbol:
@@ -485,7 +568,12 @@ async function syncCandlesCache() {
         '',
       addedAt: token.addedAt,
       source: token.source,
-    });
+    };
+    if (token.dextScore != null) favRow.dextScore = token.dextScore;
+    if (Number(token.newUntil) > Date.now()) {
+      favRow.newUntil = Number(token.newUntil);
+    }
+    nextFavorites.push(favRow);
 
     try {
       const { byBar, errors, okBars, reused } = await fetchBarsForToken(
@@ -595,10 +683,18 @@ async function syncCandlesCache() {
     });
   }
 
+  Object.values(results).forEach((row) => {
+    if (row && row.candlesByBar) {
+      row.candlesByBar = ensureSynthesized3D(row.candlesByBar);
+    }
+  });
+
   const payload = {
     updatedAt: Date.now(),
-    bars: BARS,
-    barLimits: Object.fromEntries(BARS.map((bar) => [bar, limitForBar(bar)])),
+    bars: OUTPUT_BARS.slice(),
+    barLimits: Object.fromEntries(
+      OUTPUT_BARS.map((bar) => [bar, limitForBar(bar)]),
+    ),
     tokenCount: tokens.length,
     okCount,
     failCount,
@@ -631,7 +727,7 @@ async function syncCandlesCache() {
     storage: 'github-slim',
     path: written.path,
     bytes: written.bytes,
-    bars: written.bars || BARS,
+    bars: written.bars || OUTPUT_BARS,
     tokenCount: tokens.length,
     okCount,
     failCount,
@@ -667,7 +763,7 @@ exports.handler = async (event, context) => {
       ok: true,
       ping: true,
       path: CANDLES_PATH,
-      bars: BARS,
+      bars: OUTPUT_BARS,
       node: process.version,
     };
   }

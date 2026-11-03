@@ -140,6 +140,7 @@
     <div class="container">
         <div style="display:flex;flex-wrap:wrap;gap:0.6rem;padding:1rem 0 0.5rem;">
             <a href="./index.html" style="display:inline-block;padding:0.6rem 1.1rem;background:var(--primary-color);color:white;text-decoration:none;border-radius:6px;font-weight:600;font-size:0.9rem;">返回总导航</a>
+            <a href="./eth/pipeline.html" style="display:inline-block;padding:0.6rem 1.1rem;background:var(--primary-color);color:white;text-decoration:none;border-radius:6px;font-weight:600;font-size:0.9rem;">一键流水线</a>
             <a href="./solana/" style="display:inline-block;padding:0.6rem 1.1rem;background:transparent;color:var(--primary-color);border:1px solid var(--primary-color);text-decoration:none;border-radius:6px;font-weight:600;font-size:0.9rem;">Solana 发现</a>
             <a href="https://betterma.github.io/" style="display:inline-block;padding:0.6rem 1.1rem;background:transparent;color:var(--primary-color);border:1px solid var(--primary-color);text-decoration:none;border-radius:6px;font-weight:600;font-size:0.9rem;">蚂蚱导航</a>
         </div>
@@ -147,6 +148,7 @@
             <button class="tab-button active" data-tab="url-viewer">资源中心</button>
             <button class="tab-button" data-tab="data-comparison-2">数据对比</button>
             <button class="tab-button" data-tab="get-coin-info">获取详情</button>
+            <button class="tab-button" data-tab="pipeline">一键流水线</button>
         </div>
         
         <div class="tab-content active" id="url-viewer">
@@ -164,6 +166,12 @@
         <div class="tab-content" id="get-coin-info">
             <div class="iframe-container">
                 <iframe src="./eth/getcoininfo.html" title="获取详情工具"></iframe>
+            </div>
+        </div>
+
+        <div class="tab-content" id="pipeline">
+            <div class="iframe-container">
+                <iframe src="./eth/pipeline.html" title="Robinhood 一键流水线"></iframe>
             </div>
         </div>
     </div>
