@@ -2,7 +2,8 @@
 
 /**
  * 持仓买入价 P → 固定止损任务（-3% 卖一半 / -5% 卖剩余，市价）。
- * 与限价「设置卖出」并存；取消过的固定档记在 holdings.stopCancel，避免自动复活。
+ * 与限价「设置卖出」并存；取消记在 holdings.stopCancel。
+ * 买入成交 / 页面保存 P 都会清 stopCancel 并按新 P 重挂两档。
  */
 
 const { loadJson, saveJson } = require('./github-wecom');
@@ -54,8 +55,7 @@ function buildStopTask(symbol, stopKey, entryPrice, now) {
 }
 
 /**
- * 写入/刷新固定止损（尊重 stopCancel，不复活已取消档）。
- * 买入成交路径可先清 stopCancel 再调用；页面改 P 应传入现有 stopCancel。
+ * 写入/刷新固定止损（仍尊重传入的 stopCancel；调用方若要重挂应先清 cancel）。
  * @returns {object[]} next tasks
  */
 function upsertFixedStopTasks(tasks, symbol, entryPrice, stopCancel, now) {
@@ -107,7 +107,8 @@ function dropFixedStopTasks(tasks, symbol) {
 }
 
 /**
- * 买入成交或手填 P 后：写 holdings.entryPrices，清空该币 stopCancel，种固定止损。
+ * 买入成交后：写 holdings.entryPrices，清空该币 stopCancel，种固定止损。
+ * （页面手填 P 走 kline 自己的 patch，语义同为清 cancel + 重挂。）
  */
 async function applyEntryPriceAndSeedStops(options) {
   const opts = options || {};
