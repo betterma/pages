@@ -134,6 +134,31 @@
           var(--float-dock-h) + env(safe-area-inset-bottom, 0px)
         );
       }
+      /* PC：整页收成手机比例居中；transform 让 fixed 浮层跟着落在壳内。移动端不变。 */
+      @media (min-width: 769px) {
+        html {
+          background: #0a0b0d;
+        }
+        html[data-theme="daylight"] {
+          background: #c8ccd2;
+        }
+        body {
+          --pc-phone-w: 430px;
+          width: var(--pc-phone-w);
+          max-width: var(--pc-phone-w);
+          margin-left: auto;
+          margin-right: auto;
+          min-height: 100vh;
+          box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06),
+            0 12px 48px rgba(0, 0, 0, 0.45);
+          transform: translateZ(0);
+          overflow-x: hidden;
+        }
+        .page {
+          width: calc(100% - 12px);
+          margin: 8px auto 16px;
+        }
+      }
       body.is-notes-view .kline-card.is-notes-filtered-out {
         display: none !important;
       }
@@ -3010,6 +3035,72 @@
       .nail-hold-panel .nail-hold-price-row button {
         background: rgba(0, 0, 0, 0.06);
         color: #1c1c1e;
+      }
+      .nail-hold-entry {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin: 4px 0 2px;
+        font-size: 12px;
+        color: var(--secondary, rgba(28, 28, 30, 0.72));
+      }
+      .nail-hold-entry input {
+        width: 88px;
+        height: 28px;
+        padding: 0 6px;
+        border: 1px solid var(--separator, rgba(0, 0, 0, 0.12));
+        border-radius: 8px;
+        background: var(--bg, #fff);
+        color: var(--label, #1c1c1e);
+        font: inherit;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-hold-entry button {
+        height: 28px;
+        padding: 0 8px;
+        border: none;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.06);
+        color: #1c1c1e;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .nail-hold-task-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .nail-hold-task-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.04);
+        font-size: 12px;
+        line-height: 1.35;
+        color: rgba(28, 28, 30, 0.78);
+      }
+      .nail-hold-task-row .nail-hold-status-text {
+        flex: 1;
+        min-width: 0;
+        white-space: pre-line;
+      }
+      .nail-hold-task-row button.is-danger {
+        flex: 0 0 auto;
+        height: 26px;
+        padding: 0 8px;
+        border: none;
+        border-radius: 7px;
+        background: rgba(255, 92, 100, 0.16);
+        color: var(--down, #c0392b);
+        font-size: 11px;
+        font-weight: 650;
+        cursor: pointer;
       }
       .nail-hold-sell-status {
         display: flex;
@@ -10568,6 +10659,7 @@
         const skipMap = {
           "dry-run": "模拟中（未真下单）",
           "below-minSell": "买一未达最低卖出价",
+          "above-trigger": "未跌破止损价",
           "above-maxBuy": "卖一高于最高买入价",
           "qty-too-small": "数量过小",
           "below-minNotional": "名义金额过低",
@@ -10576,26 +10668,38 @@
           "no-usdt": "USDT 不足",
           "insufficient-usdt": "USDT 不足",
           "bad-price": "价格无效",
+          "bad-trigger": "止损触发价无效",
+          "superseded-by-stop5": "已由 -5% 全出接管",
         };
-        const label = side === "buy" ? "买入" : "卖出";
+        const isStop =
+          side === "sell" && String(task.kind || "").toLowerCase() === "stop";
+        const stopLabel =
+          task.stopKey === "stop5"
+            ? "止损-5%全出"
+            : task.stopKey === "stop3"
+              ? "止损-3%半仓"
+              : "止损";
+        const label = side === "buy" ? "买入" : isStop ? stopLabel : "卖出";
         const st = String(task.status || "").toLowerCase();
         const statusText = statusMap[st] || st || "未知";
         const skip = String(task.skipReason || "").trim();
-        const skipText = skip
-          ? skipMap[skip] || skip
-          : "";
+        const skipText = skip ? skipMap[skip] || skip : "";
         const pct =
           side === "buy"
             ? Number(task.buyPercent)
             : Number(task.sellPercent);
         const limit =
           side === "buy" ? Number(task.maxBuy) : Number(task.minSell);
+        const trigger = Number(task.triggerPrice);
         const bits = [`${label}·${statusText}`];
+        if (isStop) bits.push("市价");
         if (skipText) bits.push(skipText);
         if (Number.isFinite(pct) && pct > 0) {
           bits.push(side === "buy" ? `用 ${pct}% USDT` : `卖 ${pct}%`);
         }
-        if (Number.isFinite(limit) && limit > 0) {
+        if (isStop && Number.isFinite(trigger) && trigger > 0) {
+          bits.push(`触发 ≤${formatHoldingsPriceInput(trigger)}`);
+        } else if (Number.isFinite(limit) && limit > 0) {
           bits.push(
             side === "buy"
               ? `最高 ${formatHoldingsPriceInput(limit)}`
@@ -10618,13 +10722,78 @@
         return bits.join(" · ");
       }
 
+      function holdingsEntryPriceOf(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const row =
+          nailHoldingsState &&
+          nailHoldingsState.entryPrices &&
+          nailHoldingsState.entryPrices[key];
+        const price = row && Number(row.price);
+        return Number.isFinite(price) && price > 0 ? price : null;
+      }
+
+      function buildFixedStopTasks(symbol, entryPrice, now) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const p = Number(entryPrice);
+        const ts = Number(now) || Date.now();
+        if (!key || key === "USDT" || !(p > 0)) return [];
+        return [
+          {
+            id: `${key}-stop3`,
+            symbol: key,
+            kind: "stop",
+            stopKey: "stop3",
+            orderType: "MARKET",
+            sellPercent: 50,
+            minSell: 0,
+            triggerPrice: p * 0.97,
+            entryPrice: p,
+            enabled: true,
+            status: "armed",
+            openOrderId: null,
+            createdAt: ts,
+            updatedAt: ts,
+            lastError: null,
+            skipReason: null,
+            wouldSell: null,
+            lastQty: null,
+            lastPrice: null,
+          },
+          {
+            id: `${key}-stop5`,
+            symbol: key,
+            kind: "stop",
+            stopKey: "stop5",
+            orderType: "MARKET",
+            sellPercent: 100,
+            minSell: 0,
+            triggerPrice: p * 0.95,
+            entryPrice: p,
+            enabled: true,
+            status: "armed",
+            openOrderId: null,
+            createdAt: ts,
+            updatedAt: ts,
+            lastError: null,
+            skipReason: null,
+            wouldSell: null,
+            lastQty: null,
+            lastPrice: null,
+          },
+        ];
+      }
+
       async function setNailTradeLive(side, nextLive) {
         const wantLive = !!nextLive;
         if (wantLive) {
           const ok = window.confirm(
             side === "buy"
               ? "开启「买入实盘」后，云函数会对满足条件的买入任务真正挂 LIMIT 单。确认开启？"
-              : "开启「卖出实盘」后，云函数会对满足条件的卖出任务真正挂 LIMIT 单。确认开启？",
+              : "开启「卖出实盘」后，云函数会对限价卖出挂 LIMIT，并对固定止损任务真下 MARKET 单。确认开启？",
           );
           if (!ok) {
             syncNailHoldLiveSwitches();
@@ -10808,10 +10977,12 @@
         const balances = nailHoldingsState.balances || {};
         const usdtBal = balances.USDT || {};
         const usdtFree = formatHoldingsQty(usdtBal.free);
-        const sellBySymbol = new Map();
+        const sellsBySymbol = new Map();
         (nailSellTasksState.tasks || []).forEach((task) => {
           if (!task || !task.symbol) return;
-          sellBySymbol.set(String(task.symbol).toUpperCase(), task);
+          const key = String(task.symbol).toUpperCase();
+          if (!sellsBySymbol.has(key)) sellsBySymbol.set(key, []);
+          sellsBySymbol.get(key).push(task);
         });
         const buyBySymbol = new Map();
         (nailBuyTasksState.tasks || []).forEach((task) => {
@@ -10866,11 +11037,19 @@
                   : "--";
               const pxText = Number.isFinite(px) ? formatHoldingsUsdt(px) : "--";
               const canSell = freeNum > 0;
-              const sell = sellBySymbol.get(String(symbol).toUpperCase());
+              const sells =
+                sellsBySymbol.get(String(symbol).toUpperCase()) || [];
+              const limitSell = sells.find(
+                (t) => String(t.kind || "limit").toLowerCase() !== "stop",
+              );
               const buy = buyBySymbol.get(String(symbol).toUpperCase());
-              const sellPct = sell ? Number(sell.sellPercent) || 50 : 50;
+              const sellPct = limitSell
+                ? Number(limitSell.sellPercent) || 50
+                : 50;
               const minSell =
-                sell && Number(sell.minSell) > 0 ? String(sell.minSell) : "";
+                limitSell && Number(limitSell.minSell) > 0
+                  ? String(limitSell.minSell)
+                  : "";
               const buyPct = buy ? Number(buy.buyPercent) || 50 : 50;
               const maxBuy =
                 buy && Number(buy.maxBuy) > 0 ? String(buy.maxBuy) : "";
@@ -10879,19 +11058,35 @@
                 const usdtFreeNum = Number(usdtBal.free) || 0;
                 return usdtFreeNum * (buyPct / 100);
               })();
-              const statusBits = [];
-              if (sell) statusBits.push(describeHoldTaskStatus("sell", sell));
-              if (buy) statusBits.push(describeHoldTaskStatus("buy", buy));
-              const clearBtns = [
-                sell
-                  ? `<button type="button" class="is-danger" data-sell-clear="${escapeHtml(symbol)}" title="从任务列表删除，不再执行">清除卖出</button>`
-                  : "",
-                buy
-                  ? `<button type="button" class="is-danger" data-buy-clear="${escapeHtml(symbol)}" title="从任务列表删除，不再执行">清除买入</button>`
-                  : "",
-              ]
-                .filter(Boolean)
-                .join("");
+              const entryPx = holdingsEntryPriceOf(symbol);
+              const entryInput = entryPx != null ? String(entryPx) : "";
+              const taskRows = [];
+              sells
+                .slice()
+                .sort((a, b) => {
+                  const ak = String(a.kind || "") === "stop" ? 0 : 1;
+                  const bk = String(b.kind || "") === "stop" ? 0 : 1;
+                  if (ak !== bk) return ak - bk;
+                  const as = a.stopKey === "stop3" ? 0 : a.stopKey === "stop5" ? 1 : 2;
+                  const bs = b.stopKey === "stop3" ? 0 : b.stopKey === "stop5" ? 1 : 2;
+                  return as - bs;
+                })
+                .forEach((task) => {
+                  taskRows.push(
+                    `<div class="nail-hold-task-row">
+                  <span class="nail-hold-status-text">${escapeHtml(describeHoldTaskStatus("sell", task))}</span>
+                  <button type="button" class="is-danger" data-sell-clear-id="${escapeHtml(task.id)}" title="取消此任务">取消</button>
+                </div>`,
+                  );
+                });
+              if (buy) {
+                taskRows.push(
+                  `<div class="nail-hold-task-row">
+                  <span class="nail-hold-status-text">${escapeHtml(describeHoldTaskStatus("buy", buy))}</span>
+                  <button type="button" class="is-danger" data-buy-clear="${escapeHtml(symbol)}" title="取消买入任务">取消</button>
+                </div>`,
+                );
+              }
               const ops = canSell
                 ? `<button type="button" class="is-sell" data-hold-open-sell="${escapeHtml(symbol)}">设置卖出</button>
                    <button type="button" class="is-buy" data-hold-open-buy="${escapeHtml(symbol)}">买入</button>`
@@ -10907,6 +11102,11 @@
               <div class="nail-hold-meta">数量 ${escapeHtml(free)}</div>
               <div class="nail-hold-meta">总金额 ≈ ${escapeHtml(totalText)} USDT</div>
               <div class="nail-hold-meta">冻结 ${escapeHtml(locked)}</div>
+              <div class="nail-hold-entry">
+                <span>买入价 P</span>
+                <input type="number" min="0" step="any" value="${escapeHtml(entryInput)}" placeholder="手填成本" data-hold-entry="${escapeHtml(symbol)}" inputmode="decimal" />
+                <button type="button" data-hold-entry-save="${escapeHtml(symbol)}" title="保存后自动加 -3%/-5% 止损任务">保存</button>
+              </div>
               <div class="nail-hold-ops">${ops}</div>
               <div class="nail-hold-panel" data-hold-panel="sell" hidden>
                 <div class="nail-hold-panel-title">设置卖出 · ${escapeHtml(asset)}</div>
@@ -10947,12 +11147,8 @@
                 </div>
               </div>
               ${
-                statusBits.length || clearBtns
-                  ? `<div class="nail-hold-sell-status">${
-                      statusBits.length
-                        ? `<span class="nail-hold-status-text">${escapeHtml(statusBits.join("\n"))}</span>`
-                        : ""
-                    }${clearBtns}</div>`
+                taskRows.length
+                  ? `<div class="nail-hold-task-list">${taskRows.join("")}</div>`
                   : ""
               }
             </div>`;
@@ -11105,31 +11301,75 @@
         }
       }
 
-      async function clearNailSellTask(symbol, options) {
-        const opts = options || {};
+      function isLimitSellTask(task) {
+        return (
+          task && String(task.kind || "limit").toLowerCase() !== "stop"
+        );
+      }
+
+      async function markHoldStopCanceled(symbol, stopKey) {
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
-        if (!key) return false;
+        const sk = String(stopKey || "").trim().toLowerCase();
+        if (!key || (sk !== "stop3" && sk !== "stop5")) return;
+        try {
+          const result = await WatchFavorites.patchHoldings({
+            repo: CONFIG.GITHUB_REPO,
+            message: `Cancel fixed stop ${key} ${sk}`,
+            mutate: (state) => {
+              const stopCancel = { ...(state.stopCancel || {}) };
+              const row = { ...(stopCancel[key] || {}) };
+              row[sk] = true;
+              stopCancel[key] = row;
+              return { ...state, stopCancel };
+            },
+          });
+          nailHoldingsState = result.state || nailHoldingsState;
+        } catch (error) {
+          console.warn("markHoldStopCanceled failed", error);
+        }
+      }
+
+      async function clearNailSellTaskById(taskId, options) {
+        const opts = options || {};
+        const id = String(taskId || "").trim();
+        if (!id) return false;
+        const existing = (nailSellTasksState.tasks || []).find(
+          (t) => String(t.id) === id,
+        );
+        const label = existing
+          ? holdingsBaseAsset(existing.symbol)
+          : id;
+        const isStop =
+          existing && String(existing.kind || "").toLowerCase() === "stop";
         if (
           opts.confirm !== false &&
-          !window.confirm(`清除 ${holdingsBaseAsset(key)} 的卖出任务？`)
+          !window.confirm(
+            isStop
+              ? `取消 ${label} 的固定止损任务？取消后改 P 也不会自动复活这一档。`
+              : `取消 ${label} 的卖出任务？`,
+          )
         ) {
           return false;
         }
-        if (opts.confirm !== false) showToast("清除中…");
+        if (opts.confirm !== false) showToast("取消中…");
         try {
           let awaitingCancel = false;
+          let clearedStopKey = null;
+          let clearedSymbol = null;
           const result = await WatchFavorites.patchSellTasks({
             repo: CONFIG.GITHUB_REPO,
-            message: `Clear sell task ${key}`,
+            message: `Clear sell task ${id}`,
             mutate: (state) => {
               const tasks = Array.isArray(state.tasks) ? state.tasks.slice() : [];
-              const idx = tasks.findIndex(
-                (t) => String(t.symbol).toUpperCase() === key,
-              );
+              const idx = tasks.findIndex((t) => String(t.id) === id);
               if (idx < 0) return state;
               const task = tasks[idx];
+              clearedSymbol = task.symbol;
+              if (String(task.kind || "").toLowerCase() === "stop") {
+                clearedStopKey = task.stopKey || null;
+              }
               if (task && task.openOrderId) {
                 awaitingCancel = true;
                 tasks[idx] = {
@@ -11140,12 +11380,68 @@
                 };
                 return { ...state, tasks };
               }
-              return {
-                ...state,
-                tasks: tasks.filter(
-                  (t) => String(t.symbol).toUpperCase() !== key,
-                ),
-              };
+              tasks.splice(idx, 1);
+              return { ...state, tasks };
+            },
+          });
+          nailSellTasksState = result.state || nailSellTasksState;
+          if (clearedStopKey && clearedSymbol) {
+            await markHoldStopCanceled(clearedSymbol, clearedStopKey);
+          }
+          if (!opts.skipRender) renderNailHoldList();
+          if (opts.silent !== true) {
+            showToast(
+              awaitingCancel
+                ? `${label} 已请求撤单，等云函数执行后消失`
+                : `${label} 任务已取消`,
+            );
+          }
+          return true;
+        } catch (error) {
+          console.warn("clearNailSellTaskById failed", error);
+          if (opts.silent !== true) showToast("取消卖出任务失败");
+          return false;
+        }
+      }
+
+      /** 清除某币全部卖出任务（移除关注时用）。 */
+      async function clearNailSellTask(symbol, options) {
+        const opts = options || {};
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return false;
+        if (
+          opts.confirm !== false &&
+          !window.confirm(`清除 ${holdingsBaseAsset(key)} 的全部卖出任务？`)
+        ) {
+          return false;
+        }
+        if (opts.confirm !== false) showToast("清除中…");
+        try {
+          let awaitingCancel = false;
+          const result = await WatchFavorites.patchSellTasks({
+            repo: CONFIG.GITHUB_REPO,
+            message: `Clear all sell tasks ${key}`,
+            mutate: (state) => {
+              const tasks = Array.isArray(state.tasks) ? state.tasks.slice() : [];
+              const next = [];
+              tasks.forEach((task) => {
+                if (String(task.symbol).toUpperCase() !== key) {
+                  next.push(task);
+                  return;
+                }
+                if (task && task.openOrderId) {
+                  awaitingCancel = true;
+                  next.push({
+                    ...task,
+                    status: "cancel_requested",
+                    enabled: true,
+                    updatedAt: Date.now(),
+                  });
+                }
+              });
+              return { ...state, tasks: next };
             },
           });
           nailSellTasksState = result.state || nailSellTasksState;
@@ -11161,6 +11457,88 @@
         } catch (error) {
           console.warn("clearNailSellTask failed", error);
           if (opts.silent !== true) showToast("清除卖出任务失败");
+          return false;
+        }
+      }
+
+      async function saveNailHoldEntryPrice(symbol, rawPrice) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || key === "USDT") {
+          showToast("请选择具体币种");
+          return false;
+        }
+        const price = Number(rawPrice);
+        if (!(Number.isFinite(price) && price > 0)) {
+          showToast("请填写有效买入价 P");
+          return false;
+        }
+        showToast("保存买入价…");
+        const now = Date.now();
+        try {
+          const holdResult = await WatchFavorites.patchHoldings({
+            repo: CONFIG.GITHUB_REPO,
+            message: `Entry price ${key} ${price}`,
+            mutate: (state) => {
+              const entryPrices = { ...(state.entryPrices || {}) };
+              const stopCancel = { ...(state.stopCancel || {}) };
+              entryPrices[key] = {
+                price,
+                at: now,
+                source: "manual",
+              };
+              // 改 P：清空该币取消标记，重新种两档固定止损
+              if (stopCancel[key]) delete stopCancel[key];
+              const symbols = Array.isArray(state.symbols)
+                ? state.symbols.slice()
+                : [];
+              if (!symbols.includes(key)) symbols.push(key);
+              return { ...state, symbols, entryPrices, stopCancel };
+            },
+          });
+          nailHoldingsState = holdResult.state || nailHoldingsState;
+
+          const stops = buildFixedStopTasks(key, price, now);
+          const sellResult = await WatchFavorites.patchSellTasks({
+            repo: CONFIG.GITHUB_REPO,
+            message: `Seed stop tasks ${key}`,
+            mutate: (state) => {
+              const tasks = Array.isArray(state.tasks) ? state.tasks.slice() : [];
+              stops.forEach((stop) => {
+                const idx = tasks.findIndex((t) => String(t.id) === stop.id);
+                if (idx >= 0) {
+                  const prev = tasks[idx];
+                  if (
+                    prev.openOrderId ||
+                    prev.status === "order_open" ||
+                    prev.status === "partial" ||
+                    prev.status === "cancel_requested"
+                  ) {
+                    return;
+                  }
+                  tasks[idx] = {
+                    ...prev,
+                    ...stop,
+                    createdAt: prev.createdAt || now,
+                    updatedAt: now,
+                  };
+                } else {
+                  tasks.unshift(stop);
+                }
+              });
+              return { ...state, tasks };
+            },
+          });
+          nailSellTasksState = sellResult.state || nailSellTasksState;
+          renderNailHoldList();
+          showToast(
+            `${holdingsBaseAsset(key)} 买入价 ${formatHoldingsPriceInput(price)} · 已加 -3%/-5% 止损`,
+          );
+          return true;
+        } catch (error) {
+          console.warn("saveNailHoldEntryPrice failed", error);
+          showToast(error.message || "保存买入价失败");
           return false;
         }
       }
@@ -11236,7 +11614,8 @@
         const opts = options || {};
         const pause = !!opts.pause;
         const existing = (nailSellTasksState.tasks || []).find(
-          (t) => String(t.symbol).toUpperCase() === key,
+          (t) =>
+            String(t.symbol).toUpperCase() === key && isLimitSellTask(t),
         );
         if (
           !pause &&
@@ -11246,7 +11625,7 @@
             existing.status === "partial" ||
             existing.status === "cancel_requested")
         ) {
-          showToast("请先清除卖出任务（有挂单会先撤单）再重新设置");
+          showToast("请先取消该限价卖出任务（有挂单会先撤单）再重新设置");
           return;
         }
         const row = document.querySelector(
@@ -11286,48 +11665,51 @@
         let result;
         try {
           result = await WatchFavorites.patchSellTasks({
-          repo: CONFIG.GITHUB_REPO,
-          message: pause
-            ? `Pause sell task ${key}`
-            : `Arm sell task ${key} ${sellPercent}%`,
-          mutate: (state) => {
-            const tasks = Array.isArray(state.tasks) ? state.tasks.slice() : [];
-            const idx = tasks.findIndex(
-              (t) => String(t.symbol).toUpperCase() === key,
-            );
-            const now = Date.now();
-            if (pause) {
-              if (idx >= 0) {
-                tasks[idx] = {
-                  ...tasks[idx],
-                  status: "paused",
-                  enabled: false,
-                  updatedAt: now,
-                };
+            repo: CONFIG.GITHUB_REPO,
+            message: pause
+              ? `Pause sell task ${key}`
+              : `Arm sell task ${key} ${sellPercent}%`,
+            mutate: (state) => {
+              const tasks = Array.isArray(state.tasks) ? state.tasks.slice() : [];
+              const idx = tasks.findIndex(
+                (t) =>
+                  String(t.symbol).toUpperCase() === key && isLimitSellTask(t),
+              );
+              const now = Date.now();
+              if (pause) {
+                if (idx >= 0) {
+                  tasks[idx] = {
+                    ...tasks[idx],
+                    status: "paused",
+                    enabled: false,
+                    updatedAt: now,
+                  };
+                }
+                return { ...state, tasks };
               }
+              const nextTask = {
+                id: idx >= 0 ? tasks[idx].id : `${key}-limit-${now}`,
+                symbol: key,
+                kind: "limit",
+                orderType: "LIMIT",
+                sellPercent,
+                minSell,
+                enabled: true,
+                status: "armed",
+                openOrderId: null,
+                createdAt: idx >= 0 ? tasks[idx].createdAt || now : now,
+                updatedAt: now,
+                lastError: null,
+                skipReason: null,
+                wouldSell: null,
+                lastQty: null,
+                lastPrice: null,
+              };
+              if (idx >= 0) tasks[idx] = { ...tasks[idx], ...nextTask };
+              else tasks.unshift(nextTask);
               return { ...state, tasks };
-            }
-            const nextTask = {
-              id: idx >= 0 ? tasks[idx].id : `${key}-${now}`,
-              symbol: key,
-              sellPercent,
-              minSell,
-              enabled: true,
-              status: "armed",
-              openOrderId: null,
-              createdAt: idx >= 0 ? tasks[idx].createdAt || now : now,
-              updatedAt: now,
-              lastError: null,
-              skipReason: null,
-              wouldSell: null,
-              lastQty: null,
-              lastPrice: null,
-            };
-            if (idx >= 0) tasks[idx] = { ...tasks[idx], ...nextTask };
-            else tasks.unshift(nextTask);
-            return { ...state, tasks };
-          },
-        });
+            },
+          });
           nailSellTasksState = result.state || nailSellTasksState;
           renderNailHoldList();
           showToast(
@@ -11546,7 +11928,11 @@
               );
               const balances = { ...(state.balances || {}) };
               delete balances[asset];
-              return { ...state, symbols, balances };
+              const entryPrices = { ...(state.entryPrices || {}) };
+              delete entryPrices[symbol];
+              const stopCancel = { ...(state.stopCancel || {}) };
+              delete stopCancel[symbol];
+              return { ...state, symbols, balances, entryPrices, stopCancel };
             },
           });
           nailHoldingsState = result.state || nailHoldingsState;
@@ -24443,6 +24829,13 @@
             );
             return;
           }
+          const sellClearId = event.target.closest("[data-sell-clear-id]");
+          if (sellClearId) {
+            void clearNailSellTaskById(
+              sellClearId.getAttribute("data-sell-clear-id"),
+            );
+            return;
+          }
           const sellClear = event.target.closest("[data-sell-clear]");
           if (sellClear) {
             void clearNailSellTask(sellClear.getAttribute("data-sell-clear"));
@@ -24451,6 +24844,15 @@
           const buyClear = event.target.closest("[data-buy-clear]");
           if (buyClear) {
             void clearNailBuyTask(buyClear.getAttribute("data-buy-clear"));
+            return;
+          }
+          const entrySave = event.target.closest("[data-hold-entry-save]");
+          if (entrySave) {
+            const sym = entrySave.getAttribute("data-hold-entry-save");
+            const row = entrySave.closest(".nail-hold-row");
+            const input =
+              row && row.querySelector(`[data-hold-entry="${sym}"]`);
+            void saveNailHoldEntryPrice(sym, input && input.value);
             return;
           }
           const armBtn = event.target.closest("[data-sell-arm]");
@@ -24462,6 +24864,16 @@
           if (buyArmBtn) {
             void upsertNailBuyTask(buyArmBtn.getAttribute("data-buy-arm"));
           }
+        });
+        nailHoldList.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") return;
+          const input = event.target.closest("[data-hold-entry]");
+          if (!input) return;
+          event.preventDefault();
+          void saveNailHoldEntryPrice(
+            input.getAttribute("data-hold-entry"),
+            input.value,
+          );
         });
       }
       if (nailHoldForm) {

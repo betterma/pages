@@ -289,6 +289,21 @@ async function limitSell(symbol, quantity, price, context) {
   );
 }
 
+async function marketSell(symbol, quantity, context) {
+  return signedRequest(
+    'POST',
+    '/api/v3/order',
+    {
+      symbol: String(symbol).toUpperCase(),
+      side: 'SELL',
+      type: 'MARKET',
+      quantity: String(quantity),
+      newOrderRespType: 'FULL',
+    },
+    context,
+  );
+}
+
 async function limitBuy(symbol, quantity, price, context) {
   return signedRequest(
     'POST',
@@ -351,8 +366,10 @@ module.exports = {
   alignPrice,
   alignPriceCeil,
   limitSell,
+  marketSell,
   limitBuy,
   getOrder,
   cancelOrder,
   fillAvgPrice,
+  fillsAvgPrice: fillAvgPrice,
 };

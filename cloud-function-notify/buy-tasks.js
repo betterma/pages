@@ -4,13 +4,35 @@
  * 限价买入任务：网页写入 watch-buy-tasks.json。
  * 花费 = USDT 可用 × buyPercent%；价格 = min(maxBuy||∞, ask)；LIMIT BUY。
  * 默认 dry-run；`live: true`（页面开关）才真下单。
+ * 成交后回写买入价 P 并种固定止损（-3%/-5%）。
  */
 
 const { loadJson, saveJson } = require('./github-wecom');
 const spot = require('./binance-spot');
 const { appendTradeActionLog } = require('./trade-action-log');
+const { applyEntryPriceAndSeedStops } = require('./entry-stop');
 
 const BUY_TASKS_PATH = process.env.BUY_TASKS_PATH || 'watch-buy-tasks.json';
+
+async function seedStopsAfterBuyFill(task, now) {
+  const price = Number(task && task.lastPrice);
+  const symbol = task && task.symbol;
+  if (!symbol || !(price > 0)) return;
+  try {
+    const seeded = await applyEntryPriceAndSeedStops({
+      symbol,
+      price,
+      source: 'buy-fill',
+      now: now || Date.now(),
+    });
+    console.log('buy-fill entry/stops', JSON.stringify(seeded));
+  } catch (error) {
+    console.warn(
+      'buy-fill entry/stops failed',
+      error && error.message ? error.message : error,
+    );
+  }
+}
 
 function normalizeSymbol(raw) {
   let key = String(raw || '')
@@ -83,7 +105,7 @@ async function pollOpenOrder(task, context) {
     task.skipReason = null;
     task.lastError = null;
     task.lastQty = Number(order.executedQty) || task.lastQty;
-    task.lastPrice = spot.fillAvgPrice(order) || Number(order.price) || task.lastPrice;
+    task.lastPrice = spot.fillsAvgPrice(order) || Number(order.price) || task.lastPrice;
     task._removeAfterFill = true;
     try {
       await appendTradeActionLog(
@@ -214,7 +236,7 @@ async function planAndMaybePlace(task, context, live) {
     task.skipReason = null;
     task.lastError = null;
     task.lastQty = Number(order.executedQty) || qty;
-    task.lastPrice = spot.fillAvgPrice(order) || price;
+    task.lastPrice = spot.fillsAvgPrice(order) || price;
     task._removeAfterFill = true;
     try {
       await appendTradeActionLog(
@@ -309,14 +331,20 @@ async function runBuyTasks(options) {
         if (task.openOrderId) {
           const poll = await pollOpenOrder(task, context);
           changed = true;
-          if (poll === 'filled') result.filled += 1;
+          if (poll === 'filled') {
+            result.filled += 1;
+            await seedStopsAfterBuyFill(task, now);
+          }
         }
         continue;
       }
       if (task.openOrderId) {
         const poll = await pollOpenOrder(task, context);
         changed = true;
-        if (poll === 'filled') result.filled += 1;
+        if (poll === 'filled') {
+          result.filled += 1;
+          await seedStopsAfterBuyFill(task, now);
+        }
         continue;
       }
       if (
@@ -328,8 +356,10 @@ async function runBuyTasks(options) {
         changed = true;
         if (action === 'dry-run') result.dryRun += 1;
         else if (action === 'placed') result.placed += 1;
-        else if (action === 'filled') result.filled += 1;
-        else if (action === 'skip') result.skippedTask += 1;
+        else if (action === 'filled') {
+          result.filled += 1;
+          await seedStopsAfterBuyFill(task, now);
+        } else if (action === 'skip') result.skippedTask += 1;
       }
     } catch (error) {
       const message = error && error.message ? error.message : String(error);

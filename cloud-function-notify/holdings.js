@@ -13,8 +13,10 @@ const {
   getUserDataFirst,
   diagSources,
 } = require('./runtime-env');
+const { dropFixedStopTasks } = require('./entry-stop');
 
 const HOLDINGS_PATH = process.env.HOLDINGS_PATH || 'watch-holdings.json';
+const SELL_TASKS_PATH = process.env.SELL_TASKS_PATH || 'watch-sell-tasks.json';
 
 const KEY_NAMES = [
   'BINANCE_API_KEY',
@@ -256,6 +258,47 @@ function baseAssetOf(symbol) {
   return key.endsWith('USDT') ? key.slice(0, -4) : key;
 }
 
+function normalizeEntryPrices(raw) {
+  const out = {};
+  const src = raw && typeof raw === 'object' ? raw : {};
+  Object.keys(src).forEach((key) => {
+    const symbol = normalizeSymbol(key);
+    if (!symbol || symbol === 'USDT') return;
+    const row = src[key];
+    const price =
+      row && typeof row === 'object' ? Number(row.price) : Number(row);
+    if (!(Number.isFinite(price) && price > 0)) return;
+    out[symbol] = {
+      price,
+      at:
+        row && typeof row === 'object' && Number.isFinite(Number(row.at))
+          ? Number(row.at)
+          : 0,
+      source:
+        row && typeof row === 'object' && row.source
+          ? String(row.source)
+          : 'manual',
+    };
+  });
+  return out;
+}
+
+function normalizeStopCancel(raw) {
+  const out = {};
+  const src = raw && typeof raw === 'object' ? raw : {};
+  Object.keys(src).forEach((key) => {
+    const symbol = normalizeSymbol(key);
+    if (!symbol || symbol === 'USDT') return;
+    const row = src[key];
+    if (!row || typeof row !== 'object') return;
+    const next = {};
+    if (row.stop3) next.stop3 = true;
+    if (row.stop5) next.stop5 = true;
+    if (Object.keys(next).length) out[symbol] = next;
+  });
+  return out;
+}
+
 function normalizeState(raw) {
   const data = raw && typeof raw === 'object' ? raw : {};
   const seen = new Set();
@@ -284,6 +327,8 @@ function normalizeState(raw) {
     updatedAt: Number(data.updatedAt) || 0,
     symbols,
     balances,
+    entryPrices: normalizeEntryPrices(data.entryPrices),
+    stopCancel: normalizeStopCancel(data.stopCancel),
     lastError: data.lastError ? String(data.lastError) : null,
   };
 }
@@ -386,6 +431,9 @@ async function runHoldingsSync(options) {
   });
 
   const balances = { ...(state.balances || {}) };
+  const entryPrices = { ...(state.entryPrices || {}) };
+  const stopCancel = { ...(state.stopCancel || {}) };
+  const flatSymbols = [];
   state.symbols.forEach((symbol) => {
     const asset = baseAssetOf(symbol);
     const row = byAsset.get(asset) || { free: 0, locked: 0 };
@@ -395,6 +443,14 @@ async function runHoldingsSync(options) {
       at: now,
     };
     result.updated += 1;
+    // 余额归零：清买入价 P（固定止损由页面/卖出任务自然 qty-too-small 或手清）
+    if (symbol !== 'USDT' && row.free <= 0 && row.locked <= 0) {
+      if (entryPrices[symbol]) {
+        delete entryPrices[symbol];
+        flatSymbols.push(symbol);
+      }
+      if (stopCancel[symbol]) delete stopCancel[symbol];
+    }
   });
   // 买入任务需要 USDT 可用额；无论关注列表是否含 USDT 都回填。
   {
@@ -410,8 +466,13 @@ async function runHoldingsSync(options) {
     updatedAt: now,
     symbols: state.symbols,
     balances,
+    entryPrices,
+    stopCancel,
     lastError: null,
   };
+  if (flatSymbols.length) {
+    result.clearedEntry = flatSymbols;
+  }
 
   try {
     await saveJson(
@@ -428,6 +489,33 @@ async function runHoldingsSync(options) {
       return result;
     }
     throw error;
+  }
+
+  if (flatSymbols.length) {
+    try {
+      const sellFile = await loadJson(SELL_TASKS_PATH);
+      const sellData =
+        sellFile.data && typeof sellFile.data === 'object' ? sellFile.data : {};
+      let tasks = Array.isArray(sellData.tasks) ? sellData.tasks.slice() : [];
+      flatSymbols.forEach((symbol) => {
+        tasks = dropFixedStopTasks(tasks, symbol);
+      });
+      await saveJson(
+        SELL_TASKS_PATH,
+        {
+          updatedAt: now,
+          live: sellData.live === true,
+          tasks,
+        },
+        sellFile.sha,
+        `Drop stops after flat ${flatSymbols.join(',')}`,
+      );
+    } catch (error) {
+      console.warn(
+        'drop stops after flat failed',
+        error && error.message ? error.message : error,
+      );
+    }
   }
 
   result.reason = 'ok';

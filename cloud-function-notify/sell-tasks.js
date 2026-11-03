@@ -40,17 +40,59 @@ function normalizeTask(raw) {
   if (!raw || typeof raw !== 'object') return null;
   const symbol = normalizeSymbol(raw.symbol);
   if (!symbol) return null;
-  const id = String(raw.id || '').trim() || `${symbol}-${Number(raw.createdAt) || 0}`;
+  const kind =
+    String(raw.kind || '')
+      .trim()
+      .toLowerCase() === 'stop'
+      ? 'stop'
+      : 'limit';
+  const stopKeyRaw = String(raw.stopKey || '')
+    .trim()
+    .toLowerCase();
+  const stopKey =
+    kind === 'stop' && (stopKeyRaw === 'stop3' || stopKeyRaw === 'stop5')
+      ? stopKeyRaw
+      : kind === 'stop'
+        ? 'stop3'
+        : null;
+  const id =
+    String(raw.id || '').trim() ||
+    (kind === 'stop' && stopKey
+      ? `${symbol}-${stopKey}`
+      : `${symbol}-${Number(raw.createdAt) || 0}`);
   let sellPercent = Number(raw.sellPercent);
   if (!Number.isFinite(sellPercent) || sellPercent <= 0) sellPercent = 100;
   if (sellPercent > 100) sellPercent = 100;
   const minSell = Number(raw.minSell);
+  const triggerPrice = Number(raw.triggerPrice);
+  const entryPrice = Number(raw.entryPrice);
   const status = String(raw.status || 'paused').toLowerCase();
+  const orderType =
+    kind === 'stop' ||
+    String(raw.orderType || '')
+      .trim()
+      .toUpperCase() === 'MARKET'
+      ? 'MARKET'
+      : 'LIMIT';
   return {
     id,
     symbol,
+    kind,
+    stopKey,
+    orderType,
     sellPercent,
-    minSell: Number.isFinite(minSell) && minSell > 0 ? minSell : 0,
+    minSell:
+      kind === 'stop'
+        ? 0
+        : Number.isFinite(minSell) && minSell > 0
+          ? minSell
+          : 0,
+    triggerPrice:
+      kind === 'stop' && Number.isFinite(triggerPrice) && triggerPrice > 0
+        ? triggerPrice
+        : null,
+    entryPrice:
+      Number.isFinite(entryPrice) && entryPrice > 0 ? entryPrice : null,
     enabled: raw.enabled !== false,
     status,
     openOrderId: raw.openOrderId != null ? String(raw.openOrderId) : null,
@@ -122,6 +164,8 @@ async function pollOpenOrder(task, context) {
 }
 
 async function planAndMaybePlace(task, context, live) {
+  const isStop =
+    String(task.kind || '') === 'stop' || task.orderType === 'MARKET';
   const filters = await spot.getSymbolFilters(task.symbol, context);
   const asset = baseAssetOf(task.symbol);
   const free = await spot.getFreeBalance(asset, context);
@@ -141,6 +185,86 @@ async function planAndMaybePlace(task, context, live) {
     task.updatedAt = Date.now();
     return 'skip';
   }
+
+  if (isStop) {
+    const trigger = Number(task.triggerPrice);
+    if (!(Number.isFinite(trigger) && trigger > 0)) {
+      task.skipReason = 'bad-trigger';
+      task.updatedAt = Date.now();
+      return 'skip';
+    }
+    if (bid > trigger) {
+      task.skipReason = 'above-trigger';
+      task.wouldSell = { free, qty, bid, triggerPrice: trigger, price: null };
+      task.updatedAt = Date.now();
+      return 'skip';
+    }
+    const stopNotional = qty * bid;
+    if (
+      Number.isFinite(filters.minNotional) &&
+      filters.minNotional > 0 &&
+      stopNotional < filters.minNotional
+    ) {
+      task.skipReason = 'below-minNotional';
+      task.wouldSell = {
+        free,
+        qty,
+        bid,
+        triggerPrice: trigger,
+        notional: stopNotional,
+      };
+      task.updatedAt = Date.now();
+      return 'skip';
+    }
+    task.wouldSell = {
+      free,
+      qty,
+      bid,
+      triggerPrice: trigger,
+      price: bid,
+      notional: stopNotional,
+      sellPercent: task.sellPercent,
+      orderType: 'MARKET',
+      live: !!live,
+    };
+    task.skipReason = null;
+    task.lastError = null;
+    task.lastQty = qty;
+    task.lastPrice = bid;
+    task.updatedAt = Date.now();
+    if (!live) {
+      task.status = 'armed';
+      task.skipReason = 'dry-run';
+      return 'dry-run';
+    }
+    const mkt = await spot.marketSell(task.symbol, qty, context);
+    task.openOrderId = mkt.orderId != null ? String(mkt.orderId) : null;
+    const mktStatus = String(mkt.status || '').toUpperCase();
+    task.lastQty = Number(mkt.executedQty) || qty;
+    task.lastPrice = spot.fillsAvgPrice(mkt) || Number(mkt.price) || bid;
+    if (mktStatus === 'FILLED' || Number(mkt.executedQty) > 0) {
+      task.status = 'filled';
+      task.enabled = false;
+      task.openOrderId = null;
+      task.skipReason = null;
+      task.lastError = null;
+      task._removeAfterFill = true;
+      try {
+        await appendTradeActionLog(
+          'sell',
+          task.symbol,
+          task.lastPrice,
+          task.lastQty,
+        );
+      } catch (error) {
+        console.warn('sell fill log failed', error && error.message);
+      }
+      return 'filled';
+    }
+    task.status = 'order_open';
+    return 'placed';
+  }
+
   if (task.minSell > 0 && bid < task.minSell) {
     task.skipReason = 'below-minSell';
     task.wouldSell = {
@@ -293,6 +417,42 @@ async function runSellTasks(options) {
   }
 
   let changed = false;
+  // 跳空：同币若已触及 -5%，本轮只打 stop5，跳过 stop3。
+  const stopSkipIds = new Set();
+  const armedStops = state.tasks.filter(
+    (t) =>
+      t &&
+      t.kind === 'stop' &&
+      t.enabled !== false &&
+      (t.status === 'armed' || t.status === 'error' || t.status === 'partial') &&
+      !t.openOrderId,
+  );
+  const bySym = new Map();
+  armedStops.forEach((t) => {
+    const key = String(t.symbol || '').toUpperCase();
+    if (!bySym.has(key)) bySym.set(key, []);
+    bySym.get(key).push(t);
+  });
+  for (const [, list] of bySym) {
+    const s5 = list.find((t) => t.stopKey === 'stop5');
+    const s3 = list.find((t) => t.stopKey === 'stop3');
+    if (!s5 || !s3) continue;
+    const trigger5 = Number(s5.triggerPrice);
+    if (!(trigger5 > 0)) continue;
+    try {
+      const book = await spot.getBookTicker(s5.symbol, context);
+      const bid = Number(book.bidPrice);
+      if (Number.isFinite(bid) && bid > 0 && bid <= trigger5) {
+        stopSkipIds.add(s3.id);
+        s3.skipReason = 'superseded-by-stop5';
+        s3.updatedAt = now;
+        changed = true;
+      }
+    } catch (_) {
+      /* ignore book peek */
+    }
+  }
+
   for (const task of state.tasks) {
     if (task.status === 'filled' || task.status === 'done') continue;
     result.checked += 1;
@@ -305,7 +465,6 @@ async function runSellTasks(options) {
       }
       if (!task.enabled) continue;
       if (task.status === 'paused') {
-        // 鏆傚仠浣嗕粛鏈夋寕鍗曪細缁х画杞鎴愪氦锛岄伩鍏嶆紡璁版棩蹇?
         if (task.openOrderId) {
           const poll = await pollOpenOrder(task, context);
           changed = true;
@@ -319,6 +478,10 @@ async function runSellTasks(options) {
         if (poll === 'filled') result.filled += 1;
         continue;
       }
+      if (stopSkipIds.has(task.id)) {
+        result.skippedTask += 1;
+        continue;
+      }
       if (
         task.status === 'armed' ||
         task.status === 'error' ||
@@ -328,8 +491,26 @@ async function runSellTasks(options) {
         changed = true;
         if (action === 'dry-run') result.dryRun += 1;
         else if (action === 'placed') result.placed += 1;
-        else if (action === 'filled') result.filled += 1;
-        else if (action === 'skip') result.skippedTask += 1;
+        else if (action === 'filled') {
+          result.filled += 1;
+          // -5% 全出后丢掉同币未完成的 -3% 固定档
+          if (task.kind === 'stop' && task.stopKey === 'stop5') {
+            state.tasks.forEach((other) => {
+              if (
+                other &&
+                other.symbol === task.symbol &&
+                other.kind === 'stop' &&
+                other.stopKey === 'stop3' &&
+                !other.openOrderId
+              ) {
+                other._removeAfterFill = true;
+                other.status = 'canceled';
+                other.enabled = false;
+                other.skipReason = 'superseded-by-stop5';
+              }
+            });
+          }
+        } else if (action === 'skip') result.skippedTask += 1;
       }
     } catch (error) {
       const message = error && error.message ? error.message : String(error);

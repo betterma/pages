@@ -2859,7 +2859,14 @@
   }
 
   function emptyHoldings() {
-    return { updatedAt: 0, symbols: [], balances: {}, lastError: null };
+    return {
+      updatedAt: 0,
+      symbols: [],
+      balances: {},
+      entryPrices: {},
+      stopCancel: {},
+      lastError: null,
+    };
   }
 
   function normalizeHoldingsSymbol(raw) {
@@ -2872,6 +2879,47 @@
     if (symbol === "USDT") return "USDT";
     if (!symbol.endsWith("USDT")) symbol += "USDT";
     return symbol;
+  }
+
+  function normalizeHoldingsEntryPrices(raw) {
+    const out = {};
+    const src = raw && typeof raw === "object" ? raw : {};
+    Object.keys(src).forEach((key) => {
+      const symbol = normalizeHoldingsSymbol(key);
+      if (!symbol || symbol === "USDT") return;
+      const row = src[key];
+      const price =
+        row && typeof row === "object" ? Number(row.price) : Number(row);
+      if (!(Number.isFinite(price) && price > 0)) return;
+      out[symbol] = {
+        price,
+        at:
+          row && typeof row === "object" && Number.isFinite(Number(row.at))
+            ? Number(row.at)
+            : 0,
+        source:
+          row && typeof row === "object" && row.source
+            ? String(row.source)
+            : "manual",
+      };
+    });
+    return out;
+  }
+
+  function normalizeHoldingsStopCancel(raw) {
+    const out = {};
+    const src = raw && typeof raw === "object" ? raw : {};
+    Object.keys(src).forEach((key) => {
+      const symbol = normalizeHoldingsSymbol(key);
+      if (!symbol || symbol === "USDT") return;
+      const row = src[key];
+      if (!row || typeof row !== "object") return;
+      const next = {};
+      if (row.stop3) next.stop3 = true;
+      if (row.stop5) next.stop5 = true;
+      if (Object.keys(next).length) out[symbol] = next;
+    });
+    return out;
   }
 
   function normalizeHoldings(raw) {
@@ -2902,6 +2950,8 @@
       updatedAt: Number(data.updatedAt) || 0,
       symbols,
       balances,
+      entryPrices: normalizeHoldingsEntryPrices(data.entryPrices),
+      stopCancel: normalizeHoldingsStopCancel(data.stopCancel),
       lastError: data.lastError ? String(data.lastError) : null,
     };
   }
@@ -2968,6 +3018,8 @@
             ...base,
             symbols: base.symbols.slice(),
             balances: { ...base.balances },
+            entryPrices: { ...(base.entryPrices || {}) },
+            stopCancel: { ...(base.stopCancel || {}) },
           });
           if (result && result.skipWrite) {
             return {
@@ -3018,18 +3070,52 @@
     if (!raw || typeof raw !== "object") return null;
     const symbol = normalizeSellTaskSymbol(raw.symbol);
     if (!symbol) return null;
+    const kind =
+      String(raw.kind || "").trim().toLowerCase() === "stop" ? "stop" : "limit";
+    const stopKeyRaw = String(raw.stopKey || "").trim().toLowerCase();
+    const stopKey =
+      kind === "stop" && (stopKeyRaw === "stop3" || stopKeyRaw === "stop5")
+        ? stopKeyRaw
+        : kind === "stop"
+          ? "stop3"
+          : null;
     const id =
       String(raw.id || "").trim() ||
-      `${symbol}-${Number(raw.createdAt) || Date.now()}`;
+      (kind === "stop" && stopKey
+        ? `${symbol}-${stopKey}`
+        : `${symbol}-${Number(raw.createdAt) || Date.now()}`);
     let sellPercent = Number(raw.sellPercent);
     if (!Number.isFinite(sellPercent) || sellPercent <= 0) sellPercent = 100;
     if (sellPercent > 100) sellPercent = 100;
     const minSell = Number(raw.minSell);
+    const triggerPrice = Number(raw.triggerPrice);
+    const entryPrice = Number(raw.entryPrice);
+    const orderType =
+      kind === "stop" ||
+      String(raw.orderType || "")
+        .trim()
+        .toUpperCase() === "MARKET"
+        ? "MARKET"
+        : "LIMIT";
     return {
       id,
       symbol,
+      kind,
+      stopKey,
+      orderType,
       sellPercent,
-      minSell: Number.isFinite(minSell) && minSell > 0 ? minSell : 0,
+      minSell:
+        kind === "stop"
+          ? 0
+          : Number.isFinite(minSell) && minSell > 0
+            ? minSell
+            : 0,
+      triggerPrice:
+        kind === "stop" && Number.isFinite(triggerPrice) && triggerPrice > 0
+          ? triggerPrice
+          : null,
+      entryPrice:
+        Number.isFinite(entryPrice) && entryPrice > 0 ? entryPrice : null,
       enabled: raw.enabled !== false,
       status: String(raw.status || "paused"),
       openOrderId: raw.openOrderId != null ? String(raw.openOrderId) : null,
