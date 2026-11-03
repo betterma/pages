@@ -1,5 +1,5 @@
 {
-  "updatedAt": 1793721539030,
+  "updatedAt": 1793721600980,
   "live": true,
   "tasks": [
     {
@@ -17,11 +17,17 @@
       "openOrderId": null,
       "lastPrice": null,
       "lastQty": null,
-      "wouldSell": null,
-      "skipReason": null,
+      "wouldSell": {
+        "free": 44743.43151,
+        "qty": 44743.43,
+        "bid": 0.01509,
+        "triggerPrice": 0.0143545,
+        "price": null
+      },
+      "skipReason": "above-trigger",
       "lastError": null,
       "createdAt": 1793721466298,
-      "updatedAt": 1793721466298
+      "updatedAt": 1793721648443
     },
     {
       "id": "BICOUSDT-stop3",
@@ -38,11 +44,17 @@
       "openOrderId": null,
       "lastPrice": null,
       "lastQty": null,
-      "wouldSell": null,
-      "skipReason": null,
+      "wouldSell": {
+        "free": 44743.43151,
+        "qty": 22371.71,
+        "bid": 0.01509,
+        "triggerPrice": 0.0146567,
+        "price": null
+      },
+      "skipReason": "above-trigger",
       "lastError": null,
       "createdAt": 1793721466298,
-      "updatedAt": 1793721466298
+      "updatedAt": 1793721648621
     },
     {
       "id": "BICOUSDT-1793382319310",
@@ -62,14 +74,14 @@
       "wouldSell": {
         "free": 44743.43151,
         "qty": 44743.43,
-        "bid": 0.0151,
+        "bid": 0.01509,
         "minSell": 0.0172,
         "price": null
       },
       "skipReason": "below-minSell",
       "lastError": null,
       "createdAt": 1793382319310,
-      "updatedAt": 1793721336655
+      "updatedAt": 1793721648794
     }
   ]
 }
