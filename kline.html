@@ -9693,7 +9693,7 @@
       }
 
       function ranking() {
-        const blocked = blacklistSymbols();
+        const blocked = poolBlockedSymbols();
         return Object.entries(marketMap)
           .sort((a, b) => b[1].change24h - a[1].change24h)
           .map(([symbol]) => symbol)
@@ -9842,7 +9842,7 @@
 
       function updateWatchPool() {
         const list = ranking();
-        const blocked = blacklistSymbols();
+        const blocked = poolBlockedSymbols();
         if (!list.length) return;
         for (const symbol of [...watchPool]) {
           const rank = list.indexOf(symbol) + 1;
@@ -9859,7 +9859,7 @@
 
       function getRisingZoneSymbols() {
         const interval = CONFIG.KLINE_INTERVAL;
-        const blocked = blacklistSymbols();
+        const blocked = poolBlockedSymbols();
         const list = ranking();
         const ranked = list.filter((symbol) => watchPool.has(symbol));
         const unranked = [...watchPool].filter(
@@ -12271,7 +12271,7 @@
       }
 
       function applyBlacklistToWatchPool() {
-        const blocked = blacklistSymbols();
+        const blocked = poolBlockedSymbols();
         for (const symbol of [...watchPool]) {
           if (blocked.has(symbol)) watchPool.delete(symbol);
         }
@@ -13096,6 +13096,32 @@
       /** 24hr 仍含 BREAK；只保留 exchangeInfo 里 TRADING 的 USDT。 */
       let usdtTradingSet = null;
       let usdtTradingSetAt = 0;
+      /** bStocks（代币化美股）：exchangeInfo permissionSets 含 TRD_GRP_261。 */
+      let bstockSymbolSet = null;
+      function bstockSymbols() {
+        return bstockSymbolSet instanceof Set ? bstockSymbolSet : new Set();
+      }
+      /** 拉黑 ∪ bStocks：不参与观察池排名 / 自动盯。 */
+      function poolBlockedSymbols() {
+        const blocked = blacklistSymbols();
+        const stocks = bstockSymbols();
+        if (!stocks.size) return blocked;
+        const out = new Set(blocked);
+        stocks.forEach((symbol) => out.add(symbol));
+        return out;
+      }
+      function rowIsBstock(row) {
+        const sets = row && Array.isArray(row.permissionSets)
+          ? row.permissionSets
+          : [];
+        for (let i = 0; i < sets.length; i += 1) {
+          const group = sets[i];
+          if (Array.isArray(group) && group.includes("TRD_GRP_261")) {
+            return true;
+          }
+        }
+        return false;
+      }
       async function loadUsdtTradingSet() {
         const ttlMs = 30 * 60 * 1000;
         if (
@@ -13119,6 +13145,7 @@
             }
             const data = await response.json();
             const set = new Set();
+            const stocks = new Set();
             (data.symbols || []).forEach((row) => {
               if (
                 !row ||
@@ -13128,13 +13155,16 @@
                 return;
               }
               const symbol = String(row.symbol || "").toUpperCase();
-              if (symbol) set.add(symbol);
+              if (!symbol) return;
+              set.add(symbol);
+              if (rowIsBstock(row)) stocks.add(symbol);
             });
             if (!set.size) {
               lastError = new Error("币安 TRADING USDT 列表为空");
               continue;
             }
             usdtTradingSet = set;
+            bstockSymbolSet = stocks;
             usdtTradingSetAt = Date.now();
             return set;
           } catch (error) {

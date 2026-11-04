@@ -134,8 +134,20 @@ async function fetchBinancePrices(symbols) {
   return map;
 }
 
-/** USDT 现货且 status=TRADING（24hr 仍会返回已 BREAK 下架对，必须用 exchangeInfo 挡掉）。 */
-async function fetchBinanceUsdtTradingSet() {
+function rowIsBstock(row) {
+  const sets = row && Array.isArray(row.permissionSets) ? row.permissionSets : [];
+  for (let i = 0; i < sets.length; i += 1) {
+    const group = sets[i];
+    if (Array.isArray(group) && group.includes('TRD_GRP_261')) return true;
+  }
+  return false;
+}
+
+/**
+ * USDT 现货 TRADING 集合；顺带识别 bStocks（TRD_GRP_261）。
+ * @returns {{ trading: Set<string>, bstocks: Set<string> }}
+ */
+async function fetchBinanceUsdtTradingMeta() {
   const endpoints = [
     'https://data-api.binance.vision/api/v3/exchangeInfo',
     'https://api.binance.com/api/v3/exchangeInfo',
@@ -149,19 +161,28 @@ async function fetchBinanceUsdtTradingSet() {
         continue;
       }
       const data = JSON.parse(response.text());
-      const set = new Set();
+      const trading = new Set();
+      const bstocks = new Set();
       (data.symbols || []).forEach((row) => {
         if (!row || row.status !== 'TRADING' || row.quoteAsset !== 'USDT') return;
         const symbol = String(row.symbol || '').toUpperCase();
-        if (symbol) set.add(symbol);
+        if (!symbol) return;
+        trading.add(symbol);
+        if (rowIsBstock(row)) bstocks.add(symbol);
       });
-      if (set.size) return set;
+      if (trading.size) return { trading, bstocks };
       lastError = new Error('Binance exchangeInfo empty USDT TRADING set');
     } catch (error) {
       lastError = error;
     }
   }
   throw lastError || new Error('Binance exchangeInfo fetch failed');
+}
+
+/** USDT 现货且 status=TRADING（24hr 仍会返回已 BREAK 下架对，必须用 exchangeInfo 挡掉）。 */
+async function fetchBinanceUsdtTradingSet() {
+  const meta = await fetchBinanceUsdtTradingMeta();
+  return meta.trading;
 }
 
 /**
@@ -180,13 +201,17 @@ async function fetchBinanceTickers(symbols) {
         );
   if (filter && !filter.size) return {};
   // 全市场排名时必须卡 TRADING；按符号取价时也尽量去掉已下架，避免脏钉回流。
+  // 全市场时再排除 bStocks（TRD_GRP_261），不进观察池 / 自动盯排名。
   let trading = null;
+  let bstocks = null;
   try {
-    trading = await fetchBinanceUsdtTradingSet();
+    const meta = await fetchBinanceUsdtTradingMeta();
+    trading = meta.trading;
+    bstocks = meta.bstocks;
   } catch (error) {
     if (symbols == null) throw error;
     console.warn(
-      `fetchBinanceUsdtTradingSet failed, continue without: ${error.message}`,
+      `fetchBinanceUsdtTradingMeta failed, continue without: ${error.message}`,
     );
   }
   const endpoints = [
@@ -209,6 +234,7 @@ async function fetchBinanceTickers(symbols) {
         // 本项目只做 USDT 现货；全市场拉取时也必须过滤，否则 GBP/BNB/FDUSD 等会进自动盯。
         if (!symbol.endsWith('USDT')) return;
         if (trading && !trading.has(symbol)) return;
+        if (symbols == null && bstocks && bstocks.has(symbol)) return;
         if (filter && !filter.has(symbol)) return;
         const price = Number(item.lastPrice);
         const change24h = Number(item.priceChangePercent);
@@ -422,6 +448,7 @@ module.exports = {
   fetchBinancePrices,
   fetchBinanceTickers,
   fetchBinanceUsdtTradingSet,
+  fetchBinanceUsdtTradingMeta,
   sendWecomMarkdown,
   sendWecomText,
   sendWecomImage,

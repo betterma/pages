@@ -328,12 +328,17 @@ async function main(event, context) {
   const nowMs = Date.now();
   const result = { summary: null };
 
+  // saveWithRetry：mutator 返回 null 则不写 GitHub。
+  // 跳过总结时禁止只为 lastRunAt 心跳提交，否则会每几分钟刷一次 Pages 部署。
   await saveWithRetry(
     DATA_PATH,
     async (data) => {
       // 无 DashScope 时仍可写兜底文案并尝试推送
       const summaryResult = await maybePushDailySummary(data, nowMs);
       result.summary = summaryResult;
+      if (summaryResult && summaryResult.skipped) {
+        return null;
+      }
       data.state.lastRunAt = nowMs;
       return data;
     },
