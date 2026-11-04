@@ -753,7 +753,21 @@ function isAutoPinSource(source) {
  * 补漏尊重 dismissedNails（用户删过的不补）；新自动盯会清掉 dismissed 再钉入。
  * 便签价优先现价（tickers），没有才回退 pinPrice。
  */
-async function saveAutoPinNails(now, newcomers, pins, priceBySymbol) {
+async function saveAutoPinNails(now, newcomers, pins, options) {
+  const opts = options && typeof options === 'object' ? options : {};
+  const nailsPath = opts.nailsPath || CONFIG.NAILS_PATH;
+  // options.priceBySymbol；或兼容旧调用把 ticker map 直接当第 4 参。
+  let priceBySymbol =
+    opts.priceBySymbol && typeof opts.priceBySymbol === 'object'
+      ? opts.priceBySymbol
+      : null;
+  if (
+    !priceBySymbol &&
+    !opts.nailsPath &&
+    Object.keys(opts).some((key) => /USDT$/i.test(key))
+  ) {
+    priceBySymbol = opts;
+  }
   const forceSet = new Set(
     (newcomers || [])
       .map((symbol) => String(symbol || '').trim().toUpperCase())
@@ -761,7 +775,7 @@ async function saveAutoPinNails(now, newcomers, pins, priceBySymbol) {
   );
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const file = await loadJson(CONFIG.NAILS_PATH);
+    const file = await loadJson(nailsPath);
     const prev = Array.isArray(file.data && file.data.nails) ? file.data.nails : [];
     const bySymbol = new Map();
     prev.forEach((item) => {
@@ -874,7 +888,7 @@ async function saveAutoPinNails(now, newcomers, pins, priceBySymbol) {
     const backfillCount = added.filter((row) => !forceSet.has(row.symbol)).length;
     try {
       await saveJson(
-        CONFIG.NAILS_PATH,
+        nailsPath,
         {
           nails,
           nailsUpdatedAt: now,
@@ -904,7 +918,9 @@ async function saveAutoPinNails(now, newcomers, pins, priceBySymbol) {
   return [];
 }
 
-async function saveAutoPinMomNotes(now, newcomers, pins) {
+async function saveAutoPinMomNotes(now, newcomers, pins, options) {
+  const opts = options || {};
+  const momNotesPath = opts.momNotesPath || CONFIG.MOM_NOTES_PATH;
   const symbols = (newcomers || [])
     .map((symbol) => String(symbol || '').trim().toUpperCase())
     .filter(Boolean);
@@ -916,7 +932,7 @@ async function saveAutoPinMomNotes(now, newcomers, pins) {
   const drop = new Set(symbols);
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const file = await loadJson(CONFIG.MOM_NOTES_PATH);
+    const file = await loadJson(momNotesPath);
     const prev = Array.isArray(file.data && file.data.notes)
       ? file.data.notes
       : [];
@@ -929,7 +945,7 @@ async function saveAutoPinMomNotes(now, newcomers, pins) {
     const notes = [...added, ...kept].slice(0, CONFIG.MOM_NOTES_MAX);
     try {
       await saveJson(
-        CONFIG.MOM_NOTES_PATH,
+        momNotesPath,
         {
           notes,
           notesUpdatedAt: now,
@@ -953,12 +969,14 @@ async function saveAutoPinMomNotes(now, newcomers, pins) {
 }
 
 /** Merge incoming action-log rows onto GitHub (conflict-retry). */
-async function appendActionLogEntries(incoming, message) {
+async function appendActionLogEntries(incoming, message, options) {
   const batch = Array.isArray(incoming) ? incoming : [];
   if (!batch.length) return;
+  const actionLogPath =
+    (options && options.actionLogPath) || CONFIG.ACTION_LOG_PATH;
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const file = await loadJson(CONFIG.ACTION_LOG_PATH);
+    const file = await loadJson(actionLogPath);
     const prev = Array.isArray(file.data && file.data.entries)
       ? file.data.entries
       : [];
@@ -975,7 +993,7 @@ async function appendActionLogEntries(incoming, message) {
     const kept = trimActionLogEntries(entries);
     try {
       await saveJson(
-        CONFIG.ACTION_LOG_PATH,
+        actionLogPath,
         {
           entries: kept,
           updatedAt: Date.now(),
@@ -997,7 +1015,7 @@ async function appendActionLogEntries(incoming, message) {
 }
 
 /** Same batches as WeCom: webpage 日志 follows cloud edges, not page refresh. */
-async function appendAutoPinActionLog(now, newcomers, dropped, momNotes) {
+async function appendAutoPinActionLog(now, newcomers, dropped, momNotes, options) {
   const incoming = [];
   if (newcomers.length) {
     incoming.push({
@@ -1028,6 +1046,7 @@ async function appendAutoPinActionLog(now, newcomers, dropped, momNotes) {
   await appendActionLogEntries(
     incoming,
     `Action log auto-pin ${incoming.length}`,
+    options,
   );
 }
 
@@ -1066,13 +1085,23 @@ function priceAlertHit(alert, price) {
   return price >= alert.target;
 }
 
-async function processPriceAlerts(now) {
-  const file = await loadJson(CONFIG.PRICE_ALERTS_PATH);
+/**
+ * @param {number} now
+ * @param {string} [alertsPath]
+ * @param {{ push?: boolean }} [options]
+ *   push=false：只落盘 hit（供网页），不发企微/微信。bstock 必须关推送。
+ */
+async function processPriceAlerts(now, alertsPath, options) {
+  const path = alertsPath || CONFIG.PRICE_ALERTS_PATH;
+  const pushEnabled = !(options && options.push === false);
+  const file = await loadJson(path);
   const alerts = normalizePriceAlerts(
     file && file.data && Array.isArray(file.data.alerts) ? file.data.alerts : [],
   );
   const active = alerts.filter((item) => item.active);
-  if (!active.length) return { sent: 0, hit: 0, checked: 0 };
+  if (!active.length) {
+    return { sent: 0, hit: 0, checked: 0, path, push: pushEnabled };
+  }
 
   const symbols = [...new Set(active.map((item) => item.symbol))];
   const tickers = await fetchBinanceTickers(symbols);
@@ -1091,6 +1120,10 @@ async function processPriceAlerts(now) {
       hit += 1;
     }
     if (!alert.hitAt) continue;
+
+    // bStock 等：只记触发，不发企微/微信，也不走 sentCount 推送配额。
+    if (!pushEnabled) continue;
+
     if (alert.sentCount >= CONFIG.PRICE_ALERT_SEND_MAX) {
       alert.active = false;
       changed = true;
@@ -1136,7 +1169,7 @@ async function processPriceAlerts(now) {
 
   if (changed) {
     await saveJson(
-      CONFIG.PRICE_ALERTS_PATH,
+      path,
       {
         alerts: alerts.map((item) => ({
           id: item.id,
@@ -1153,11 +1186,175 @@ async function processPriceAlerts(now) {
         updatedAt: now,
       },
       file.sha,
-      `Price alerts sent ${sent}`,
+      pushEnabled
+        ? `Price alerts sent ${sent}`
+        : `Price alerts hit ${hit} (no push)`,
     );
   }
 
-  return { sent, hit, checked: active.length };
+  return { sent, hit, checked: active.length, path, push: pushEnabled };
+}
+
+/**
+ * bStock 页读 watch-bstock-notify-state：补写盯/仓浮窗，保留 auto-pin 的 zone snap。
+ * 只写 GitHub 供网页；不发企微/微信。不跑破点高 / 记一笔排行 / 钉子绿。
+ */
+async function updateBstockPageNotify(now) {
+  const { AUTO_PIN_PROFILES } = require('./auto-pin');
+  const profile = AUTO_PIN_PROFILES.bstock;
+  const positionsPath =
+    profile.POSITIONS_PATH || 'watch-bstock-positions.json';
+
+  let pinsFile = { data: null, sha: null };
+  let positionsFile = { data: null, sha: null };
+  let stateFile = { data: null, sha: null };
+  try {
+    [pinsFile, positionsFile, stateFile] = await Promise.all([
+      loadJson(profile.PINS_PATH),
+      loadJson(positionsPath),
+      loadJson(profile.NOTIFY_STATE_PATH),
+    ]);
+  } catch (error) {
+    console.warn(
+      'bstock page-notify load failed',
+      error && error.message ? error.message : error,
+    );
+    return { skipped: true, reason: 'load-failed' };
+  }
+
+  const pins = normalizePinList(
+    (pinsFile.data && pinsFile.data.pins) ||
+      (Array.isArray(pinsFile.data) ? pinsFile.data : []),
+  );
+  const positions = normalizePositions(
+    positionsFile.data && positionsFile.data.positions,
+  );
+  const state = (stateFile && stateFile.data) || {};
+  const lastPinPrices =
+    state.lastPinPrices && typeof state.lastPinPrices === 'object'
+      ? state.lastPinPrices
+      : {};
+  const dropAlerts =
+    state.dropAlerts && typeof state.dropAlerts === 'object'
+      ? state.dropAlerts
+      : {};
+
+  const symbols = [
+    ...new Set([
+      ...pins.map((item) => item.symbol),
+      ...positions.map((item) => item.symbol),
+    ]),
+  ];
+  const tickers = symbols.length ? await fetchBinanceTickers(symbols) : {};
+
+  const { text: positionText, nextDropAlerts } = buildPositionReport(
+    positions,
+    tickers,
+    dropAlerts,
+    now,
+  );
+
+  let pinRows = listPinCandidateRows(pins, tickers);
+  if (pinRows.length) {
+    await attachPinWindowGain(pinRows);
+    pinRows = filterPinWindowUp(pinRows);
+  }
+  const pinCap = limitPinNotifyRows(pinRows);
+  pinRows = pinCap.rows;
+  if (pinRows.length) {
+    await attachPinMomentum(pinRows);
+    attachPriceVsLast(pinRows, lastPinPrices);
+  }
+  const pinText = pinRows.length
+    ? buildPinReport(pinRows, { totalUp: pinCap.totalUp })
+    : null;
+
+  const nextPinPrices = pinText
+    ? nextLastPinPrices(lastPinPrices, pinRows)
+    : lastPinPrices;
+  const prevNotify =
+    state.lastPinNotify && typeof state.lastPinNotify === 'object'
+      ? state.lastPinNotify
+      : null;
+  const prevPositionNotify =
+    state.lastPositionNotify && typeof state.lastPositionNotify === 'object'
+      ? state.lastPositionNotify
+      : null;
+  const lastPinNotify = pinText
+    ? {
+        at: now,
+        markdown: pinText,
+        symbols: pinRows.map((row) => row.symbol),
+      }
+    : prevNotify;
+  const lastPositionNotify = positionText
+    ? {
+        at: now,
+        text: positionText,
+        symbols: positions.map((item) => item.symbol),
+      }
+    : null;
+  const dropAlertsToSave = positionText ? nextDropAlerts : dropAlerts;
+
+  const changed =
+    JSON.stringify(dropAlertsToSave) !== JSON.stringify(dropAlerts) ||
+    JSON.stringify(nextPinPrices) !== JSON.stringify(lastPinPrices) ||
+    JSON.stringify(lastPinNotify) !== JSON.stringify(prevNotify) ||
+    JSON.stringify(lastPositionNotify) !== JSON.stringify(prevPositionNotify);
+
+  if (!changed) {
+    return {
+      skipped: true,
+      reason: 'unchanged',
+      pins: pins.length,
+      positions: positions.length,
+    };
+  }
+
+  // 重新读 sha，避免与前面 auto-pin zone 写入撞车。
+  let freshSha = stateFile.sha;
+  let risingZoneSnap = Array.isArray(state.risingZoneSnap)
+    ? state.risingZoneSnap
+    : [];
+  let risingZoneSnapSeeded = !!state.risingZoneSnapSeeded;
+  let autoPinEvents = Array.isArray(state.autoPinEvents)
+    ? state.autoPinEvents
+    : [];
+  try {
+    const fresh = await loadJson(profile.NOTIFY_STATE_PATH);
+    freshSha = fresh.sha;
+    const data = fresh.data || {};
+    if (Array.isArray(data.risingZoneSnap)) risingZoneSnap = data.risingZoneSnap;
+    risingZoneSnapSeeded = !!data.risingZoneSnapSeeded;
+    if (Array.isArray(data.autoPinEvents)) autoPinEvents = data.autoPinEvents;
+  } catch (_) {
+    /* keep prior */
+  }
+
+  await saveJson(
+    profile.NOTIFY_STATE_PATH,
+    {
+      ...(state && typeof state === 'object' ? state : {}),
+      dropAlerts: dropAlertsToSave,
+      lastPinPrices: nextPinPrices,
+      lastPinNotify,
+      lastPositionNotify,
+      risingZoneSnap,
+      risingZoneSnapSeeded,
+      autoPinEvents,
+      updatedAt: Date.now(),
+    },
+    freshSha,
+    'bStock page pin/position notify',
+  );
+
+  return {
+    ok: true,
+    pins: pins.length,
+    positions: positions.length,
+    pinText: !!pinText,
+    positionText: !!positionText,
+  };
 }
 
 async function main(event, context) {
@@ -1229,14 +1426,34 @@ async function main(event, context) {
     : [];
 
   let priceAlertStats = { sent: 0, hit: 0, checked: 0 };
+  let bstockPriceAlertStats = { sent: 0, hit: 0, checked: 0 };
   try {
-    priceAlertStats = await processPriceAlerts(now);
+    priceAlertStats = await processPriceAlerts(now, CONFIG.PRICE_ALERTS_PATH);
     if (priceAlertStats.sent || priceAlertStats.hit) {
       console.log('price alerts', JSON.stringify(priceAlertStats));
     }
   } catch (error) {
     console.warn(
       'price alerts failed',
+      error && error.message ? error.message : error,
+    );
+  }
+  try {
+    const { AUTO_PIN_PROFILES } = require('./auto-pin');
+    const bstockAlertsPath =
+      (AUTO_PIN_PROFILES.bstock &&
+        AUTO_PIN_PROFILES.bstock.PRICE_ALERTS_PATH) ||
+      'watch-bstock-price-alerts.json';
+    // bStock：只落盘触发态给网页，禁止企微/微信推送。
+    bstockPriceAlertStats = await processPriceAlerts(now, bstockAlertsPath, {
+      push: false,
+    });
+    if (bstockPriceAlertStats.hit) {
+      console.log('bstock price alerts', JSON.stringify(bstockPriceAlertStats));
+    }
+  } catch (error) {
+    console.warn(
+      'bstock price alerts failed',
       error && error.message ? error.message : error,
     );
   }
@@ -1273,6 +1490,161 @@ async function main(event, context) {
     }
   } catch (error) {
     console.warn('auto-pin failed', error.message || error);
+  }
+
+  // bStock 独立自动盯：与现货同表现（钉子/记一笔/日志），独立 JSON；不发企微/微信；不跑破点高。
+  let bstockAutoPinned = [];
+  let bstockAutoDropped = [];
+  let bstockPins = [];
+  let bstockAutoPinMomNotes = [];
+  let bstockAutoPinNails = [];
+  try {
+    const { applyAutoPinProfile, AUTO_PIN_PROFILES } = require('./auto-pin');
+    const bstockProfile = AUTO_PIN_PROFILES.bstock;
+    applyAutoPinProfile('bstock');
+    let bstockPinsFile = { data: null, sha: null };
+    try {
+      bstockPinsFile = await loadJson(bstockProfile.PINS_PATH);
+    } catch (error) {
+      console.warn('bstock pins load failed', error.message || error);
+    }
+    let bstockNotifyFile = { data: null, sha: null };
+    try {
+      bstockNotifyFile = await loadJson(bstockProfile.NOTIFY_STATE_PATH);
+    } catch (error) {
+      console.warn('bstock notify-state load failed', error.message || error);
+    }
+    const bstockState = bstockNotifyFile.data || {};
+    const bstockPinsIn = normalizePinList(
+      (bstockPinsFile.data && bstockPinsFile.data.pins) ||
+        (Array.isArray(bstockPinsFile.data) ? bstockPinsFile.data : []),
+    );
+    const bstockResult = await runAutoPin({
+      profile: 'bstock',
+      pins: bstockPinsIn,
+      risingZoneSnap: Array.isArray(bstockState.risingZoneSnap)
+        ? bstockState.risingZoneSnap
+        : [],
+      risingZoneSnapSeeded: !!bstockState.risingZoneSnapSeeded,
+      autoPinEvents: Array.isArray(bstockState.autoPinEvents)
+        ? bstockState.autoPinEvents
+        : [],
+      now,
+    });
+    bstockPins = bstockResult.pins || bstockPinsIn;
+    bstockAutoPinned = bstockResult.newcomers || [];
+    bstockAutoDropped = bstockResult.dropped || [];
+    if (bstockResult.pinsChanged) {
+      const saved = await savePinsFile(
+        bstockPinsFile,
+        bstockPins,
+        `bStock auto-pin: new ${bstockAutoPinned.length}`,
+      );
+      bstockPins = saved.pins;
+    }
+    const prevSnap = Array.isArray(bstockState.risingZoneSnap)
+      ? bstockState.risingZoneSnap
+      : [];
+    const nextSnap = Array.isArray(bstockResult.risingSnap)
+      ? bstockResult.risingSnap
+      : [];
+    const snapChanged =
+      JSON.stringify(prevSnap) !== JSON.stringify(nextSnap) ||
+      !!bstockState.risingZoneSnapSeeded !==
+        !!bstockResult.risingSnapSeeded ||
+      JSON.stringify(bstockState.autoPinEvents || []) !==
+        JSON.stringify(bstockResult.autoPinEvents || []);
+    // 无变化不写 GitHub，避免每轮定时刷 Pages 部署。
+    if (snapChanged || bstockResult.pinsChanged || !bstockNotifyFile.sha) {
+      const nextBstockState = {
+        ...(bstockState && typeof bstockState === 'object' ? bstockState : {}),
+        risingZoneSnap: nextSnap,
+        risingZoneSnapSeeded: bstockResult.risingSnapSeeded,
+        autoPinEvents: bstockResult.autoPinEvents,
+        updatedAt: Date.now(),
+      };
+      await saveJson(
+        bstockProfile.NOTIFY_STATE_PATH,
+        nextBstockState,
+        bstockNotifyFile.sha,
+        'bStock auto-pin zone snap',
+      );
+    }
+
+    const bstockPaths = {
+      nailsPath: bstockProfile.NAILS_PATH,
+      momNotesPath: bstockProfile.MOM_NOTES_PATH,
+      actionLogPath: bstockProfile.ACTION_LOG_PATH,
+    };
+    if (bstockAutoPinned.length) {
+      try {
+        bstockAutoPinMomNotes = await saveAutoPinMomNotes(
+          now,
+          bstockAutoPinned,
+          bstockPins,
+          bstockPaths,
+        );
+      } catch (error) {
+        console.warn(
+          'bstock auto-pin mom notes failed',
+          error && error.message ? error.message : error,
+        );
+        bstockAutoPinMomNotes = [];
+      }
+    }
+    try {
+      bstockAutoPinNails = await saveAutoPinNails(
+        now,
+        bstockAutoPinned,
+        bstockPins,
+        bstockPaths,
+      );
+      if (bstockAutoPinNails.length) {
+        console.log(
+          'bstock auto-pin nails',
+          JSON.stringify({
+            count: bstockAutoPinNails.length,
+            newcomers: bstockAutoPinned.length,
+            sample: bstockAutoPinNails.slice(0, 12).map((row) => row.symbol),
+          }),
+        );
+      }
+    } catch (error) {
+      console.warn(
+        'bstock auto-pin nails failed',
+        error && error.message ? error.message : error,
+      );
+      bstockAutoPinNails = [];
+    }
+    if (bstockAutoPinned.length || bstockAutoDropped.length) {
+      try {
+        await appendAutoPinActionLog(
+          now,
+          bstockAutoPinned,
+          bstockAutoDropped,
+          bstockAutoPinMomNotes,
+          bstockPaths,
+        );
+      } catch (error) {
+        console.warn(
+          'bstock auto-pin action log failed',
+          error && error.message ? error.message : error,
+        );
+      }
+    }
+
+    applyAutoPinProfile('crypto');
+  } catch (error) {
+    console.warn(
+      'bstock auto-pin failed',
+      error && error.message ? error.message : error,
+    );
+    try {
+      const { applyAutoPinProfile } = require('./auto-pin');
+      applyAutoPinProfile('crypto');
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   let autoPinMomNotes = [];
@@ -1547,6 +1919,7 @@ async function main(event, context) {
   }
 
   let nailDailyReset = { skipped: true, reason: 'not-run' };
+  let bstockNailDailyReset = { skipped: true, reason: 'not-run' };
   try {
     nailDailyReset = await runNailDailyReset({ now });
     if (!nailDailyReset.skipped && nailDailyReset.reason === 'ok') {
@@ -1557,6 +1930,24 @@ async function main(event, context) {
     const message = error && error.message ? error.message : String(error);
     sendErrors.push(`nail-daily-reset:${message}`);
     console.warn('nail-daily-reset failed', message);
+  }
+  try {
+    const { AUTO_PIN_PROFILES } = require('./auto-pin');
+    const bp = AUTO_PIN_PROFILES.bstock;
+    bstockNailDailyReset = await runNailDailyReset({
+      now,
+      nailsPath: bp.NAILS_PATH,
+      statePath: bp.NAIL_DAILY_RESET_PATH,
+    });
+    console.log(
+      'bstock nail-daily-reset',
+      JSON.stringify(bstockNailDailyReset),
+    );
+  } catch (error) {
+    console.warn(
+      'bstock nail-daily-reset failed',
+      error && error.message ? error.message : error,
+    );
   }
 
   let holdings = { skipped: true, reason: 'not-run' };
@@ -1609,6 +2000,12 @@ async function main(event, context) {
   }
 
   let nailGreenAlert = { skipped: true, reason: 'not-run', sent: 0, symbols: [] };
+  let bstockNailGreenAlert = {
+    skipped: true,
+    reason: 'not-run',
+    sent: 0,
+    symbols: [],
+  };
   try {
     nailGreenAlert = await runNailGreenAlerts({
       now,
@@ -1625,6 +2022,28 @@ async function main(event, context) {
     const message = error && error.message ? error.message : String(error);
     sendErrors.push(`nail-green:${message}`);
     console.warn('nail-green-alert failed', message);
+  }
+  try {
+    const { AUTO_PIN_PROFILES } = require('./auto-pin');
+    const bp = AUTO_PIN_PROFILES.bstock;
+    // bStock：页面 notices 同语义，禁止企微/微信推送。
+    bstockNailGreenAlert = await runNailGreenAlerts({
+      now,
+      nailsPath: bp.NAILS_PATH,
+      statePath: bp.NAIL_GREEN_ALERT_PATH,
+      noticesPath: bp.NAIL_GREEN_NOTICES_PATH,
+      push: false,
+      webhook: '',
+    });
+    console.log(
+      'bstock nail-green-alert',
+      JSON.stringify(bstockNailGreenAlert),
+    );
+  } catch (error) {
+    console.warn(
+      'bstock nail-green-alert failed',
+      error && error.message ? error.message : error,
+    );
   }
 
   // 网页盯一下文案更新即推进 lastPinPrices（@@@ 相对上次网页公布价）。
@@ -1695,6 +2114,21 @@ async function main(event, context) {
     );
   }
 
+  let bstockPageNotify = { skipped: true, reason: 'not-run' };
+  try {
+    bstockPageNotify = await updateBstockPageNotify(now);
+    console.log('bstock page-notify', JSON.stringify(bstockPageNotify));
+  } catch (error) {
+    console.warn(
+      'bstock page-notify failed',
+      error && error.message ? error.message : error,
+    );
+    bstockPageNotify = {
+      skipped: true,
+      reason: error && error.message ? error.message : 'error',
+    };
+  }
+
   console.log(
     'notify done',
     JSON.stringify({
@@ -1715,6 +2149,14 @@ async function main(event, context) {
       sellTasks,
       buyTasks,
       nailGreenAlert,
+      bstockAutoPinned,
+      bstockAutoDropped,
+      bstockAutoPinNails: bstockAutoPinNails.length,
+      bstockAutoPinMomNotes: bstockAutoPinMomNotes.length,
+      bstockNailDailyReset,
+      bstockNailGreenAlert,
+      bstockPriceAlertStats,
+      bstockPageNotify,
       sendErrors,
     }),
   );
@@ -1737,6 +2179,12 @@ async function main(event, context) {
     sellTasks,
     buyTasks,
     nailGreenAlert,
+    bstockAutoPinned,
+    bstockAutoDropped,
+    bstockNailDailyReset,
+    bstockNailGreenAlert,
+    bstockPriceAlertStats,
+    bstockPageNotify,
     sendErrors,
   };
 }

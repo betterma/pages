@@ -331,7 +331,15 @@ function evaluateNail(candles, nail, now) {
 async function runNailGreenAlerts(options) {
   const opts = options || {};
   const now = Number(opts.now) || Date.now();
-  const webhook = String(opts.webhook || resolveWebhook() || '').trim();
+  const nailsPath = String(opts.nailsPath || NAILS_PATH).trim() || NAILS_PATH;
+  const statePath = String(opts.statePath || STATE_PATH).trim() || STATE_PATH;
+  const noticesPath =
+    String(opts.noticesPath || NOTICES_PATH).trim() || NOTICES_PATH;
+  // push=false：只写页面 notices，不发企微（bstock 必须关推送）。
+  const pushEnabled = opts.push !== false;
+  const webhook = pushEnabled
+    ? String(opts.webhook || resolveWebhook() || '').trim()
+    : '';
   const result = {
     skipped: false,
     reason: null,
@@ -340,6 +348,8 @@ async function runNailGreenAlerts(options) {
     sent: 0,
     symbols: [],
     errors: [],
+    path: nailsPath,
+    push: pushEnabled,
   };
 
   if (!enabled()) {
@@ -349,12 +359,14 @@ async function runNailGreenAlerts(options) {
   }
   // 无 webhook 仍可检查并写入页面 notices；企微发送跳过。
   if (!webhook) {
-    console.warn('nail-green-alert: no WeCom webhook — notices only');
+    console.warn(
+      `nail-green-alert(${nailsPath}): no WeCom webhook — notices only`,
+    );
   }
 
   const [nailsFile, stateFile] = await Promise.all([
-    loadJson(NAILS_PATH),
-    loadJson(STATE_PATH),
+    loadJson(nailsPath),
+    loadJson(statePath),
   ]);
   const nails = normalizeNails(nailsFile && nailsFile.data);
   let state = normalizeState(stateFile && stateFile.data);
@@ -478,7 +490,7 @@ async function runNailGreenAlerts(options) {
   if (stateDirty || result.sent) {
     state.updatedAt = now;
     await saveJson(
-      STATE_PATH,
+      statePath,
       {
         bySymbol: state.bySymbol,
         checkCursor: Number(state.checkCursor) || 0,
@@ -493,7 +505,7 @@ async function runNailGreenAlerts(options) {
 
   // 每轮都整理通知：进入新 4h 窗时清掉旧窗条目（无新命中也会写）。
   try {
-    result.notices = await appendNailGreenNotices(noticeRows, now);
+    result.notices = await appendNailGreenNotices(noticeRows, now, noticesPath);
   } catch (error) {
     result.errors.push(
       `notices:${error && error.message ? error.message : error}`,
@@ -561,8 +573,9 @@ function noticeItemsFingerprint(list) {
     .join('|');
 }
 
-async function appendNailGreenNotices(rows, now) {
-  const file = await loadJson(NOTICES_PATH);
+async function appendNailGreenNotices(rows, now, noticesPath) {
+  const path = String(noticesPath || NOTICES_PATH).trim() || NOTICES_PATH;
+  const file = await loadJson(path);
   const prev = (file && file.data) || {};
   const prevItems = Array.isArray(prev.items) ? prev.items : [];
   const incoming = Array.isArray(rows) ? rows : [];
@@ -572,7 +585,7 @@ async function appendNailGreenNotices(rows, now) {
     noticeItemsFingerprint(merged) !== noticeItemsFingerprint(prevItems);
   if (!changed) return merged.length;
   await saveJson(
-    NOTICES_PATH,
+    path,
     {
       updatedAt: now,
       readAt: Number(prev.readAt) || 0,

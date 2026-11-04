@@ -124,10 +124,14 @@ function normalizeState(raw) {
 }
 
 /**
- * @param {{ now?: number }} [options]
+ * @param {{ now?: number, nailsPath?: string, statePath?: string }} [options]
  */
 async function runNailDailyReset(options) {
   const now = Number(options && options.now) || Date.now();
+  const nailsPath =
+    String((options && options.nailsPath) || NAILS_PATH).trim() || NAILS_PATH;
+  const statePath =
+    String((options && options.statePath) || STATE_PATH).trim() || STATE_PATH;
   const result = {
     skipped: true,
     reason: 'init',
@@ -136,6 +140,7 @@ async function runNailDailyReset(options) {
     updatedCount: 0,
     skippedPinned: 0,
     skippedNoPrice: 0,
+    path: nailsPath,
   };
 
   if (!ENABLED) {
@@ -153,7 +158,7 @@ async function runNailDailyReset(options) {
     return result;
   }
 
-  const stateFile = await loadJson(STATE_PATH);
+  const stateFile = await loadJson(statePath);
   const prev = normalizeState(stateFile && stateFile.data);
   if (prev.resetDay === today && prev.resetAt >= resetAt) {
     result.skipped = true;
@@ -167,7 +172,7 @@ async function runNailDailyReset(options) {
   let lastError = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      const nailsFile = await loadJson(NAILS_PATH);
+      const nailsFile = await loadJson(nailsPath);
       const prevNails = normalizeNailList(nailsFile && nailsFile.data);
       if (!prevNails.length) {
         const emptyState = {
@@ -183,7 +188,7 @@ async function runNailDailyReset(options) {
           updatedAt: Date.now(),
         };
         await saveJson(
-          STATE_PATH,
+          statePath,
           emptyState,
           stateFile && stateFile.sha,
           `Nail daily reset ${today} empty`,
@@ -231,7 +236,7 @@ async function runNailDailyReset(options) {
         : [];
 
       await saveJson(
-        NAILS_PATH,
+        nailsPath,
         {
           nails: nextNails.map((item, order) => ({ ...item, order })),
           nailsUpdatedAt: now,
@@ -258,9 +263,9 @@ async function runNailDailyReset(options) {
       };
       // 状态文件可能被并发改写；失败不回滚钉子（已写入）。
       try {
-        const freshState = await loadJson(STATE_PATH);
+        const freshState = await loadJson(statePath);
         await saveJson(
-          STATE_PATH,
+          statePath,
           nextState,
           freshState && freshState.sha,
           `Nail daily reset state ${today}`,

@@ -14,11 +14,40 @@ const {
   requestRaw,
 } = require('./github-wecom');
 
+const AUTO_PIN_PROFILES = {
+  crypto: {
+    DATA_PATH: 'watch-data.json',
+    BLACKLIST_PATH: 'watch-blacklist.json',
+    PINS_PATH: 'watch-pins.json',
+    HOME_PREFS_PATH: 'watch-home-prefs.json',
+    NOTIFY_STATE_PATH: 'watch-notify-state.json',
+    MARKET_UNIVERSE: 'crypto',
+  },
+  bstock: {
+    DATA_PATH: 'watch-bstock-data.json',
+    BLACKLIST_PATH: 'watch-bstock-blacklist.json',
+    PINS_PATH: 'watch-bstock-pins.json',
+    HOME_PREFS_PATH: 'watch-bstock-home-prefs.json',
+    NOTIFY_STATE_PATH: 'watch-bstock-notify-state.json',
+    POSITIONS_PATH: 'watch-bstock-positions.json',
+    PRICE_ALERTS_PATH: 'watch-bstock-price-alerts.json',
+    NAILS_PATH: 'watch-bstock-nails.json',
+    MOM_NOTES_PATH: 'watch-bstock-mom-notes.json',
+    ACTION_LOG_PATH: 'watch-bstock-action-log.json',
+    NAIL_GREEN_NOTICES_PATH: 'watch-bstock-nail-green-notices.json',
+    NAIL_GREEN_ALERT_PATH: 'watch-bstock-nail-green-alert.json',
+    NAIL_DAILY_RESET_PATH: 'watch-bstock-nail-daily-reset.json',
+    MARKET_UNIVERSE: 'bstock',
+  },
+};
+
 const CONFIG = {
   DATA_PATH: process.env.DATA_PATH || 'watch-data.json',
   BLACKLIST_PATH: process.env.BLACKLIST_PATH || 'watch-blacklist.json',
   PINS_PATH: process.env.PINS_PATH || 'watch-pins.json',
   HOME_PREFS_PATH: process.env.HOME_PREFS_PATH || 'watch-home-prefs.json',
+  NOTIFY_STATE_PATH: process.env.NOTIFY_STATE_PATH || 'watch-notify-state.json',
+  MARKET_UNIVERSE: process.env.MARKET_UNIVERSE || 'crypto',
   WATCH_POOL_RANK_DEFAULT: 30,
   WATCH_POOL_RANK_MIN: 10,
   WATCH_POOL_RANK_MAX: 100,
@@ -36,6 +65,17 @@ const CONFIG = {
     String(process.env.AUTO_PIN_ENABLED === undefined ? '1' : process.env.AUTO_PIN_ENABLED) !==
     '0',
 };
+
+function applyAutoPinProfile(profileKey) {
+  const profile = AUTO_PIN_PROFILES[profileKey] || AUTO_PIN_PROFILES.crypto;
+  CONFIG.DATA_PATH = profile.DATA_PATH;
+  CONFIG.BLACKLIST_PATH = profile.BLACKLIST_PATH;
+  CONFIG.PINS_PATH = profile.PINS_PATH;
+  CONFIG.HOME_PREFS_PATH = profile.HOME_PREFS_PATH;
+  CONFIG.NOTIFY_STATE_PATH = profile.NOTIFY_STATE_PATH;
+  CONFIG.MARKET_UNIVERSE = profile.MARKET_UNIVERSE;
+  return profile;
+}
 
 function normalizeWatchPoolRank(raw) {
   const def = CONFIG.WATCH_POOL_RANK_DEFAULT;
@@ -375,6 +415,10 @@ function emptyResult(pins, snap, seeded, events) {
  */
 async function runAutoPin(options) {
   const opts = options || {};
+  applyAutoPinProfile(opts.profile || 'crypto');
+  console.log(
+    `auto-pin profile=${CONFIG.MARKET_UNIVERSE} data=${CONFIG.DATA_PATH}`,
+  );
   const now = Number(opts.now) || Date.now();
   let pins = normalizePinList(opts.pins);
   // Zone snap (v2) includes pinned; first deploy re-seeds without mass pin.
@@ -405,7 +449,9 @@ async function runAutoPin(options) {
     .filter((s) => s.endsWith('USDT'));
 
   // 全市场 USDT 24hr，才能得到真实前 N（不能只拉池内子集再排名）。
-  const marketMap = await fetchBinanceTickers(null);
+  const marketMap = await fetchBinanceTickers(null, {
+    universe: CONFIG.MARKET_UNIVERSE || 'crypto',
+  });
 
   const watchPool = buildWatchPool(history, marketMap, seedPool, blacklist);
   console.log(
@@ -515,5 +561,7 @@ module.exports = {
   loadBlacklistSet,
   listRisingZone,
   listRisingSymbols,
+  applyAutoPinProfile,
+  AUTO_PIN_PROFILES,
   CONFIG,
 };

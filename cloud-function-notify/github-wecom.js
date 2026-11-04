@@ -189,8 +189,16 @@ async function fetchBinanceUsdtTradingSet() {
  * @param {string[]|null|undefined} symbols
  *   传入数组则只保留这些；传 null/undefined 表示全市场 **USDT TRADING** 交易对
  *   （用于 24h 真前 N 排名；非 USDT / 已 BREAK 一律丢弃）。
+ * @param {{ universe?: 'crypto'|'bstock'|'all' }} [options]
+ *   crypto（默认）全市场排除 bStocks；bstock 仅 bStocks；all 不按类型滤。
  */
-async function fetchBinanceTickers(symbols) {
+async function fetchBinanceTickers(symbols, options) {
+  const universe =
+    options && options.universe
+      ? String(options.universe)
+      : symbols == null
+        ? 'crypto'
+        : 'all';
   const filter =
     symbols == null
       ? null
@@ -201,7 +209,6 @@ async function fetchBinanceTickers(symbols) {
         );
   if (filter && !filter.size) return {};
   // 全市场排名时必须卡 TRADING；按符号取价时也尽量去掉已下架，避免脏钉回流。
-  // 全市场时再排除 bStocks（TRD_GRP_261），不进观察池 / 自动盯排名。
   let trading = null;
   let bstocks = null;
   try {
@@ -234,7 +241,11 @@ async function fetchBinanceTickers(symbols) {
         // 本项目只做 USDT 现货；全市场拉取时也必须过滤，否则 GBP/BNB/FDUSD 等会进自动盯。
         if (!symbol.endsWith('USDT')) return;
         if (trading && !trading.has(symbol)) return;
-        if (symbols == null && bstocks && bstocks.has(symbol)) return;
+        if (universe === 'bstock') {
+          if (bstocks && !bstocks.has(symbol)) return;
+        } else if (universe === 'crypto') {
+          if (bstocks && bstocks.has(symbol)) return;
+        }
         if (filter && !filter.has(symbol)) return;
         const price = Number(item.lastPrice);
         const change24h = Number(item.priceChangePercent);

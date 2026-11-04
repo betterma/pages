@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -7548,26 +7548,47 @@
 
     <script src="./github-token-vault.js"></script>
     <script src="./watch-favorites.js"></script>
+    <script src="./kline-mode.js"></script>
     <script>
       "use strict";
+
+      const KLINE_MODE =
+        window.KlineMode && typeof window.KlineMode.resolveMode === "function"
+          ? window.KlineMode.resolveMode()
+          : "crypto";
+      const KLINE_PROFILE =
+        window.KlineMode && typeof window.KlineMode.getProfile === "function"
+          ? window.KlineMode.getProfile(KLINE_MODE)
+          : { id: "crypto", title: "观察池 K 线", paths: {} };
+      const KLINE_PATHS = KLINE_PROFILE.paths || {};
 
       const CONFIG = {
         HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000,
         KLINE_RANGE_DAYS_DEFAULT: 3,
         KLINE_RANGE_DAYS_EXTENDED: 10,
         GITHUB_REPO: "betterma/pages",
-        GITHUB_PATH: "watch-data.json",
+        GITHUB_PATH: KLINE_PATHS.GITHUB_PATH || "watch-data.json",
         OBS_BASE: "https://mpctest.obs.cn-north-4.myhuaweicloud.com",
-        FAVORITES_PATH: "watch-favorites.json",
-        BLACKLIST_PATH: "watch-blacklist.json",
-        PINS_PATH: "watch-pins.json",
-        MOM_NOTES_PATH: "watch-mom-notes.json",
-        ACTION_LOG_PATH: "watch-action-log.json",
-        CARD_EGGS_PATH: "watch-card-eggs.json",
-        BREAK_HIGH_PATH: "watch-break-high.json",
-        NAILS_PATH: "watch-nails.json",
-        POSITIONS_PATH: "watch-positions.json",
-        PRICE_ALERTS_PATH: "watch-price-alerts.json",
+        FAVORITES_PATH: KLINE_PATHS.FAVORITES_PATH || "watch-favorites.json",
+        BLACKLIST_PATH: KLINE_PATHS.BLACKLIST_PATH || "watch-blacklist.json",
+        PINS_PATH: KLINE_PATHS.PINS_PATH || "watch-pins.json",
+        MOM_NOTES_PATH: KLINE_PATHS.MOM_NOTES_PATH || "watch-mom-notes.json",
+        ACTION_LOG_PATH: KLINE_PATHS.ACTION_LOG_PATH || "watch-action-log.json",
+        CARD_EGGS_PATH: KLINE_PATHS.CARD_EGGS_PATH || "watch-card-eggs.json",
+        BREAK_HIGH_PATH: KLINE_PATHS.BREAK_HIGH_PATH || "watch-break-high.json",
+        NAILS_PATH: KLINE_PATHS.NAILS_PATH || "watch-nails.json",
+        POSITIONS_PATH: KLINE_PATHS.POSITIONS_PATH || "watch-positions.json",
+        PRICE_ALERTS_PATH:
+          KLINE_PATHS.PRICE_ALERTS_PATH || "watch-price-alerts.json",
+        HOLDINGS_PATH: KLINE_PATHS.HOLDINGS_PATH || "watch-holdings.json",
+        SELL_TASKS_PATH: KLINE_PATHS.SELL_TASKS_PATH || "watch-sell-tasks.json",
+        BUY_TASKS_PATH: KLINE_PATHS.BUY_TASKS_PATH || "watch-buy-tasks.json",
+        HOME_PREFS_PATH: KLINE_PATHS.HOME_PREFS_PATH || "watch-home-prefs.json",
+        NAIL_GREEN_NOTICES_PATH:
+          KLINE_PATHS.NAIL_GREEN_NOTICES_PATH ||
+          "watch-nail-green-notices.json",
+        NAIL_DAILY_RESET_PATH:
+          KLINE_PATHS.NAIL_DAILY_RESET_PATH || "watch-nail-daily-reset.json",
         WATCH_POOL_RANK: 30,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
         KLINE_MAX_LIMIT: 1000,
@@ -7585,7 +7606,8 @@
         STOP_LOSS_PCT: 5,
         LONG_PRESS_MS: 550,
         MOMENTUM_5M_LIMIT: 5,
-        NOTIFY_STATE_PATH: "watch-notify-state.json",
+        NOTIFY_STATE_PATH:
+          KLINE_PATHS.NOTIFY_STATE_PATH || "watch-notify-state.json",
         // WeCom notify runs ~5m; poll often enough without hammering GitHub.
         NOTIFY_POLL_MS: 60 * 1000,
         // 切回页面：距上次成功刷新不足此时长则跳过整页重拉。
@@ -7612,6 +7634,17 @@
           dropFromPeakPts: 2,
         },
       };
+
+      if (KLINE_MODE === "bstock") {
+        document.title = KLINE_PROFILE.title || "bStock 观察池 K 线";
+        try {
+          if (!/bstock-kline/i.test(location.pathname || "")) {
+            history.replaceState(null, "", "./bstock-kline.html");
+          }
+        } catch (_) {
+          /* ignore */
+        }
+      }
       const DURATION_MS = {
         "15m": 15 * 60 * 1000,
         "30m": 30 * 60 * 1000,
@@ -7736,7 +7769,8 @@
       let momNotesSaving = false;
       let momNotesExpanded = true;
       const NOTES_RANK_SORT_KEY = "kline-notes-rank-sort-v1";
-      const NOTES_RANK_PREFS_PATH = "watch-notes-rank-prefs.json";
+      const NOTES_RANK_PREFS_PATH =
+        KLINE_PATHS.NOTES_RANK_PREFS_PATH || "watch-notes-rank-prefs.json";
       const NOTES_RANK_PREFS_DEFAULT =
         WatchFavorites.NOTES_RANK_PREFS_DEFAULT || {
           keys: ["change2h", "noteAt", "change1h"],
@@ -8107,7 +8141,9 @@
         const notes = isNotesView();
         document.body.classList.toggle("is-notes-view", notes);
         document.body.classList.remove("is-jiji-view");
-        document.title = notes ? "观察池 K 线 · 记一笔" : "观察池 K 线";
+        document.title = notes
+          ? KLINE_PROFILE.titleNotes || "观察池 K 线 · 记一笔"
+          : KLINE_PROFILE.title || "观察池 K 线";
         const h1 = document.querySelector(".page-header h1");
         if (h1) h1.textContent = notes ? "币安观察 · 记一笔" : "币安观察";
         const pinTitle = document.getElementById("pinSectionTitle");
@@ -10916,9 +10952,18 @@
         const list = document.getElementById("nailHoldList");
         const hint = document.getElementById("nailHoldHint");
         if (!list) return;
-        const symbols = Array.isArray(nailHoldingsState.symbols)
+        let symbols = Array.isArray(nailHoldingsState.symbols)
           ? nailHoldingsState.symbols.slice()
           : [];
+        // 持仓跟同一币安账户；按宇宙过滤展示（USDT 行两边都留着方便买）。
+        if (bstockSymbolSet && bstockSymbolSet.size) {
+          symbols = symbols.filter((symbol) => {
+            const key = String(symbol || "").toUpperCase();
+            if (key === "USDT" || key === "USDTUSDT") return true;
+            const pair = key.endsWith("USDT") ? key : `${key}USDT`;
+            return symbolInActiveUniverse(pair);
+          });
+        }
         if (hint) {
           const err = String(nailHoldingsState.lastError || "").trim();
           const stamp = Number(nailHoldingsState.updatedAt) || 0;
@@ -10945,7 +10990,9 @@
         }
         if (!symbols.length) {
           list.innerHTML =
-            '<div class="nail-hold-empty">暂无关注币 · 点设置加入，等云函数回填余额</div>';
+            KLINE_MODE === "bstock"
+              ? '<div class="nail-hold-empty">暂无 bStock 持仓 · 点设置加入关注后等云函数回填</div>'
+              : '<div class="nail-hold-empty">暂无关注币 · 点设置加入，等云函数回填余额</div>';
           syncNailHoldLiveSwitches();
           return;
         }
@@ -13101,14 +13148,29 @@
       function bstockSymbols() {
         return bstockSymbolSet instanceof Set ? bstockSymbolSet : new Set();
       }
-      /** 拉黑 ∪ bStocks：不参与观察池排名 / 自动盯。 */
+      /**
+       * crypto：拉黑 ∪ bStocks（股票代币不进现货池）
+       * bstock：仅拉黑（宇宙本身已是 bStocks）
+       */
       function poolBlockedSymbols() {
         const blocked = blacklistSymbols();
+        if (KLINE_MODE === "bstock") return blocked;
         const stocks = bstockSymbols();
         if (!stocks.size) return blocked;
         const out = new Set(blocked);
         stocks.forEach((symbol) => out.add(symbol));
         return out;
+      }
+      function symbolInActiveUniverse(symbol) {
+        const key = String(symbol || "").toUpperCase();
+        if (!key.endsWith("USDT")) return false;
+        if (KLINE_MODE === "bstock") {
+          return !!(bstockSymbolSet && bstockSymbolSet.size && bstockSymbolSet.has(key));
+        }
+        if (bstockSymbolSet && bstockSymbolSet.size && bstockSymbolSet.has(key)) {
+          return false;
+        }
+        return true;
       }
       function rowIsBstock(row) {
         const sets = row && Array.isArray(row.permissionSets)
@@ -13209,6 +13271,7 @@
               const symbol = String(ticker.symbol || "").toUpperCase();
               if (!symbol.endsWith("USDT")) return;
               if (trading && !trading.has(symbol)) return;
+              if (!symbolInActiveUniverse(symbol)) return;
               const price = Number(ticker.lastPrice);
               const change = Number(ticker.priceChangePercent);
               if (
@@ -18860,7 +18923,8 @@
       let homePrefUpdatedAt = 0;
       let homePrefSaving = false;
       let watchPoolRankSaving = false;
-      const HOME_PREFS_LOCAL_KEY = "kline-home-pref-v1";
+      const HOME_PREFS_LOCAL_KEY =
+        KLINE_MODE === "bstock" ? "kline-home-pref-bstock-v1" : "kline-home-pref-v1";
       const WATCH_POOL_RANK_LOCAL_KEY = "kline-watch-pool-rank-v1";
 
       function watchPoolRankBounds() {
@@ -19033,7 +19097,7 @@
             repo: CONFIG.GITHUB_REPO,
             path:
               WatchFavorites.NAIL_GREEN_NOTICES_PATH ||
-              "watch-nail-green-notices.json",
+              CONFIG.NAIL_GREEN_NOTICES_PATH,
             force: !!opts.force,
           });
           // 强制刷新却读空：多半是瞬时失败，保留旧名单，避免列表被清空。
@@ -19066,7 +19130,7 @@
                   repo: CONFIG.GITHUB_REPO,
                   path:
                     WatchFavorites.NAIL_GREEN_NOTICES_PATH ||
-                    "watch-nail-green-notices.json",
+                    CONFIG.NAIL_GREEN_NOTICES_PATH,
                   message: "Prune nail green notices to current window",
                   mutate: (items, meta) => ({
                     items: filterNailNoticesCurrentWindow(items),
@@ -19756,7 +19820,7 @@
             repo: CONFIG.GITHUB_REPO,
             path:
               WatchFavorites.NAIL_GREEN_NOTICES_PATH ||
-              "watch-nail-green-notices.json",
+              CONFIG.NAIL_GREEN_NOTICES_PATH,
             message: "Mark nail green notices read",
             mutate: (items, meta) => ({
               items,
@@ -20033,7 +20097,7 @@
             repo: CONFIG.GITHUB_REPO,
             path:
               WatchFavorites.NAIL_DAILY_RESET_PATH ||
-              "watch-nail-daily-reset.json",
+              CONFIG.NAIL_DAILY_RESET_PATH,
           });
           nailDailyResetState = state;
           const kind = WatchFavorites.nailDailyResetPromptKind(state);
@@ -20062,7 +20126,7 @@
             repo: CONFIG.GITHUB_REPO,
             path:
               WatchFavorites.NAIL_DAILY_RESET_PATH ||
-              "watch-nail-daily-reset.json",
+              CONFIG.NAIL_DAILY_RESET_PATH,
             message:
               kind === "pre"
                 ? "Dismiss nail daily reset pre-prompt"
@@ -20163,7 +20227,9 @@
           const remote = await WatchFavorites.loadHomePrefsRaw({
             repo: CONFIG.GITHUB_REPO,
             path:
-              WatchFavorites.HOME_PREFS_PATH || "watch-home-prefs.json",
+              CONFIG.HOME_PREFS_PATH ||
+                WatchFavorites.HOME_PREFS_PATH ||
+                "watch-home-prefs.json",
           });
           if (remote && remote.prefs) {
             const remoteAt = Number(remote.prefs.updatedAt) || 0;
@@ -20207,7 +20273,9 @@
           await WatchFavorites.patchHomePrefs({
             repo: CONFIG.GITHUB_REPO,
             path:
-              WatchFavorites.HOME_PREFS_PATH || "watch-home-prefs.json",
+              CONFIG.HOME_PREFS_PATH ||
+                WatchFavorites.HOME_PREFS_PATH ||
+                "watch-home-prefs.json",
             message: `Home pref ${home}`,
             mutate: (base) => ({
               ...base,
@@ -20241,7 +20309,9 @@
           await WatchFavorites.patchHomePrefs({
             repo: CONFIG.GITHUB_REPO,
             path:
-              WatchFavorites.HOME_PREFS_PATH || "watch-home-prefs.json",
+              CONFIG.HOME_PREFS_PATH ||
+                WatchFavorites.HOME_PREFS_PATH ||
+                "watch-home-prefs.json",
             message: `Watch pool rank ${rank}`,
             mutate: (base) => ({
               ...base,

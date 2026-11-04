@@ -2,11 +2,32 @@
 
 const https = require('https');
 
+const MONITOR_PROFILES = {
+  crypto: {
+    DATA_PATH: 'watch-data.json',
+    BLACKLIST_PATH: 'watch-blacklist.json',
+    PINS_PATH: 'watch-pins.json',
+    NAILS_PATH: 'watch-nails.json',
+    HOME_PREFS_PATH: 'watch-home-prefs.json',
+    MARKET_UNIVERSE: 'crypto',
+  },
+  bstock: {
+    DATA_PATH: 'watch-bstock-data.json',
+    BLACKLIST_PATH: 'watch-bstock-blacklist.json',
+    PINS_PATH: 'watch-bstock-pins.json',
+    NAILS_PATH: 'watch-bstock-nails.json',
+    HOME_PREFS_PATH: 'watch-bstock-home-prefs.json',
+    MARKET_UNIVERSE: 'bstock',
+  },
+};
+
 const CONFIG = {
   GITHUB_REPO: process.env.GITHUB_REPO || 'betterma/pages',
   DATA_PATH: process.env.DATA_PATH || 'watch-data.json',
   BLACKLIST_PATH: process.env.BLACKLIST_PATH || 'watch-blacklist.json',
   PINS_PATH: process.env.PINS_PATH || 'watch-pins.json',
+  NAILS_PATH: process.env.NAILS_PATH || 'watch-nails.json',
+  MARKET_UNIVERSE: process.env.MARKET_UNIVERSE || 'crypto',
   GITHUB_API: 'https://api.github.com',
   GITHUB_TOKEN: process.env.GITHUB_TOKEN || process.env.GH_TOKEN || '',
   SNAPSHOT_INTERVAL: 15 * 60 * 1000,
@@ -380,8 +401,28 @@ async function loadPinSymbols() {
   }
 }
 
+function applyMonitorProfile(profileKey) {
+  const profile = MONITOR_PROFILES[profileKey] || MONITOR_PROFILES.crypto;
+  CONFIG.DATA_PATH = profile.DATA_PATH;
+  CONFIG.BLACKLIST_PATH = profile.BLACKLIST_PATH;
+  CONFIG.PINS_PATH = profile.PINS_PATH;
+  CONFIG.NAILS_PATH = profile.NAILS_PATH;
+  CONFIG.HOME_PREFS_PATH = profile.HOME_PREFS_PATH;
+  CONFIG.MARKET_UNIVERSE = profile.MARKET_UNIVERSE;
+  return profile;
+}
+
+function rowIsBstock(row) {
+  const sets = row && Array.isArray(row.permissionSets) ? row.permissionSets : [];
+  for (let i = 0; i < sets.length; i += 1) {
+    const group = sets[i];
+    if (Array.isArray(group) && group.includes('TRD_GRP_261')) return true;
+  }
+  return false;
+}
+
 async function loadNailSymbols() {
-  const path = process.env.NAILS_PATH || 'watch-nails.json';
+  const path = CONFIG.NAILS_PATH || 'watch-nails.json';
   try {
     const file = await loadGithubJsonFile(path);
     const raw =
@@ -985,7 +1026,7 @@ async function readMonitorState() {
   }
 }
 
-async function fetchBinanceUsdtTradingSet() {
+async function fetchBinanceUsdtTradingMeta() {
   const endpoints = [
     'https://data-api.binance.vision/api/v3/exchangeInfo',
     'https://api.binance.com/api/v3/exchangeInfo',
@@ -1000,15 +1041,20 @@ async function fetchBinanceUsdtTradingSet() {
         continue;
       }
       const data = await response.json();
-      const set = new Set();
+      const trading = new Set();
+      const bstocks = new Set();
       (data.symbols || []).forEach((row) => {
         if (!row || row.status !== 'TRADING' || row.quoteAsset !== 'USDT') return;
         const symbol = String(row.symbol || '').toUpperCase();
-        if (symbol) set.add(symbol);
+        if (!symbol) return;
+        trading.add(symbol);
+        if (rowIsBstock(row)) bstocks.add(symbol);
       });
-      if (set.size) {
-        console.log(`Binance USDT TRADING set size=${set.size}`);
-        return set;
+      if (trading.size) {
+        console.log(
+          `Binance USDT TRADING set size=${trading.size} bstocks=${bstocks.size}`,
+        );
+        return { trading, bstocks };
       }
       lastError = new Error('exchangeInfo empty USDT TRADING set');
     } catch (error) {
@@ -1016,6 +1062,11 @@ async function fetchBinanceUsdtTradingSet() {
     }
   }
   throw lastError || new Error('Binance exchangeInfo fetch failed');
+}
+
+async function fetchBinanceUsdtTradingSet() {
+  const meta = await fetchBinanceUsdtTradingMeta();
+  return meta.trading;
 }
 
 async function fetchBinanceTicker() {
@@ -1069,7 +1120,11 @@ async function fetchBinanceTicker() {
   }
 }
 
-async function runMonitorOnce() {
+async function runMonitorOnce(profileKey) {
+  const profile = applyMonitorProfile(profileKey || 'crypto');
+  console.log(
+    `monitor profile=${profile.MARKET_UNIVERSE} data=${CONFIG.DATA_PATH}`,
+  );
   const state = await readMonitorState();
   let history = hydrateWatchHistory(pruneHistory(state.history.slice()));
   let events = Array.isArray(state.events) ? state.events.slice() : [];
@@ -1085,16 +1140,23 @@ async function runMonitorOnce() {
   CONFIG.WATCH_POOL_RANK = await loadWatchPoolRankFromPrefs();
   console.log(`monitor watchPoolRank=${CONFIG.WATCH_POOL_RANK}`);
 
-  const [data, trading] = await Promise.all([
+  const [data, meta] = await Promise.all([
     fetchBinanceTicker(),
-    fetchBinanceUsdtTradingSet(),
+    fetchBinanceUsdtTradingMeta(),
   ]);
+  const trading = meta.trading;
+  const bstocks = meta.bstocks;
   const marketMap = {};
 
   for (const ticker of data) {
     const symbol = String(ticker.symbol || '').toUpperCase();
     // 24hr 仍含 BREAK 下架对；只进 TRADING USDT，避免假前 N / 脏自动盯。
     if (!symbol.endsWith('USDT') || !trading.has(symbol)) continue;
+    if (CONFIG.MARKET_UNIVERSE === 'bstock') {
+      if (!bstocks.has(symbol)) continue;
+    } else if (bstocks.has(symbol)) {
+      continue;
+    }
     const price = Number(ticker.lastPrice);
     const change = Number(ticker.priceChangePercent);
     if (Number.isFinite(price) && price > 0 && Number.isFinite(change)) {
@@ -1192,11 +1254,22 @@ async function runMonitorOnce() {
     throw error;
   }
 
+  resultSummary.profile = CONFIG.MARKET_UNIVERSE;
+  resultSummary.path = CONFIG.DATA_PATH;
   return resultSummary;
 }
 
 async function main() {
-  return runMonitorOnce();
+  const cryptoResult = await runMonitorOnce('crypto');
+  let bstockResult = null;
+  try {
+    bstockResult = await runMonitorOnce('bstock');
+  } catch (error) {
+    console.warn(
+      `bstock monitor failed: ${error && error.message ? error.message : error}`,
+    );
+  }
+  return { crypto: cryptoResult, bstock: bstockResult };
 }
 
 if (require.main === module) {

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>bStock 观察池 K 线</title>
+    <script>
+      window.KLINE_MODE = "bstock";
+    </script>
+    <script>
+      // 独立入口：复用 kline.html 实现，档案由 kline-mode.js 切到 bstock。
+      location.replace("./kline.html?mode=bstock");
+    </script>
+  </head>
+  <body>
+    <p style="font-family: sans-serif; padding: 1rem">正在打开 bStock 观察池…</p>
+  </body>
+</html>
