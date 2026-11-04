@@ -1266,6 +1266,55 @@
         return ((close - open) / open) * 100;
       }
 
+      /**
+       * 纵轴以开/收实体为主；极端影线最多再扩 bodyRange×1.25。
+       * 避免单根超高影线把走势压扁到图底（如 CHOO）。
+       */
+      function chartPriceBounds(candles) {
+        let bodyMax = -Infinity;
+        let bodyMin = Infinity;
+        let wickMax = -Infinity;
+        let wickMin = Infinity;
+        (Array.isArray(candles) ? candles : []).forEach((c) => {
+          const o = Number(c && c.open);
+          const cl = Number(c && c.close);
+          const h = Number(c && c.high);
+          const l = Number(c && c.low);
+          if (Number.isFinite(o)) {
+            bodyMax = Math.max(bodyMax, o);
+            bodyMin = Math.min(bodyMin, o);
+          }
+          if (Number.isFinite(cl)) {
+            bodyMax = Math.max(bodyMax, cl);
+            bodyMin = Math.min(bodyMin, cl);
+          }
+          if (Number.isFinite(h)) wickMax = Math.max(wickMax, h);
+          if (Number.isFinite(l)) wickMin = Math.min(wickMin, l);
+        });
+        if (!Number.isFinite(bodyMax) || !Number.isFinite(bodyMin)) {
+          return {
+            min: Number.isFinite(wickMin) ? wickMin : 0,
+            max: Number.isFinite(wickMax) ? wickMax : 1,
+          };
+        }
+        const bodyRange = bodyMax - bodyMin || Math.abs(bodyMax) * 0.01 || 1;
+        const expand = bodyRange * 1.25;
+        let max = bodyMax;
+        let min = bodyMin;
+        if (Number.isFinite(wickMax)) {
+          max = Math.max(max, Math.min(wickMax, bodyMax + expand));
+        }
+        if (Number.isFinite(wickMin)) {
+          min = Math.min(min, Math.max(wickMin, bodyMin - expand));
+        }
+        if (!(max > min)) {
+          max = bodyMax + bodyRange * 0.05;
+          min = bodyMin - bodyRange * 0.05;
+        }
+        const padAmt = (max - min) * 0.06;
+        return { min: min - padAmt, max: max + padAmt };
+      }
+
       function drawKline(canvas, candles) {
         const rect = canvas.getBoundingClientRect();
         const width = Math.max(1, Math.floor(rect.width));
@@ -1281,14 +1330,17 @@
         const pad = { top: 6, right: 4, bottom: 6, left: 4 };
         const chartW = width - pad.left - pad.right;
         const chartH = height - pad.top - pad.bottom;
-        const highs = candles.map((item) => item.high);
-        const lows = candles.map((item) => item.low);
-        const max = Math.max(...highs);
-        const min = Math.min(...lows);
+        const { min, max } = chartPriceBounds(candles);
         const range = max - min || max * 0.01 || 1;
         const slot = chartW / candles.length;
         const bodyW = Math.max(1, slot * 0.62);
-        const yOf = (price) => pad.top + ((max - price) / range) * chartH;
+        const clampPrice = (price) => {
+          const n = Number(price);
+          if (!Number.isFinite(n)) return min;
+          return Math.min(max, Math.max(min, n));
+        };
+        const yOf = (price) =>
+          pad.top + ((max - clampPrice(price)) / range) * chartH;
 
         candles.forEach((candle, index) => {
           const x = pad.left + slot * index + slot / 2;
