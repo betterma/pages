@@ -4902,6 +4902,22 @@
       .notify-float.is-momentum {
         width: min(720px, calc(100vw - 24px));
       }
+      .notify-float.is-sim-hold {
+        width: min(420px, calc(100vw - 16px));
+        max-height: min(70vh, calc(100vh - var(--float-dock-h, 54px) - 8px));
+      }
+      .notify-float.is-sim-hold .notify-float-body {
+        padding: 0;
+        white-space: normal;
+      }
+      .notify-float.is-sim-hold .nail-hold-list {
+        max-height: none;
+      }
+      body[data-sim-float="off"] #simHoldFloatTab,
+      body[data-sim-float="off"] #simHoldFloat,
+      body[data-sim-float="off"] #nailSimHoldBtn {
+        display: none !important;
+      }
       .notify-float-head {
         display: flex;
         align-items: center;
@@ -6654,6 +6670,16 @@
               <button
                 type="button"
                 class="nail-notice-entry"
+                id="nailSimHoldBtn"
+                aria-expanded="false"
+                aria-controls="simHoldFloat"
+                title="模拟盘（与真持仓隔离）"
+              >
+                模拟
+              </button>
+              <button
+                type="button"
+                class="nail-notice-entry"
                 id="nailHoldBtn"
                 aria-expanded="false"
                 aria-controls="nailHoldPopover"
@@ -6807,6 +6833,18 @@
                   钉子
                 </button>
               </div>
+            </div>
+            <div class="nail-rising-row">
+              <span>显示模拟盘浮窗</span>
+              <button
+                type="button"
+                class="nail-switch"
+                id="nailSimFloatVisibleSwitch"
+                role="switch"
+                aria-checked="true"
+                title="关闭后隐藏底栏「模拟」与钉子页入口"
+                aria-label="显示模拟盘浮窗"
+              ></button>
             </div>
             <div class="nail-rising-row nail-pool-rank-row">
               <span title="24h 涨幅前 N 进入观察池 / 自动盯；与云函数共用，默认 30">观察池前 N</span>
@@ -7510,6 +7548,91 @@
       >
         企微
       </button>
+      <button
+        type="button"
+        class="notify-float-tab"
+        id="simHoldFloatTab"
+        data-float="sim"
+        title="模拟盘：虚拟资金买卖，与真持仓隔离"
+      >
+        模拟
+      </button>
+    </div>
+
+    <div id="simHoldFloat" class="notify-float is-sim-hold" hidden>
+      <div class="notify-float-head">
+        <button
+          type="button"
+          class="notify-float-refresh"
+          id="simHoldFloatRefresh"
+          title="拉取模拟余额与止损任务"
+          aria-label="刷新模拟盘"
+        >
+          刷新
+        </button>
+        <strong>模拟盘<span class="notify-time" id="simHoldFloatTime"></span></strong>
+        <button
+          type="button"
+          class="notify-float-close"
+          id="simHoldFloatClose"
+          title="关闭"
+          aria-label="关闭模拟盘"
+        >
+          ×
+        </button>
+      </div>
+      <div class="notify-float-body" id="simHoldFloatBody">
+        <div class="nail-hold-toolbar">
+          <div class="nail-hold-toolbar-title">虚拟仓位</div>
+          <div class="nail-hold-toolbar-actions">
+            <button
+              type="button"
+              class="nail-hold-settings-btn"
+              id="simHoldSettingsBtn"
+              aria-expanded="false"
+              aria-controls="simHoldSettingsPanel"
+              title="关注币与重置本金"
+              aria-label="模拟盘设置"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 3.5v2.2M12 18.3v2.2M4.9 6.4l1.6 1.6M17.5 16l1.6 1.6M3.5 12h2.2M18.3 12h2.2M4.9 17.6l1.6-1.6M17.5 8l1.6-1.6" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <p class="nail-hold-hint" id="simHoldHint">
+          确认后按现价立刻模拟成交（含 0.1% 手续费）；-3%/-5% 止损由独立云函数盯价成交。与真持仓完全隔离。
+        </p>
+        <div class="nail-hold-settings-panel" id="simHoldSettingsPanel" hidden>
+          <form class="nail-hold-form" id="simHoldForm">
+            <label>
+              新增关注
+              <input
+                id="simHoldSymbol"
+                name="symbol"
+                type="text"
+                placeholder="IOST 或 IOSTUSDT"
+                autocomplete="off"
+                required
+              />
+            </label>
+            <button type="submit" id="simHoldAddBtn">加入</button>
+          </form>
+          <div class="nail-hold-live-row">
+            <button type="button" class="nail-hold-refresh" id="simHoldResetBtn" title="清空仓位，USDT 回到起始本金">
+              重置本金
+            </button>
+          </div>
+        </div>
+        <div class="nail-hold-list-head">
+          <span>币列表</span>
+          <button type="button" class="nail-hold-refresh" id="simHoldListRefreshBtn" title="刷新">
+            刷新
+          </button>
+        </div>
+        <div class="nail-hold-list" id="simHoldList"></div>
+      </div>
     </div>
 
     <div id="pinBatchBar" class="pin-batch-bar" hidden>
@@ -7595,6 +7718,10 @@
         HOLDINGS_PATH: KLINE_PATHS.HOLDINGS_PATH || "watch-holdings.json",
         SELL_TASKS_PATH: KLINE_PATHS.SELL_TASKS_PATH || "watch-sell-tasks.json",
         BUY_TASKS_PATH: KLINE_PATHS.BUY_TASKS_PATH || "watch-buy-tasks.json",
+        SIM_HOLDINGS_PATH:
+          KLINE_PATHS.SIM_HOLDINGS_PATH || "watch-sim-holdings.json",
+        SIM_SELL_TASKS_PATH:
+          KLINE_PATHS.SIM_SELL_TASKS_PATH || "watch-sim-sell-tasks.json",
         HOME_PREFS_PATH: KLINE_PATHS.HOME_PREFS_PATH || "watch-home-prefs.json",
         NAIL_GREEN_NOTICES_PATH:
           KLINE_PATHS.NAIL_GREEN_NOTICES_PATH ||
@@ -8013,7 +8140,15 @@
         drop: new Set(["zone-drop"]),
         notes: new Set(["mom-note"]),
         rank: new Set(["rank-new", "rank-up"]),
-        other: new Set(["buy", "sell", "sell-stop", "period-low-exit"]),
+        other: new Set([
+          "buy",
+          "sell",
+          "sell-stop",
+          "period-low-exit",
+          "sim-buy",
+          "sim-sell",
+          "sim-sell-stop",
+        ]),
       };
       let priceAlertItems = [];
       let priceAlertSaving = false;
@@ -8238,6 +8373,7 @@
         { id: "alerts", label: "价格预警 watch-price-alerts", wave: 1 },
         { id: "rankPrefs", label: "排序偏好 watch-notes-rank-prefs", wave: 1 },
         { id: "homePrefs", label: "首页偏好 watch-home-prefs", wave: 1 },
+        { id: "sim", label: "模拟盘 watch-sim-holdings", wave: 1 },
       ];
 
       function bootInitSortTasks(tasks) {
@@ -10230,6 +10366,9 @@
         if (kind === "sell") return "卖";
         if (kind === "sell-stop") return "止损";
         if (kind === "period-low-exit") return "触底退出";
+        if (kind === "sim-buy") return "模拟买";
+        if (kind === "sim-sell") return "模拟卖";
+        if (kind === "sim-sell-stop") return "模拟止损";
         return kind || "动";
       }
 
@@ -10642,6 +10781,21 @@
       };
       let nailSellTasksState = { updatedAt: 0, live: false, tasks: [] };
       let nailBuyTasksState = { updatedAt: 0, live: false, tasks: [] };
+      let simHoldingsState =
+        typeof WatchFavorites.emptySimHoldings === "function"
+          ? WatchFavorites.emptySimHoldings()
+          : {
+              updatedAt: 0,
+              startingCash: 10000,
+              symbols: ["USDT"],
+              balances: { USDT: { free: 10000, locked: 0, at: 0 } },
+              entryPrices: {},
+              stopCancel: {},
+              lastError: null,
+            };
+      let simSellTasksState = { updatedAt: 0, live: false, tasks: [] };
+      let simFloatVisible = true;
+      let simHoldBusy = false;
 
       function syncNailHoldLiveSwitches() {
         const sellOn = !!(nailSellTasksState && nailSellTasksState.live);
@@ -11988,6 +12142,715 @@
         }
       }
 
+      function syncSimFloatVisibleUi() {
+        document.body.setAttribute(
+          "data-sim-float",
+          simFloatVisible ? "on" : "off",
+        );
+        const sw = document.getElementById("nailSimFloatVisibleSwitch");
+        if (sw) sw.setAttribute("aria-checked", simFloatVisible ? "true" : "false");
+        const tab = document.getElementById("simHoldFloatTab");
+        if (tab) tab.hidden = !simFloatVisible;
+        const nailBtn = document.getElementById("nailSimHoldBtn");
+        if (nailBtn) nailBtn.hidden = !simFloatVisible;
+        if (!simFloatVisible && isFloatPanelOpen("sim")) {
+          closeAllFloatPanels();
+        }
+      }
+
+      function applySimFloatVisible(next, options) {
+        simFloatVisible = next !== false;
+        syncSimFloatVisibleUi();
+        const opts = options || {};
+        if (opts.persist === false) return;
+        try {
+          const raw = localStorage.getItem(HOME_PREFS_LOCAL_KEY);
+          const parsed = raw ? JSON.parse(raw) : {};
+          localStorage.setItem(
+            HOME_PREFS_LOCAL_KEY,
+            JSON.stringify({
+              ...(parsed && typeof parsed === "object" ? parsed : {}),
+              home: getHomePref(),
+              watchPoolRank: getWatchPoolRank(),
+              simFloatVisible,
+              updatedAt: Date.now(),
+            }),
+          );
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
+      async function flushSimFloatVisible(next) {
+        applySimFloatVisible(next !== false);
+        if (
+          !WatchFavorites ||
+          typeof WatchFavorites.patchHomePrefs !== "function"
+        ) {
+          return;
+        }
+        try {
+          await WatchFavorites.patchHomePrefs({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.HOME_PREFS_PATH,
+            message: simFloatVisible ? "Show sim float" : "Hide sim float",
+            mutate: (prefs) => ({
+              ...prefs,
+              simFloatVisible,
+            }),
+          });
+        } catch (error) {
+          console.warn("flush sim float visible failed", error);
+          showToast(error.message || "保存模拟盘开关失败");
+        }
+      }
+
+      function simHoldingsEntryPriceOf(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const row =
+          simHoldingsState &&
+          simHoldingsState.entryPrices &&
+          simHoldingsState.entryPrices[key];
+        const price = row && Number(row.price);
+        return Number.isFinite(price) && price > 0 ? price : null;
+      }
+
+      function simHoldingsFreeQty(symbol) {
+        const asset = holdingsBaseAsset(symbol);
+        if (asset === "USDT") {
+          return Number(simHoldingsState.balances?.USDT?.free) || 0;
+        }
+        const row = simHoldingsState.balances && simHoldingsState.balances[asset];
+        return Number(row && row.free) || 0;
+      }
+
+      function simHoldingsTotalUsdt(symbol) {
+        const free = simHoldingsFreeQty(symbol);
+        if (holdingsBaseAsset(symbol) === "USDT") return free;
+        const px = holdingsSpotPrice(symbol);
+        if (!(Number.isFinite(px) && px > 0)) return NaN;
+        return free * px;
+      }
+
+      function seedSimStopTasksInState(tasks, symbol, entryPrice, now, stopCancelMap) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const stops = buildFixedStopTasks(key, entryPrice, now);
+        const cancel =
+          (stopCancelMap && stopCancelMap[key]) ||
+          (simHoldingsState.stopCancel && simHoldingsState.stopCancel[key]) ||
+          {};
+        // 先丢掉该币旧止损，再按 cancel 重挂，避免残留过期 trigger。
+        const list = (Array.isArray(tasks) ? tasks : []).filter((t) => {
+          if (!t || String(t.symbol || "").toUpperCase() !== key) return true;
+          return String(t.kind || "").toLowerCase() !== "stop";
+        });
+        stops.forEach((stop) => {
+          if (cancel[stop.stopKey]) return;
+          list.unshift(stop);
+        });
+        return list;
+      }
+
+      function renderSimHoldList() {
+        const list = document.getElementById("simHoldList");
+        const hint = document.getElementById("simHoldHint");
+        const timeEl = document.getElementById("simHoldFloatTime");
+        if (!list) return;
+        let symbols = Array.isArray(simHoldingsState.symbols)
+          ? simHoldingsState.symbols.slice()
+          : [];
+        if (bstockSymbolSet && bstockSymbolSet.size) {
+          symbols = symbols.filter((symbol) => {
+            const key = String(symbol || "").toUpperCase();
+            if (key === "USDT" || key === "USDTUSDT") return true;
+            const pair = key.endsWith("USDT") ? key : `${key}USDT`;
+            return symbolInActiveUniverse(pair);
+          });
+        }
+        const stamp = Number(simHoldingsState.updatedAt) || 0;
+        const when = stamp
+          ? new Date(stamp).toLocaleString("zh-CN", { hour12: false })
+          : "尚未同步";
+        if (timeEl) timeEl.textContent = stamp ? ` · ${when}` : "";
+        if (hint) {
+          const cash = Number(simHoldingsState.startingCash) || 10000;
+          hint.textContent = `起始本金 ${formatHoldingsUsdt(cash)} USDT · 确认后现价立刻成交（0.1% 费）· -3%/-5% 由模拟云函数盯价 · ${when}`;
+        }
+        if (!symbols.length) {
+          list.innerHTML =
+            '<div class="nail-hold-empty">暂无关注 · 点设置加入，再买</div>';
+          return;
+        }
+        const balances = simHoldingsState.balances || {};
+        const usdtBal = balances.USDT || {};
+        const usdtFree = formatHoldingsQty(usdtBal.free);
+        const sellsBySymbol = new Map();
+        (simSellTasksState.tasks || []).forEach((task) => {
+          if (!task || !task.symbol) return;
+          const key = String(task.symbol).toUpperCase();
+          if (!sellsBySymbol.has(key)) sellsBySymbol.set(key, []);
+          sellsBySymbol.get(key).push(task);
+        });
+        const sortedSymbols = symbols.slice().sort((a, b) => {
+          const qa = simHoldingsFreeQty(a);
+          const qb = simHoldingsFreeQty(b);
+          if (qb !== qa) return qb - qa;
+          return String(a).localeCompare(String(b));
+        });
+        list.innerHTML =
+          `<div class="nail-hold-usdt-banner">模拟 USDT 可用 ${escapeHtml(usdtFree)}</div>` +
+          sortedSymbols
+            .map((symbol) => {
+              const asset = holdingsBaseAsset(symbol);
+              if (asset === "USDT") {
+                return `<div class="nail-hold-row" data-sim-symbol="${escapeHtml(symbol)}">
+              <div class="nail-hold-row-top">
+                <span class="nail-hold-sym-wrap">
+                  <button type="button" class="nail-hold-sym" data-sim-jump="${escapeHtml(symbol)}" title="跳到钉子 K 线">USDT</button>
+                </span>
+                <span class="nail-hold-actions"><button type="button" data-sim-remove="${escapeHtml(symbol)}">移除</button></span>
+              </div>
+              <div class="nail-hold-meta">数量 ${escapeHtml(formatHoldingsQty(usdtBal.free))}</div>
+            </div>`;
+              }
+              const freeNum = simHoldingsFreeQty(symbol);
+              const px = holdingsSpotPrice(symbol);
+              const total = simHoldingsTotalUsdt(symbol);
+              const free = formatHoldingsQty(freeNum);
+              const totalText = Number.isFinite(total)
+                ? formatHoldingsUsdt(total)
+                : "--";
+              const pxText = Number.isFinite(px) ? formatHoldingsUsdt(px) : "--";
+              const canSell = freeNum > 0;
+              const sells =
+                sellsBySymbol.get(String(symbol).toUpperCase()) || [];
+              const entryPx = simHoldingsEntryPriceOf(symbol);
+              const entryInput = entryPx != null ? String(entryPx) : "";
+              const taskRows = sells
+                .slice()
+                .sort((a, b) => {
+                  const as = a.stopKey === "stop3" ? 0 : a.stopKey === "stop5" ? 1 : 2;
+                  const bs = b.stopKey === "stop3" ? 0 : b.stopKey === "stop5" ? 1 : 2;
+                  return as - bs;
+                })
+                .map(
+                  (task) => `<div class="nail-hold-task-row">
+                  <span class="nail-hold-status-text">${escapeHtml(describeHoldTaskStatus("sell", task))}</span>
+                  <button type="button" class="is-danger" data-sim-stop-clear="${escapeHtml(task.id)}" title="取消此止损">取消</button>
+                </div>`,
+                )
+                .join("");
+              const ops = canSell
+                ? `<button type="button" class="is-sell" data-sim-open-sell="${escapeHtml(symbol)}">卖出</button>
+                   <button type="button" class="is-buy" data-sim-open-buy="${escapeHtml(symbol)}">买入</button>`
+                : `<button type="button" class="is-buy" data-sim-open-buy="${escapeHtml(symbol)}">买入</button>`;
+              return `<div class="nail-hold-row" data-sim-symbol="${escapeHtml(symbol)}" data-hold-free="${escapeHtml(String(freeNum))}" data-hold-usdt="${escapeHtml(String(Number(usdtBal.free) || 0))}">
+              <div class="nail-hold-row-top">
+                <span class="nail-hold-sym-wrap">
+                  <button type="button" class="nail-hold-sym" data-sim-jump="${escapeHtml(symbol)}" title="跳到钉子 K 线">${escapeHtml(asset)}</button>
+                  <span class="nail-hold-px">${escapeHtml(pxText)}</span>
+                </span>
+                <span class="nail-hold-actions"><button type="button" data-sim-remove="${escapeHtml(symbol)}">移除</button></span>
+              </div>
+              <div class="nail-hold-meta">数量 ${escapeHtml(free)}</div>
+              <div class="nail-hold-meta">总金额 ≈ ${escapeHtml(totalText)} USDT</div>
+              <div class="nail-hold-entry">
+                <span>买入价 P</span>
+                <input type="number" min="0" step="any" value="${escapeHtml(entryInput)}" placeholder="手填成本" data-sim-entry="${escapeHtml(symbol)}" inputmode="decimal" />
+                <button type="button" data-sim-entry-save="${escapeHtml(symbol)}" title="保存后自动加 -3%/-5% 止损">保存</button>
+              </div>
+              <div class="nail-hold-ops">${ops}</div>
+              <div class="nail-hold-panel" data-sim-panel="sell" hidden>
+                <div class="nail-hold-panel-title">市价卖出 · ${escapeHtml(asset)}</div>
+                <div>
+                  <div class="nail-hold-pct-line"><span>卖出比例</span><span data-sim-sell-pct-label="${escapeHtml(symbol)}">50%</span></div>
+                  <input type="range" min="1" max="100" step="1" value="50" data-sim-sell-pct="${escapeHtml(symbol)}" />
+                  <div class="nail-hold-qty-hint" data-sim-sell-qty-hint="${escapeHtml(symbol)}">可用 ${escapeHtml(free)} · 本单约 ${escapeHtml(formatHoldingsQty(freeNum * 0.5))}</div>
+                </div>
+                <div class="nail-hold-panel-actions">
+                  <button type="button" data-sim-cancel-panel="${escapeHtml(symbol)}">取消</button>
+                  <button type="button" class="primary" data-sim-sell-arm="${escapeHtml(symbol)}">按现价卖出</button>
+                </div>
+              </div>
+              <div class="nail-hold-panel" data-sim-panel="buy" hidden>
+                <div class="nail-hold-panel-title">市价买入 · ${escapeHtml(asset)} · USDT ${escapeHtml(usdtFree)}</div>
+                <div>
+                  <div class="nail-hold-pct-line"><span>使用 USDT 比例</span><span data-sim-buy-pct-label="${escapeHtml(symbol)}">50%</span></div>
+                  <input type="range" min="1" max="100" step="1" value="50" data-sim-buy-pct="${escapeHtml(symbol)}" />
+                  <div class="nail-hold-qty-hint" data-sim-buy-qty-hint="${escapeHtml(symbol)}">可用 USDT ${escapeHtml(usdtFree)} · 本单约 ${escapeHtml(formatHoldingsUsdt((Number(usdtBal.free) || 0) * 0.5))} USDT</div>
+                </div>
+                <div class="nail-hold-panel-actions">
+                  <button type="button" data-sim-cancel-panel="${escapeHtml(symbol)}">取消</button>
+                  <button type="button" class="primary" data-sim-buy-arm="${escapeHtml(symbol)}">按现价买入</button>
+                </div>
+              </div>
+              ${taskRows}
+            </div>`;
+            })
+            .join("");
+      }
+
+      function closeSimHoldPanels(row) {
+        if (!row) return;
+        row.querySelectorAll("[data-sim-panel]").forEach((panel) => {
+          panel.hidden = true;
+        });
+      }
+
+      function openSimHoldPanel(symbol, mode) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const row = document.querySelector(
+          `#simHoldList .nail-hold-row[data-sim-symbol="${key}"]`,
+        );
+        if (!row) return;
+        closeSimHoldPanels(row);
+        const panel = row.querySelector(`[data-sim-panel="${mode}"]`);
+        if (panel) panel.hidden = false;
+      }
+
+      async function reloadSimHoldings(options) {
+        const opts = options || {};
+        if (simHoldBusy) return;
+        simHoldBusy = true;
+        try {
+          if (typeof WatchFavorites.loadSimHoldingsRaw === "function") {
+            const hold = await WatchFavorites.loadSimHoldingsRaw({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.SIM_HOLDINGS_PATH,
+            });
+            simHoldingsState = hold.state || simHoldingsState;
+          }
+          if (typeof WatchFavorites.loadSimSellTasksRaw === "function") {
+            const sell = await WatchFavorites.loadSimSellTasksRaw({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.SIM_SELL_TASKS_PATH,
+            });
+            simSellTasksState = sell.state || simSellTasksState;
+          }
+          renderSimHoldList();
+          if (opts.silent !== true) {
+            showToast(
+              `模拟盘已刷新 · ${(simHoldingsState.symbols || []).length} 币 / 止损 ${(simSellTasksState.tasks || []).length}`,
+            );
+          }
+        } catch (error) {
+          console.warn("reloadSimHoldings failed", error);
+          if (opts.silent !== true) {
+            showToast(error.message || "刷新模拟盘失败");
+          }
+        } finally {
+          simHoldBusy = false;
+        }
+      }
+
+      async function addSimHoldingSymbol(raw) {
+        const key = String(raw || "")
+          .trim()
+          .toUpperCase()
+          .replace(/\s+/g, "");
+        let symbol = key;
+        if (!symbol) {
+          showToast("请输入币种");
+          return false;
+        }
+        if (symbol !== "USDT" && !symbol.endsWith("USDT")) symbol += "USDT";
+        try {
+          const result = await WatchFavorites.patchSimHoldings({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.SIM_HOLDINGS_PATH,
+            message: `Add sim watch ${symbol}`,
+            mutate: (state) => {
+              const symbols = Array.isArray(state.symbols)
+                ? state.symbols.slice()
+                : [];
+              if (!symbols.includes(symbol)) symbols.push(symbol);
+              if (!symbols.includes("USDT")) symbols.unshift("USDT");
+              return { ...state, symbols };
+            },
+          });
+          simHoldingsState = result.state || simHoldingsState;
+          renderSimHoldList();
+          showToast(`已关注 ${holdingsBaseAsset(symbol)}`);
+          return true;
+        } catch (error) {
+          console.warn("addSimHoldingSymbol failed", error);
+          showToast(error.message || "加入失败");
+          return false;
+        }
+      }
+
+      async function removeSimHoldingSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        const label = holdingsBaseAsset(key) || key;
+        if (key === "USDT") {
+          showToast("USDT 行不能移除");
+          return;
+        }
+        if (!window.confirm(`从模拟盘移除 ${label}？`)) return;
+        try {
+          const result = await WatchFavorites.patchSimHoldings({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.SIM_HOLDINGS_PATH,
+            message: `Remove sim watch ${key}`,
+            mutate: (state) => {
+              const asset = holdingsBaseAsset(key);
+              const symbols = (state.symbols || []).filter(
+                (s) => String(s).toUpperCase() !== key,
+              );
+              const balances = { ...(state.balances || {}) };
+              delete balances[asset];
+              const entryPrices = { ...(state.entryPrices || {}) };
+              delete entryPrices[key];
+              const stopCancel = { ...(state.stopCancel || {}) };
+              delete stopCancel[key];
+              return { ...state, symbols, balances, entryPrices, stopCancel };
+            },
+          });
+          simHoldingsState = result.state || simHoldingsState;
+          await WatchFavorites.patchSimSellTasks({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.SIM_SELL_TASKS_PATH,
+            message: `Drop sim stops ${key}`,
+            mutate: (state) => ({
+              ...state,
+              tasks: (state.tasks || []).filter(
+                (t) => String(t.symbol).toUpperCase() !== key,
+              ),
+            }),
+          }).then((r) => {
+            simSellTasksState = r.state || simSellTasksState;
+          });
+          renderSimHoldList();
+          showToast(`已移除 ${label}`);
+        } catch (error) {
+          console.warn("removeSimHoldingSymbol failed", error);
+          showToast(error.message || "移除失败");
+        }
+      }
+
+      async function resetSimHoldingsCash() {
+        const cash =
+          Number(simHoldingsState.startingCash) ||
+          WatchFavorites.SIM_STARTING_CASH_DEFAULT ||
+          10000;
+        if (
+          !window.confirm(
+            `重置模拟盘？将清空全部仓位，USDT 回到 ${formatHoldingsUsdt(cash)}`,
+          )
+        ) {
+          return;
+        }
+        try {
+          const result = await WatchFavorites.patchSimHoldings({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.SIM_HOLDINGS_PATH,
+            message: "Reset sim holdings",
+            mutate: (state) => ({
+              state: WatchFavorites.resetSimHoldingsState(state),
+            }),
+          });
+          simHoldingsState = result.state || simHoldingsState;
+          const sell = await WatchFavorites.patchSimSellTasks({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.SIM_SELL_TASKS_PATH,
+            message: "Clear sim stop tasks",
+            mutate: () => ({ updatedAt: Date.now(), live: false, tasks: [] }),
+          });
+          simSellTasksState = sell.state || simSellTasksState;
+          renderSimHoldList();
+          showToast("模拟盘已重置");
+        } catch (error) {
+          console.warn("resetSimHoldingsCash failed", error);
+          showToast(error.message || "重置失败");
+        }
+      }
+
+      async function saveSimHoldEntryPrice(symbol, rawPrice) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || key === "USDT") {
+          showToast("请选择具体币种");
+          return false;
+        }
+        const price = Number(rawPrice);
+        if (!(Number.isFinite(price) && price > 0)) {
+          showToast("请填写有效买入价 P");
+          return false;
+        }
+        const now = Date.now();
+        try {
+          const holdResult = await WatchFavorites.patchSimHoldings({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.SIM_HOLDINGS_PATH,
+            message: `Sim entry ${key} ${price}`,
+            mutate: (state) => {
+              const entryPrices = { ...(state.entryPrices || {}) };
+              const stopCancel = { ...(state.stopCancel || {}) };
+              entryPrices[key] = { price, at: now, source: "manual" };
+              if (stopCancel[key]) delete stopCancel[key];
+              const symbols = Array.isArray(state.symbols)
+                ? state.symbols.slice()
+                : [];
+              if (!symbols.includes(key)) symbols.push(key);
+              return { ...state, symbols, entryPrices, stopCancel };
+            },
+          });
+          simHoldingsState = holdResult.state || simHoldingsState;
+          const sellResult = await WatchFavorites.patchSimSellTasks({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.SIM_SELL_TASKS_PATH,
+            message: `Seed sim stops ${key}`,
+            mutate: (state) => ({
+              ...state,
+              tasks: seedSimStopTasksInState(
+                state.tasks,
+                key,
+                price,
+                now,
+                (holdResult.state && holdResult.state.stopCancel) || {},
+              ),
+            }),
+          });
+          simSellTasksState = sellResult.state || simSellTasksState;
+          renderSimHoldList();
+          showToast(
+            `${holdingsBaseAsset(key)} 买入价 ${formatHoldingsPriceInput(price)} · 已挂 -3%/-5%`,
+          );
+          return true;
+        } catch (error) {
+          console.warn("saveSimHoldEntryPrice failed", error);
+          showToast(error.message || "保存买入价失败");
+          return false;
+        }
+      }
+
+      async function clearSimStopTaskById(taskId) {
+        const id = String(taskId || "").trim();
+        if (!id) return;
+        const task = (simSellTasksState.tasks || []).find(
+          (t) => String(t.id) === id,
+        );
+        if (!task) return;
+        const sk = String(task.stopKey || "");
+        try {
+          if (sk === "stop3" || sk === "stop5") {
+            await WatchFavorites.patchSimHoldings({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.SIM_HOLDINGS_PATH,
+              message: `Cancel sim ${sk} ${task.symbol}`,
+              mutate: (state) => {
+                const stopCancel = { ...(state.stopCancel || {}) };
+                const key = String(task.symbol).toUpperCase();
+                const row = { ...(stopCancel[key] || {}) };
+                row[sk] = true;
+                stopCancel[key] = row;
+                return { ...state, stopCancel };
+              },
+            }).then((r) => {
+              simHoldingsState = r.state || simHoldingsState;
+            });
+          }
+          const sell = await WatchFavorites.patchSimSellTasks({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.SIM_SELL_TASKS_PATH,
+            message: `Clear sim stop ${id}`,
+            mutate: (state) => ({
+              ...state,
+              tasks: (state.tasks || []).filter((t) => String(t.id) !== id),
+            }),
+          });
+          simSellTasksState = sell.state || simSellTasksState;
+          renderSimHoldList();
+          showToast("已取消止损");
+        } catch (error) {
+          console.warn("clearSimStopTaskById failed", error);
+          showToast(error.message || "取消失败");
+        }
+      }
+
+      async function executeSimMarketBuy(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || key === "USDT") return;
+        const row = document.querySelector(
+          `#simHoldList .nail-hold-row[data-sim-symbol="${key}"]`,
+        );
+        let buyPercent = 50;
+        if (row) {
+          const pctEl = row.querySelector("[data-sim-buy-pct]");
+          buyPercent = Number(pctEl && pctEl.value) || 50;
+        }
+        let spot;
+        try {
+          spot = await resolveHoldSpotPrice(key);
+        } catch (error) {
+          showToast(
+            (error && (error.userMessage || error.message)) || "无法获取现价",
+          );
+          return;
+        }
+        if (
+          !window.confirm(
+            `模拟买入 ${holdingsBaseAsset(key)}？\n现价 ${formatHoldingsPriceInput(spot)} · 使用 USDT ${buyPercent}%（含 0.1% 费）`,
+          )
+        ) {
+          return;
+        }
+        showToast("成交中…");
+        const now = Date.now();
+        try {
+          const holdResult = await WatchFavorites.patchSimHoldings({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.SIM_HOLDINGS_PATH,
+            message: `Sim buy ${key}`,
+            mutate: (state) => {
+              const applied = WatchFavorites.applySimMarketBuy(state, {
+                symbol: key,
+                buyPercent,
+                spot,
+                now,
+              });
+              if (!applied.ok) {
+                return { skipWrite: true, state, fill: null, reason: applied.reason };
+              }
+              return { state: applied.state, fill: applied.fill };
+            },
+          });
+          if (!holdResult.fill) {
+            showToast("买入失败（余额不足？）");
+            return;
+          }
+          simHoldingsState = holdResult.state || simHoldingsState;
+          const sellResult = await WatchFavorites.patchSimSellTasks({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.SIM_SELL_TASKS_PATH,
+            message: `Seed sim stops after buy ${key}`,
+            mutate: (state) => ({
+              ...state,
+              tasks: seedSimStopTasksInState(
+                state.tasks,
+                key,
+                holdResult.fill.price,
+                now,
+                (holdResult.state && holdResult.state.stopCancel) || {},
+              ),
+            }),
+          });
+          simSellTasksState = sellResult.state || simSellTasksState;
+          try {
+            appendActionLog("sim-buy", [key], {
+              price: holdResult.fill.price,
+              note: `qty ${formatHoldingsQty(holdResult.fill.qty)}`,
+            });
+          } catch (_) {
+            /* ignore */
+          }
+          renderSimHoldList();
+          showToast(
+            `${holdingsBaseAsset(key)} 已模拟买入 @ ${formatHoldingsPriceInput(holdResult.fill.price)}`,
+          );
+        } catch (error) {
+          console.warn("executeSimMarketBuy failed", error);
+          showToast(error.message || "买入失败");
+        }
+      }
+
+      async function executeSimMarketSell(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || key === "USDT") return;
+        const row = document.querySelector(
+          `#simHoldList .nail-hold-row[data-sim-symbol="${key}"]`,
+        );
+        let sellPercent = 50;
+        if (row) {
+          const pctEl = row.querySelector("[data-sim-sell-pct]");
+          sellPercent = Number(pctEl && pctEl.value) || 50;
+        }
+        let spot;
+        try {
+          spot = await resolveHoldSpotPrice(key);
+        } catch (error) {
+          showToast(
+            (error && (error.userMessage || error.message)) || "无法获取现价",
+          );
+          return;
+        }
+        if (
+          !window.confirm(
+            `模拟卖出 ${holdingsBaseAsset(key)}？\n现价 ${formatHoldingsPriceInput(spot)} · 卖出 ${sellPercent}%（含 0.1% 费）`,
+          )
+        ) {
+          return;
+        }
+        showToast("成交中…");
+        try {
+          const holdResult = await WatchFavorites.patchSimHoldings({
+            repo: CONFIG.GITHUB_REPO,
+            path: CONFIG.SIM_HOLDINGS_PATH,
+            message: `Sim sell ${key}`,
+            mutate: (state) => {
+              const applied = WatchFavorites.applySimMarketSell(state, {
+                symbol: key,
+                sellPercent,
+                spot,
+                now: Date.now(),
+              });
+              if (!applied.ok) {
+                return { skipWrite: true, state, fill: null };
+              }
+              return { state: applied.state, fill: applied.fill };
+            },
+          });
+          if (!holdResult.fill) {
+            showToast("卖出失败（无仓？）");
+            return;
+          }
+          simHoldingsState = holdResult.state || simHoldingsState;
+          if (!(simHoldingsFreeQty(key) > 0)) {
+            const sell = await WatchFavorites.patchSimSellTasks({
+              repo: CONFIG.GITHUB_REPO,
+              path: CONFIG.SIM_SELL_TASKS_PATH,
+              message: `Clear sim stops after flat ${key}`,
+              mutate: (state) => ({
+                ...state,
+                tasks: (state.tasks || []).filter(
+                  (t) => String(t.symbol).toUpperCase() !== key,
+                ),
+              }),
+            });
+            simSellTasksState = sell.state || simSellTasksState;
+          }
+          try {
+            appendActionLog("sim-sell", [key], {
+              price: holdResult.fill.price,
+              note: `qty ${formatHoldingsQty(holdResult.fill.qty)}`,
+            });
+          } catch (_) {
+            /* ignore */
+          }
+          renderSimHoldList();
+          showToast(
+            `${holdingsBaseAsset(key)} 已模拟卖出 @ ${formatHoldingsPriceInput(holdResult.fill.price)}`,
+          );
+        } catch (error) {
+          console.warn("executeSimMarketSell failed", error);
+          showToast(error.message || "卖出失败");
+        }
+      }
+
       async function editActionLogPrice(identityKey) {
         const key = String(identityKey || "");
         if (!key) return;
@@ -12108,6 +12971,10 @@
           const panel = document.getElementById("actionLogFloat");
           return !!(panel && !panel.hidden);
         }
+        if (name === "sim") {
+          const panel = document.getElementById("simHoldFloat");
+          return !!(panel && !panel.hidden);
+        }
         return false;
       }
 
@@ -12121,16 +12988,22 @@
         const momentum = document.getElementById("momentumFloat");
         const notify = document.getElementById("notifyFloat");
         const log = document.getElementById("actionLogFloat");
+        const sim = document.getElementById("simHoldFloat");
         const momTab = document.getElementById("momentumFloatTab");
         const notifyTab = document.getElementById("notifyFloatTab");
         const logTab = document.getElementById("actionLogTab");
+        const simTab = document.getElementById("simHoldFloatTab");
         const pickTab = document.getElementById("capturePickTab");
+        const nailSimBtn = document.getElementById("nailSimHoldBtn");
         if (momentum) momentum.hidden = true;
         if (notify) notify.hidden = true;
         if (log) log.hidden = true;
+        if (sim) sim.hidden = true;
         if (momTab) momTab.classList.remove("is-active");
         if (notifyTab) notifyTab.classList.remove("is-active");
         if (logTab) logTab.classList.remove("is-active");
+        if (simTab) simTab.classList.remove("is-active");
+        if (nailSimBtn) nailSimBtn.setAttribute("aria-expanded", "false");
         // 捕捉精选是全屏页，不在此清 is-active（由 syncNotesRankHeadUi 管）
         if (pickTab && !isNotesRankOpen()) {
           pickTab.classList.remove("is-active");
@@ -12188,6 +13061,22 @@
             tab.classList.add("is-active");
           }
           renderActionLogBody();
+          return;
+        }
+        if (name === "sim") {
+          if (!simFloatVisible) return;
+          const panel = document.getElementById("simHoldFloat");
+          const tab = document.getElementById("simHoldFloatTab");
+          const nailSimBtn = document.getElementById("nailSimHoldBtn");
+          if (!panel) return;
+          panel.hidden = false;
+          if (tab && simFloatVisible) {
+            tab.hidden = false;
+            tab.classList.add("is-active");
+          }
+          if (nailSimBtn) nailSimBtn.setAttribute("aria-expanded", "true");
+          renderSimHoldList();
+          void reloadSimHoldings({ silent: true });
         }
       }
 
@@ -12453,6 +13342,9 @@
           }),
           soft("homePrefs", "首页偏好", async () => {
             await loadHomePrefsShared();
+          }),
+          soft("sim", "模拟盘", async () => {
+            await reloadSimHoldings({ silent: true });
           }),
           soft("alerts", "价格预警", async () => {
             await loadSharedPriceAlerts();
@@ -19035,6 +19927,10 @@
                 parsed.watchPoolRank != null
                   ? normalizeWatchPoolRankLocal(parsed.watchPoolRank)
                   : null,
+              simFloatVisible:
+                parsed.simFloatVisible === undefined
+                  ? undefined
+                  : parsed.simFloatVisible !== false,
             };
           }
         } catch (_) {
@@ -20248,7 +21144,7 @@
         });
       }
 
-      function applyHomePref(next, updatedAt) {
+      function applyHomePref(next, updatedAt, prefsExtra) {
         homePref =
           String(next || "").trim().toLowerCase() === "nails"
             ? "nails"
@@ -20257,12 +21153,18 @@
           Number.isFinite(Number(updatedAt)) && Number(updatedAt) > 0
             ? Number(updatedAt)
             : Date.now();
+        if (prefsExtra && prefsExtra.simFloatVisible !== undefined) {
+          applySimFloatVisible(prefsExtra.simFloatVisible !== false, {
+            persist: false,
+          });
+        }
         try {
           localStorage.setItem(
             HOME_PREFS_LOCAL_KEY,
             JSON.stringify({
               home: homePref,
               watchPoolRank: getWatchPoolRank(),
+              simFloatVisible,
               updatedAt: homePrefUpdatedAt,
             }),
           );
@@ -20270,15 +21172,20 @@
           /* ignore */
         }
         syncHomePrefUi();
+        syncSimFloatVisibleUi();
       }
 
       async function loadHomePrefsShared() {
         const local = readLocalHomePref();
         if (local) {
-          applyHomePref(local.home, local.updatedAt || Date.now());
+          applyHomePref(local.home, local.updatedAt || Date.now(), {
+            simFloatVisible: local.simFloatVisible,
+          });
           if (local.watchPoolRank != null) {
             applyWatchPoolRank(local.watchPoolRank, { rebuild: false });
           }
+        } else {
+          syncSimFloatVisibleUi();
         }
         if (
           !WatchFavorites ||
@@ -20300,7 +21207,9 @@
             const localAt = Number(homePrefUpdatedAt) || 0;
             // 取较新一侧，避免 GitHub 未写上时用旧的 market 盖掉本地钉子首页。
             if (remoteAt >= localAt) {
-              applyHomePref(remote.prefs.home, remoteAt || Date.now());
+              applyHomePref(remote.prefs.home, remoteAt || Date.now(), {
+                simFloatVisible: remote.prefs.simFloatVisible,
+              });
               if (remote.prefs.watchPoolRank != null) {
                 applyWatchPoolRank(remote.prefs.watchPoolRank);
               }
@@ -20309,6 +21218,9 @@
             } else if (remote.prefs.watchPoolRank != null) {
               applyWatchPoolRank(remote.prefs.watchPoolRank);
             }
+            if (remoteAt >= localAt && remote.prefs.simFloatVisible === undefined) {
+              syncSimFloatVisibleUi();
+            }
             syncWatchPoolRankUi();
             return true;
           }
@@ -20316,6 +21228,7 @@
           console.warn("load home prefs failed", error);
         }
         syncWatchPoolRankUi();
+        syncSimFloatVisibleUi();
         return false;
       }
 
@@ -20345,6 +21258,7 @@
               ...base,
               home,
               watchPoolRank: getWatchPoolRank(),
+              simFloatVisible,
               updatedAt: homePrefUpdatedAt || Date.now(),
             }),
           });
@@ -20381,11 +21295,12 @@
               ...base,
               home: getHomePref(),
               watchPoolRank: rank,
+              simFloatVisible,
               updatedAt: Date.now(),
             }),
           });
           homePrefUpdatedAt = Date.now();
-          applyHomePref(homePref, homePrefUpdatedAt);
+          applyHomePref(homePref, homePrefUpdatedAt, { simFloatVisible });
           showToast(`观察池已设为前 ${rank}`);
         } catch (error) {
           console.warn("persist watch pool rank failed", error);
@@ -25051,6 +25966,181 @@
           void setNailTradeLive("buy", !on);
         });
       }
+      const nailSimFloatVisibleSwitch = document.getElementById(
+        "nailSimFloatVisibleSwitch",
+      );
+      if (nailSimFloatVisibleSwitch) {
+        nailSimFloatVisibleSwitch.addEventListener("click", () => {
+          const on =
+            nailSimFloatVisibleSwitch.getAttribute("aria-checked") === "true";
+          void flushSimFloatVisible(!on);
+        });
+      }
+      const nailSimHoldBtn = document.getElementById("nailSimHoldBtn");
+      if (nailSimHoldBtn) {
+        nailSimHoldBtn.addEventListener("click", () => {
+          if (!simFloatVisible) return;
+          toggleFloatPanel("sim");
+        });
+      }
+      const simHoldFloatClose = document.getElementById("simHoldFloatClose");
+      if (simHoldFloatClose) {
+        simHoldFloatClose.addEventListener("click", () => {
+          closeAllFloatPanels();
+        });
+      }
+      const simHoldFloatRefresh = document.getElementById("simHoldFloatRefresh");
+      if (simHoldFloatRefresh) {
+        simHoldFloatRefresh.addEventListener("click", () => {
+          void reloadSimHoldings();
+        });
+      }
+      const simHoldListRefreshBtn = document.getElementById(
+        "simHoldListRefreshBtn",
+      );
+      if (simHoldListRefreshBtn) {
+        simHoldListRefreshBtn.addEventListener("click", () => {
+          void reloadSimHoldings();
+        });
+      }
+      const simHoldSettingsBtn = document.getElementById("simHoldSettingsBtn");
+      if (simHoldSettingsBtn) {
+        simHoldSettingsBtn.addEventListener("click", () => {
+          const panel = document.getElementById("simHoldSettingsPanel");
+          if (!panel) return;
+          const next = panel.hidden;
+          panel.hidden = !next;
+          simHoldSettingsBtn.classList.toggle("is-open", next);
+          simHoldSettingsBtn.setAttribute(
+            "aria-expanded",
+            next ? "true" : "false",
+          );
+        });
+      }
+      const simHoldForm = document.getElementById("simHoldForm");
+      if (simHoldForm) {
+        simHoldForm.addEventListener("submit", (event) => {
+          event.preventDefault();
+          const symbol = document.getElementById("simHoldSymbol");
+          void addSimHoldingSymbol(symbol && symbol.value).then((ok) => {
+            if (ok && symbol) symbol.value = "";
+          });
+        });
+      }
+      const simHoldResetBtn = document.getElementById("simHoldResetBtn");
+      if (simHoldResetBtn) {
+        simHoldResetBtn.addEventListener("click", () => {
+          void resetSimHoldingsCash();
+        });
+      }
+      const simHoldList = document.getElementById("simHoldList");
+      if (simHoldList) {
+        simHoldList.addEventListener("input", (event) => {
+          const sellRange = event.target.closest("[data-sim-sell-pct]");
+          if (sellRange && sellRange.type === "range") {
+            const sym = sellRange.getAttribute("data-sim-sell-pct");
+            const label = simHoldList.querySelector(
+              `[data-sim-sell-pct-label="${sym}"]`,
+            );
+            if (label) label.textContent = `${sellRange.value}%`;
+            const row = sellRange.closest(".nail-hold-row");
+            const free = Number(row && row.getAttribute("data-hold-free")) || 0;
+            const hint = simHoldList.querySelector(
+              `[data-sim-sell-qty-hint="${sym}"]`,
+            );
+            if (hint) {
+              const plan = free * (Number(sellRange.value) / 100);
+              hint.textContent = `可用 ${formatHoldingsQty(free)} · 本单约 ${formatHoldingsQty(plan)}`;
+            }
+            return;
+          }
+          const buyRange = event.target.closest("[data-sim-buy-pct]");
+          if (buyRange && buyRange.type === "range") {
+            const sym = buyRange.getAttribute("data-sim-buy-pct");
+            const label = simHoldList.querySelector(
+              `[data-sim-buy-pct-label="${sym}"]`,
+            );
+            if (label) label.textContent = `${buyRange.value}%`;
+            const row = buyRange.closest(".nail-hold-row");
+            const usdt = Number(row && row.getAttribute("data-hold-usdt")) || 0;
+            const hint = simHoldList.querySelector(
+              `[data-sim-buy-qty-hint="${sym}"]`,
+            );
+            if (hint) {
+              const spend = usdt * (Number(buyRange.value) / 100);
+              hint.textContent = `可用 USDT ${formatHoldingsQty(usdt)} · 本单约 ${formatHoldingsUsdt(spend)} USDT`;
+            }
+          }
+        });
+        simHoldList.addEventListener("click", (event) => {
+          const jumpBtn = event.target.closest("[data-sim-jump]");
+          if (jumpBtn) {
+            const sym = jumpBtn.getAttribute("data-sim-jump");
+            closeAllFloatPanels();
+            openNailDrawerAtSymbol(sym);
+            return;
+          }
+          const removeBtn = event.target.closest("[data-sim-remove]");
+          if (removeBtn) {
+            void removeSimHoldingSymbol(
+              removeBtn.getAttribute("data-sim-remove"),
+            );
+            return;
+          }
+          const openSell = event.target.closest("[data-sim-open-sell]");
+          if (openSell) {
+            openSimHoldPanel(openSell.getAttribute("data-sim-open-sell"), "sell");
+            return;
+          }
+          const openBuy = event.target.closest("[data-sim-open-buy]");
+          if (openBuy) {
+            openSimHoldPanel(openBuy.getAttribute("data-sim-open-buy"), "buy");
+            return;
+          }
+          const cancelPanel = event.target.closest("[data-sim-cancel-panel]");
+          if (cancelPanel) {
+            const row = cancelPanel.closest(".nail-hold-row");
+            closeSimHoldPanels(row);
+            return;
+          }
+          const stopClear = event.target.closest("[data-sim-stop-clear]");
+          if (stopClear) {
+            void clearSimStopTaskById(
+              stopClear.getAttribute("data-sim-stop-clear"),
+            );
+            return;
+          }
+          const entrySave = event.target.closest("[data-sim-entry-save]");
+          if (entrySave) {
+            const sym = entrySave.getAttribute("data-sim-entry-save");
+            const row = entrySave.closest(".nail-hold-row");
+            const input =
+              row && row.querySelector(`[data-sim-entry="${sym}"]`);
+            void saveSimHoldEntryPrice(sym, input && input.value);
+            return;
+          }
+          const sellArm = event.target.closest("[data-sim-sell-arm]");
+          if (sellArm) {
+            void executeSimMarketSell(sellArm.getAttribute("data-sim-sell-arm"));
+            return;
+          }
+          const buyArm = event.target.closest("[data-sim-buy-arm]");
+          if (buyArm) {
+            void executeSimMarketBuy(buyArm.getAttribute("data-sim-buy-arm"));
+          }
+        });
+        simHoldList.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") return;
+          const input = event.target.closest("[data-sim-entry]");
+          if (!input) return;
+          event.preventDefault();
+          void saveSimHoldEntryPrice(
+            input.getAttribute("data-sim-entry"),
+            input.value,
+          );
+        });
+      }
+      syncSimFloatVisibleUi();
       const cardFocusLabelBtn = document.getElementById("cardFocusLabel");
       if (cardFocusLabelBtn) {
         cardFocusLabelBtn.addEventListener("click", async () => {
@@ -25075,7 +26165,7 @@
       document.addEventListener("click", (event) => {
         if (
           event.target.closest(
-            "#nailAutoPinBtn, #nailAutoPinPopover, #nailRadarBtn, #nailRadarPopover, #nailHoldBtn, #nailHoldPopover",
+            "#nailAutoPinBtn, #nailAutoPinPopover, #nailRadarBtn, #nailRadarPopover, #nailHoldBtn, #nailHoldPopover, #nailSimHoldBtn, #simHoldFloat",
           )
         ) {
           return;

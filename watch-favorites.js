@@ -41,8 +41,15 @@
   const HOME_PREFS_DEFAULT = {
     home: "market",
     watchPoolRank: WATCH_POOL_RANK_DEFAULT,
+    /** 是否显示模拟盘浮窗（默认开）。 */
+    simFloatVisible: true,
     updatedAt: 0,
   };
+  const SIM_HOLDINGS_PATH = "watch-sim-holdings.json";
+  const SIM_SELL_TASKS_PATH = "watch-sim-sell-tasks.json";
+  const SIM_STARTING_CASH_DEFAULT = 10000;
+  /** 模拟单向手续费（与 trade-sim 一致）。 */
+  const SIM_FEE_RATE = 0.001;
   const PRICE_ALERTS_PATH = "watch-price-alerts.json";
   const LEGACY_DATA_PATH = "watch-data.json";
   const PIN_TTL_MS = 12 * 60 * 60 * 1000;
@@ -60,6 +67,9 @@
     "buy",
     "sell",
     "sell-stop",
+    "sim-buy",
+    "sim-sell",
+    "sim-sell-stop",
     "mom-note",
     "period-low-exit",
   ]);
@@ -2215,6 +2225,10 @@
           ? base.watchPoolRank
           : HOME_PREFS_DEFAULT.watchPoolRank,
       ),
+      simFloatVisible:
+        base.simFloatVisible === undefined
+          ? HOME_PREFS_DEFAULT.simFloatVisible !== false
+          : base.simFloatVisible !== false,
       updatedAt: Number.isFinite(Number(base.updatedAt))
         ? Number(base.updatedAt)
         : 0,
@@ -2226,6 +2240,7 @@
     return {
       home: next.home,
       watchPoolRank: next.watchPoolRank,
+      simFloatVisible: next.simFloatVisible !== false,
       updatedAt: next.updatedAt || Date.now(),
     };
   }
@@ -3050,6 +3065,349 @@
       }
     }
     throw lastError || new Error("保存持有列表失败");
+  }
+
+  function emptySimHoldings() {
+    const cash = SIM_STARTING_CASH_DEFAULT;
+    return {
+      updatedAt: 0,
+      startingCash: cash,
+      symbols: ["USDT"],
+      balances: {
+        USDT: { free: cash, locked: 0, at: 0 },
+      },
+      entryPrices: {},
+      stopCancel: {},
+      lastError: null,
+    };
+  }
+
+  function normalizeSimHoldings(raw) {
+    const data = raw && typeof raw === "object" ? raw : {};
+    const base = normalizeHoldings(data);
+    let startingCash = Number(data.startingCash);
+    if (!(Number.isFinite(startingCash) && startingCash > 0)) {
+      startingCash = SIM_STARTING_CASH_DEFAULT;
+    }
+    const symbols = Array.isArray(base.symbols) ? base.symbols.slice() : [];
+    if (!symbols.includes("USDT")) symbols.unshift("USDT");
+    const balances =
+      base.balances && typeof base.balances === "object"
+        ? { ...base.balances }
+        : {};
+    // 缺 USDT 键时补 0，避免误把 startingCash 当可用余额灌回去。
+    if (!balances.USDT) {
+      balances.USDT = { free: 0, locked: 0, at: 0 };
+    }
+    return {
+      ...base,
+      startingCash,
+      symbols,
+      balances,
+    };
+  }
+
+  function simBaseAsset(symbol) {
+    const key = normalizeHoldingsSymbol(symbol);
+    if (!key || key === "USDT") return "USDT";
+    return key.endsWith("USDT") ? key.slice(0, -4) : key;
+  }
+
+  function cloneSimBalances(balances) {
+    const out = {};
+    const src = balances && typeof balances === "object" ? balances : {};
+    Object.keys(src).forEach((asset) => {
+      const row = src[asset];
+      out[asset] = {
+        free: Number(row && row.free) || 0,
+        locked: Number(row && row.locked) || 0,
+        at: Number(row && row.at) || 0,
+      };
+    });
+    return out;
+  }
+
+  /**
+   * 模拟市价买入：按 USDT 比例扣款，按现价计入币数量，写成本并清 stopCancel。
+   * 不改真实 holdings。
+   */
+  function applySimMarketBuy(state, options) {
+    const opts = options || {};
+    const symbol = normalizeHoldingsSymbol(opts.symbol);
+    const spot = Number(opts.spot);
+    const now = Number(opts.now) || Date.now();
+    const feeRate =
+      Number.isFinite(Number(opts.feeRate)) && Number(opts.feeRate) >= 0
+        ? Number(opts.feeRate)
+        : SIM_FEE_RATE;
+    let buyPercent = Number(opts.buyPercent);
+    if (!Number.isFinite(buyPercent) || buyPercent <= 0) buyPercent = 100;
+    if (buyPercent > 100) buyPercent = 100;
+    if (!symbol || symbol === "USDT") {
+      return { ok: false, reason: "bad-symbol" };
+    }
+    if (!(spot > 0)) return { ok: false, reason: "bad-spot" };
+    const base = normalizeSimHoldings(state);
+    const balances = cloneSimBalances(base.balances);
+    const usdtFree = Number(balances.USDT && balances.USDT.free) || 0;
+    const spendGross = usdtFree * (buyPercent / 100);
+    if (!(spendGross > 0)) return { ok: false, reason: "no-usdt" };
+    const fee = spendGross * feeRate;
+    const spendNet = spendGross - fee;
+    if (!(spendNet > 0)) return { ok: false, reason: "fee-too-high" };
+    const qty = spendNet / spot;
+    if (!(qty > 0)) return { ok: false, reason: "qty-too-small" };
+    const asset = simBaseAsset(symbol);
+    balances.USDT = {
+      free: Math.max(0, usdtFree - spendGross),
+      locked: Number(balances.USDT && balances.USDT.locked) || 0,
+      at: now,
+    };
+    const prev = balances[asset] || { free: 0, locked: 0, at: 0 };
+    balances[asset] = {
+      free: (Number(prev.free) || 0) + qty,
+      locked: Number(prev.locked) || 0,
+      at: now,
+    };
+    const symbols = Array.isArray(base.symbols) ? base.symbols.slice() : [];
+    if (!symbols.includes(symbol)) symbols.push(symbol);
+    if (!symbols.includes("USDT")) symbols.unshift("USDT");
+    const entryPrices = { ...(base.entryPrices || {}) };
+    const stopCancel = { ...(base.stopCancel || {}) };
+    entryPrices[symbol] = { price: spot, at: now, source: "sim-buy" };
+    if (stopCancel[symbol]) delete stopCancel[symbol];
+    return {
+      ok: true,
+      fill: {
+        symbol,
+        side: "buy",
+        price: spot,
+        qty,
+        spend: spendGross,
+        fee,
+        buyPercent,
+        at: now,
+      },
+      state: normalizeSimHoldings({
+        ...base,
+        symbols,
+        balances,
+        entryPrices,
+        stopCancel,
+        updatedAt: now,
+      }),
+    };
+  }
+
+  /**
+   * 模拟市价卖出：按持仓比例卖出，回笼 USDT；卖光则清成本。
+   */
+  function applySimMarketSell(state, options) {
+    const opts = options || {};
+    const symbol = normalizeHoldingsSymbol(opts.symbol);
+    const spot = Number(opts.spot);
+    const now = Number(opts.now) || Date.now();
+    const feeRate =
+      Number.isFinite(Number(opts.feeRate)) && Number(opts.feeRate) >= 0
+        ? Number(opts.feeRate)
+        : SIM_FEE_RATE;
+    let sellPercent = Number(opts.sellPercent);
+    if (!Number.isFinite(sellPercent) || sellPercent <= 0) sellPercent = 100;
+    if (sellPercent > 100) sellPercent = 100;
+    if (!symbol || symbol === "USDT") {
+      return { ok: false, reason: "bad-symbol" };
+    }
+    if (!(spot > 0)) return { ok: false, reason: "bad-spot" };
+    const base = normalizeSimHoldings(state);
+    const balances = cloneSimBalances(base.balances);
+    const asset = simBaseAsset(symbol);
+    const free = Number(balances[asset] && balances[asset].free) || 0;
+    const qty = free * (sellPercent / 100);
+    if (!(qty > 0)) return { ok: false, reason: "no-qty" };
+    const gross = qty * spot;
+    const fee = gross * feeRate;
+    const proceeds = gross - fee;
+    balances[asset] = {
+      free: Math.max(0, free - qty),
+      locked: Number(balances[asset] && balances[asset].locked) || 0,
+      at: now,
+    };
+    const usdtPrev = balances.USDT || { free: 0, locked: 0, at: 0 };
+    balances.USDT = {
+      free: (Number(usdtPrev.free) || 0) + proceeds,
+      locked: Number(usdtPrev.locked) || 0,
+      at: now,
+    };
+    const entryPrices = { ...(base.entryPrices || {}) };
+    const stopCancel = { ...(base.stopCancel || {}) };
+    const remain = Number(balances[asset].free) || 0;
+    if (remain * spot < 0.01) {
+      balances[asset] = { free: 0, locked: 0, at: now };
+      delete entryPrices[symbol];
+      delete stopCancel[symbol];
+    }
+    const symbols = Array.isArray(base.symbols) ? base.symbols.slice() : [];
+    if (!symbols.includes(symbol)) symbols.push(symbol);
+    if (!symbols.includes("USDT")) symbols.unshift("USDT");
+    return {
+      ok: true,
+      fill: {
+        symbol,
+        side: "sell",
+        price: spot,
+        qty,
+        proceeds,
+        fee,
+        sellPercent,
+        at: now,
+      },
+      state: normalizeSimHoldings({
+        ...base,
+        symbols,
+        balances,
+        entryPrices,
+        stopCancel,
+        updatedAt: now,
+      }),
+    };
+  }
+
+  function resetSimHoldingsState(state, options) {
+    const opts = options || {};
+    const base = normalizeSimHoldings(state);
+    let cash = Number(opts.startingCash);
+    if (!(Number.isFinite(cash) && cash > 0)) cash = base.startingCash;
+    if (!(Number.isFinite(cash) && cash > 0)) cash = SIM_STARTING_CASH_DEFAULT;
+    const now = Number(opts.now) || Date.now();
+    return normalizeSimHoldings({
+      startingCash: cash,
+      symbols: ["USDT"],
+      balances: { USDT: { free: cash, locked: 0, at: now } },
+      entryPrices: {},
+      stopCancel: {},
+      lastError: null,
+      updatedAt: now,
+    });
+  }
+
+  async function loadSimHoldingsRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || SIM_HOLDINGS_PATH;
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return {
+          state: normalizeSimHoldings(current.data),
+          sha: current.sha,
+          source: "api",
+        };
+      }
+    } catch (error) {
+      console.warn("loadSimHoldings via API failed, trying raw", error);
+    }
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          state: normalizeSimHoldings(data),
+          sha: null,
+          source: "raw-commit",
+        };
+      }
+    } catch (error) {
+      console.warn("loadSimHoldings via commit-raw failed", error);
+    }
+    return { state: emptySimHoldings(), sha: null, source: "empty" };
+  }
+
+  async function patchSimHoldings(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || SIM_HOLDINGS_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = normalizeSimHoldings(
+          current.data || emptySimHoldings(),
+        );
+        let next = base;
+        let fillOut = null;
+        if (typeof options.mutate === "function") {
+          const result = options.mutate({
+            ...base,
+            symbols: base.symbols.slice(),
+            balances: cloneSimBalances(base.balances),
+            entryPrices: { ...(base.entryPrices || {}) },
+            stopCancel: { ...(base.stopCancel || {}) },
+          });
+          if (result && result.skipWrite) {
+            return {
+              state: normalizeSimHoldings(result.state || base),
+              skipped: true,
+              fill: result.fill || null,
+            };
+          }
+          next = normalizeSimHoldings(
+            result && result.state ? result.state : result || base,
+          );
+          fillOut = result && result.fill ? result.fill : null;
+        }
+        const nextData = {
+          ...next,
+          updatedAt: Date.now(),
+        };
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update sim holdings",
+        });
+        return {
+          state: normalizeSimHoldings(nextData),
+          skipped: false,
+          fill: fillOut,
+        };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存模拟盘失败");
+  }
+
+  async function loadSimSellTasksRaw(options) {
+    return loadSellTasksRaw({
+      ...(options || {}),
+      path: (options && options.path) || SIM_SELL_TASKS_PATH,
+    });
+  }
+
+  async function patchSimSellTasks(options) {
+    return patchSellTasks({
+      ...(options || {}),
+      path: (options && options.path) || SIM_SELL_TASKS_PATH,
+      message: (options && options.message) || "Update sim sell tasks",
+    });
   }
 
   function emptySellTasks() {
@@ -3932,6 +4290,19 @@
     normalizeHoldings,
     loadHoldingsRaw,
     patchHoldings,
+    SIM_HOLDINGS_PATH,
+    SIM_SELL_TASKS_PATH,
+    SIM_STARTING_CASH_DEFAULT,
+    SIM_FEE_RATE,
+    emptySimHoldings,
+    normalizeSimHoldings,
+    applySimMarketBuy,
+    applySimMarketSell,
+    resetSimHoldingsState,
+    loadSimHoldingsRaw,
+    patchSimHoldings,
+    loadSimSellTasksRaw,
+    patchSimSellTasks,
     SELL_TASKS_PATH,
     emptySellTasks,
     normalizeSellTasks,
