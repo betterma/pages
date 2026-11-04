@@ -2062,7 +2062,9 @@
       .nail-head-actions #nailRadarBtn.is-active,
       .nail-head-actions #nailRadarBtn[aria-expanded="true"],
       .nail-head-actions #nailHoldBtn.is-active,
-      .nail-head-actions #nailHoldBtn[aria-expanded="true"] {
+      .nail-head-actions #nailHoldBtn[aria-expanded="true"],
+      .nail-head-actions #nailJumpBtn.is-active,
+      .nail-head-actions #nailJumpBtn[aria-expanded="true"] {
         border-color: color-mix(in srgb, var(--label) 38%, transparent);
         background: color-mix(in srgb, var(--accent) 14%, transparent);
         color: var(--accent);
@@ -2676,6 +2678,54 @@
       }
       .nail-hold-popover[hidden] {
         display: none !important;
+      }
+      .nail-jump-popover {
+        position: fixed;
+        left: 10px;
+        right: 10px;
+        top: 120px;
+        bottom: 0;
+        z-index: 12;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        border-bottom: none;
+        border-radius: 14px 14px 0 0;
+        background: color-mix(in srgb, #f4f5f7 78%, transparent);
+        color: #1c1c1e;
+        -webkit-backdrop-filter: blur(18px) saturate(1.2);
+        backdrop-filter: blur(18px) saturate(1.2);
+        box-shadow: 0 -8px 36px rgba(0, 0, 0, 0.28);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        box-sizing: border-box;
+      }
+      html[data-theme="light"] .nail-jump-popover {
+        background: color-mix(in srgb, #ffffff 82%, transparent);
+        border-color: rgba(0, 0, 0, 0.08);
+        box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.12);
+      }
+      .nail-jump-popover[hidden] {
+        display: none !important;
+      }
+      .nail-jump-list {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        overscroll-behavior: contain;
+        padding: 8px 10px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .nail-jump-empty {
+        padding: 28px 12px;
+        text-align: center;
+        color: var(--secondary, #6b6b6b);
+        font-size: 13px;
+      }
+      .nail-jump-popover .nail-notice-card {
+        background: color-mix(in srgb, #ffffff 88%, transparent);
       }
       .nail-hold-toolbar {
         display: flex;
@@ -6642,6 +6692,28 @@
               <button
                 type="button"
                 class="nail-notice-entry"
+                id="nailJumpBtn"
+                aria-expanded="false"
+                aria-controls="nailJumpPopover"
+                title="跳跳提示：当前窗可关注的自动盯"
+              >
+                <svg
+                  class="nail-notice-bell"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M4 12h4l3-7 4 14 3-7h4" />
+                </svg>
+                跳跳
+              </button>
+              <button
+                type="button"
+                class="nail-notice-entry"
                 id="nailHoldBtn"
                 aria-expanded="false"
                 aria-controls="nailHoldPopover"
@@ -6771,6 +6843,25 @@
               </button>
             </div>
             <div class="nail-hold-list" id="nailHoldList"></div>
+          </div>
+          <div class="nail-jump-popover" id="nailJumpPopover" hidden>
+            <div class="nail-hold-toolbar">
+              <div class="nail-hold-toolbar-title">跳跳提示</div>
+              <div class="nail-hold-toolbar-actions">
+                <button
+                  type="button"
+                  class="nail-hold-refresh"
+                  id="nailJumpRefreshBtn"
+                  title="按当前窗重算可买入提示"
+                >
+                  刷新
+                </button>
+              </div>
+            </div>
+            <p class="nail-hold-hint" id="nailJumpHint">
+              自动盯 · 便签水位上方（蓝）· 本窗上涨 · 仅提示不自动下单
+            </p>
+            <div class="nail-jump-list" id="nailJumpList"></div>
           </div>
           <div
             class="nail-settings-popover"
@@ -10506,6 +10597,7 @@
         if (next) {
           await setNailRadarPopoverOpen(false);
           await setNailHoldPopoverOpen(false);
+          await setNailJumpPopoverOpen(false);
         }
         popover.hidden = !next;
         if (button) {
@@ -10611,6 +10703,7 @@
         if (next) {
           await setNailAutoPinPopoverOpen(false);
           await setNailHoldPopoverOpen(false);
+          await setNailJumpPopoverOpen(false);
         }
         popover.hidden = !next;
         if (button) {
@@ -11880,6 +11973,7 @@
         if (next) {
           await setNailAutoPinPopoverOpen(false);
           await setNailRadarPopoverOpen(false);
+          await setNailJumpPopoverOpen(false);
         }
         popover.hidden = !next;
         if (button) {
@@ -11890,6 +11984,224 @@
           layoutNailHoldPopover();
           await reloadNailHoldings({ silent: true });
           layoutNailHoldPopover();
+        } else {
+          popover.style.top = "";
+        }
+      }
+
+      const JUMP_AUTO_PIN_SOURCES = new Set([
+        "auto-cloud",
+        "auto-rising",
+        "auto-rewarm",
+      ]);
+
+      function layoutNailJumpPopover() {
+        const popover = document.getElementById("nailJumpPopover");
+        if (!popover || popover.hidden) return;
+        const head = document.querySelector(".nail-panel .nail-head");
+        const top = head
+          ? Math.max(8, Math.round(head.getBoundingClientRect().bottom - 2))
+          : 120;
+        popover.style.top = `${top}px`;
+      }
+
+      function listJumpHintCandidates() {
+        if (KLINE_MODE === "bstock") return [];
+        const iv = CONFIG.KLINE_INTERVAL || "4h";
+        const rows = [];
+        (pinItems || []).forEach((pin) => {
+          if (!pin || !JUMP_AUTO_PIN_SOURCES.has(String(pin.source || ""))) {
+            return;
+          }
+          const symbol = String(pin.symbol || "")
+            .trim()
+            .toUpperCase();
+          if (!symbol || !symbol.endsWith("USDT")) return;
+          if (!symbolInActiveUniverse(symbol)) return;
+          const nail = (nailItems || []).find(
+            (item) => String(item.symbol || "").toUpperCase() === symbol,
+          );
+          if (!nail) return;
+          const notePrice = parseNailNoteAlertPrice(nail.note);
+          if (!(Number.isFinite(notePrice) && notePrice > 0)) return;
+          if (!hasWindowGain(symbol, iv)) return;
+          const live = Number(marketMap[symbol] && marketMap[symbol].price);
+          if (!(Number.isFinite(live) && live > 0)) return;
+          // 蓝=现价在便签水位上方；红=下方（不提示）。
+          if (!(live > notePrice)) return;
+          const abovePct = ((live - notePrice) / notePrice) * 100;
+          const winPct = windowPriceChange(symbol, iv);
+          rows.push({
+            symbol,
+            label: symbol.replace(/USDT$/i, ""),
+            notePrice,
+            noteAt: Number(nail.noteAt) || 0,
+            pinPrice: Number(pin.pinPrice) || 0,
+            pinnedAt: Number(pin.pinnedAt) || 0,
+            live,
+            abovePct,
+            winPct: Number.isFinite(winPct) ? winPct : null,
+            change24h: Number(marketMap[symbol] && marketMap[symbol].change24h),
+          });
+        });
+        rows.sort((a, b) => {
+          const aa = Number.isFinite(a.abovePct) ? a.abovePct : 999;
+          const bb = Number.isFinite(b.abovePct) ? b.abovePct : 999;
+          if (aa !== bb) return aa - bb;
+          const wa = Number.isFinite(a.winPct) ? a.winPct : -999;
+          const wb = Number.isFinite(b.winPct) ? b.winPct : -999;
+          if (wb !== wa) return wb - wa;
+          return String(a.symbol).localeCompare(String(b.symbol));
+        });
+        return rows;
+      }
+
+      function renderNailJumpList() {
+        const listEl = document.getElementById("nailJumpList");
+        const hintEl = document.getElementById("nailJumpHint");
+        if (!listEl) return;
+        const rows = listJumpHintCandidates();
+        if (hintEl) {
+          hintEl.textContent = rows.length
+            ? `当前窗即时符合 ${rows.length} 个 · 自动盯 · 水位上方 · 窗涨 · 不自动下单`
+            : "当前窗暂无符合条件的自动盯（水位上方且本窗上涨）";
+        }
+        if (!rows.length) {
+          listEl.innerHTML =
+            '<div class="nail-jump-empty">暂无跳跳提示</div>';
+          return;
+        }
+        const windowStart = getWindowStart(
+          Date.now(),
+          DURATION_MS[CONFIG.KLINE_INTERVAL || "4h"] || DURATION_MS["4h"],
+        );
+        listEl.innerHTML = rows
+          .map((row) => {
+            const symbol = escapeHtml(row.symbol);
+            const label = escapeHtml(row.label);
+            const above = Number.isFinite(row.abovePct)
+              ? formatPercent(row.abovePct)
+              : "--";
+            const win = Number.isFinite(row.winPct)
+              ? formatPercent(row.winPct)
+              : "--";
+            const aboveCls =
+              Number.isFinite(row.abovePct) && row.abovePct > 0
+                ? " is-up"
+                : Number.isFinite(row.abovePct) && row.abovePct < 0
+                  ? " is-down"
+                  : "";
+            const winCls =
+              Number.isFinite(row.winPct) && row.winPct > 0
+                ? " is-up"
+                : Number.isFinite(row.winPct) && row.winPct < 0
+                  ? " is-down"
+                  : "";
+            return [
+              `<article class="nail-notice-card" data-jump-symbol="${symbol}">`,
+              `<div class="nail-notice-card-top">`,
+              `<button type="button" class="nail-notice-name" data-jump-open="${symbol}">${label}</button>`,
+              `</div>`,
+              `<div class="nail-notice-meta">`,
+              `<span class="nail-notice-line"><span class="nail-notice-key">水位</span><span>${escapeHtml(formatPinPrice(row.notePrice))}</span></span>`,
+              `<span class="nail-notice-line"><span class="nail-notice-key">现价</span><span>${escapeHtml(formatPinPrice(row.live))}</span><span class="nail-notice-delta${aboveCls}">${escapeHtml(above)}</span></span>`,
+              `<span class="nail-notice-line"><span class="nail-notice-key">窗涨</span><span class="nail-notice-delta${winCls}">${escapeHtml(win)}</span></span>`,
+              `</div>`,
+              `<canvas width="640" height="160" data-jump-chart="${symbol}" data-jump-note="${row.notePrice}" data-jump-note-at="${row.noteAt}" data-jump-pin="${row.pinPrice}" data-jump-pin-at="${row.pinnedAt}" data-jump-window="${windowStart}"></canvas>`,
+              `</article>`,
+            ].join("");
+          })
+          .join("");
+        listEl.querySelectorAll("[data-jump-open]").forEach((btn) => {
+          btn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const sym = btn.getAttribute("data-jump-open");
+            void setNailJumpPopoverOpen(false);
+            openNailDrawerAtSymbol(sym);
+          });
+        });
+        void paintNailJumpCharts();
+      }
+
+      async function paintNailJumpCharts() {
+        const canvases = [
+          ...document.querySelectorAll("#nailJumpList canvas[data-jump-chart]"),
+        ];
+        if (!canvases.length) return;
+        const paintOne = async (canvas) => {
+          const symbol = String(canvas.getAttribute("data-jump-chart") || "")
+            .trim()
+            .toUpperCase();
+          const notePrice = Number(canvas.getAttribute("data-jump-note"));
+          const noteAt = Number(canvas.getAttribute("data-jump-note-at")) || 0;
+          const pinPrice = Number(canvas.getAttribute("data-jump-pin"));
+          const pinnedAt = Number(canvas.getAttribute("data-jump-pin-at")) || 0;
+          const windowStart =
+            Number(canvas.getAttribute("data-jump-window")) || 0;
+          if (!symbol || !(notePrice > 0)) return;
+          try {
+            const candles = await fetchKlines(symbol, "4h", null, 18);
+            drawKline(
+              canvas,
+              candles,
+              pinPrice > 0 ? pinPrice : null,
+              pinPrice > 0 ? pinnedAt : null,
+              [],
+              {
+                price: notePrice,
+                fromAt: noteAt > 0 ? noteAt : 0,
+              },
+              windowStart > 0
+                ? {
+                    fromOpenTime: windowStart,
+                    notifyPrice: notePrice,
+                  }
+                : null,
+            );
+          } catch (error) {
+            console.warn("jump chart failed", symbol, error);
+          }
+        };
+        const concurrency = 5;
+        let cursor = 0;
+        const workers = Array.from(
+          { length: Math.min(concurrency, canvases.length) },
+          async () => {
+            while (cursor < canvases.length) {
+              const index = cursor;
+              cursor += 1;
+              await paintOne(canvases[index]);
+            }
+          },
+        );
+        await Promise.all(workers);
+      }
+
+      async function setNailJumpPopoverOpen(open) {
+        const popover = document.getElementById("nailJumpPopover");
+        const button = document.getElementById("nailJumpBtn");
+        if (!popover) return;
+        const next = !!open;
+        if (next) {
+          await setNailAutoPinPopoverOpen(false);
+          await setNailRadarPopoverOpen(false);
+          await setNailHoldPopoverOpen(false);
+        }
+        popover.hidden = !next;
+        if (button) {
+          button.setAttribute("aria-expanded", next ? "true" : "false");
+          button.classList.toggle("is-active", next);
+        }
+        if (next) {
+          layoutNailJumpPopover();
+          try {
+            await loadBinanceTicker();
+          } catch (error) {
+            console.warn("jump ticker refresh failed", error);
+          }
+          renderNailJumpList();
+          layoutNailJumpPopover();
         } else {
           popover.style.top = "";
         }
@@ -19728,11 +20040,12 @@
                 );
                 applyNailNoticeDeltaFilter();
               }
+              const pin = pinItemBySymbol(symbol);
               drawKline(
                 canvas,
                 candles,
-                null,
-                null,
+                pin ? pin.pinPrice : null,
+                pin ? pin.pinnedAt : null,
                 [],
                 {
                   price: alertPrice,
@@ -24835,8 +25148,31 @@
           );
         });
       }
+      const nailJumpBtn = document.getElementById("nailJumpBtn");
+      const nailJumpPopover = document.getElementById("nailJumpPopover");
+      const nailJumpRefreshBtn = document.getElementById("nailJumpRefreshBtn");
+      if (nailJumpBtn) {
+        nailJumpBtn.addEventListener("click", () => {
+          void setNailJumpPopoverOpen(
+            !nailJumpPopover || nailJumpPopover.hidden,
+          );
+        });
+      }
+      if (nailJumpRefreshBtn) {
+        nailJumpRefreshBtn.addEventListener("click", () => {
+          void (async () => {
+            try {
+              await loadBinanceTicker();
+            } catch (error) {
+              console.warn("jump refresh ticker failed", error);
+            }
+            renderNailJumpList();
+          })();
+        });
+      }
       window.addEventListener("resize", () => {
         layoutNailHoldPopover();
+        layoutNailJumpPopover();
       });
       if (nailHoldList) {
         nailHoldList.addEventListener("input", (event) => {
@@ -25022,7 +25358,7 @@
       document.addEventListener("click", (event) => {
         if (
           event.target.closest(
-            "#nailAutoPinBtn, #nailAutoPinPopover, #nailRadarBtn, #nailRadarPopover, #nailHoldBtn, #nailHoldPopover",
+            "#nailAutoPinBtn, #nailAutoPinPopover, #nailRadarBtn, #nailRadarPopover, #nailHoldBtn, #nailHoldPopover, #nailJumpBtn, #nailJumpPopover",
           )
         ) {
           return;
@@ -25035,6 +25371,9 @@
         }
         if (nailHoldPopover && !nailHoldPopover.hidden) {
           void setNailHoldPopoverOpen(false);
+        }
+        if (nailJumpPopover && !nailJumpPopover.hidden) {
+          void setNailJumpPopoverOpen(false);
         }
       });
       const nailNoticeCloseBtn = document.getElementById("nailNoticeCloseBtn");
