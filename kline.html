@@ -2062,7 +2062,9 @@
       .nail-head-actions #nailRadarBtn.is-active,
       .nail-head-actions #nailRadarBtn[aria-expanded="true"],
       .nail-head-actions #nailHoldBtn.is-active,
-      .nail-head-actions #nailHoldBtn[aria-expanded="true"] {
+      .nail-head-actions #nailHoldBtn[aria-expanded="true"],
+      .nail-head-actions #nailSimHoldBtn.is-active,
+      .nail-head-actions #nailSimHoldBtn[aria-expanded="true"] {
         border-color: color-mix(in srgb, var(--label) 38%, transparent);
         background: color-mix(in srgb, var(--accent) 14%, transparent);
         color: var(--accent);
@@ -2690,6 +2692,12 @@
         font-weight: 750;
         color: #1c1c1e;
       }
+      .nail-hold-toolbar-title .notify-time {
+        margin-left: 6px;
+        font-size: 11px;
+        font-weight: 400;
+        color: rgba(28, 28, 30, 0.55);
+      }
       .nail-hold-toolbar-actions {
         display: flex;
         align-items: center;
@@ -3287,7 +3295,7 @@
         box-shadow: 0 0 0 1px
           color-mix(in srgb, var(--accent, #2f8f6e) 35%, transparent);
       }
-      /* 现价相对前半段历史（不含当前窗）创新高 → MVP */
+      /* 现价相对前半段历史（不含当前窗）实体创新高 → MVP（不算上影） */
       .nail-notice-card.is-notice-mvp {
         background: linear-gradient(
           125deg,
@@ -4901,17 +4909,6 @@
       }
       .notify-float.is-momentum {
         width: min(720px, calc(100vw - 24px));
-      }
-      .notify-float.is-sim-hold {
-        width: min(420px, calc(100vw - 16px));
-        max-height: min(70vh, calc(100vh - var(--float-dock-h, 54px) - 8px));
-      }
-      .notify-float.is-sim-hold .notify-float-body {
-        padding: 0;
-        white-space: normal;
-      }
-      .notify-float.is-sim-hold .nail-hold-list {
-        max-height: none;
       }
       body[data-sim-float="off"] #simHoldFloatTab,
       body[data-sim-float="off"] #simHoldFloat,
@@ -6810,6 +6807,60 @@
             </div>
             <div class="nail-hold-list" id="nailHoldList"></div>
           </div>
+          <div class="nail-hold-popover" id="simHoldFloat" hidden>
+            <div class="nail-hold-toolbar">
+              <div class="nail-hold-toolbar-title">
+                模拟盘<span class="notify-time" id="simHoldFloatTime"></span>
+              </div>
+              <div class="nail-hold-toolbar-actions">
+                <button
+                  type="button"
+                  class="nail-hold-settings-btn"
+                  id="simHoldSettingsBtn"
+                  aria-expanded="false"
+                  aria-controls="simHoldSettingsPanel"
+                  title="关注币与重置本金"
+                  aria-label="模拟盘设置"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M12 3.5v2.2M12 18.3v2.2M4.9 6.4l1.6 1.6M17.5 16l1.6 1.6M3.5 12h2.2M18.3 12h2.2M4.9 17.6l1.6-1.6M17.5 8l1.6-1.6" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <p class="nail-hold-hint" id="simHoldHint">
+              确认后按现价立刻模拟成交（含 0.1% 手续费）；-3%/-5% 止损由独立云函数盯价成交。与真持仓完全隔离。
+            </p>
+            <div class="nail-hold-settings-panel" id="simHoldSettingsPanel" hidden>
+              <form class="nail-hold-form" id="simHoldForm">
+                <label>
+                  新增关注
+                  <input
+                    id="simHoldSymbol"
+                    name="symbol"
+                    type="text"
+                    placeholder="IOST 或 IOSTUSDT"
+                    autocomplete="off"
+                    required
+                  />
+                </label>
+                <button type="submit" id="simHoldAddBtn">加入</button>
+              </form>
+              <div class="nail-hold-live-row">
+                <button type="button" class="nail-hold-refresh" id="simHoldResetBtn" title="清空仓位，USDT 回到起始本金">
+                  重置本金
+                </button>
+              </div>
+            </div>
+            <div class="nail-hold-list-head">
+              <span>币列表</span>
+              <button type="button" class="nail-hold-refresh" id="simHoldListRefreshBtn" title="刷新">
+                刷新
+              </button>
+            </div>
+            <div class="nail-hold-list" id="simHoldList"></div>
+          </div>
           <div
             class="nail-settings-popover"
             id="nailSettingsPopover"
@@ -7557,82 +7608,6 @@
       >
         模拟
       </button>
-    </div>
-
-    <div id="simHoldFloat" class="notify-float is-sim-hold" hidden>
-      <div class="notify-float-head">
-        <button
-          type="button"
-          class="notify-float-refresh"
-          id="simHoldFloatRefresh"
-          title="拉取模拟余额与止损任务"
-          aria-label="刷新模拟盘"
-        >
-          刷新
-        </button>
-        <strong>模拟盘<span class="notify-time" id="simHoldFloatTime"></span></strong>
-        <button
-          type="button"
-          class="notify-float-close"
-          id="simHoldFloatClose"
-          title="关闭"
-          aria-label="关闭模拟盘"
-        >
-          ×
-        </button>
-      </div>
-      <div class="notify-float-body" id="simHoldFloatBody">
-        <div class="nail-hold-toolbar">
-          <div class="nail-hold-toolbar-title">虚拟仓位</div>
-          <div class="nail-hold-toolbar-actions">
-            <button
-              type="button"
-              class="nail-hold-settings-btn"
-              id="simHoldSettingsBtn"
-              aria-expanded="false"
-              aria-controls="simHoldSettingsPanel"
-              title="关注币与重置本金"
-              aria-label="模拟盘设置"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M12 3.5v2.2M12 18.3v2.2M4.9 6.4l1.6 1.6M17.5 16l1.6 1.6M3.5 12h2.2M18.3 12h2.2M4.9 17.6l1.6-1.6M17.5 8l1.6-1.6" />
-              </svg>
-            </button>
-          </div>
-        </div>
-        <p class="nail-hold-hint" id="simHoldHint">
-          确认后按现价立刻模拟成交（含 0.1% 手续费）；-3%/-5% 止损由独立云函数盯价成交。与真持仓完全隔离。
-        </p>
-        <div class="nail-hold-settings-panel" id="simHoldSettingsPanel" hidden>
-          <form class="nail-hold-form" id="simHoldForm">
-            <label>
-              新增关注
-              <input
-                id="simHoldSymbol"
-                name="symbol"
-                type="text"
-                placeholder="IOST 或 IOSTUSDT"
-                autocomplete="off"
-                required
-              />
-            </label>
-            <button type="submit" id="simHoldAddBtn">加入</button>
-          </form>
-          <div class="nail-hold-live-row">
-            <button type="button" class="nail-hold-refresh" id="simHoldResetBtn" title="清空仓位，USDT 回到起始本金">
-              重置本金
-            </button>
-          </div>
-        </div>
-        <div class="nail-hold-list-head">
-          <span>币列表</span>
-          <button type="button" class="nail-hold-refresh" id="simHoldListRefreshBtn" title="刷新">
-            刷新
-          </button>
-        </div>
-        <div class="nail-hold-list" id="simHoldList"></div>
-      </div>
     </div>
 
     <div id="pinBatchBar" class="pin-batch-bar" hidden>
@@ -12028,14 +12003,18 @@
         }
       }
 
-      function layoutNailHoldPopover() {
-        const popover = document.getElementById("nailHoldPopover");
-        if (!popover || popover.hidden) return;
+      function layoutNailHoldSheet(el) {
+        if (!el || el.hidden) return;
         const head = document.querySelector(".nail-panel .nail-head");
         const top = head
           ? Math.max(8, Math.round(head.getBoundingClientRect().bottom - 2))
           : 120;
-        popover.style.top = `${top}px`;
+        el.style.top = `${top}px`;
+      }
+
+      function layoutNailHoldPopover() {
+        layoutNailHoldSheet(document.getElementById("nailHoldPopover"));
+        layoutNailHoldSheet(document.getElementById("simHoldFloat"));
       }
 
       async function setNailHoldPopoverOpen(open) {
@@ -12046,6 +12025,7 @@
         if (next) {
           await setNailAutoPinPopoverOpen(false);
           await setNailRadarPopoverOpen(false);
+          if (isFloatPanelOpen("sim")) closeAllFloatPanels();
         }
         popover.hidden = !next;
         if (button) {
@@ -12998,12 +12978,18 @@
         if (momentum) momentum.hidden = true;
         if (notify) notify.hidden = true;
         if (log) log.hidden = true;
-        if (sim) sim.hidden = true;
+        if (sim) {
+          sim.hidden = true;
+          sim.style.top = "";
+        }
         if (momTab) momTab.classList.remove("is-active");
         if (notifyTab) notifyTab.classList.remove("is-active");
         if (logTab) logTab.classList.remove("is-active");
         if (simTab) simTab.classList.remove("is-active");
-        if (nailSimBtn) nailSimBtn.setAttribute("aria-expanded", "false");
+        if (nailSimBtn) {
+          nailSimBtn.setAttribute("aria-expanded", "false");
+          nailSimBtn.classList.remove("is-active");
+        }
         // 捕捉精选是全屏页，不在此清 is-active（由 syncNotesRankHeadUi 管）
         if (pickTab && !isNotesRankOpen()) {
           pickTab.classList.remove("is-active");
@@ -13069,14 +13055,23 @@
           const tab = document.getElementById("simHoldFloatTab");
           const nailSimBtn = document.getElementById("nailSimHoldBtn");
           if (!panel) return;
+          void setNailHoldPopoverOpen(false);
+          void setNailAutoPinPopoverOpen(false);
+          void setNailRadarPopoverOpen(false);
           panel.hidden = false;
           if (tab && simFloatVisible) {
             tab.hidden = false;
             tab.classList.add("is-active");
           }
-          if (nailSimBtn) nailSimBtn.setAttribute("aria-expanded", "true");
+          if (nailSimBtn) {
+            nailSimBtn.setAttribute("aria-expanded", "true");
+            nailSimBtn.classList.add("is-active");
+          }
+          layoutNailHoldPopover();
           renderSimHoldList();
-          void reloadSimHoldings({ silent: true });
+          void reloadSimHoldings({ silent: true }).then(() => {
+            layoutNailHoldPopover();
+          });
         }
       }
 
@@ -20574,8 +20569,8 @@
           nailNoticeDeBlueEnabled && nailNoticeDeltaFilter === "up";
         try {
           /**
-           * 现价相对「不含当前窗」往前至少一半 K 线跨度内的最高价更高 → MVP。
-           * 18 根时约看前 9 根（紧邻当前窗的那一段）的 max(high)。
+           * 现价相对「不含当前窗」往前至少一半 K 线跨度内的实体高更高 → MVP。
+           * 18 根时约看前 9 根（紧邻当前窗的那一段）的 max(open, close)，不算上影线。
            */
           function noticeIsMvpHigh(candles, livePrice) {
             if (!Array.isArray(candles) || candles.length < 3) return false;
@@ -20591,12 +20586,17 @@
                   ? lastClose
                   : NaN;
             if (!(Number.isFinite(px) && px > 0)) return false;
-            let maxHigh = 0;
+            let maxBody = 0;
             for (const bar of window) {
-              const high = Number(bar && bar.high);
-              if (Number.isFinite(high) && high > maxHigh) maxHigh = high;
+              const open = Number(bar && bar.open);
+              const close = Number(bar && bar.close);
+              const bodyTop = Math.max(
+                Number.isFinite(open) ? open : 0,
+                Number.isFinite(close) ? close : 0,
+              );
+              if (bodyTop > maxBody) maxBody = bodyTop;
             }
-            return maxHigh > 0 && px > maxHigh;
+            return maxBody > 0 && px > maxBody;
           }
 
           const paintOne = async (canvas) => {
@@ -25983,18 +25983,6 @@
           toggleFloatPanel("sim");
         });
       }
-      const simHoldFloatClose = document.getElementById("simHoldFloatClose");
-      if (simHoldFloatClose) {
-        simHoldFloatClose.addEventListener("click", () => {
-          closeAllFloatPanels();
-        });
-      }
-      const simHoldFloatRefresh = document.getElementById("simHoldFloatRefresh");
-      if (simHoldFloatRefresh) {
-        simHoldFloatRefresh.addEventListener("click", () => {
-          void reloadSimHoldings();
-        });
-      }
       const simHoldListRefreshBtn = document.getElementById(
         "simHoldListRefreshBtn",
       );
@@ -26178,6 +26166,9 @@
         }
         if (nailHoldPopover && !nailHoldPopover.hidden) {
           void setNailHoldPopoverOpen(false);
+        }
+        if (isFloatPanelOpen("sim")) {
+          closeAllFloatPanels();
         }
       });
       const nailNoticeCloseBtn = document.getElementById("nailNoticeCloseBtn");
