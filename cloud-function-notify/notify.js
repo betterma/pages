@@ -1357,6 +1357,71 @@ async function updateBstockPageNotify(now) {
   };
 }
 
+/** bStock 侧定时维护：日切 / 染绿 notices / 盯仓浮窗。不发企微微信。 */
+async function runBstockSideMaintenance(now) {
+  const out = {
+    nailDailyReset: { skipped: true, reason: 'not-run' },
+    nailGreenAlert: {
+      skipped: true,
+      reason: 'not-run',
+      sent: 0,
+      symbols: [],
+    },
+    pageNotify: { skipped: true, reason: 'not-run' },
+  };
+  const { AUTO_PIN_PROFILES } = require('./auto-pin');
+  const bp = AUTO_PIN_PROFILES.bstock;
+  try {
+    out.nailDailyReset = await runNailDailyReset({
+      now,
+      nailsPath: bp.NAILS_PATH,
+      statePath: bp.NAIL_DAILY_RESET_PATH,
+    });
+    console.log(
+      'bstock nail-daily-reset',
+      JSON.stringify(out.nailDailyReset),
+    );
+  } catch (error) {
+    console.warn(
+      'bstock nail-daily-reset failed',
+      error && error.message ? error.message : error,
+    );
+  }
+  try {
+    out.nailGreenAlert = await runNailGreenAlerts({
+      now,
+      nailsPath: bp.NAILS_PATH,
+      statePath: bp.NAIL_GREEN_ALERT_PATH,
+      noticesPath: bp.NAIL_GREEN_NOTICES_PATH,
+      push: false,
+      webhook: '',
+    });
+    console.log(
+      'bstock nail-green-alert',
+      JSON.stringify(out.nailGreenAlert),
+    );
+  } catch (error) {
+    console.warn(
+      'bstock nail-green-alert failed',
+      error && error.message ? error.message : error,
+    );
+  }
+  try {
+    out.pageNotify = await updateBstockPageNotify(now);
+    console.log('bstock page-notify', JSON.stringify(out.pageNotify));
+  } catch (error) {
+    console.warn(
+      'bstock page-notify failed',
+      error && error.message ? error.message : error,
+    );
+    out.pageNotify = {
+      skipped: true,
+      reason: error && error.message ? error.message : 'error',
+    };
+  }
+  return out;
+}
+
 async function main(event, context) {
   if (CONFIG.AUTO_PIN_PUSHPLUS && !CONFIG.PUSHPLUS_TOKEN) {
     throw new Error('Missing PUSHPLUS_TOKEN for auto-pin WeChat push');
@@ -1647,6 +1712,26 @@ async function main(event, context) {
     }
   }
 
+  // 必须在现货「空仓早退」之前跑，否则 bstock 日切/染绿/浮窗会被跳过。
+  let bstockSide = {
+    nailDailyReset: { skipped: true, reason: 'not-run' },
+    nailGreenAlert: {
+      skipped: true,
+      reason: 'not-run',
+      sent: 0,
+      symbols: [],
+    },
+    pageNotify: { skipped: true, reason: 'not-run' },
+  };
+  try {
+    bstockSide = await runBstockSideMaintenance(now);
+  } catch (error) {
+    console.warn(
+      'bstock side maintenance failed',
+      error && error.message ? error.message : error,
+    );
+  }
+
   let autoPinMomNotes = [];
   let autoPinNails = [];
   if (autoPinned.length) {
@@ -1779,6 +1864,8 @@ async function main(event, context) {
       reason: 'empty',
       autoPinned,
       autoDropped,
+      bstockAutoPinned,
+      bstockSide,
     };
   }
 
@@ -1919,7 +2006,6 @@ async function main(event, context) {
   }
 
   let nailDailyReset = { skipped: true, reason: 'not-run' };
-  let bstockNailDailyReset = { skipped: true, reason: 'not-run' };
   try {
     nailDailyReset = await runNailDailyReset({ now });
     if (!nailDailyReset.skipped && nailDailyReset.reason === 'ok') {
@@ -1930,24 +2016,6 @@ async function main(event, context) {
     const message = error && error.message ? error.message : String(error);
     sendErrors.push(`nail-daily-reset:${message}`);
     console.warn('nail-daily-reset failed', message);
-  }
-  try {
-    const { AUTO_PIN_PROFILES } = require('./auto-pin');
-    const bp = AUTO_PIN_PROFILES.bstock;
-    bstockNailDailyReset = await runNailDailyReset({
-      now,
-      nailsPath: bp.NAILS_PATH,
-      statePath: bp.NAIL_DAILY_RESET_PATH,
-    });
-    console.log(
-      'bstock nail-daily-reset',
-      JSON.stringify(bstockNailDailyReset),
-    );
-  } catch (error) {
-    console.warn(
-      'bstock nail-daily-reset failed',
-      error && error.message ? error.message : error,
-    );
   }
 
   let holdings = { skipped: true, reason: 'not-run' };
@@ -2000,12 +2068,6 @@ async function main(event, context) {
   }
 
   let nailGreenAlert = { skipped: true, reason: 'not-run', sent: 0, symbols: [] };
-  let bstockNailGreenAlert = {
-    skipped: true,
-    reason: 'not-run',
-    sent: 0,
-    symbols: [],
-  };
   try {
     nailGreenAlert = await runNailGreenAlerts({
       now,
@@ -2022,28 +2084,6 @@ async function main(event, context) {
     const message = error && error.message ? error.message : String(error);
     sendErrors.push(`nail-green:${message}`);
     console.warn('nail-green-alert failed', message);
-  }
-  try {
-    const { AUTO_PIN_PROFILES } = require('./auto-pin');
-    const bp = AUTO_PIN_PROFILES.bstock;
-    // bStock：页面 notices 同语义，禁止企微/微信推送。
-    bstockNailGreenAlert = await runNailGreenAlerts({
-      now,
-      nailsPath: bp.NAILS_PATH,
-      statePath: bp.NAIL_GREEN_ALERT_PATH,
-      noticesPath: bp.NAIL_GREEN_NOTICES_PATH,
-      push: false,
-      webhook: '',
-    });
-    console.log(
-      'bstock nail-green-alert',
-      JSON.stringify(bstockNailGreenAlert),
-    );
-  } catch (error) {
-    console.warn(
-      'bstock nail-green-alert failed',
-      error && error.message ? error.message : error,
-    );
   }
 
   // 网页盯一下文案更新即推进 lastPinPrices（@@@ 相对上次网页公布价）。
@@ -2114,21 +2154,6 @@ async function main(event, context) {
     );
   }
 
-  let bstockPageNotify = { skipped: true, reason: 'not-run' };
-  try {
-    bstockPageNotify = await updateBstockPageNotify(now);
-    console.log('bstock page-notify', JSON.stringify(bstockPageNotify));
-  } catch (error) {
-    console.warn(
-      'bstock page-notify failed',
-      error && error.message ? error.message : error,
-    );
-    bstockPageNotify = {
-      skipped: true,
-      reason: error && error.message ? error.message : 'error',
-    };
-  }
-
   console.log(
     'notify done',
     JSON.stringify({
@@ -2153,10 +2178,8 @@ async function main(event, context) {
       bstockAutoDropped,
       bstockAutoPinNails: bstockAutoPinNails.length,
       bstockAutoPinMomNotes: bstockAutoPinMomNotes.length,
-      bstockNailDailyReset,
-      bstockNailGreenAlert,
       bstockPriceAlertStats,
-      bstockPageNotify,
+      bstockSide,
       sendErrors,
     }),
   );
@@ -2181,10 +2204,8 @@ async function main(event, context) {
     nailGreenAlert,
     bstockAutoPinned,
     bstockAutoDropped,
-    bstockNailDailyReset,
-    bstockNailGreenAlert,
     bstockPriceAlertStats,
-    bstockPageNotify,
+    bstockSide,
     sendErrors,
   };
 }

@@ -16027,6 +16027,14 @@
       }
 
       function scheduleBreakHighTick() {
+        // bStock 不做破点高（云侧也不跑）；避免写 watch-bstock-break-high。
+        if (KLINE_MODE === "bstock") {
+          if (breakHighTimer) {
+            clearTimeout(breakHighTimer);
+            breakHighTimer = 0;
+          }
+          return;
+        }
         if (breakHighTimer) {
           clearTimeout(breakHighTimer);
           breakHighTimer = 0;
@@ -16065,6 +16073,9 @@
        */
       async function maybeRunBreakHighCheck(options) {
         const force = !!(options && options.force);
+        if (KLINE_MODE === "bstock") {
+          return { skipped: true, reason: "bstock-disabled", hits: [] };
+        }
         if (breakHighChecking) {
           return { skipped: true, hits: breakHighState.hits || [] };
         }

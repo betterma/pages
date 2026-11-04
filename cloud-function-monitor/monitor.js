@@ -1260,14 +1260,25 @@ async function runMonitorOnce(profileKey) {
 }
 
 async function main() {
-  const cryptoResult = await runMonitorOnce('crypto');
+  // 两边互不影响：一侧失败仍跑另一侧。
+  let cryptoResult = null;
   let bstockResult = null;
+  try {
+    cryptoResult = await runMonitorOnce('crypto');
+  } catch (error) {
+    console.warn(
+      `crypto monitor failed: ${error && error.message ? error.message : error}`,
+    );
+  }
   try {
     bstockResult = await runMonitorOnce('bstock');
   } catch (error) {
     console.warn(
       `bstock monitor failed: ${error && error.message ? error.message : error}`,
     );
+  }
+  if (!cryptoResult && !bstockResult) {
+    throw new Error('monitor failed: both crypto and bstock');
   }
   return { crypto: cryptoResult, bstock: bstockResult };
 }
