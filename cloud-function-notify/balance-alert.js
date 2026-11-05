@@ -18,7 +18,26 @@ const CONCURRENCY = Math.max(
   1,
   Number(process.env.BALANCE_ALERT_CONCURRENCY || 6),
 );
-const SEND_MAX = Math.max(0, Number(process.env.BALANCE_ALERT_SEND_MAX || 0));
+/** 单轮最多推几只（默认 5）；0=不限制。首轮全量命中时避免企微连发超时。 */
+const SEND_MAX = Math.max(
+  0,
+  Number(
+    process.env.BALANCE_ALERT_SEND_MAX === undefined ||
+      process.env.BALANCE_ALERT_SEND_MAX === ''
+      ? 5
+      : process.env.BALANCE_ALERT_SEND_MAX,
+  ),
+);
+/** 单轮最多拉 K 检查几只（默认 24）；0=冷却到期的全查。 */
+const CHECK_MAX = Math.max(
+  0,
+  Number(
+    process.env.BALANCE_ALERT_CHECK_MAX === undefined ||
+      process.env.BALANCE_ALERT_CHECK_MAX === ''
+      ? 24
+      : process.env.BALANCE_ALERT_CHECK_MAX,
+  ),
+);
 /** 同一币两次天平企微最短间隔（默认 1 小时）。 */
 const COOLDOWN_MS = Math.max(
   0,
@@ -212,7 +231,7 @@ async function runBalanceAlerts(options) {
   let state = normalizeState(stateFile && stateFile.data);
   let stateDirty = false;
 
-  const pending = pins.filter((pin) => {
+  const due = pins.filter((pin) => {
     const prev = state.bySymbol[pin.symbol];
     if (!prev) return true;
     const lastSentAt = Number(prev.lastSentAt) || 0;
@@ -220,8 +239,13 @@ async function runBalanceAlerts(options) {
     if (COOLDOWN_MS <= 0) return true;
     return now - lastSentAt >= COOLDOWN_MS;
   });
+  // 优先更早盯上的，避免总扫同一批新币。
+  due.sort((a, b) => (a.pinnedAt || 0) - (b.pinnedAt || 0));
+  const pending =
+    CHECK_MAX > 0 && due.length > CHECK_MAX ? due.slice(0, CHECK_MAX) : due;
+  result.due = due.length;
   result.checked = pending.length;
-  result.skippedFetch = pins.length - pending.length;
+  result.skippedFetch = pins.length - due.length;
   result.cooldownMs = COOLDOWN_MS;
   if (!pending.length) {
     result.reason = 'cooldown';

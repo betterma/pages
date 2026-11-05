@@ -29,7 +29,9 @@
 - `BALANCE_ALERT`：默认 `1`；`0` 关闭
 - `BALANCE_ALERT_COOLDOWN_MS`：默认 `3600000`（1 小时）
 - Webhook：`WECOM_WEBHOOK_PINS` → 否则 `WECOM_WEBHOOK_POSITIONS` / `WECOM_WEBHOOK_URL`
-- `BALANCE_ALERT_SEND_MAX`：默认 `0`=不限制；并发 `BALANCE_ALERT_CONCURRENCY`（默认 6）
+- `BALANCE_ALERT_SEND_MAX`：默认 `5`（防首轮连发超时）；`0`=不限制
+- `BALANCE_ALERT_CHECK_MAX`：默认 `24`（单轮最多拉 K 检查几只）；`0`=冷却到期全查
+- 并发 `BALANCE_ALERT_CONCURRENCY`（默认 6）
 
 ## 排序动态（notes-rank 快照）
 

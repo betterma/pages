@@ -1436,13 +1436,18 @@ async function runBstockSideMaintenance(now) {
 }
 
 async function main(event, context) {
+  // 缺 token/webhook 时降级关闭推送，避免整轮 notify 直接抛死（控制台只见「执行失败」）。
   if (CONFIG.AUTO_PIN_PUSHPLUS && !CONFIG.PUSHPLUS_TOKEN) {
-    throw new Error('Missing PUSHPLUS_TOKEN for auto-pin WeChat push');
+    console.warn(
+      'AUTO_PIN_PUSHPLUS=1 but PUSHPLUS_TOKEN missing — disable auto-pin PushPlus',
+    );
+    CONFIG.AUTO_PIN_PUSHPLUS = false;
   }
   if (CONFIG.AUTO_PIN_WECOM && !CONFIG.WECOM_WEBHOOK_POSITIONS) {
-    throw new Error(
-      'Missing WECOM_WEBHOOK_POSITIONS (or WECOM_WEBHOOK_URL) for auto-pin WeCom',
+    console.warn(
+      'AUTO_PIN_WECOM=1 but WECOM_WEBHOOK_POSITIONS missing — disable auto-pin WeCom',
     );
+    CONFIG.AUTO_PIN_WECOM = false;
   }
 
   console.log(
