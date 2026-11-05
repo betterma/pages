@@ -1152,10 +1152,9 @@ async function runMonitorOnce(profileKey) {
     const symbol = String(ticker.symbol || '').toUpperCase();
     // 24hr 仍含 BREAK 下架对；只进 TRADING USDT，避免假前 N / 脏自动盯。
     if (!symbol.endsWith('USDT') || !trading.has(symbol)) continue;
+    // bstock 宇宙仍只收 TRD_GRP_261；crypto 不再排除 bStocks（与网页池一致）。
     if (CONFIG.MARKET_UNIVERSE === 'bstock') {
       if (!bstocks.has(symbol)) continue;
-    } else if (bstocks.has(symbol)) {
-      continue;
     }
     const price = Number(ticker.lastPrice);
     const change = Number(ticker.priceChangePercent);

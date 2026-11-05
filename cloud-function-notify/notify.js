@@ -44,6 +44,19 @@ try {
   );
 }
 
+let runBalanceAlerts = async () => ({
+  skipped: true,
+  reason: 'module-missing',
+});
+try {
+  runBalanceAlerts = require('./balance-alert').runBalanceAlerts;
+} catch (error) {
+  console.warn(
+    'balance-alert module missing — 请整包上传 cloud-function-notify',
+    error && error.message ? error.message : error,
+  );
+}
+
 let runNailDailyReset = async () => ({
   skipped: true,
   reason: 'module-missing',
@@ -169,9 +182,9 @@ const CONFIG = {
   // Parallel symbol fetches for 5m/15m momentum (each symbol = 2 kline calls).
   MOMENTUM_CONCURRENCY: Number(process.env.MOMENTUM_CONCURRENCY || 5),
   PUSHPLUS_TOKEN: String(process.env.PUSHPLUS_TOKEN || '').trim(),
-  // 新自动盯默认走微信 PushPlus；企微仅当显式打开。
+  // 新自动盯默认不再推送；天平命中才发企微（见 balance-alert）。
   AUTO_PIN_PUSHPLUS:
-    String(process.env.AUTO_PIN_PUSHPLUS === undefined ? '1' : process.env.AUTO_PIN_PUSHPLUS) !==
+    String(process.env.AUTO_PIN_PUSHPLUS === undefined ? '0' : process.env.AUTO_PIN_PUSHPLUS) !==
     '0',
   AUTO_PIN_WECOM:
     String(process.env.AUTO_PIN_WECOM === undefined ? '0' : process.env.AUTO_PIN_WECOM) !==
@@ -1794,6 +1807,8 @@ async function main(event, context) {
   }
 
   async function sendAutoPinAlert() {
+    // 产品改为：自动盯本身不推；仅天平新命中推企微。
+    if (!CONFIG.AUTO_PIN_PUSHPLUS && !CONFIG.AUTO_PIN_WECOM) return null;
     const alert = buildAutoPinAlert();
     if (!alert) return null;
     const sentTags = [];
@@ -1819,6 +1834,36 @@ async function main(event, context) {
   } catch (error) {
     console.warn('load mom notes failed', error.message || error);
     momNotes = [];
+  }
+
+  // 首绿落盘 / 天平企微：不依赖持仓与记一笔，空仓早退前也要跑。
+  let nailGreenAlert = { skipped: true, reason: 'not-run', sent: 0, symbols: [] };
+  try {
+    nailGreenAlert = await runNailGreenAlerts({
+      now,
+      push: false,
+    });
+    console.log('nail-green-alert', JSON.stringify(nailGreenAlert));
+  } catch (error) {
+    console.warn(
+      'nail-green-alert failed',
+      error && error.message ? error.message : error,
+    );
+  }
+
+  let balanceAlert = { skipped: true, reason: 'not-run', sent: 0, symbols: [] };
+  try {
+    balanceAlert = await runBalanceAlerts({
+      now,
+      pins,
+      webhook: CONFIG.WECOM_WEBHOOK_PINS || CONFIG.WECOM_WEBHOOK_POSITIONS,
+    });
+    console.log('balance-alert', JSON.stringify(balanceAlert));
+  } catch (error) {
+    console.warn(
+      'balance-alert failed',
+      error && error.message ? error.message : error,
+    );
   }
 
   if (!pins.length && !positions.length && !momNotes.length) {
@@ -1866,6 +1911,8 @@ async function main(event, context) {
       autoDropped,
       bstockAutoPinned,
       bstockSide,
+      nailGreenAlert,
+      balanceAlert,
     };
   }
 
@@ -2067,23 +2114,18 @@ async function main(event, context) {
     console.warn('buy-tasks failed', message);
   }
 
-  let nailGreenAlert = { skipped: true, reason: 'not-run', sent: 0, symbols: [] };
-  try {
-    nailGreenAlert = await runNailGreenAlerts({
-      now,
-      webhook: CONFIG.WECOM_WEBHOOK_PINS || CONFIG.WECOM_WEBHOOK_POSITIONS,
-    });
-    if (nailGreenAlert.sent) {
-      sent.push(`nail-green:${nailGreenAlert.sent}`);
-    }
-    if (nailGreenAlert.errors && nailGreenAlert.errors.length) {
-      sendErrors.push(...nailGreenAlert.errors.slice(0, 5));
-    }
-    console.log('nail-green-alert', JSON.stringify(nailGreenAlert));
-  } catch (error) {
-    const message = error && error.message ? error.message : String(error);
-    sendErrors.push(`nail-green:${message}`);
-    console.warn('nail-green-alert failed', message);
+  // nailGreenAlert / balanceAlert 已在空仓早退前跑过；此处只汇总到 sent。
+  if (nailGreenAlert && nailGreenAlert.hits) {
+    sent.push(`nail-green-page:${nailGreenAlert.hits}`);
+  }
+  if (nailGreenAlert && nailGreenAlert.errors && nailGreenAlert.errors.length) {
+    sendErrors.push(...nailGreenAlert.errors.slice(0, 5));
+  }
+  if (balanceAlert && balanceAlert.sent) {
+    sent.push(`balance:${balanceAlert.sent}`);
+  }
+  if (balanceAlert && balanceAlert.errors && balanceAlert.errors.length) {
+    sendErrors.push(...balanceAlert.errors.slice(0, 5));
   }
 
   // 网页盯一下文案更新即推进 lastPinPrices（@@@ 相对上次网页公布价）。
@@ -2174,6 +2216,7 @@ async function main(event, context) {
       sellTasks,
       buyTasks,
       nailGreenAlert,
+      balanceAlert,
       bstockAutoPinned,
       bstockAutoDropped,
       bstockAutoPinNails: bstockAutoPinNails.length,
@@ -2202,6 +2245,7 @@ async function main(event, context) {
     sellTasks,
     buyTasks,
     nailGreenAlert,
+    balanceAlert,
     bstockAutoPinned,
     bstockAutoDropped,
     bstockPriceAlertStats,

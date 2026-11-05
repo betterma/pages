@@ -3295,18 +3295,6 @@
         box-shadow: 0 0 0 1px
           color-mix(in srgb, var(--accent, #2f8f6e) 35%, transparent);
       }
-      /* 现价相对前半段历史（不含当前窗）实体创新高 → MVP（不算上影） */
-      .nail-notice-card.is-notice-mvp {
-        background: linear-gradient(
-          125deg,
-          color-mix(in srgb, #ff8a7a 34%, var(--elevated, #fff)),
-          color-mix(in srgb, #ffd56a 36%, var(--elevated, #fff)),
-          color-mix(in srgb, #7ddea0 34%, var(--elevated, #fff)),
-          color-mix(in srgb, #7eb6ff 36%, var(--elevated, #fff))
-        );
-        box-shadow: inset 0 0 0 1px
-          color-mix(in srgb, #e8b84a 42%, transparent);
-      }
       .nail-notice-card.is-delta-filtered {
         display: none;
       }
@@ -7124,6 +7112,16 @@
               title="仅蓝筛选可用。打开：按钉子抽屉染绿；关闭：正常染蓝。偏好保存在本机。"
             >
               去蓝
+            </button>
+            <button
+              type="button"
+              id="nailNoticeBalanceBtn"
+              class="nail-notice-deblue"
+              hidden
+              aria-pressed="false"
+              title="仅蓝筛选可用。打开：只显示天平（盯后曾跌破 pin，且现价高于跌破K最低收盘）。偏好保存在本机。"
+            >
+              天平
             </button>
             <button
               type="button"
@@ -14048,26 +14046,16 @@
         return bstockSymbolSet instanceof Set ? bstockSymbolSet : new Set();
       }
       /**
-       * crypto：拉黑 ∪ bStocks（股票代币不进现货池）
-       * bstock：仅拉黑（宇宙本身已是 bStocks）
+       * crypto / bstock：仅拉黑（crypto 不再排除 bStocks）
        */
       function poolBlockedSymbols() {
-        const blocked = blacklistSymbols();
-        if (KLINE_MODE === "bstock") return blocked;
-        const stocks = bstockSymbols();
-        if (!stocks.size) return blocked;
-        const out = new Set(blocked);
-        stocks.forEach((symbol) => out.add(symbol));
-        return out;
+        return blacklistSymbols();
       }
       function symbolInActiveUniverse(symbol) {
         const key = String(symbol || "").toUpperCase();
         if (!key.endsWith("USDT")) return false;
         if (KLINE_MODE === "bstock") {
           return !!(bstockSymbolSet && bstockSymbolSet.size && bstockSymbolSet.has(key));
-        }
-        if (bstockSymbolSet && bstockSymbolSet.size && bstockSymbolSet.has(key)) {
-          return false;
         }
         return true;
       }
@@ -19806,6 +19794,12 @@
       const selectedNoticeSymbols = new Set();
       /** 仅蓝筛选下有效；开关偏好存本机 localStorage。 */
       const NAIL_NOTICE_DEBLUE_KEY = "kline-nail-notice-deblue-v1";
+      const NAIL_NOTICE_BALANCE_KEY = "kline-nail-notice-balance-v1";
+      const NAIL_NOTICE_AUTO_PIN_SOURCES = new Set([
+        "auto-rising",
+        "auto-cloud",
+        "auto-rewarm",
+      ]);
       function readLocalNailNoticeDeBlue() {
         try {
           return localStorage.getItem(NAIL_NOTICE_DEBLUE_KEY) === "1";
@@ -19823,7 +19817,25 @@
           /* ignore */
         }
       }
+      function readLocalNailNoticeBalance() {
+        try {
+          return localStorage.getItem(NAIL_NOTICE_BALANCE_KEY) === "1";
+        } catch (_) {
+          return false;
+        }
+      }
+      function writeLocalNailNoticeBalance(enabled) {
+        try {
+          localStorage.setItem(
+            NAIL_NOTICE_BALANCE_KEY,
+            enabled ? "1" : "0",
+          );
+        } catch (_) {
+          /* ignore */
+        }
+      }
       let nailNoticeDeBlueEnabled = readLocalNailNoticeDeBlue();
+      let nailNoticeBalanceEnabled = readLocalNailNoticeBalance();
       let nailDailyResetState = null;
       let nailDailyResetPromptKind = null; // pre | post
       let nailDailyResetPromptBusy = false;
@@ -20352,6 +20364,7 @@
           btn.classList.toggle("is-active", mode === nailNoticeDeltaFilter);
         });
         syncNailNoticeDeBlueUi();
+        syncNailNoticeBalanceUi();
       }
 
       function syncNailNoticeDeBlueUi() {
@@ -20365,6 +20378,17 @@
         btn.textContent = on ? "去蓝·开" : "去蓝";
       }
 
+      function syncNailNoticeBalanceUi() {
+        const btn = document.getElementById("nailNoticeBalanceBtn");
+        if (!btn) return;
+        const show = nailNoticeDeltaFilter === "up";
+        const on = show && !!nailNoticeBalanceEnabled;
+        btn.hidden = !show;
+        btn.classList.toggle("is-on", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+        btn.textContent = on ? "天平·开" : "天平";
+      }
+
       function setNailNoticeDeBlueEnabled(enabled) {
         if (nailNoticeDeltaFilter !== "up") return;
         nailNoticeDeBlueEnabled = !!enabled;
@@ -20373,10 +20397,20 @@
         void paintNailNoticeCharts();
       }
 
+      function setNailNoticeBalanceEnabled(enabled) {
+        if (nailNoticeDeltaFilter !== "up") return;
+        nailNoticeBalanceEnabled = !!enabled;
+        writeLocalNailNoticeBalance(nailNoticeBalanceEnabled);
+        syncNailNoticeBalanceUi();
+        applyNailNoticeDeltaFilter();
+        void paintNailNoticeCharts();
+      }
+
       function applyNailNoticeDeltaFilter() {
         const listEl = document.getElementById("nailNoticeList");
         if (!listEl) return;
         const mode = nailNoticeDeltaFilter;
+        const balanceOn = mode === "up" && !!nailNoticeBalanceEnabled;
         let visible = 0;
         listEl.querySelectorAll(".nail-notice-card").forEach((card) => {
           const dir = card.getAttribute("data-notice-dir") || "";
@@ -20388,19 +20422,33 @@
                 : false;
           // 尚未算出涨跌时：筛选开启则先藏，避免闪一下再消失。
           const pending = !dir && mode !== "all";
-          const filtered = hide || pending;
+          const balAttr = card.getAttribute("data-notice-balance");
+          const balanceHide =
+            balanceOn &&
+            (balAttr !== "1" || balAttr === null || balAttr === "");
+          // 天平开且尚未算出：先藏。
+          const balancePending = balanceOn && balAttr === null;
+          const filtered =
+            hide || pending || balanceHide || balancePending;
           card.classList.toggle("is-delta-filtered", filtered);
           if (!filtered) visible += 1;
         });
         let emptyEl = listEl.querySelector(".nail-notice-filter-empty");
-        if (mode !== "all" && visible === 0 && listEl.querySelector(".nail-notice-card")) {
+        if (
+          (mode !== "all" || balanceOn) &&
+          visible === 0 &&
+          listEl.querySelector(".nail-notice-card")
+        ) {
           if (!emptyEl) {
             emptyEl = document.createElement("div");
             emptyEl.className = "nail-notice-empty nail-notice-filter-empty";
             listEl.appendChild(emptyEl);
           }
-          emptyEl.textContent =
-            mode === "up" ? "暂无上涨（蓝）通知" : "暂无下跌（红）通知";
+          emptyEl.textContent = balanceOn
+            ? "暂无天平通知"
+            : mode === "up"
+              ? "暂无上涨（蓝）通知"
+              : "暂无下跌（红）通知";
           emptyEl.hidden = false;
         } else if (emptyEl) {
           emptyEl.hidden = true;
@@ -20408,10 +20456,17 @@
         const metaEl = document.getElementById("nailNoticeMeta");
         const total = (nailGreenNotices || []).length;
         if (metaEl && total) {
+          const tag = balanceOn
+            ? "蓝·天平"
+            : mode === "up"
+              ? "蓝"
+              : mode === "down"
+                ? "红"
+                : "";
           metaEl.textContent =
-            mode === "all"
+            mode === "all" && !balanceOn
               ? `当前 4h 窗 · ${total} 条 · 最新在上`
-              : `当前 4h 窗 · 显示 ${visible}/${total} · ${mode === "up" ? "蓝" : "红"}`;
+              : `当前 4h 窗 · 显示 ${visible}/${total} · ${tag}`;
         }
       }
 
@@ -20510,9 +20565,10 @@
       async function setNailNoticeDeltaFilter(mode) {
         nailNoticeDeltaFilter =
           mode === "up" || mode === "down" ? mode : "all";
-        // 切回蓝时按本机偏好恢复去蓝；其它筛选下 UI 隐藏，不改写偏好。
+        // 切回蓝时按本机偏好恢复去蓝/天平；其它筛选下 UI 隐藏，不改写偏好。
         if (nailNoticeDeltaFilter === "up") {
           nailNoticeDeBlueEnabled = readLocalNailNoticeDeBlue();
+          nailNoticeBalanceEnabled = readLocalNailNoticeBalance();
         }
         syncNailNoticeDeltaFilterUi();
         // 先立刻按新筛选显隐，避免「按钮已是全部、卡片仍被蓝筛 pending 藏住」的竞态。
@@ -20569,14 +20625,16 @@
           nailNoticeDeBlueEnabled && nailNoticeDeltaFilter === "up";
         try {
           /**
-           * 现价相对「不含当前窗」往前至少一半 K 线跨度内的实体高更高 → MVP。
-           * 18 根时约看前 9 根（紧邻当前窗的那一段）的 max(open, close)，不算上影线。
+           * 天平：盯所在 K 之后到当前窗（含）存在 low < pinPrice（影线算跌破）；
+           * 收回：现价 > 这些跌破 K 的最低收盘（对比只用收盘，影线不算）。
            */
-          function noticeIsMvpHigh(candles, livePrice) {
-            if (!Array.isArray(candles) || candles.length < 3) return false;
-            const prior = candles.slice(0, -1);
-            const lookback = Math.max(1, Math.ceil(prior.length / 2));
-            const window = prior.slice(-lookback);
+          function noticeIsBalance(candles, livePrice, pin) {
+            if (!pin || !Array.isArray(candles) || !candles.length) return false;
+            if (!NAIL_NOTICE_AUTO_PIN_SOURCES.has(String(pin.source || ""))) {
+              return false;
+            }
+            const line = Number(pin.pinPrice);
+            if (!(Number.isFinite(line) && line > 0)) return false;
             const live = Number(livePrice);
             const lastClose = Number(candles[candles.length - 1]?.close);
             const px =
@@ -20586,17 +20644,27 @@
                   ? lastClose
                   : NaN;
             if (!(Number.isFinite(px) && px > 0)) return false;
-            let maxBody = 0;
-            for (const bar of window) {
-              const open = Number(bar && bar.open);
+            const pinnedAt = Number(pin.pinnedAt) || 0;
+            if (!(pinnedAt > 0)) return false;
+            const pinIdx = findCandleIndexAt(candles, pinnedAt);
+            const lastIdx = candles.length - 1;
+            if (pinIdx < 0 || lastIdx <= pinIdx) return false;
+            let minDipClose = Infinity;
+            let dipped = false;
+            for (let i = pinIdx + 1; i <= lastIdx; i += 1) {
+              const bar = candles[i];
+              const low = Number(bar && bar.low);
+              if (!(Number.isFinite(low) && low < line)) continue;
+              dipped = true;
               const close = Number(bar && bar.close);
-              const bodyTop = Math.max(
-                Number.isFinite(open) ? open : 0,
-                Number.isFinite(close) ? close : 0,
-              );
-              if (bodyTop > maxBody) maxBody = bodyTop;
+              if (Number.isFinite(close) && close < minDipClose) {
+                minDipClose = close;
+              }
             }
-            return maxBody > 0 && px > maxBody;
+            if (!dipped || !(Number.isFinite(minDipClose) && minDipClose < Infinity)) {
+              return false;
+            }
+            return px > minDipClose;
           }
 
           const paintOne = async (canvas) => {
@@ -20655,18 +20723,18 @@
                   deltaEl.classList.remove("is-up", "is-down");
                 }
               }
+              const pin = pinItemBySymbol(symbol);
               if (card) {
                 card.setAttribute(
                   "data-notice-dir",
                   delta ? (delta.up ? "up" : "down") : "flat",
                 );
-                card.classList.toggle(
-                  "is-notice-mvp",
-                  noticeIsMvpHigh(candles, livePrice),
+                card.setAttribute(
+                  "data-notice-balance",
+                  noticeIsBalance(candles, livePrice, pin) ? "1" : "0",
                 );
                 applyNailNoticeDeltaFilter();
               }
-              const pin = pinItemBySymbol(symbol);
               drawKline(
                 canvas,
                 candles,
@@ -20686,13 +20754,15 @@
               );
             } catch (error) {
               console.warn("notice chart failed", symbol, error);
-              // 失败也写入方向，避免蓝/红筛选下一直 pending 被藏死。
+              // 失败也写入方向/天平，避免筛选下一直 pending 被藏死。
               if (card) {
-                card.classList.remove("is-notice-mvp");
                 if (!card.getAttribute("data-notice-dir")) {
                   card.setAttribute("data-notice-dir", "flat");
-                  applyNailNoticeDeltaFilter();
                 }
+                if (card.getAttribute("data-notice-balance") === null) {
+                  card.setAttribute("data-notice-balance", "0");
+                }
+                applyNailNoticeDeltaFilter();
               }
             }
           };
@@ -20813,8 +20883,10 @@
         // 打开通知页时默认筛「蓝」（相对通知线上涨）。
         nailNoticeDeltaFilter = "up";
         nailNoticeDeBlueEnabled = readLocalNailNoticeDeBlue();
+        nailNoticeBalanceEnabled = readLocalNailNoticeBalance();
         syncNailNoticeDeltaFilterUi();
         syncNailNoticeDeBlueUi();
+        syncNailNoticeBalanceUi();
         // 先开抽屉（用内存名单立刻出画面），再后台强刷，避免点击半秒停顿。
         if ((nailGreenNotices || []).length) {
           renderNailNoticeList();
@@ -26203,6 +26275,15 @@
         nailNoticeDeBlueBtn.addEventListener("click", () => {
           if (nailNoticeDeltaFilter !== "up") return;
           setNailNoticeDeBlueEnabled(!nailNoticeDeBlueEnabled);
+        });
+      }
+      const nailNoticeBalanceBtn = document.getElementById(
+        "nailNoticeBalanceBtn",
+      );
+      if (nailNoticeBalanceBtn) {
+        nailNoticeBalanceBtn.addEventListener("click", () => {
+          if (nailNoticeDeltaFilter !== "up") return;
+          setNailNoticeBalanceEnabled(!nailNoticeBalanceEnabled);
         });
       }
       const nailNoticeRefreshBtn = document.getElementById(

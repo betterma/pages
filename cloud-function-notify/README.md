@@ -1,14 +1,13 @@
-# 自动盯 · 微信 PushPlus
+# 自动盯 · 天平企微
 
 定时事件函数：默认每 5 分钟读取 GitHub 盯一下、记住、持仓，拉币安现价。  
 观察池 `watch-data`：只读 **GitHub 热库**（含紧凑名次 `r[]`，读入展开为 ranks）。
 
-## 微信（新自动盯）
+## 自动盯（默认不推送）
 
-未盯币进入（或已在）24h 前 30 / 观察池时发 PushPlus 一对一微信（`新盯 FIL`），并写入 `watch-action-log.json`。同时用**同一时刻、同一盯住价**写入 `watch-mom-notes.json` 记一笔，并写入钉子。  
-含两类：边沿**新进**，以及 **在池却未盯**的补漏（`catch-up`，避免 snap 已记但漏钉）。  
-**不再要求**当前 4h 窗口上涨或窗起点快照有价。  
-已盯币**掉出前 30 / 观察池**只写捕捉日志（`掉出窗口`），不推微信。  
+未盯币进入（或已在）24h 前 30 / 观察池时写入盯一下、`watch-action-log.json`、记一笔与钉子；**默认不发微信/企微**。  
+含两类：边沿**新进**，以及 **在池却未盯**的补漏（`catch-up`）。  
+已盯币**掉出前 30 / 观察池**只写捕捉日志（`掉出窗口`）。  
 **已取消回暖**：已盯币再次进区不会改钉价、不写回暖日志、不推送。
 
 盯一下离开方式只有两种：
@@ -16,11 +15,21 @@
 1. **触底退出**（周期低点自动清钉）
 2. **用户手动取消盯一下**
 
-- `PUSHPLUS_TOKEN`：一对一 token，只放云函数环境变量，不要写入仓库。
-- `AUTO_PIN_PUSHPLUS`：默认 `1`；`0` 关闭微信推送（日志仍写）。
-- `AUTO_PIN_WECOM`：默认 `0`。需要同时发企微时设为 `1`，并保留 `WECOM_WEBHOOK_POSITIONS`。
+- `AUTO_PIN_PUSHPLUS`：默认 `0`；`1` 才发 PushPlus（需 `PUSHPLUS_TOKEN`）。
+- `AUTO_PIN_WECOM`：默认 `0`；`1` 才发企微（需 `WECOM_WEBHOOK_POSITIONS`）。
 
 网页刷新不再单独自动盯。
+
+## 天平（企微文字 + K 线）
+
+对自动盯（`auto-rising` / `auto-cloud` / `auto-rewarm`）检查：盯后到当前 4h 窗曾 `low < pinPrice`，且现价 **>** 跌破 K 的最低收盘 → 发企微「币名 · 天平」+ 4h 图（含盯住价线）。  
+同一币 **1 小时内**不重复推；满 1 小时仍符合天平可再推（`lastSentAt` 冷却）。
+
+- 去重状态：`watch-balance-alert.json`
+- `BALANCE_ALERT`：默认 `1`；`0` 关闭
+- `BALANCE_ALERT_COOLDOWN_MS`：默认 `3600000`（1 小时）
+- Webhook：`WECOM_WEBHOOK_PINS` → 否则 `WECOM_WEBHOOK_POSITIONS` / `WECOM_WEBHOOK_URL`
+- `BALANCE_ALERT_SEND_MAX`：默认 `0`=不限制；并发 `BALANCE_ALERT_CONCURRENCY`（默认 6）
 
 ## 排序动态（notes-rank 快照）
 
@@ -31,19 +40,16 @@
 - `NOTES_RANK_SNAP_ENABLED`：默认 `1`；`0` 关闭。
 - `NOTES_RANK_SNAP_INTERVAL_MS`：默认 `1800000`（30 分钟）。
 
-## 钉子荧光绿（企微 + 图）
+## 钉子荧光绿（仅网页，不发企微）
 
 定时里读取 `watch-nails.json`：有便签水位的钉子，拉 **4h** K 线，站在当前时刻回看 `noteAt` 之后的窗口。  
-当**当前根已染绿**（含**第一条绿**，以及续绿/断绿再绿），且该根 `openTime` 尚未推过 → 发企微文字 + 染绿图（文案带「首绿」/「续绿」）。**同一根 4h 只推一次。**  
-通知列表只保留**当前 4h 窗**；进入新窗时自动清掉旧窗通知（更聚焦「此刻这根」）。
+当**当前根已染绿**（首绿 / 续绿），且该根 `openTime` 尚未记过 → **只写**页面通知列表，**不再发企微**。  
+通知列表只保留**当前 4h 窗**；进入新窗时自动清掉旧窗通知。
 
-- 去重状态：`watch-nail-green-alert.json`（按 openTime 同根只推一次）
+- 去重状态：`watch-nail-green-alert.json`（按 openTime 同根只记一次）
 - 页面通知列表：`watch-nail-green-notices.json`（仅当前窗，含 `readAt`；网页可重画近似图）
 - `NAIL_GREEN_ALERT`：默认 `1`；`0` 关闭
-- Webhook：`WECOM_WEBHOOK_PINS` → 否则 `WECOM_WEBHOOK_POSITIONS` / `WECOM_WEBHOOK_URL`
-- 单次最多推送 `NAIL_GREEN_SEND_MAX`（默认 `0`=不限制）
-- **减负 / 及时**：本根已推过的跳过拉 K；`NAIL_GREEN_CHECK_MAX` 默认 `0`=每轮全查（更及时；钉很多时可改回 40 轮询），并发 `NAIL_GREEN_CONCURRENCY`（默认 8）
-- 时效仍受定时触发器约束（默认 5 分钟）；要更及时可把触发器改为 1 分钟，并保证超时 ≥ 60～120s
+- `NAIL_GREEN_CHECK_MAX` 默认 `0`=每轮全查；并发 `NAIL_GREEN_CONCURRENCY`（默认 8）
 
 ## 钉子每日便签现价（北京时间 0:00）
 
@@ -68,7 +74,7 @@
 
 ## 部署
 
-1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js` + `notes-rank-snap.js` + `nail-green-alert.js` + `nail-daily-reset.js` + `holdings.js` + `runtime-env.js` + `binance-spot.js` + `sell-tasks.js` + `buy-tasks.js` + `trade-action-log.js`）。只更新 `index.js` 会出现 `main is not a function`。
+1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js` + `notes-rank-snap.js` + `nail-green-alert.js` + `balance-alert.js` + `nail-daily-reset.js` + `holdings.js` + `runtime-env.js` + `binance-spot.js` + `sell-tasks.js` + `buy-tasks.js` + `trade-action-log.js`）。只更新 `index.js` 会出现 `main is not a function`。
 2. Handler：`index.handler`，Node.js 18+
 3. **超时建议 ≥ 60～120 秒**
 4. 定时触发器：`0 */5 * * * *`
@@ -76,15 +82,16 @@
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `PUSHPLUS_TOKEN` | 是* | PushPlus 一对一 token |
 | `GITHUB_TOKEN` | 是 | 读写 GitHub JSON |
-| `AUTO_PIN_PUSHPLUS` | 否 | 默认 `1` |
+| `WECOM_WEBHOOK_PINS` | 天平推送建议 | 天平企微 webhook（可回落到 POSITIONS/URL） |
+| `AUTO_PIN_PUSHPLUS` | 否 | 默认 `0` |
 | `AUTO_PIN_WECOM` | 否 | 默认 `0` |
-| `WECOM_WEBHOOK_POSITIONS` | 否 | 仅当 `AUTO_PIN_WECOM=1` |
+| `PUSHPLUS_TOKEN` | 否* | 仅当 `AUTO_PIN_PUSHPLUS=1` |
+| `BALANCE_ALERT` | 否 | 默认 `1` |
 | `NOTES_RANK_SNAP_ENABLED` | 否 | 默认 `1` |
 | `BINANCE_API_KEY` / `BINANCE_API_SECRET` | 持有/卖出 | 现货 Key（可读账户；真下单还需交易权限）。支持 HMAC 或 Ed25519 PEM |
 
-\* `AUTO_PIN_PUSHPLUS=0` 时可空。
+\* 默认不推自动盯时可不配 PushPlus。
 
 ## 持有余额
 
