@@ -1714,37 +1714,48 @@ async function main(event, context) {
       );
       bstockAutoPinNails = [];
     }
-    try {
+    const bstockRemain =
+      context && typeof context.getRemainingTimeInMillis === 'function'
+        ? context.getRemainingTimeInMillis()
+        : null;
+    if (bstockRemain != null && bstockRemain < 25000) {
+      console.warn(
+        'bstock prune-stale-auto-pin-nails skip: low remaining ms',
+        bstockRemain,
+      );
+    } else {
       try {
-        bstockPinsFile = await loadJson(bstockProfile.PINS_PATH);
-      } catch (_) {
-        /* keep prior */
-      }
-      const bstockPrune = await pruneStaleAutoPinNails({
-        now,
-        pins: bstockPins,
-        pinsFile: bstockPinsFile,
-        nailsPath: bstockProfile.NAILS_PATH,
-        pinsPath: bstockProfile.PINS_PATH,
-      });
-      if (Array.isArray(bstockPrune.pins)) {
-        bstockPins = bstockPrune.pins;
-      }
-      if (bstockPrune.removed && bstockPrune.removed.length) {
-        console.log(
-          'bstock prune-stale-auto-pin-nails',
-          JSON.stringify({
-            removed: bstockPrune.removed.length,
-            sample: bstockPrune.removed.slice(0, 12),
-            checked: bstockPrune.checked,
-          }),
+        try {
+          bstockPinsFile = await loadJson(bstockProfile.PINS_PATH);
+        } catch (_) {
+          /* keep prior */
+        }
+        const bstockPrune = await pruneStaleAutoPinNails({
+          now,
+          pins: bstockPins,
+          pinsFile: bstockPinsFile,
+          nailsPath: bstockProfile.NAILS_PATH,
+          pinsPath: bstockProfile.PINS_PATH,
+        });
+        if (Array.isArray(bstockPrune.pins)) {
+          bstockPins = bstockPrune.pins;
+        }
+        if (bstockPrune.removed && bstockPrune.removed.length) {
+          console.log(
+            'bstock prune-stale-auto-pin-nails',
+            JSON.stringify({
+              removed: bstockPrune.removed.length,
+              sample: bstockPrune.removed.slice(0, 12),
+              checked: bstockPrune.checked,
+            }),
+          );
+        }
+      } catch (error) {
+        console.warn(
+          'bstock prune-stale-auto-pin-nails failed',
+          error && error.message ? error.message : error,
         );
       }
-    } catch (error) {
-      console.warn(
-        'bstock prune-stale-auto-pin-nails failed',
-        error && error.message ? error.message : error,
-      );
     }
     if (bstockAutoPinned.length || bstockAutoDropped.length) {
       try {
@@ -1837,37 +1848,60 @@ async function main(event, context) {
     reason: 'not-run',
     removed: [],
   };
-  try {
-    try {
-      pinsFile = await loadJson(CONFIG.PINS_PATH);
-    } catch (_) {
-      /* keep prior pinsFile */
-    }
-    staleNailPrune = await pruneStaleAutoPinNails({
-      now,
-      pins,
-      pinsFile,
-      nailsPath: CONFIG.NAILS_PATH,
-      pinsPath: CONFIG.PINS_PATH,
-    });
-    if (Array.isArray(staleNailPrune.pins)) {
-      pins = staleNailPrune.pins;
-    }
-    if (staleNailPrune.removed && staleNailPrune.removed.length) {
-      console.log(
-        'prune-stale-auto-pin-nails',
-        JSON.stringify({
-          removed: staleNailPrune.removed.length,
-          sample: staleNailPrune.removed.slice(0, 12),
-          checked: staleNailPrune.checked,
-        }),
-      );
-    }
-  } catch (error) {
+  const pruneRemain =
+    context && typeof context.getRemainingTimeInMillis === 'function'
+      ? context.getRemainingTimeInMillis()
+      : null;
+  if (pruneRemain != null && pruneRemain < 25000) {
+    staleNailPrune = {
+      skipped: true,
+      reason: 'low-remaining',
+      remainingMs: pruneRemain,
+      removed: [],
+    };
     console.warn(
-      'prune-stale-auto-pin-nails failed',
-      error && error.message ? error.message : error,
+      'prune-stale-auto-pin-nails skip: low remaining ms',
+      pruneRemain,
     );
+  } else {
+    try {
+      try {
+        pinsFile = await loadJson(CONFIG.PINS_PATH);
+      } catch (_) {
+        /* keep prior pinsFile */
+      }
+      staleNailPrune = await pruneStaleAutoPinNails({
+        now,
+        pins,
+        pinsFile,
+        nailsPath: CONFIG.NAILS_PATH,
+        pinsPath: CONFIG.PINS_PATH,
+      });
+      if (Array.isArray(staleNailPrune.pins)) {
+        pins = staleNailPrune.pins;
+      }
+      if (staleNailPrune.removed && staleNailPrune.removed.length) {
+        console.log(
+          'prune-stale-auto-pin-nails',
+          JSON.stringify({
+            removed: staleNailPrune.removed.length,
+            sample: staleNailPrune.removed.slice(0, 12),
+            checked: staleNailPrune.checked,
+          }),
+        );
+      }
+    } catch (error) {
+      console.warn(
+        'prune-stale-auto-pin-nails failed',
+        error && error.message ? error.message : error,
+      );
+      staleNailPrune = {
+        skipped: true,
+        reason: 'error',
+        removed: [],
+        error: error && error.message ? error.message : String(error),
+      };
+    }
   }
 
   function buildAutoPinAlert() {

@@ -27,12 +27,14 @@
 **置顶钉子除外**（`pinned` / `pinnedAt`）。不写入 `dismissedNails`，以便回前 30 时再自动盯可重新钉入。
 
 - `STALE_AUTO_PIN_NAILS`：默认 `1`；`0` 关闭
-- `STALE_NAIL_LIMIT`：默认 `18`；`STALE_NAIL_CHECK_MAX` 默认 `40`；并发 `STALE_NAIL_CONCURRENCY`（默认 6）
+- `STALE_NAIL_LIMIT`：默认 `18`；`STALE_NAIL_CHECK_MAX` 默认 `12`（防与天平/染绿叠超时；`0`=全查）；并发 `STALE_NAIL_CONCURRENCY`（默认 4）
+- 剩余时间不足 25s 时本轮跳过清退
 - 现货与 bStock 各跑一轮（各自 pins/nails 路径）
 
 ## 天平（企微文字 + K 线）
 
-对自动盯（`auto-rising` / `auto-cloud` / `auto-rewarm`）检查：盯后到当前 4h 窗曾 `low < pinPrice`，且现价 **>** 跌破 K 的最低收盘 → 发企微「币名 · 天平」+ 4h 图（含盯住价线）。  
+对自动盯（`auto-rising` / `auto-cloud` / `auto-rewarm`）检查：盯后到当前 4h 窗曾 `low < pinPrice`，且现价 **>** 跌破 K 的最低收盘，且**当前 4h 窗上涨**（现价 > 窗开盘）→ 发企微「币名 · 天平」+ 4h 图（含盯住价线）。  
+当前窗下跌则不发企微、不进冷却（窗翻红后再符合时可推）。  
 同一币 **1 小时内**不重复推；满 1 小时仍符合天平可再推（`lastSentAt` 冷却）。
 
 - 去重状态：`watch-balance-alert.json`

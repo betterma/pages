@@ -17,14 +17,15 @@ const INTERVAL = process.env.STALE_NAIL_INTERVAL || '4h';
 const LIMIT = Math.max(12, Number(process.env.STALE_NAIL_LIMIT || 18));
 const CONCURRENCY = Math.max(
   1,
-  Number(process.env.STALE_NAIL_CONCURRENCY || 6),
+  Number(process.env.STALE_NAIL_CONCURRENCY || 4),
 );
+/** 单轮最多拉 K 检查几只；默认 12，避免与天平/染绿叠超时。0=候选全查。 */
 const CHECK_MAX = Math.max(
   0,
   Number(
     process.env.STALE_NAIL_CHECK_MAX === undefined ||
       process.env.STALE_NAIL_CHECK_MAX === ''
-      ? 40
+      ? 12
       : process.env.STALE_NAIL_CHECK_MAX,
   ),
 );

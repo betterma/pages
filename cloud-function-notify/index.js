@@ -5,7 +5,18 @@
  * Handler: index.handler
  * 必须与 notify.js、auto-pin.js 等一并上传。
  */
-const notify = require('./notify');
+
+let notifyLoadError = null;
+let notify = null;
+try {
+  notify = require('./notify');
+} catch (error) {
+  notifyLoadError = error;
+  console.error(
+    'notify module load failed',
+    error && error.stack ? error.stack : error,
+  );
+}
 
 function resolveMain(mod) {
   if (!mod) return null;
@@ -27,6 +38,19 @@ exports.handler = async (event, context) => {
           : null,
     }),
   );
+  if (notifyLoadError) {
+    const errorMessage =
+      (notifyLoadError && notifyLoadError.message
+        ? notifyLoadError.message
+        : String(notifyLoadError)) +
+      ' — 请整包上传 cloud-function-notify（含 notify.js / prune-stale-auto-pin-nails.js 等）';
+    return {
+      ok: false,
+      errorType:
+        (notifyLoadError && notifyLoadError.name) || 'ModuleLoadError',
+      errorMessage,
+    };
+  }
   const run = resolveMain(notify);
   if (typeof run !== 'function') {
     const keys =

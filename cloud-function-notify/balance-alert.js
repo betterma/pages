@@ -2,6 +2,7 @@
 
 /**
  * 天平推送：自动盯 pin 后曾跌破 pinPrice（low），且现价高于跌破 K 最低收盘 → 企微文字 + 4h 图。
+ * 另要求当前 4h 窗上涨（现价 > 窗开盘）；下跌窗不发企微。
  * 同一币 1 小时内不重复推；满 1 小时仍符合天平可再推。
  */
 
@@ -129,8 +130,29 @@ function normalizeState(data) {
 }
 
 /**
+ * 与盯一下「当前窗口上涨」同口径：现价相对正在形成的 4h 窗开盘。
+ */
+function isCurrentWindowUp(candles, livePrice) {
+  if (!Array.isArray(candles) || !candles.length) return false;
+  const forming = candles[candles.length - 1];
+  const open = Number(forming && forming.open);
+  if (!(Number.isFinite(open) && open > 0)) return false;
+  const lastClose = Number(forming && forming.close);
+  const live = Number(livePrice);
+  const px =
+    Number.isFinite(live) && live > 0
+      ? live
+      : Number.isFinite(lastClose) && lastClose > 0
+        ? lastClose
+        : NaN;
+  if (!(Number.isFinite(px) && px > 0)) return false;
+  return px > open;
+}
+
+/**
  * 与网页通知页天平同口径：
  * 盯后到当前窗（含）存在 low < pinPrice；现价 > 跌破 K 最低收盘。
+ * 另：当前窗须上涨，否则不推企微（仍不算命中，不进冷却）。
  */
 function evaluateBalance(candles, pin, livePrice) {
   if (!pin || !Array.isArray(candles) || !candles.length) return null;
@@ -145,6 +167,7 @@ function evaluateBalance(candles, pin, livePrice) {
         ? lastClose
         : NaN;
   if (!(Number.isFinite(px) && px > 0)) return null;
+  if (!isCurrentWindowUp(candles, px)) return null;
   const pinIdx = findCandleIndexAt(candles, pin.pinnedAt);
   const lastIdx = candles.length - 1;
   if (pinIdx < 0 || lastIdx <= pinIdx) return null;
@@ -162,7 +185,7 @@ function evaluateBalance(candles, pin, livePrice) {
     return null;
   }
   if (!(px > minDipClose)) return null;
-  return { livePrice: px, minDipClose, pinIdx, lastIdx };
+  return { livePrice: px, minDipClose, pinIdx, lastIdx, windowUp: true };
 }
 
 async function mapPool(items, concurrency, worker) {
@@ -348,5 +371,6 @@ async function runBalanceAlerts(options) {
 module.exports = {
   runBalanceAlerts,
   evaluateBalance,
+  isCurrentWindowUp,
   normalizePins,
 };

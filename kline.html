@@ -7109,7 +7109,7 @@
               class="nail-notice-deblue"
               hidden
               aria-pressed="false"
-              title="仅蓝筛选可用。打开：只显示天平（盯后曾跌破 pin，且现价高于跌破K最低收盘）。偏好保存在本机。"
+              title="仅蓝筛选可用。打开：只显示天平（盯后曾跌破 pin，现价高于跌破K最低收盘，且当前4h窗上涨）。偏好保存在本机。"
             >
               天平
             </button>
@@ -20539,7 +20539,8 @@
         try {
           /**
            * 天平：盯所在 K 之后到当前窗（含）存在 low < pinPrice（影线算跌破）；
-           * 收回：现价 > 这些跌破 K 的最低收盘（对比只用收盘，影线不算）。
+           * 收回：现价 > 这些跌破 K 的最低收盘（对比只用收盘，影线不算）；
+           * 另须当前 4h 窗上涨（现价 > 窗开盘），与企微推送同口径。
            */
           function noticeIsBalance(candles, livePrice, pin) {
             if (!pin || !Array.isArray(candles) || !candles.length) return false;
@@ -20549,7 +20550,8 @@
             const line = Number(pin.pinPrice);
             if (!(Number.isFinite(line) && line > 0)) return false;
             const live = Number(livePrice);
-            const lastClose = Number(candles[candles.length - 1]?.close);
+            const forming = candles[candles.length - 1];
+            const lastClose = Number(forming && forming.close);
             const px =
               Number.isFinite(live) && live > 0
                 ? live
@@ -20557,6 +20559,10 @@
                   ? lastClose
                   : NaN;
             if (!(Number.isFinite(px) && px > 0)) return false;
+            const windowOpen = Number(forming && forming.open);
+            if (!(Number.isFinite(windowOpen) && windowOpen > 0 && px > windowOpen)) {
+              return false;
+            }
             const pinnedAt = Number(pin.pinnedAt) || 0;
             if (!(pinnedAt > 0)) return false;
             const pinIdx = findCandleIndexAt(candles, pinnedAt);
