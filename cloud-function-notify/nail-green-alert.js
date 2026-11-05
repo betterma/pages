@@ -1,9 +1,9 @@
 'use strict';
 
 /**
- * 钉子荧光绿：首根染绿 + 续绿/断绿再绿 → 写网页 notices（默认可关企微）。
- * 站在 Date.now() 拉当前 4h K，回看 noteAt 之后的窗口；
- * 同一根 K（同一 openTime）只记一次。notify 主流程现以 push:false 调用。
+ * 钉子荧光绿：相对便签水位（alertPrice / noteAt）首绿 + 续绿/断绿再绿 → 写网页 notices。
+ * 站在 Date.now() 拉当前 4h K，回看 noteAt 之后的窗口；同一根 K（openTime）只记一次。
+ * notify 主流程以 push:false 调用（仅网页通知列表，不发企微）。
  */
 
 const { loadJson, saveJson, sendWecomText, sendWecomImage } = require('./github-wecom');

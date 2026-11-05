@@ -7087,7 +7087,7 @@
               id="nailNoticeDeltaFilter"
               role="group"
               aria-label="按涨跌筛选"
-              title="相对通知线：全部 / 蓝涨 / 红跌"
+              title="相对便签水位：全部 / 蓝涨 / 红跌"
             >
               <button
                 type="button"
@@ -7096,23 +7096,13 @@
               >
                 全部
               </button>
-              <button type="button" data-notice-delta-filter="up" title="相对通知线上涨（蓝）">
+              <button type="button" data-notice-delta-filter="up" title="相对便签水位上涨（蓝）">
                 蓝
               </button>
-              <button type="button" data-notice-delta-filter="down" title="相对通知线下跌（红）">
+              <button type="button" data-notice-delta-filter="down" title="相对便签水位下跌（红）">
                 红
               </button>
             </div>
-            <button
-              type="button"
-              id="nailNoticeDeBlueBtn"
-              class="nail-notice-deblue"
-              hidden
-              aria-pressed="false"
-              title="仅蓝筛选可用。打开：按钉子抽屉染绿；关闭：正常染蓝。偏好保存在本机。"
-            >
-              去蓝
-            </button>
             <button
               type="button"
               id="nailNoticeBalanceBtn"
@@ -17775,8 +17765,41 @@
       }
 
       const NAIL_ALERT_GREEN = "#3ecf8e";
-      const NAIL_DELTA_BLUE = "#3a7fc4";
-      const NAIL_DELTA_RED = "#c45c5c";
+      /** 自动盯价横线 / 便签水位：同色浅绿；实线=盯价，虚线=便签。 */
+      const KLINE_AUTO_PIN_LINE = "rgba(62, 207, 142, 0.5)";
+      const KLINE_AUTO_PIN_LINE_SOURCES = new Set([
+        "auto-rising",
+        "auto-cloud",
+        "auto-rewarm",
+      ]);
+      function isAutoPinLineSource(source) {
+        return KLINE_AUTO_PIN_LINE_SOURCES.has(String(source || "").trim());
+      }
+      function resolveDrawKlineAutoPin(canvas, options) {
+        const opts = options && typeof options === "object" ? options : {};
+        if (opts.autoPin === true) return true;
+        if (opts.autoPin === false) return false;
+        const fromAttr = String(
+          (canvas && canvas.getAttribute("data-kline")) || "",
+        )
+          .trim()
+          .toUpperCase();
+        const card = canvas && canvas.closest && canvas.closest("[data-symbol]");
+        const fromCard = String(
+          (card && card.getAttribute("data-symbol")) || "",
+        )
+          .trim()
+          .toUpperCase();
+        const fromZoom =
+          typeof klineZoomSymbol === "string"
+            ? String(klineZoomSymbol).trim().toUpperCase()
+            : "";
+        const fromOpt = String(opts.symbol || "").trim().toUpperCase();
+        const key = fromAttr || fromCard || fromZoom || fromOpt;
+        if (!key) return false;
+        const row = pinItemBySymbol(key);
+        return !!(row && isAutoPinLineSource(row.source));
+      }
 
       function strokeCandleWick(ctx, x, high, low, alertPrice, yOf, below, above) {
         const yH = yOf(high);
@@ -17873,27 +17896,14 @@
         const notes = Array.isArray(noteMarks) ? noteMarks : [];
         const alertPrice = Number(alertMark && alertMark.price);
         const hasAlert = Number.isFinite(alertPrice) && alertPrice > 0;
-        // 通知线：推送时价格；红蓝相对此线。缺省时用 openTime 那根收盘兜底。
-        let notifyPrice = Number(deltaMark && deltaMark.notifyPrice);
-        const deltaFromOpen = Number(deltaMark && deltaMark.fromOpenTime) || 0;
-        if (
-          deltaMark &&
-          !(Number.isFinite(notifyPrice) && notifyPrice > 0) &&
-          deltaFromOpen > 0
-        ) {
-          const atIdx = findCandleIndexAt(candles, deltaFromOpen);
-          if (atIdx >= 0) {
-            notifyPrice = Number(candles[atIdx].close);
-          }
-        }
-        const hasNotify =
-          !!deltaMark && Number.isFinite(notifyPrice) && notifyPrice > 0;
+        // deltaMark / 通知线已废弃：涨跌与染图一律以便签水位为准。
+        void deltaMark;
         const { min, max } = klinePriceBounds(
           candles,
           hasPin ? pin : null,
           notes,
           hasAlert ? alertPrice : null,
-          hasNotify ? notifyPrice : null,
+          null,
         );
         const range = max - min || max * 0.01 || 1;
         const slot = chartW / candles.length;
@@ -17916,24 +17926,16 @@
               })
             : { from: -1, until: -1 };
 
-        // 红蓝：相对通知线（非水位）；从推送那根画到最新。
-        const latestClose = Number(candles[candles.length - 1].close);
-        const deltaFromIndex =
-          hasNotify &&
-          Number.isFinite(latestClose) &&
-          latestClose > 0 &&
-          deltaFromOpen > 0 &&
-          latestClose !== notifyPrice
-            ? findCandleIndexAt(candles, deltaFromOpen)
-            : -1;
-        const deltaUp =
-          deltaFromIndex >= 0 ? latestClose > notifyPrice : false;
+        const autoPinLine = resolveDrawKlineAutoPin(canvas, options);
 
         if (hasPin) {
           const y = yOf(pin);
           ctx.save();
-          ctx.strokeStyle = "rgba(120, 130, 126, 0.75)";
+          ctx.strokeStyle = autoPinLine
+            ? KLINE_AUTO_PIN_LINE
+            : "rgba(120, 130, 126, 0.75)";
           ctx.lineWidth = 1;
+          ctx.setLineDash([]);
           ctx.beginPath();
           ctx.moveTo(pad.left, y);
           ctx.lineTo(pad.left + chartW, y);
@@ -17944,23 +17946,9 @@
         if (hasAlert) {
           const y = yOf(alertPrice);
           ctx.save();
-          ctx.strokeStyle = "rgba(62, 207, 142, 0.7)";
+          ctx.strokeStyle = KLINE_AUTO_PIN_LINE;
           ctx.lineWidth = 1;
           ctx.setLineDash([4, 3]);
-          ctx.beginPath();
-          ctx.moveTo(pad.left, y);
-          ctx.lineTo(pad.left + chartW, y);
-          ctx.stroke();
-          ctx.setLineDash([]);
-          ctx.restore();
-        }
-
-        if (hasNotify) {
-          const y = yOf(notifyPrice);
-          ctx.save();
-          ctx.strokeStyle = "rgba(58, 127, 196, 0.85)";
-          ctx.lineWidth = 1;
-          ctx.setLineDash([2, 3]);
           ctx.beginPath();
           ctx.moveTo(pad.left, y);
           ctx.lineTo(pad.left + chartW, y);
@@ -17973,17 +17961,13 @@
           const x = pad.left + slot * index + slot / 2;
           const up = candle.close >= candle.open;
           const base = up ? "#8a9a96" : "#9a8e88";
-          const inDelta = deltaFromIndex >= 0 && index >= deltaFromIndex;
-          // 通知线起不再染绿，只染蓝/红；绿仅保留在通知线之前。
           const useAlert =
-            !inDelta &&
             hasAlert &&
             up &&
             alertGreenRange.from >= 0 &&
             index >= alertGreenRange.from &&
             index < alertGreenRange.until;
 
-          // 先灰底；通知线起再按通知线叠色；此前可叠荧光绿。
           strokeCandleWick(
             ctx,
             x,
@@ -18005,32 +17989,6 @@
             base,
             base,
           );
-
-          if (inDelta) {
-            const belowColor = deltaUp ? base : NAIL_DELTA_RED;
-            const aboveColor = deltaUp ? NAIL_DELTA_BLUE : base;
-            strokeCandleWick(
-              ctx,
-              x,
-              candle.high,
-              candle.low,
-              notifyPrice,
-              yOf,
-              belowColor,
-              aboveColor,
-            );
-            fillCandleBody(
-              ctx,
-              x,
-              bodyW,
-              candle.open,
-              candle.close,
-              notifyPrice,
-              yOf,
-              belowColor,
-              aboveColor,
-            );
-          }
 
           if (useAlert) {
             if (candle.high > alertPrice) {
@@ -19792,31 +19750,13 @@
       let nailNoticeDeltaFilter = "all"; // all | up | down
       let nailNoticeSelectMode = false;
       const selectedNoticeSymbols = new Set();
-      /** 仅蓝筛选下有效；开关偏好存本机 localStorage。 */
-      const NAIL_NOTICE_DEBLUE_KEY = "kline-nail-notice-deblue-v1";
+      /** 仅蓝筛选下有效；天平开关偏好存本机 localStorage。 */
       const NAIL_NOTICE_BALANCE_KEY = "kline-nail-notice-balance-v1";
       const NAIL_NOTICE_AUTO_PIN_SOURCES = new Set([
         "auto-rising",
         "auto-cloud",
         "auto-rewarm",
       ]);
-      function readLocalNailNoticeDeBlue() {
-        try {
-          return localStorage.getItem(NAIL_NOTICE_DEBLUE_KEY) === "1";
-        } catch (_) {
-          return false;
-        }
-      }
-      function writeLocalNailNoticeDeBlue(enabled) {
-        try {
-          localStorage.setItem(
-            NAIL_NOTICE_DEBLUE_KEY,
-            enabled ? "1" : "0",
-          );
-        } catch (_) {
-          /* ignore */
-        }
-      }
       function readLocalNailNoticeBalance() {
         try {
           return localStorage.getItem(NAIL_NOTICE_BALANCE_KEY) === "1";
@@ -19834,7 +19774,6 @@
           /* ignore */
         }
       }
-      let nailNoticeDeBlueEnabled = readLocalNailNoticeDeBlue();
       let nailNoticeBalanceEnabled = readLocalNailNoticeBalance();
       let nailDailyResetState = null;
       let nailDailyResetPromptKind = null; // pre | post
@@ -20114,7 +20053,6 @@
               item.label || String(item.symbol || "").replace(/USDT$/i, ""),
             );
             const id = escapeHtml(item.id || `${item.symbol}:${item.openTime}`);
-            const notifyPrice = Number(item.notifyPrice) || 0;
             const isNew = Number(item.at) > (Number(nailGreenNoticesReadAt) || 0);
             const kind =
               item.kind === "首绿" || item.kind === "续绿" ? item.kind : "";
@@ -20133,11 +20071,10 @@
               `<span class="nail-notice-card-stamps">${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
               `</div>`,
               `<div class="nail-notice-meta">`,
-              `<span class="nail-notice-line"><span class="nail-notice-key">水位</span><span>${escapeHtml(formatPinPrice(item.alertPrice))}</span></span>`,
-              `<span class="nail-notice-line"><span class="nail-notice-key">通知</span><span>${notifyPrice > 0 ? escapeHtml(formatPinPrice(notifyPrice)) : "--"}</span><span class="nail-notice-iv">${escapeHtml(item.interval || "4h")}</span></span>`,
+              `<span class="nail-notice-line"><span class="nail-notice-key">水位</span><span>${escapeHtml(formatPinPrice(item.alertPrice))}</span><span class="nail-notice-iv">${escapeHtml(item.interval || "4h")}</span></span>`,
               `<span class="nail-notice-line"><span class="nail-notice-key">现价</span><span data-notice-live>--</span><span class="nail-notice-delta" data-notice-delta></span></span>`,
               `</div>`,
-              `<canvas width="640" height="160" data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${Number(item.alertPrice) || 0}" data-notice-notify="${notifyPrice}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
+              `<canvas width="640" height="160" data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${Number(item.alertPrice) || 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
               `</article>`,
             ].join("");
           })
@@ -20345,8 +20282,8 @@
         }
       }
 
-      function formatNoticeDeltaPct(notifyPrice, latestClose) {
-        const base = Number(notifyPrice);
+      function formatNoticeDeltaPct(alertPrice, latestClose) {
+        const base = Number(alertPrice);
         const last = Number(latestClose);
         if (!(base > 0) || !(last > 0) || last === base) return null;
         const pct = ((last - base) / base) * 100;
@@ -20363,19 +20300,7 @@
           const mode = btn.getAttribute("data-notice-delta-filter");
           btn.classList.toggle("is-active", mode === nailNoticeDeltaFilter);
         });
-        syncNailNoticeDeBlueUi();
         syncNailNoticeBalanceUi();
-      }
-
-      function syncNailNoticeDeBlueUi() {
-        const btn = document.getElementById("nailNoticeDeBlueBtn");
-        if (!btn) return;
-        const show = nailNoticeDeltaFilter === "up";
-        const on = show && !!nailNoticeDeBlueEnabled;
-        btn.hidden = !show;
-        btn.classList.toggle("is-on", on);
-        btn.setAttribute("aria-pressed", on ? "true" : "false");
-        btn.textContent = on ? "去蓝·开" : "去蓝";
       }
 
       function syncNailNoticeBalanceUi() {
@@ -20387,14 +20312,6 @@
         btn.classList.toggle("is-on", on);
         btn.setAttribute("aria-pressed", on ? "true" : "false");
         btn.textContent = on ? "天平·开" : "天平";
-      }
-
-      function setNailNoticeDeBlueEnabled(enabled) {
-        if (nailNoticeDeltaFilter !== "up") return;
-        nailNoticeDeBlueEnabled = !!enabled;
-        writeLocalNailNoticeDeBlue(nailNoticeDeBlueEnabled);
-        syncNailNoticeDeBlueUi();
-        void paintNailNoticeCharts();
       }
 
       function setNailNoticeBalanceEnabled(enabled) {
@@ -20565,9 +20482,8 @@
       async function setNailNoticeDeltaFilter(mode) {
         nailNoticeDeltaFilter =
           mode === "up" || mode === "down" ? mode : "all";
-        // 切回蓝时按本机偏好恢复去蓝/天平；其它筛选下 UI 隐藏，不改写偏好。
+        // 切回蓝时按本机偏好恢复天平；其它筛选下 UI 隐藏，不改写偏好。
         if (nailNoticeDeltaFilter === "up") {
-          nailNoticeDeBlueEnabled = readLocalNailNoticeDeBlue();
           nailNoticeBalanceEnabled = readLocalNailNoticeBalance();
         }
         syncNailNoticeDeltaFilterUi();
@@ -20620,9 +20536,6 @@
         nailNoticeChartsBusy = true;
         nailNoticeChartsQueued = false;
         nailNoticeChartsQueuedOpts = null;
-        // 去蓝：不按通知线染蓝，整段按钉子抽屉荧光绿水位处理。
-        const deBlue =
-          nailNoticeDeBlueEnabled && nailNoticeDeltaFilter === "up";
         try {
           /**
            * 天平：盯所在 K 之后到当前窗（含）存在 low < pinPrice（影线算跌破）；
@@ -20676,23 +20589,12 @@
             const alertPrice = Number(
               canvas.getAttribute("data-notice-price"),
             );
-            let notifyPrice = Number(
-              canvas.getAttribute("data-notice-notify"),
-            );
             const noteAt = Number(canvas.getAttribute("data-notice-note-at"));
-            const openTime = Number(canvas.getAttribute("data-notice-open"));
             if (!symbol || !(alertPrice > 0)) return;
             const card = canvas.closest(".nail-notice-card");
             try {
               if (force) klineFetchCache.delete(`${symbol}|4h|18`);
               const candles = await fetchKlines(symbol, "4h", null, 18);
-              // 旧通知无 notifyPrice：用推送那根 4h 收盘作通知线。
-              if (!(notifyPrice > 0) && openTime > 0 && candles.length) {
-                const atIdx = findCandleIndexAt(candles, openTime);
-                if (atIdx >= 0) {
-                  notifyPrice = Number(candles[atIdx].close) || 0;
-                }
-              }
               const latestClose =
                 candles.length > 0
                   ? Number(candles[candles.length - 1].close)
@@ -20711,8 +20613,8 @@
               const deltaEl = canvas
                 .closest(".nail-notice-card")
                 ?.querySelector("[data-notice-delta]");
-              // 涨跌相对「通知价」；现价优先用 ticker，否则用最新 K 收盘。
-              const delta = formatNoticeDeltaPct(notifyPrice, livePrice);
+              // 涨跌相对便签水位；现价优先用 ticker，否则用最新 K 收盘。
+              const delta = formatNoticeDeltaPct(alertPrice, livePrice);
               if (deltaEl) {
                 if (delta) {
                   deltaEl.textContent = delta.text;
@@ -20745,12 +20647,7 @@
                   price: alertPrice,
                   fromAt: noteAt > 0 ? noteAt : 0,
                 },
-                !deBlue && openTime > 0
-                  ? {
-                      fromOpenTime: openTime,
-                      notifyPrice: notifyPrice > 0 ? notifyPrice : 0,
-                    }
-                  : null,
+                null,
               );
             } catch (error) {
               console.warn("notice chart failed", symbol, error);
@@ -20880,12 +20777,10 @@
 
       async function openNailNoticeDrawer(options) {
         const opts = options || {};
-        // 打开通知页时默认筛「蓝」（相对通知线上涨）。
+        // 打开通知页时默认筛「蓝」（相对便签水位上涨）。
         nailNoticeDeltaFilter = "up";
-        nailNoticeDeBlueEnabled = readLocalNailNoticeDeBlue();
         nailNoticeBalanceEnabled = readLocalNailNoticeBalance();
         syncNailNoticeDeltaFilterUi();
-        syncNailNoticeDeBlueUi();
         syncNailNoticeBalanceUi();
         // 先开抽屉（用内存名单立刻出画面），再后台强刷，避免点击半秒停顿。
         if ((nailGreenNotices || []).length) {
@@ -26266,15 +26161,6 @@
           void setNailNoticeDeltaFilter(
             btn.getAttribute("data-notice-delta-filter"),
           );
-        });
-      }
-      const nailNoticeDeBlueBtn = document.getElementById(
-        "nailNoticeDeBlueBtn",
-      );
-      if (nailNoticeDeBlueBtn) {
-        nailNoticeDeBlueBtn.addEventListener("click", () => {
-          if (nailNoticeDeltaFilter !== "up") return;
-          setNailNoticeDeBlueEnabled(!nailNoticeDeBlueEnabled);
         });
       }
       const nailNoticeBalanceBtn = document.getElementById(

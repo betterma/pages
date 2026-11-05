@@ -18,7 +18,11 @@ const CHART = {
   down: [141, 119, 113, 255],
   grid: [216, 221, 218, 255],
   text: [40, 50, 58, 255],
+  // Manual pin line (gray). Auto-pin uses autoPin instead.
   pin: [90, 106, 104, 255],
+  // Match kline.html: auto-pin solid + note water dashed, same light green.
+  autoPin: [62, 207, 142, 128],
+  alertLine: [62, 207, 142, 128],
   // Match kline.html / WeCom markdown: 5m three-up green, 15m heat orange.
   streak5: [47, 143, 110, 255],
   heat15: [196, 122, 58, 255],
@@ -28,7 +32,6 @@ const CHART = {
   badgeAtBg: [74, 108, 98, 235],
   // Match kline.html nail drawer fluorescent green.
   alertGreen: [62, 207, 142, 255],
-  alertLine: [62, 207, 142, 180],
 };
 
 // Minimal 5x7 glyphs for chart titles (A-Z 0-9 . + - % space).
@@ -195,6 +198,21 @@ function drawLine(pixels, width, height, x0, y0, x1, y1, rgba) {
     if (e2 < dx) {
       err += dx;
       ya += sy;
+    }
+  }
+}
+
+/** Horizontal dashed line (on/off pattern along x). */
+function drawDashedHLine(pixels, width, height, x0, y, x1, rgba, dash, gap) {
+  const ya = Math.round(y);
+  const xa0 = Math.round(Math.min(x0, x1));
+  const xa1 = Math.round(Math.max(x0, x1));
+  const on = Math.max(1, Math.round(dash || 4));
+  const off = Math.max(1, Math.round(gap || 3));
+  const period = on + off;
+  for (let x = xa0; x <= xa1; x += 1) {
+    if ((x - xa0) % period < on) {
+      setPixel(pixels, width, height, x, ya, rgba);
     }
   }
 }
@@ -408,6 +426,11 @@ function renderCandlesPixels(candles, options) {
     );
   }
 
+  const autoPinLine =
+    options &&
+    (options.autoPin === true ||
+      options.autoPin === 1 ||
+      options.autoPin === '1');
   if (Number.isFinite(pinPrice)) {
     const y = yOf(pinPrice);
     drawLine(
@@ -418,21 +441,22 @@ function renderCandlesPixels(candles, options) {
       y,
       width - CHART.padRight,
       y,
-      CHART.pin,
+      autoPinLine ? CHART.autoPin : CHART.pin,
     );
   }
 
   if (hasAlert) {
     const y = yOf(alertPrice);
-    drawLine(
+    drawDashedHLine(
       pixels,
       width,
       height,
       CHART.padLeft,
       y,
       width - CHART.padRight,
-      y,
       CHART.alertLine,
+      4,
+      3,
     );
   }
 
@@ -592,6 +616,7 @@ async function buildSymbolChart(symbol, options) {
   return renderCandlesPng(candles, {
     title,
     pinPrice: options && options.pinPrice,
+    autoPin: !!(options && options.autoPin),
     streak5: !!(options && options.streak5),
     heat15: !!(options && options.heat15),
     priceUpVsLast: !!(options && options.priceUpVsLast),

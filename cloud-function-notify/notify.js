@@ -57,6 +57,21 @@ try {
   );
 }
 
+let pruneStaleAutoPinNails = async () => ({
+  skipped: true,
+  reason: 'module-missing',
+  removed: [],
+});
+try {
+  pruneStaleAutoPinNails =
+    require('./prune-stale-auto-pin-nails').pruneStaleAutoPinNails;
+} catch (error) {
+  console.warn(
+    'prune-stale-auto-pin-nails module missing — 请整包上传 cloud-function-notify',
+    error && error.message ? error.message : error,
+  );
+}
+
 let runNailDailyReset = async () => ({
   skipped: true,
   reason: 'module-missing',
@@ -1699,6 +1714,38 @@ async function main(event, context) {
       );
       bstockAutoPinNails = [];
     }
+    try {
+      try {
+        bstockPinsFile = await loadJson(bstockProfile.PINS_PATH);
+      } catch (_) {
+        /* keep prior */
+      }
+      const bstockPrune = await pruneStaleAutoPinNails({
+        now,
+        pins: bstockPins,
+        pinsFile: bstockPinsFile,
+        nailsPath: bstockProfile.NAILS_PATH,
+        pinsPath: bstockProfile.PINS_PATH,
+      });
+      if (Array.isArray(bstockPrune.pins)) {
+        bstockPins = bstockPrune.pins;
+      }
+      if (bstockPrune.removed && bstockPrune.removed.length) {
+        console.log(
+          'bstock prune-stale-auto-pin-nails',
+          JSON.stringify({
+            removed: bstockPrune.removed.length,
+            sample: bstockPrune.removed.slice(0, 12),
+            checked: bstockPrune.checked,
+          }),
+        );
+      }
+    } catch (error) {
+      console.warn(
+        'bstock prune-stale-auto-pin-nails failed',
+        error && error.message ? error.message : error,
+      );
+    }
     if (bstockAutoPinned.length || bstockAutoDropped.length) {
       try {
         await appendAutoPinActionLog(
@@ -1782,6 +1829,45 @@ async function main(event, context) {
       error && error.message ? error.message : error,
     );
     autoPinNails = [];
+  }
+
+  // 盯点已落在 18 根 4h 最旧前 1/3 → 离钉并清自动盯（置顶除外）。
+  let staleNailPrune = {
+    skipped: true,
+    reason: 'not-run',
+    removed: [],
+  };
+  try {
+    try {
+      pinsFile = await loadJson(CONFIG.PINS_PATH);
+    } catch (_) {
+      /* keep prior pinsFile */
+    }
+    staleNailPrune = await pruneStaleAutoPinNails({
+      now,
+      pins,
+      pinsFile,
+      nailsPath: CONFIG.NAILS_PATH,
+      pinsPath: CONFIG.PINS_PATH,
+    });
+    if (Array.isArray(staleNailPrune.pins)) {
+      pins = staleNailPrune.pins;
+    }
+    if (staleNailPrune.removed && staleNailPrune.removed.length) {
+      console.log(
+        'prune-stale-auto-pin-nails',
+        JSON.stringify({
+          removed: staleNailPrune.removed.length,
+          sample: staleNailPrune.removed.slice(0, 12),
+          checked: staleNailPrune.checked,
+        }),
+      );
+    }
+  } catch (error) {
+    console.warn(
+      'prune-stale-auto-pin-nails failed',
+      error && error.message ? error.message : error,
+    );
   }
 
   function buildAutoPinAlert() {
@@ -1918,6 +2004,7 @@ async function main(event, context) {
       bstockSide,
       nailGreenAlert,
       balanceAlert,
+      staleNailPrune,
     };
   }
 
@@ -2222,6 +2309,7 @@ async function main(event, context) {
       buyTasks,
       nailGreenAlert,
       balanceAlert,
+      staleNailPrune,
       bstockAutoPinned,
       bstockAutoDropped,
       bstockAutoPinNails: bstockAutoPinNails.length,
@@ -2251,6 +2339,7 @@ async function main(event, context) {
     buyTasks,
     nailGreenAlert,
     balanceAlert,
+    staleNailPrune,
     bstockAutoPinned,
     bstockAutoDropped,
     bstockPriceAlertStats,

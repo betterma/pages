@@ -300,6 +300,7 @@ async function runBalanceAlerts(options) {
       const painted = renderCandlesPng(candles, {
         title: `${label} 天平`,
         pinPrice: pin.pinPrice,
+        autoPin: true,
         height: 280,
       });
       await sendWecomImage(painted, webhook);

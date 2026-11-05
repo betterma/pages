@@ -10,15 +10,25 @@
 已盯币**掉出前 30 / 观察池**只写捕捉日志（`掉出窗口`）。  
 **已取消回暖**：已盯币再次进区不会改钉价、不写回暖日志、不推送。
 
-盯一下离开方式只有两种：
+盯一下离开方式：
 
 1. **触底退出**（周期低点自动清钉）
 2. **用户手动取消盯一下**
+3. **过期清退**（见下：自动盯钉子落在 18 根 4h 最旧前 1/3）
 
 - `AUTO_PIN_PUSHPLUS`：默认 `0`；`1` 才发 PushPlus（需 `PUSHPLUS_TOKEN`）。
 - `AUTO_PIN_WECOM`：默认 `0`；`1` 才发企微（需 `WECOM_WEBHOOK_POSITIONS`）。
 
 网页刷新不再单独自动盯。
+
+## 自动盯钉子过期清退
+
+定时里在写完自动盯钉子之后：对「钉子页有钉、且对应 pin 为自动盯」的标的拉 **18 根 4h**；若 `pinnedAt` 落在最旧前 1/3（含已滚出左缘 → index 0），则从 `watch-nails.json` 移除该钉，并清掉对应自动盯 pin。  
+**置顶钉子除外**（`pinned` / `pinnedAt`）。不写入 `dismissedNails`，以便回前 30 时再自动盯可重新钉入。
+
+- `STALE_AUTO_PIN_NAILS`：默认 `1`；`0` 关闭
+- `STALE_NAIL_LIMIT`：默认 `18`；`STALE_NAIL_CHECK_MAX` 默认 `40`；并发 `STALE_NAIL_CONCURRENCY`（默认 6）
+- 现货与 bStock 各跑一轮（各自 pins/nails 路径）
 
 ## 天平（企微文字 + K 线）
 
@@ -76,7 +86,7 @@
 
 ## 部署
 
-1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js` + `notes-rank-snap.js` + `nail-green-alert.js` + `balance-alert.js` + `nail-daily-reset.js` + `holdings.js` + `runtime-env.js` + `binance-spot.js` + `sell-tasks.js` + `buy-tasks.js` + `trade-action-log.js`）。只更新 `index.js` 会出现 `main is not a function`。
+1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js` + `notes-rank-snap.js` + `nail-green-alert.js` + `balance-alert.js` + `prune-stale-auto-pin-nails.js` + `nail-daily-reset.js` + `holdings.js` + `runtime-env.js` + `binance-spot.js` + `sell-tasks.js` + `buy-tasks.js` + `trade-action-log.js`）。只更新 `index.js` 会出现 `main is not a function`。
 2. Handler：`index.handler`，Node.js 18+
 3. **超时建议 ≥ 60～120 秒**
 4. 定时触发器：`0 */5 * * * *`
