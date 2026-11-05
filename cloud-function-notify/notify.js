@@ -2038,7 +2038,15 @@ async function main(event, context) {
       bstockSide,
       nailGreenAlert,
       balanceAlert,
-      staleNailPrune,
+      staleNailPrune: {
+        skipped: !!(staleNailPrune && staleNailPrune.skipped),
+        reason: (staleNailPrune && staleNailPrune.reason) || null,
+        checked: Number(staleNailPrune && staleNailPrune.checked) || 0,
+        candidate: Number(staleNailPrune && staleNailPrune.candidate) || 0,
+        removed: Array.isArray(staleNailPrune && staleNailPrune.removed)
+          ? staleNailPrune.removed
+          : [],
+      },
     };
   }
 
@@ -2322,6 +2330,20 @@ async function main(event, context) {
     );
   }
 
+  // 返回/日志不要带整表 pins，否则控制台会被撑爆。
+  const staleNailPruneSummary = {
+    skipped: !!(staleNailPrune && staleNailPrune.skipped),
+    reason: (staleNailPrune && staleNailPrune.reason) || null,
+    checked: Number(staleNailPrune && staleNailPrune.checked) || 0,
+    candidate: Number(staleNailPrune && staleNailPrune.candidate) || 0,
+    removed: Array.isArray(staleNailPrune && staleNailPrune.removed)
+      ? staleNailPrune.removed
+      : [],
+    errors: Array.isArray(staleNailPrune && staleNailPrune.errors)
+      ? staleNailPrune.errors.slice(0, 5)
+      : [],
+  };
+
   console.log(
     'notify done',
     JSON.stringify({
@@ -2343,7 +2365,7 @@ async function main(event, context) {
       buyTasks,
       nailGreenAlert,
       balanceAlert,
-      staleNailPrune,
+      staleNailPrune: staleNailPruneSummary,
       bstockAutoPinned,
       bstockAutoDropped,
       bstockAutoPinNails: bstockAutoPinNails.length,
@@ -2373,7 +2395,7 @@ async function main(event, context) {
     buyTasks,
     nailGreenAlert,
     balanceAlert,
-    staleNailPrune,
+    staleNailPrune: staleNailPruneSummary,
     bstockAutoPinned,
     bstockAutoDropped,
     bstockPriceAlertStats,
