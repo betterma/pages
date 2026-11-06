@@ -21657,6 +21657,57 @@
         return `${Math.round(n / 1000)}s`;
       }
 
+      /** 健康面板错误 → 人话（去掉企微原文堆砌）。 */
+      function humanizeHealthError(raw) {
+        let text = String(raw || "").trim();
+        if (!text) return "";
+        const balPref = text.match(/^balance×\d+:\s*(.*)$/i);
+        if (balPref) text = String(balPref[1] || "").trim();
+        const nailPref = text.match(/^nail-green×\d+:\s*(.*)$/i);
+        if (nailPref) text = String(nailPref[1] || "").trim();
+        const sendSym = (text.match(/^send:([A-Za-z0-9]+)/i) || [])[1];
+        const label = sendSym
+          ? String(sendSym).replace(/USDT$/i, "")
+          : "";
+        if (/45009/i.test(text) || /too many requests/i.test(text)) {
+          return label
+            ? `企微发太快被限流，卡在 ${label}；约 5 分钟后再补推`
+            : "企微发太快被限流；约 5 分钟后再补推";
+        }
+        if (/^send:/i.test(text)) {
+          const rest = text
+            .replace(/^send:[A-Za-z0-9]+:\s*/i, "")
+            .replace(/^WeCom\s*/i, "")
+            .trim();
+          const short =
+            rest.length > 72 ? `${rest.slice(0, 70)}…` : rest || "未知原因";
+          return label ? `推送 ${label} 失败：${short}` : `推送失败：${short}`;
+        }
+        if (/module-missing/i.test(text)) return "云函数缺文件，需要重新部署";
+        if (/\bdisabled\b/i.test(text)) return "该项检测已关闭";
+        if (/notices:/i.test(text)) {
+          return `网页通知列表写入失败：${text.replace(/^notices:\s*/i, "").slice(0, 60)}`;
+        }
+        return text.length > 100 ? `${text.slice(0, 98)}…` : text;
+      }
+
+      function humanizeHealthErrorBlob(raw) {
+        const text = String(raw || "").trim();
+        if (!text) return "";
+        const parts = text
+          .split(/\s*·\s*/)
+          .map((part) => humanizeHealthError(part))
+          .filter(Boolean);
+        const seen = new Set();
+        const out = [];
+        parts.forEach((part) => {
+          if (seen.has(part)) return;
+          seen.add(part);
+          out.push(part);
+        });
+        return out.join("；") || humanizeHealthError(text);
+      }
+
       function balanceHealthProgressText(bal) {
         const b = bal || {};
         if (b.skipped && b.reason && b.reason !== "cooldown") {
@@ -21751,14 +21802,27 @@
                 hour12: false,
               })
             : "—";
-        const errLine =
+        const topErrText =
           data.ok === false && data.error
-            ? `<div class="nh-row"><span class="nh-k">错误</span><span class="nh-v">${escapeHtml(String(data.error))}</span></div>`
+            ? humanizeHealthErrorBlob(data.error)
             : "";
-        const balErr =
-          Number(bal.errorCount) > 0 && Array.isArray(bal.errors) && bal.errors.length
-            ? `<div class="nh-row"><span class="nh-k">天平错误</span><span class="nh-v">${escapeHtml(bal.errors.slice(0, 2).join(" · "))}</span></div>`
+        const balErrParts = (
+          Number(bal.errorCount) > 0 && Array.isArray(bal.errors)
+            ? bal.errors.slice(0, 3)
+            : []
+        )
+          .map((item) => humanizeHealthError(item))
+          .filter(Boolean);
+        const balErrUnique = [...new Set(balErrParts)];
+        // 顶栏错误若已与天平错误同义，只保留一条，避免两行重复刷屏。
+        const errLine =
+          topErrText &&
+          !(balErrUnique.length === 1 && balErrUnique[0] === topErrText)
+            ? `<div class="nh-row"><span class="nh-k">说明</span><span class="nh-v">${escapeHtml(topErrText)}</span></div>`
             : "";
+        const balErr = balErrUnique.length
+          ? `<div class="nh-row"><span class="nh-k">推送说明</span><span class="nh-v">${escapeHtml(balErrUnique.join("；"))}</span></div>`
+          : "";
         panel.innerHTML = [
           `<p class="nh-status" data-level="${info.level}">${escapeHtml(info.label)} · ${escapeHtml(formatHealthAge(info.ageMs))}</p>`,
           `<div class="nh-row"><span class="nh-k">上次检测</span><span class="nh-v">${escapeHtml(when)}</span></div>`,
