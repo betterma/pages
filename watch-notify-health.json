@@ -1,23 +1,25 @@
 {
-  "updatedAt": 1793943346948,
-  "lastRunAt": 1793943300571,
-  "ok": true,
-  "error": null,
-  "durationMs": 46377,
+  "updatedAt": 1793943648645,
+  "lastRunAt": 1793943600637,
+  "ok": false,
+  "error": "balance×1:send:XAUTUSDT:WeCom errcode 45009: Too many requests. Please try again later., hint: [1793943647611674168472174], from ip: 159.138.123.229, more info at https://open.work.weixin.qq.com/devtool/query?e=45009",
+  "durationMs": 48008,
   "autoPins": 102,
   "balance": {
     "skipped": false,
     "reason": null,
     "autoPins": 102,
-    "due": 51,
-    "checked": 51,
-    "hits": 4,
-    "sent": 4,
+    "due": 60,
+    "checked": 60,
+    "hits": 11,
+    "sent": 10,
     "checkMax": 0,
     "checkCursor": 0,
-    "cooldownSkipped": 51,
-    "errorCount": 0,
-    "errors": []
+    "cooldownSkipped": 42,
+    "errorCount": 1,
+    "errors": [
+      "send:XAUTUSDT:WeCom errcode 45009: Too many requests. Please try again later., hint: [1793943647611674168472174], from ip: 159.138.123.229, more info at https://open.work.weixin.qq.com/devtool/query?e=45009"
+    ]
   },
   "nailGreen": {
     "skipped": false,
@@ -39,5 +41,6 @@
     "checked": 12,
     "candidate": 99,
     "removed": 0
-  }
+  },
+  "degraded": true
 }
