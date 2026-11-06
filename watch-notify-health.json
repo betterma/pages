@@ -1,49 +1,52 @@
 {
-  "updatedAt": 1793966466236,
-  "lastRunAt": 1793966400398,
-  "ok": true,
-  "error": null,
-  "durationMs": 65838,
+  "updatedAt": 1793966775612,
+  "lastRunAt": 1793966700602,
+  "ok": false,
+  "error": "balance×1:send:INJUSDT:WeCom errcode 45009: Too many requests. Please try again later., hint: [1793966774158103565229394], from ip: 159.138.123.229, more info at https://open.work.weixin.qq.com/devtool/query?e=45009",
+  "durationMs": 75010,
   "autoPins": 107,
   "balance": {
     "skipped": false,
     "reason": null,
     "autoPins": 107,
-    "due": 45,
-    "checked": 45,
-    "hits": 27,
-    "sent": 4,
-    "wecomDue": 4,
-    "wecomQueued": 4,
-    "wecomDeferred": 0,
-    "skippedWecomWindow": 23,
+    "due": 62,
+    "checked": 62,
+    "hits": 47,
+    "sent": 11,
+    "wecomDue": 22,
+    "wecomQueued": 22,
+    "wecomDeferred": 11,
+    "skippedWecomWindow": 25,
     "checkMax": 0,
     "sendMax": 0,
     "checkCursor": 0,
     "cooldownMs": 1800000,
-    "cooldownSkipped": 62,
-    "errorCount": 0,
-    "errors": []
+    "cooldownSkipped": 45,
+    "errorCount": 1,
+    "errors": [
+      "send:INJUSDT:WeCom errcode 45009: Too many requests. Please try again later., hint: [1793966774158103565229394], from ip: 159.138.123.229, more info at https://open.work.weixin.qq.com/devtool/query?e=45009"
+    ]
   },
   "nailGreen": {
     "skipped": false,
     "reason": null,
     "nails": 117,
-    "pending": 117,
-    "checked": 117,
-    "hits": 58,
+    "pending": 59,
+    "checked": 59,
+    "hits": 10,
     "sent": 0,
     "checkMax": 0,
     "checkCursor": 0,
-    "bucketSkipped": 0,
+    "bucketSkipped": 58,
     "errorCount": 0,
     "errors": []
   },
   "staleNailPrune": {
     "skipped": false,
-    "reason": null,
+    "reason": "none-stale",
     "checked": 12,
-    "candidate": 110,
-    "removed": 6
-  }
+    "candidate": 104,
+    "removed": 0
+  },
+  "degraded": true
 }
