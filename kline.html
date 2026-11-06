@@ -7407,8 +7407,8 @@
               class="nail-notice-delta-filter"
               id="nailNoticeDeltaFilter"
               role="group"
-              aria-label="按便签水位筛选"
-              title="相对便签水位：全部 / 绿（现价在上）/ 红（现价在下）"
+              aria-label="按当前4h窗筛选"
+              title="相对当前4h开盘：全部 / 窗上涨 / 窗下跌。卡片染绿仍按便签水位，与此筛选无关。"
             >
               <button
                 type="button"
@@ -7417,11 +7417,11 @@
               >
                 全部
               </button>
-              <button type="button" data-notice-delta-filter="up" title="相对便签水位：现价在上（绿）">
-                绿
+              <button type="button" data-notice-delta-filter="up" title="现价高于当前4h开盘">
+                窗上涨
               </button>
-              <button type="button" data-notice-delta-filter="down" title="相对便签水位：现价在下（红）">
-                红
+              <button type="button" data-notice-delta-filter="down" title="现价低于当前4h开盘">
+                窗下跌
               </button>
             </div>
             <button
@@ -7429,7 +7429,7 @@
               id="nailNoticeBalanceBtn"
               class="nail-notice-deblue"
               aria-pressed="false"
-              title="打开：只显示天平（盯后曾跌破 pin，现价高于跌破K最低收盘；不要求当前窗上涨）。可与「直拉」同开（并集）；在全部/绿/红下均可用。偏好保存在本机。"
+              title="打开：只显示天平（盯后曾跌破 pin，现价高于跌破K最低收盘；不要求当前窗上涨）。可与「直拉」同开（并集）；在全部/窗上涨/窗下跌下均可用。偏好保存在本机。"
             >
               天平
             </button>
@@ -7438,7 +7438,7 @@
               id="nailNoticeStraightBtn"
               class="nail-notice-deblue"
               aria-pressed="false"
-              title="打开：只显示直拉（盯后实体从未跌破 pin，下影线不算；现价高于盯价；不要求当前窗上涨）。可与「天平」同开（并集）；在全部/绿/红下均可用。偏好保存在本机。"
+              title="打开：只显示直拉（盯后实体从未跌破 pin，下影线不算；现价高于盯价；不要求当前窗上涨）。可与「天平」同开（并集）；在全部/窗上涨/窗下跌下均可用。偏好保存在本机。"
             >
               直拉
             </button>
@@ -20182,7 +20182,8 @@
       let nailNoticeSelectMode = false;
       const selectedNoticeSymbols = new Set();
       /** 通知筛选偏好存本机：全部/绿/红 + 天平/直拉（后两者可同开为并集）。 */
-      const NAIL_NOTICE_DELTA_KEY = "kline-nail-notice-delta-v1";
+      // v2：筛选改为窗上涨/窗下跌（不再用便签绿红）；染绿画图仍按便签。
+      const NAIL_NOTICE_DELTA_KEY = "kline-nail-notice-window-v2";
       const NAIL_NOTICE_BALANCE_KEY = "kline-nail-notice-balance-v1";
       const NAIL_NOTICE_STRAIGHT_KEY = "kline-nail-notice-straight-v1";
       const NAIL_NOTICE_AUTO_PIN_SOURCES = new Set([
@@ -20199,11 +20200,11 @@
         } catch (_) {
           /* ignore */
         }
-        return "up";
+        return "all";
       }
       function writeLocalNailNoticeDelta(mode) {
         const next =
-          mode === "up" || mode === "down" || mode === "all" ? mode : "up";
+          mode === "up" || mode === "down" || mode === "all" ? mode : "all";
         try {
           localStorage.setItem(NAIL_NOTICE_DELTA_KEY, next);
         } catch (_) {
@@ -20772,8 +20773,8 @@
 
       function describeNailNoticeFilter() {
         const bits = [];
-        if (nailNoticeDeltaFilter === "up") bits.push("绿");
-        else if (nailNoticeDeltaFilter === "down") bits.push("红");
+        if (nailNoticeDeltaFilter === "up") bits.push("窗上涨");
+        else if (nailNoticeDeltaFilter === "down") bits.push("窗下跌");
         else bits.push("全部");
         if (nailNoticeBalanceEnabled) bits.push("天平");
         if (nailNoticeStraightEnabled) bits.push("直拉");
@@ -20882,15 +20883,16 @@
         const patternOn = balanceOn || straightOn;
         let visible = 0;
         listEl.querySelectorAll(".nail-notice-card").forEach((card) => {
-          const dir = card.getAttribute("data-notice-dir") || "";
+          // 筛选用当前4h窗相对开盘；染绿仍看 data-notice-dir（便签水位）。
+          const win = card.getAttribute("data-notice-window") || "";
           const hide =
             mode === "up"
-              ? dir !== "up"
+              ? win !== "up"
               : mode === "down"
-                ? dir !== "down"
+                ? win !== "down"
                 : false;
-          // 尚未算出涨跌时：绿/红筛选先藏，避免闪一下再消失。
-          const pending = !dir && mode !== "all";
+          // 尚未算出窗方向时：窗上涨/下跌筛选先藏，避免闪一下再消失。
+          const pending = !win && mode !== "all";
           const balAttr = card.getAttribute("data-notice-balance");
           const straightAttr = card.getAttribute("data-notice-straight");
           const balReady = balAttr !== null;
@@ -20937,8 +20939,8 @@
                 : straightOn
                   ? "暂无直拉通知"
                   : mode === "up"
-                    ? "暂无绿（便签上）通知"
-                    : "暂无红（便签下）通知";
+                    ? "暂无窗上涨通知"
+                    : "暂无窗下跌通知";
           emptyEl.hidden = false;
         } else if (emptyEl) {
           emptyEl.hidden = true;
@@ -21223,27 +21225,56 @@
               const deltaEl = canvas
                 .closest(".nail-notice-card")
                 ?.querySelector("[data-notice-delta]");
-              // 绿/红相对便签水位；无便签则不计方向（仅「全部」可见）。
-              const delta =
-                alertPrice > 0
-                  ? formatNoticeDeltaPct(alertPrice, livePrice)
-                  : null;
+              // 现价旁显示 24h 涨跌%；染绿仍相对便签水位；筛选用窗上涨/下跌。
+              let change24h = Number(marketMap[symbol]?.change24h);
+              if (!Number.isFinite(change24h)) {
+                try {
+                  await fetchBinanceTickerForSymbol(symbol);
+                  change24h = Number(marketMap[symbol]?.change24h);
+                } catch (_) {
+                  /* ignore */
+                }
+              }
               if (deltaEl) {
-                if (delta) {
-                  deltaEl.textContent = delta.text;
-                  deltaEl.classList.toggle("is-up", delta.up);
-                  deltaEl.classList.toggle("is-down", !delta.up);
+                if (Number.isFinite(change24h)) {
+                  deltaEl.textContent = formatPercent(change24h);
+                  deltaEl.classList.toggle("is-up", change24h > 0);
+                  deltaEl.classList.toggle("is-down", change24h < 0);
+                  if (!(change24h > 0) && !(change24h < 0)) {
+                    deltaEl.classList.remove("is-up", "is-down");
+                  }
                 } else {
                   deltaEl.textContent = "";
                   deltaEl.classList.remove("is-up", "is-down");
                 }
               }
+              const noteDir =
+                alertPrice > 0 &&
+                Number.isFinite(livePrice) &&
+                livePrice > 0
+                  ? livePrice > alertPrice
+                    ? "up"
+                    : livePrice < alertPrice
+                      ? "down"
+                      : "flat"
+                  : "flat";
+              const formingOpen = Number(
+                candles.length > 0 && candles[candles.length - 1].open,
+              );
+              let windowDir = "flat";
+              if (
+                Number.isFinite(livePrice) &&
+                livePrice > 0 &&
+                Number.isFinite(formingOpen) &&
+                formingOpen > 0
+              ) {
+                if (livePrice > formingOpen) windowDir = "up";
+                else if (livePrice < formingOpen) windowDir = "down";
+              }
               const pin = pinItemBySymbol(symbol);
               if (card) {
-                card.setAttribute(
-                  "data-notice-dir",
-                  delta ? (delta.up ? "up" : "down") : "flat",
-                );
+                card.setAttribute("data-notice-dir", noteDir);
+                card.setAttribute("data-notice-window", windowDir);
                 // 天平/直拉筛选用落盘 kinds（渲染时已写入），不因现价回撤把历史命中滤掉。
                 // 实时形态仅作标记，供排查。
                 card.setAttribute(
@@ -21282,11 +21313,14 @@
               );
             } catch (error) {
               console.warn("notice chart failed", symbol, error);
-              // 失败也写入方向，避免绿/红筛选一直 pending 被藏死。
+              // 失败也写入窗方向，避免窗上涨/下跌筛选一直 pending 被藏死。
               // 天平/直拉仍用渲染时的落盘 kinds，不在此覆盖。
               if (card) {
                 if (!card.getAttribute("data-notice-dir")) {
                   card.setAttribute("data-notice-dir", "flat");
+                }
+                if (!card.getAttribute("data-notice-window")) {
+                  card.setAttribute("data-notice-window", "flat");
                 }
                 applyNailNoticeDeltaFilter();
               }

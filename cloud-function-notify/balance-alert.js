@@ -10,7 +10,7 @@
  * 冷却：lastNoticeAt / lastSentAt 各管网页与企微，默认各 30 分钟；
  * 未窗上涨时不写 lastSentAt，下轮继续查，窗翻红后再推企微。
  * 默认每轮检查全部企微冷却到期的自动盯（CHECK_MAX=0）；
- * 企微默认每轮最多推 5 只（SEND_MAX），间隔 SEND_GAP_MS。
+ * 企微默认窗上涨命中全推（SEND_MAX=0），条与条之间隔 SEND_GAP_MS。
  */
 
 const { loadJson, saveJson, sendWecomText, sendWecomImage, fetchBinanceTickers } =
@@ -37,13 +37,13 @@ const CONCURRENCY = Math.max(
   1,
   Number(process.env.BALANCE_ALERT_CONCURRENCY || 8),
 );
-/** 单轮最多推企微几只；默认 5（防 45009）。0=不限。只限企微，不影响网页 notices。 */
+/** 单轮最多推企微几只；默认 0=窗上涨命中全推。只限企微，不影响网页 notices。 */
 const SEND_MAX = Math.max(
   0,
   Number(
     process.env.BALANCE_ALERT_SEND_MAX === undefined ||
       process.env.BALANCE_ALERT_SEND_MAX === ''
-      ? 5
+      ? 0
       : process.env.BALANCE_ALERT_SEND_MAX,
   ),
 );
@@ -662,6 +662,21 @@ async function runBalanceAlerts(options) {
     else result.skippedWecomWindow += 1;
   }
   result.wecomDue = wecomCandidates.length;
+  // 限推时优先：从未发过企微 → 冷却更久 → 首次进通知更早；避免字母序永远卡住 ONE 等。
+  wecomCandidates.sort((a, b) => {
+    const sa = state.bySymbol[a.symbol] || {};
+    const sb = state.bySymbol[b.symbol] || {};
+    const sentA = Number(sa.lastSentAt) || 0;
+    const sentB = Number(sb.lastSentAt) || 0;
+    const neverA = sentA > 0 ? 1 : 0;
+    const neverB = sentB > 0 ? 1 : 0;
+    if (neverA !== neverB) return neverA - neverB;
+    if (sentA !== sentB) return sentA - sentB;
+    const firstA = Number(a.firstSeenAt) || Number(a.at) || 0;
+    const firstB = Number(b.firstSeenAt) || Number(b.at) || 0;
+    if (firstA !== firstB) return firstA - firstB;
+    return String(a.symbol || '').localeCompare(String(b.symbol || ''));
+  });
   const wecomRows =
     SEND_MAX > 0 ? wecomCandidates.slice(0, SEND_MAX) : wecomCandidates;
   result.wecomQueued = wecomRows.length;
