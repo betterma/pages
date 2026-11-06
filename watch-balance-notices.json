@@ -3,6 +3,44 @@
   "readAt": 1793981224359,
   "items": [
     {
+      "id": "ACTUSDT:1793980800000:1793981400593",
+      "symbol": "ACTUSDT",
+      "label": "ACT",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1793981400593,
+      "firstSeenAt": 1793959500592,
+      "openTime": 1793980800000,
+      "pinPrice": 0.00891,
+      "pinnedAt": 1793889580631,
+      "alertPrice": 0.00943,
+      "notifyPrice": 0.00946,
+      "noteAt": 1793980800642,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1793981400593
+    },
+    {
+      "id": "USDCUSDT:1793980800000:1793981400593",
+      "symbol": "USDCUSDT",
+      "label": "USDC",
+      "kinds": [
+        "直拉"
+      ],
+      "at": 1793981400593,
+      "firstSeenAt": 1793959500592,
+      "openTime": 1793980800000,
+      "pinPrice": 1.00089,
+      "pinnedAt": 1793891400420,
+      "alertPrice": 1.0011,
+      "notifyPrice": 1.00109,
+      "noteAt": 1793980800642,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1793981400593
+    },
+    {
       "id": "NOMUSDT:1793980800000:1793981400593",
       "symbol": "NOMUSDT",
       "label": "NOM",
@@ -803,25 +841,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1793980800642
-    },
-    {
-      "id": "ACTUSDT:1793980800000:1793980800642",
-      "symbol": "ACTUSDT",
-      "label": "ACT",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1793980800642,
-      "firstSeenAt": 1793959500592,
-      "openTime": 1793980800000,
-      "pinPrice": 0.00891,
-      "pinnedAt": 1793889580631,
-      "alertPrice": 0.00892,
-      "notifyPrice": 0.00943,
-      "noteAt": 1793895300633,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 0
     },
     {
       "id": "AGPUBUSDT:1793980800000:1793980800642",
@@ -1986,25 +2005,6 @@
       "batchAt": 1793975700649
     },
     {
-      "id": "USDCUSDT:1793966400000:1793980200974",
-      "symbol": "USDCUSDT",
-      "label": "USDC",
-      "kinds": [
-        "直拉"
-      ],
-      "at": 1793980200974,
-      "firstSeenAt": 1793959500592,
-      "openTime": 1793966400000,
-      "pinPrice": 1.00089,
-      "pinnedAt": 1793891400420,
-      "alertPrice": 1.001,
-      "notifyPrice": 1.00108,
-      "noteAt": 1793895300633,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1793978100985
-    },
-    {
       "id": "XUSDUSDT:1793966400000:1793980200974",
       "symbol": "XUSDUSDT",
       "label": "XUSD",
@@ -2482,6 +2482,14 @@
   ],
   "batches": [
     {
+      "at": 1793981400593,
+      "count": 2,
+      "symbols": [
+        "ACTUSDT",
+        "USDCUSDT"
+      ]
+    },
+    {
       "at": 1793981100612,
       "count": 18,
       "symbols": [
@@ -2625,11 +2633,10 @@
     },
     {
       "at": 1793978100985,
-      "count": 5,
+      "count": 4,
       "symbols": [
         "KERNELUSDT",
         "KGSTUSDT",
-        "USDCUSDT",
         "USDSUSDT",
         "XUSDUSDT"
       ]
