@@ -1,49 +1,49 @@
 {
-  "updatedAt": 1793947867894,
-  "lastRunAt": 1793947800407,
-  "ok": false,
-  "error": "balance×3:send:REDUSDT:WeCom errcode 45009: Too many requests. Please try again later., hint: [1793947866184591335542664], from ip: 159.138.123.229, more info at https://open.work.weixin.qq.com/devtool/query?e=45009",
-  "durationMs": 67487,
+  "updatedAt": 1793947990530,
+  "lastRunAt": 1793947944680,
+  "ok": true,
+  "error": null,
+  "durationMs": 45850,
   "autoPins": 104,
   "balance": {
     "skipped": false,
     "reason": null,
     "autoPins": 104,
-    "due": 69,
-    "checked": 69,
-    "hits": 45,
-    "sent": 14,
+    "due": 59,
+    "checked": 59,
+    "hits": 33,
+    "sent": 2,
+    "wecomDue": 2,
+    "wecomQueued": 2,
+    "wecomDeferred": 0,
+    "skippedWecomWindow": 31,
     "checkMax": 0,
+    "sendMax": 5,
     "checkCursor": 0,
     "cooldownMs": 1800000,
-    "cooldownSkipped": 35,
-    "errorCount": 3,
-    "errors": [
-      "send:REDUSDT:WeCom errcode 45009: Too many requests. Please try again later., hint: [1793947866184591335542664], from ip: 159.138.123.229, more info at https://open.work.weixin.qq.com/devtool/query?e=45009",
-      "send:RWUSDUSDT:WeCom errcode 45009: Too many requests. Please try again later., hint: [1793947866022873287716362], from ip: 159.138.123.229, more info at https://open.work.weixin.qq.com/devtool/query?e=45009",
-      "send:SUSDT:WeCom errcode 45009: Too many requests. Please try again later., hint: [1793947866430053267680450], from ip: 159.138.123.229, more info at https://open.work.weixin.qq.com/devtool/query?e=45009"
-    ]
+    "cooldownSkipped": 45,
+    "errorCount": 0,
+    "errors": []
   },
   "nailGreen": {
     "skipped": false,
     "reason": null,
     "nails": 114,
-    "pending": 42,
-    "checked": 42,
-    "hits": 2,
+    "pending": 40,
+    "checked": 40,
+    "hits": 0,
     "sent": 0,
     "checkMax": 0,
     "checkCursor": 0,
-    "bucketSkipped": 72,
+    "bucketSkipped": 74,
     "errorCount": 0,
     "errors": []
   },
   "staleNailPrune": {
     "skipped": false,
-    "reason": null,
+    "reason": "none-stale",
     "checked": 12,
-    "candidate": 103,
-    "removed": 1
-  },
-  "degraded": true
+    "candidate": 102,
+    "removed": 0
+  }
 }
