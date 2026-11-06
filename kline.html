@@ -7649,7 +7649,7 @@
                 id="nailSortSwitch"
                 role="group"
                 aria-label="钉子排序"
-                title="默认：置顶/拖拽顺序；荧光绿：置顶仍在最上，其余按绿色K线面积排序；24h：置顶优先后按涨幅降序"
+                title="默认：置顶/拖拽顺序；荧光绿/24h：置顶区内保持手动顺序，仅「其余」按指标排序"
               >
                 <button type="button" data-nail-sort="order" class="is-active">
                   默认
@@ -7657,14 +7657,14 @@
                 <button
                   type="button"
                   data-nail-sort="alertGreen"
-                  title="置顶仍在最上；其余按绿色K线占用面积从大到小"
+                  title="置顶仍在最上且保持手动序；其余按绿色K线占用面积从大到小"
                 >
                   荧光绿
                 </button>
                 <button
                   type="button"
                   data-nail-sort="change24h"
-                  title="置顶仍在最上；其余按24小时涨幅从高到低"
+                  title="置顶仍在最上且保持手动序；其余按24小时涨幅从高到低"
                 >
                   24h
                 </button>
@@ -24221,6 +24221,10 @@
             const ap = a.pinned ? 0 : 1;
             const bp = b.pinned ? 0 : 1;
             if (ap !== bp) return ap - bp;
+            // 置顶区内保持手动/拖拽序（「排第一」才生效）；指标只排「其余」。
+            if (a.pinned && b.pinned) {
+              return (a.order || 0) - (b.order || 0);
+            }
             const ka = String(a.symbol || "").toUpperCase();
             const kb = String(b.symbol || "").toUpperCase();
             const hasA = nailAlertGreenScores.has(ka);
@@ -24242,6 +24246,10 @@
             const ap = a.pinned ? 0 : 1;
             const bp = b.pinned ? 0 : 1;
             if (ap !== bp) return ap - bp;
+            // 置顶区内保持手动/拖拽序（「排第一」才生效）；24h 只排「其余」。
+            if (a.pinned && b.pinned) {
+              return (a.order || 0) - (b.order || 0);
+            }
             const changeA = Number(marketMap[a.symbol]?.change24h);
             const changeB = Number(marketMap[b.symbol]?.change24h);
             const hasA = Number.isFinite(changeA);
