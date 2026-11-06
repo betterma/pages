@@ -139,10 +139,26 @@ function notePriceBySymbol(nailsRaw) {
 
 function trimBalanceNotices(list, now) {
   const cutoff = (Number(now) || Date.now()) - NOTICES_TTL_MS;
+  const filtered = (Array.isArray(list) ? list : []).filter(
+    (item) => item && Number(item.at) >= cutoff,
+  );
+  // 同币保留「第一次进通知页」时间；重复命中只更新 at，不覆盖 firstSeenAt。
+  const firstBySymbol = {};
+  filtered.forEach((item) => {
+    const symbol = String(item.symbol || '')
+      .trim()
+      .toUpperCase();
+    if (!symbol) return;
+    const at = Number(item.at) || 0;
+    const first = Number(item.firstSeenAt) || at;
+    if (!(first > 0)) return;
+    if (!firstBySymbol[symbol] || first < firstBySymbol[symbol]) {
+      firstBySymbol[symbol] = first;
+    }
+  });
   const seen = new Set();
   const out = [];
-  (Array.isArray(list) ? list : [])
-    .filter((item) => item && Number(item.at) >= cutoff)
+  filtered
     .sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0))
     .forEach((item) => {
       const symbol = String(item.symbol || '')
@@ -159,6 +175,7 @@ function trimBalanceNotices(list, now) {
       if (!(at > 0) || !(Number.isFinite(pinPrice) && pinPrice > 0)) return;
       const alertPrice = Number(item.alertPrice);
       const notifyPrice = Number(item.notifyPrice);
+      const firstSeenAt = firstBySymbol[symbol] || at;
       out.push({
         id: item.id || `${symbol}:${openTime}:${at}`,
         symbol,
@@ -167,6 +184,7 @@ function trimBalanceNotices(list, now) {
           : labelOf(symbol),
         kinds: kinds.length ? kinds : ['天平'],
         at,
+        firstSeenAt,
         openTime,
         pinPrice,
         pinnedAt: Number(item.pinnedAt) || 0,
@@ -176,6 +194,7 @@ function trimBalanceNotices(list, now) {
           Number.isFinite(notifyPrice) && notifyPrice > 0 ? notifyPrice : 0,
         noteAt: Number(item.noteAt) || 0,
         interval: item.interval ? String(item.interval) : INTERVAL,
+        windowUp: !!item.windowUp,
       });
     });
   return out;
@@ -185,7 +204,7 @@ function noticeItemsFingerprint(list) {
   return (Array.isArray(list) ? list : [])
     .map(
       (item) =>
-        `${item && item.id}:${(item && item.kinds) || []}:${item && item.at}`,
+        `${item && item.id}:${(item && item.kinds) || []}:${item && item.at}:${item && item.firstSeenAt}`,
     )
     .join('|');
 }
@@ -614,6 +633,8 @@ async function runBalanceAlerts(options) {
       label,
       kinds: verdict.kinds,
       at: now,
+      // trim 时与历史同币取最早；重复命中不会覆盖。
+      firstSeenAt: now,
       openTime,
       pinPrice: pin.pinPrice,
       pinnedAt: pin.pinnedAt,

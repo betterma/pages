@@ -1647,6 +1647,9 @@
     const openTime = Number(item.openTime) || at;
     const alertPrice = Number(item.alertPrice);
     const notifyPrice = Number(item.notifyPrice);
+    const firstRaw = Number(item.firstSeenAt);
+    const firstSeenAt =
+      Number.isFinite(firstRaw) && firstRaw > 0 ? firstRaw : at;
     const label = item.label
       ? String(item.label).trim().slice(0, 32)
       : symbol.replace(/USDT$/i, "");
@@ -1656,6 +1659,7 @@
       label,
       kinds: kinds.length ? kinds : ["天平"],
       at,
+      firstSeenAt,
       openTime,
       pinPrice,
       pinnedAt: Number(item.pinnedAt) || 0,
@@ -1676,17 +1680,32 @@
       : Array.isArray(raw && raw.items)
         ? raw.items
         : [];
+    const normalized = list
+      .map(normalizeBalanceNotice)
+      .filter((item) => item && item.at >= cutoff);
+    // 同币取最早 firstSeenAt；列表仍按最新 at 排序（回顾不影响排序）。
+    const firstBySymbol = {};
+    normalized.forEach((item) => {
+      const key = String(item.symbol || "").toUpperCase();
+      if (!key) return;
+      const first = Number(item.firstSeenAt) || Number(item.at) || 0;
+      if (!(first > 0)) return;
+      if (!firstBySymbol[key] || first < firstBySymbol[key]) {
+        firstBySymbol[key] = first;
+      }
+    });
     const seen = new Set();
     const out = [];
-    list
-      .map(normalizeBalanceNotice)
-      .filter((item) => item && item.at >= cutoff)
+    normalized
       .sort((a, b) => (b.at || 0) - (a.at || 0))
       .forEach((item) => {
         const key = String(item.symbol || "").toUpperCase();
         if (!key || seen.has(key)) return;
         seen.add(key);
-        out.push(item);
+        out.push({
+          ...item,
+          firstSeenAt: firstBySymbol[key] || item.firstSeenAt || item.at,
+        });
       });
     return out;
   }

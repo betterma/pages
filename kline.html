@@ -3406,6 +3406,19 @@
         padding: 6px 8px 8px;
         min-width: 0;
       }
+      .nail-notice-card.is-reviewing {
+        outline: 1px solid rgba(120, 140, 160, 0.55);
+        outline-offset: -1px;
+      }
+      .nail-notice-card.is-reviewing .nail-notice-review-stamp {
+        display: inline;
+        margin-right: 6px;
+        color: #5a6a78;
+        font-size: 0.78em;
+      }
+      .nail-notice-review-stamp {
+        display: none;
+      }
       .nail-notice-card.is-focus {
         outline: 2px solid var(--accent, #2f8f6e);
         outline-offset: 2px;
@@ -4551,7 +4564,10 @@
         z-index: 140;
         width: min(420px, calc(100vw - 16px));
       }
-      .card-focus-bar.is-notice-scope [data-focus-action]:not([data-focus-action="refresh"]):not([data-focus-action="nail"]) {
+      .card-focus-bar.is-notice-scope [data-focus-action]:not([data-focus-action="refresh"]):not([data-focus-action="nail"]):not([data-focus-action="review"]) {
+        display: none;
+      }
+      .card-focus-bar:not(.is-notice-scope) [data-focus-action="review"] {
         display: none;
       }
       .card-focus-bar.is-nail-scope [data-focus-action="nail"],
@@ -7619,6 +7635,13 @@
       <button type="button" data-focus-action="nail">钉</button>
       <button type="button" data-focus-action="zoom">放大</button>
       <button type="button" data-focus-action="refresh">刷新</button>
+      <button
+        type="button"
+        data-focus-action="review"
+        title="按第一次进通知页时的 K 线回顾"
+      >
+        回顾
+      </button>
       <button type="button" data-focus-action="nail-note">便签</button>
       <button type="button" data-focus-action="nail-calc">计算</button>
       <button type="button" class="is-primary" data-focus-action="more">
@@ -14395,9 +14418,19 @@
         throw fail;
       }
 
-      async function fetchKlines(symbol, interval, signal, limitOverride) {
+      async function fetchKlines(
+        symbol,
+        interval,
+        signal,
+        limitOverride,
+        endTimeOverride,
+      ) {
         const limit = limitOverride || klineLimit(interval);
-        const cacheKey = `${symbol}|${interval}|${limit}`;
+        const endTime = Number(endTimeOverride) || 0;
+        const cacheKey =
+          endTime > 0
+            ? `${symbol}|${interval}|${limit}|e${endTime}`
+            : `${symbol}|${interval}|${limit}`;
         const cached = klineFetchCache.get(cacheKey);
         if (
           cached &&
@@ -14407,7 +14440,9 @@
         ) {
           return cached.candles;
         }
-        const query = `symbol=${symbol}&interval=${interval}&limit=${limit}`;
+        const query =
+          `symbol=${symbol}&interval=${interval}&limit=${limit}` +
+          (endTime > 0 ? `&endTime=${endTime}` : "");
         const endpoints = [
           `https://data-api.binance.vision/api/v3/klines?${query}`,
           `https://api.binance.com/api/v3/klines?${query}`,
@@ -18260,6 +18295,25 @@
           ctx.restore();
         }
 
+        // 通知回顾：第一次进通知页时的 4h 柱，竖线标出。
+        const reviewAt = Number(options && options.reviewAt) || 0;
+        if (reviewAt > 0) {
+          const reviewIndex = findCandleIndexAt(candles, reviewAt);
+          if (reviewIndex >= 0) {
+            const x = pad.left + slot * reviewIndex + slot / 2;
+            ctx.save();
+            ctx.strokeStyle = "rgba(70, 110, 150, 0.85)";
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([2, 2]);
+            ctx.beginPath();
+            ctx.moveTo(x, pad.top);
+            ctx.lineTo(x, pad.top + chartH);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+          }
+        }
+
         // 记一笔：时间对齐到 K 线柱，价位用记录价（旧数据无价则用该柱收盘）。
         const noteRadius = Math.max(2.2, Math.min(3.2, slot * 0.28));
         notes.forEach((note) => {
@@ -19704,6 +19758,30 @@
           }
           return;
         }
+        if (action === "review") {
+          if (focusActionScope !== "notice") return;
+          setFocusBarBusy(true, activeBtn, "回顾中");
+          try {
+            const result = await reviewNailNoticeChart(symbol);
+            if (!result || !result.ok) {
+              showToast(
+                result && result.reason === "no-first"
+                  ? "没有首次进通知时间"
+                  : "通知列表找不到这张 K 线",
+              );
+              return;
+            }
+            showToast(
+              `${symbol.replace(/USDT$/i, "")} 回顾 · ${formatNoticeTime(result.firstSeenAt)}`,
+            );
+          } catch (error) {
+            console.error(error);
+            showToast(error.message || "回顾失败");
+          } finally {
+            setFocusBarBusy(false);
+          }
+          return;
+        }
         if (action === "note") {
           if (!pinSymbols().has(symbol)) {
             showToast("记一笔需要先盯一下");
@@ -20280,11 +20358,14 @@
             const kinds = Array.isArray(item.kinds)
               ? item.kinds.map(String).filter(Boolean)
               : [];
-            const kindText = kinds.length ? kinds.join("·") : "";
             const hitBal = kinds.includes("天平");
             const hitStraight = kinds.includes("直拉");
             const notePrice = Number(item.alertPrice);
             const pinPrice = Number(item.pinPrice);
+            const firstSeenAt =
+              Number(item.firstSeenAt) > 0
+                ? Number(item.firstSeenAt)
+                : Number(item.at) || 0;
             const selected =
               nailNoticeSelectMode && selectedNoticeSymbols.has(key)
                 ? " is-selected"
@@ -20293,18 +20374,18 @@
               ? `<input type="checkbox" class="nail-notice-check" data-notice-select="${symbol}" ${selectedNoticeSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
               : "";
             return [
-              `<article class="nail-notice-card${selected}" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-balance="${hitBal ? "1" : "0"}" data-notice-straight="${hitStraight ? "1" : "0"}">`,
+              `<article class="nail-notice-card${selected}" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-first="${firstSeenAt}" data-notice-balance="${hitBal ? "1" : "0"}" data-notice-straight="${hitStraight ? "1" : "0"}">`,
               check,
               `<div class="nail-notice-card-top">`,
-              `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}${kindText ? ` · ${escapeHtml(kindText)}` : ""}</button>`,
-              `<span class="nail-notice-card-stamps">${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
+              `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}</button>`,
+              `<span class="nail-notice-card-stamps"><span class="nail-notice-review-stamp" data-notice-review-stamp></span>${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
               `</div>`,
               `<div class="nail-notice-meta">`,
               `<span class="nail-notice-line"><span class="nail-notice-key">便签</span><span>${notePrice > 0 ? escapeHtml(formatPinPrice(notePrice)) : "—"}</span><span class="nail-notice-iv">${escapeHtml(item.interval || "4h")}</span></span>`,
               `<span class="nail-notice-line"><span class="nail-notice-key">盯价</span><span>${pinPrice > 0 ? escapeHtml(formatPinPrice(pinPrice)) : "—"}</span></span>`,
               `<span class="nail-notice-line"><span class="nail-notice-key">现价</span><span data-notice-live>--</span><span class="nail-notice-delta" data-notice-delta></span></span>`,
               `</div>`,
-              `<canvas width="640" height="160" data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${notePrice > 0 ? notePrice : 0}" data-notice-pin-price="${pinPrice > 0 ? pinPrice : 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
+              `<canvas width="640" height="160" data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-first="${firstSeenAt}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${notePrice > 0 ? notePrice : 0}" data-notice-pin-price="${pinPrice > 0 ? pinPrice : 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
               `</article>`,
             ].join("");
           })
@@ -20852,6 +20933,7 @@
           .trim()
           .toUpperCase();
         const force = !!opts.force;
+        const reviewMode = !!opts.review;
         const trackFilter = !!opts.trackFilter;
         const filterPass = Number(opts.filterPass) || 0;
         const filterLabel = String(opts.filterLabel || "").trim();
@@ -20986,18 +21068,40 @@
               return;
             }
             const card = canvas.closest(".nail-notice-card");
+            const firstSeenAt =
+              Number(canvas.getAttribute("data-notice-first")) ||
+              Number(card && card.getAttribute("data-notice-first")) ||
+              0;
+            const wantReview =
+              reviewMode ||
+              !!(card && card.classList.contains("is-reviewing"));
+            const reviewAt =
+              wantReview && firstSeenAt > 0 ? firstSeenAt : 0;
             try {
-              if (force) klineFetchCache.delete(`${symbol}|4h|18`);
-              const candles = await fetchKlines(symbol, "4h", null, 18);
+              if (force) {
+                klineFetchCache.delete(`${symbol}|4h|18`);
+                if (reviewAt > 0) {
+                  klineFetchCache.delete(`${symbol}|4h|18|e${reviewAt}`);
+                }
+              }
+              const candles = await fetchKlines(
+                symbol,
+                "4h",
+                null,
+                18,
+                reviewAt > 0 ? reviewAt : 0,
+              );
               const latestClose =
                 candles.length > 0
                   ? Number(candles[candles.length - 1].close)
                   : NaN;
               const tickerPrice = Number(marketMap[symbol]?.price);
               const livePrice =
-                Number.isFinite(tickerPrice) && tickerPrice > 0
-                  ? tickerPrice
-                  : latestClose;
+                reviewAt > 0
+                  ? latestClose
+                  : Number.isFinite(tickerPrice) && tickerPrice > 0
+                    ? tickerPrice
+                    : latestClose;
               const liveEl = canvas
                 .closest(".nail-notice-card")
                 ?.querySelector("[data-notice-live]");
@@ -21038,6 +21142,16 @@
                   "data-notice-straight-live",
                   noticeIsStraight(candles, livePrice, pin) ? "1" : "0",
                 );
+                const stamp = card.querySelector("[data-notice-review-stamp]");
+                if (reviewAt > 0) {
+                  card.classList.add("is-reviewing");
+                  if (stamp) {
+                    stamp.textContent = `回顾 ${formatNoticeTime(reviewAt)}`;
+                  }
+                } else {
+                  card.classList.remove("is-reviewing");
+                  if (stamp) stamp.textContent = "";
+                }
                 applyNailNoticeDeltaFilter();
               }
               const drawPin =
@@ -21063,6 +21177,7 @@
                     }
                   : null,
                 null,
+                reviewAt > 0 ? { reviewAt } : null,
               );
             } catch (error) {
               console.warn("notice chart failed", symbol, error);
@@ -21115,6 +21230,12 @@
               .toUpperCase() === key,
         );
         if (!canvas) return false;
+        const card = canvas.closest(".nail-notice-card");
+        if (card) {
+          card.classList.remove("is-reviewing");
+          const stamp = card.querySelector("[data-notice-review-stamp]");
+          if (stamp) stamp.textContent = "";
+        }
         klineFetchCache.delete(`${key}|4h|18`);
         try {
           await fetchBinanceTickerForSymbol(key);
@@ -21123,6 +21244,46 @@
         }
         await paintNailNoticeCharts({ symbol: key, force: true });
         return true;
+      }
+
+      async function reviewNailNoticeChart(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || nailNoticeMode !== "open") return { ok: false };
+        const item = (nailGreenNotices || []).find(
+          (row) => String(row.symbol || "").toUpperCase() === key,
+        );
+        const card = [
+          ...document.querySelectorAll(
+            "#nailNoticeList .nail-notice-card[data-notice-symbol]",
+          ),
+        ].find(
+          (el) =>
+            String(el.getAttribute("data-notice-symbol") || "")
+              .trim()
+              .toUpperCase() === key,
+        );
+        const firstSeenAt =
+          Number(item && item.firstSeenAt) ||
+          Number(card && card.getAttribute("data-notice-first")) ||
+          Number(item && item.at) ||
+          0;
+        if (!(firstSeenAt > 0)) return { ok: false, reason: "no-first" };
+        if (card) {
+          card.classList.add("is-reviewing");
+          card.setAttribute("data-notice-first", String(firstSeenAt));
+          const canvas = card.querySelector("canvas[data-notice-chart]");
+          if (canvas) {
+            canvas.setAttribute("data-notice-first", String(firstSeenAt));
+          }
+        }
+        await paintNailNoticeCharts({
+          symbol: key,
+          force: true,
+          review: true,
+        });
+        return { ok: true, firstSeenAt };
       }
 
       async function markNailNoticesRead() {
