@@ -1,23 +1,30 @@
 {
-  "updatedAt": 1793945144780,
-  "lastRunAt": 1793945100971,
-  "ok": true,
-  "error": null,
-  "durationMs": 43809,
+  "updatedAt": 1793945389592,
+  "lastRunAt": 1793945330184,
+  "ok": false,
+  "error": "balance×40:send:ESPUSDT:WeCom errcode 45009: Too many requests. Please try again later., hint: [1793945380353653803703449], from ip: 159.138.123.229, more info at https://open.work.weixin.qq.com/devtool/query?e=45009",
+  "durationMs": 59408,
   "autoPins": 102,
   "balance": {
     "skipped": false,
     "reason": null,
     "autoPins": 102,
-    "due": 62,
-    "checked": 62,
-    "hits": 8,
-    "sent": 8,
+    "due": 75,
+    "checked": 75,
+    "hits": 50,
+    "sent": 10,
     "checkMax": 0,
     "checkCursor": 0,
-    "cooldownSkipped": 40,
-    "errorCount": 0,
-    "errors": []
+    "cooldownMs": 1800000,
+    "cooldownSkipped": 27,
+    "errorCount": 40,
+    "errors": [
+      "send:ESPUSDT:WeCom errcode 45009: Too many requests. Please try again later., hint: [1793945380353653803703449], from ip: 159.138.123.229, more info at https://open.work.weixin.qq.com/devtool/query?e=45009",
+      "send:ETCUSDT:WeCom errcode 45009: Too many requests. Please try again later., hint: [1793945380390123740098484], from ip: 159.138.123.229, more info at https://open.work.weixin.qq.com/devtool/query?e=45009",
+      "send:FFUSDT:WeCom errcode 45009: Too many requests. Please try again later., hint: [1793945381417503510832036], from ip: 159.138.123.229, more info at https://open.work.weixin.qq.com/devtool/query?e=45009",
+      "send:FOGOUSDT:WeCom errcode 45009: Too many requests. Please try again later., hint: [1793945381491623776185376], from ip: 159.138.123.229, more info at https://open.work.weixin.qq.com/devtool/query?e=45009",
+      "send:FRAXUSDT:WeCom errcode 45009: Too many requests. Please try again later., hint: [1793945381552653265829582], from ip: 159.138.123.229, more info at https://open.work.weixin.qq.com/devtool/query?e=45009"
+    ]
   },
   "nailGreen": {
     "skipped": false,
@@ -39,5 +46,6 @@
     "checked": 12,
     "candidate": 99,
     "removed": 0
-  }
+  },
+  "degraded": true
 }
