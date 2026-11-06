@@ -5500,7 +5500,10 @@
       .notify-float.is-momentum {
         width: min(720px, calc(100vw - 24px));
       }
-      body[data-sim-float="off"] #simHoldFloatTab,
+      /* 底栏不再放「模拟」Tab；钉子页入口仍由开关控制 */
+      #simHoldFloatTab {
+        display: none !important;
+      }
       body[data-sim-float="off"] #simHoldFloat,
       body[data-sim-float="off"] #nailSimHoldBtn {
         display: none !important;
@@ -7588,15 +7591,15 @@
               </div>
             </div>
             <div class="nail-rising-row">
-              <span>显示模拟盘浮窗</span>
+              <span>显示模拟盘</span>
               <button
                 type="button"
                 class="nail-switch"
                 id="nailSimFloatVisibleSwitch"
                 role="switch"
                 aria-checked="true"
-                title="关闭后隐藏底栏「模拟」与钉子页入口"
-                aria-label="显示模拟盘浮窗"
+                title="关闭后隐藏钉子页「模拟」入口"
+                aria-label="显示模拟盘"
               ></button>
             </div>
             <div class="nail-rising-row nail-pool-rank-row">
@@ -8455,6 +8458,14 @@
           : { id: "crypto", title: "观察池 K 线", paths: {} };
       const KLINE_PATHS = KLINE_PROFILE.paths || {};
 
+      /**
+       * 页面减负开关：关掉重逻辑（不删代码，改 true 可恢复）。
+       * - 捕捉精选：全屏精选页 / 底栏 Tab / 相关拉取
+       * - 破点高：10 分钟检测、GitHub 读写、动态浮层右栏
+       */
+      const FEATURE_CAPTURE_PICK = false;
+      const FEATURE_BREAK_HIGH = false;
+
       const CONFIG = {
         HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000,
         KLINE_RANGE_DAYS_DEFAULT: 3,
@@ -9131,12 +9142,43 @@
         { id: "notify", label: "通知状态 watch-notify-state", wave: 1 },
         { id: "log", label: "捕捉日志 watch-action-log", wave: 1 },
         { id: "eggs", label: "彩蛋 watch-card-eggs", wave: 1 },
-        { id: "break", label: "破点高 watch-break-high", wave: 1 },
+        ...(FEATURE_BREAK_HIGH
+          ? [{ id: "break", label: "破点高 watch-break-high", wave: 1 }]
+          : []),
         { id: "alerts", label: "价格预警 watch-price-alerts", wave: 1 },
         { id: "rankPrefs", label: "排序偏好 watch-notes-rank-prefs", wave: 1 },
         { id: "homePrefs", label: "首页偏好 watch-home-prefs", wave: 1 },
         { id: "sim", label: "模拟盘 watch-sim-holdings", wave: 1 },
       ];
+
+      function applyHeavyFeatureGatesUi() {
+        if (!FEATURE_CAPTURE_PICK) {
+          const tab = document.getElementById("capturePickTab");
+          if (tab) tab.hidden = true;
+          const panel = document.getElementById("capturePickPanel");
+          if (panel) panel.hidden = true;
+          document
+            .querySelectorAll("[data-capture-pick-open]")
+            .forEach((el) => {
+              el.hidden = true;
+            });
+          document
+            .querySelectorAll('[data-step="capture"]')
+            .forEach((el) => {
+              el.hidden = true;
+            });
+        }
+        if (!FEATURE_BREAK_HIGH) {
+          const refresh = document.getElementById("momentumFloatRefresh");
+          if (refresh) {
+            refresh.title = "重算左侧近2h/1h";
+          }
+          const momTab = document.getElementById("momentumFloatTab");
+          if (momTab) {
+            momTab.title = "动态：近2h/1h";
+          }
+        }
+      }
 
       function bootInitSortTasks(tasks) {
         const rank = (status) => {
@@ -9674,6 +9716,7 @@
        * 且当前 4h 窗口仍上涨的币。返回 { symbol, pinnedAt }[] 按盯时新→旧。
        */
       function listCapturePickPins() {
+        if (!FEATURE_CAPTURE_PICK) return [];
         const duration = DURATION_MS[CONFIG.KLINE_INTERVAL];
         if (!duration) return [];
         const now = Date.now();
@@ -13436,8 +13479,9 @@
         );
         const sw = document.getElementById("nailSimFloatVisibleSwitch");
         if (sw) sw.setAttribute("aria-checked", simFloatVisible ? "true" : "false");
+        // 底栏「模拟」Tab 永久隐藏；钉子页入口仍跟开关走。
         const tab = document.getElementById("simHoldFloatTab");
-        if (tab) tab.hidden = !simFloatVisible;
+        if (tab) tab.hidden = true;
         const nailBtn = document.getElementById("nailSimHoldBtn");
         if (nailBtn) nailBtn.hidden = !simFloatVisible;
         if (!simFloatVisible && isFloatPanelOpen("sim")) {
@@ -14739,9 +14783,13 @@
           soft("eggs", "彩蛋", async () => {
             await loadSharedCardEggs();
           }),
-          soft("break", "破点高", async () => {
-            await loadSharedBreakHigh();
-          }),
+          ...(FEATURE_BREAK_HIGH
+            ? [
+                soft("break", "破点高", async () => {
+                  await loadSharedBreakHigh();
+                }),
+              ]
+            : []),
           soft("rankPrefs", "排序偏好", async () => {
             await loadNotesRankPrefsShared();
           }),
@@ -16037,7 +16085,9 @@
           tab.hidden = false;
           tab.disabled = !!busy;
           tab.style.setProperty("--mom-pct", busy ? `${pct}%` : "0%");
-          const hitCount = (breakHighState.hits || []).length;
+          const hitCount = FEATURE_BREAK_HIGH
+            ? (breakHighState.hits || []).length
+            : 0;
           const idle =
             hitCount > 0
               ? `动态·${hitCount}`
@@ -16051,7 +16101,9 @@
             ? text
             : hitCount > 0
               ? `动态：近2h/1h + 破点高 ${hitCount} 个`
-              : "动态：近2h/1h + 破点高";
+              : FEATURE_BREAK_HIGH
+                ? "动态：近2h/1h + 破点高"
+                : "动态：近2h/1h";
         }
         syncPinSortUi();
         if (!loading) {
@@ -16590,6 +16642,13 @@
       }
 
       async function loadSharedBreakHigh() {
+        if (!FEATURE_BREAK_HIGH) {
+          breakHighState = WatchFavorites.emptyBreakHigh
+            ? WatchFavorites.emptyBreakHigh()
+            : { bases: {}, hits: [], lastCheckAt: 0 };
+          syncBreakHighTabChrome();
+          return breakHighState;
+        }
         try {
           const state = await WatchFavorites.loadBreakHighRaw({
             repo: CONFIG.GITHUB_REPO,
@@ -16722,6 +16781,7 @@
       }
 
       async function persistBreakHighState(message) {
+        if (!FEATURE_BREAK_HIGH) return breakHighState;
         if (breakHighSaving) return breakHighState;
         breakHighSaving = true;
         const snapshot = WatchFavorites.normalizeBreakHigh(breakHighState);
@@ -17985,11 +18045,17 @@
           opts.section === "breakthrough"
             ? opts.section
             : "all";
-        const wantCapture = section === "all" || section === "capture";
+        if (section === "capture" && !FEATURE_CAPTURE_PICK) {
+          showToast("捕捉精选已暂时关闭");
+          return;
+        }
+        const wantCapture =
+          FEATURE_CAPTURE_PICK &&
+          (section === "all" || section === "capture");
         const wantNotes = section === "all" || section === "notes";
         const wantBreakthrough =
           section === "all" ||
-          section === "capture" ||
+          (FEATURE_CAPTURE_PICK && section === "capture") ||
           section === "breakthrough";
         const gate = document.getElementById("notesRankGate");
         if (!gate) return;
@@ -18203,6 +18269,10 @@
       }
 
       function toggleCapturePickOverlay() {
+        if (!FEATURE_CAPTURE_PICK) {
+          showToast("捕捉精选已暂时关闭");
+          return;
+        }
         if (isNotesRankOpen()) {
           closeNotesRankOverlay();
           return;
@@ -18211,6 +18281,10 @@
       }
 
       function refreshCapturePickPanel() {
+        if (!FEATURE_CAPTURE_PICK) {
+          showToast("捕捉精选已暂时关闭");
+          return;
+        }
         void openNotesRankOverlay({ force: true, section: "capture" });
       }
 
@@ -18295,6 +18369,9 @@
       }
 
       function renderBreakHighColHtml() {
+        if (!FEATURE_BREAK_HIGH) {
+          return `<div class="notify-col-empty">破点高已暂时关闭</div>`;
+        }
         const hits = Array.isArray(breakHighState.hits)
           ? breakHighState.hits
           : [];
@@ -18339,7 +18416,7 @@
 
       function scheduleBreakHighTick() {
         // bStock 不做破点高（云侧也不跑）；避免写 watch-bstock-break-high。
-        if (KLINE_MODE === "bstock") {
+        if (!FEATURE_BREAK_HIGH || KLINE_MODE === "bstock") {
           if (breakHighTimer) {
             clearTimeout(breakHighTimer);
             breakHighTimer = 0;
@@ -18384,6 +18461,9 @@
        */
       async function maybeRunBreakHighCheck(options) {
         const force = !!(options && options.force);
+        if (!FEATURE_BREAK_HIGH) {
+          return { skipped: true, reason: "feature-disabled", hits: [] };
+        }
         if (KLINE_MODE === "bstock") {
           return { skipped: true, reason: "bstock-disabled", hits: [] };
         }
@@ -18492,19 +18572,23 @@
       function syncBreakHighTabChrome() {
         const tab = document.getElementById("momentumFloatTab");
         if (!tab || momentumBusy) return;
-        const hitCount = (breakHighState.hits || []).length;
+        const hitCount = FEATURE_BREAK_HIGH
+          ? (breakHighState.hits || []).length
+          : 0;
         tab.dataset.idleText = "动态";
         tab.textContent = hitCount > 0 ? `动态·${hitCount}` : "动态";
         tab.title =
           hitCount > 0
             ? `动态：近2h/1h + 破点高 ${hitCount} 个`
-            : "动态：近2h/1h + 破点高";
+            : FEATURE_BREAK_HIGH
+              ? "动态：近2h/1h + 破点高"
+              : "动态：近2h/1h";
       }
 
       function refreshMomentumFloatBody() {
         const body = document.getElementById("momentumFloatBody");
         if (!body) return;
-        body.classList.add("notify-float-split");
+        body.classList.toggle("notify-float-split", !!FEATURE_BREAK_HIGH);
         body.innerHTML = renderMomentumFloatHtml(lastMomentumSnapshot);
       }
 
@@ -18548,6 +18632,14 @@
 
       function renderMomentumFloatHtml(snapshot, options) {
         const left = renderMomentumLeftHtml(snapshot, options);
+        if (!FEATURE_BREAK_HIGH) {
+          return [
+            `<div class="notify-col">`,
+            `<div class="notify-col-title">近2h/1h</div>`,
+            left,
+            `</div>`,
+          ].join("");
+        }
         const right = renderBreakHighColHtml();
         return [
           `<div class="notify-col">`,
@@ -18580,7 +18672,9 @@
 
         const snap = lastMomentumSnapshot;
         const hasRows = snap && Array.isArray(snap.rows) && snap.rows.length;
-        const hitCount = (breakHighState.hits || []).length;
+        const hitCount = FEATURE_BREAK_HIGH
+          ? (breakHighState.hits || []).length
+          : 0;
         tab.hidden = false;
         tab.disabled = momentumBusy;
         if (momentumBusy) {
@@ -29496,6 +29590,8 @@
           })().catch(reject);
         });
       }
+
+      applyHeavyFeatureGatesUi();
 
       void (async () => {
         try {
