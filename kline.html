@@ -22640,6 +22640,14 @@
             if (hasA !== hasB) return hasA ? -1 : 1;
             return (a.order || 0) - (b.order || 0);
           });
+        } else {
+          // 默认拖拽序：先按置顶聚拢，再按 order，与下方「持有 → 置顶 → 其余」分段一致。
+          items = items.slice().sort((a, b) => {
+            const ap = a.pinned ? 0 : 1;
+            const bp = b.pinned ? 0 : 1;
+            if (ap !== bp) return ap - bp;
+            return (a.order || 0) - (b.order || 0);
+          });
         }
         // 当前持有永远最前（稳定排序，组内保持上面规则 / 原 order），不论是否置顶。
         items = items.slice().sort((a, b) => {
