@@ -3,7 +3,8 @@
 /**
  * 持仓买入价 P → 固定止损任务（-3% 卖一半 / -5% 卖剩余，市价）。
  * 与限价「设置卖出」并存；取消记在 holdings.stopCancel。
- * 买入成交 / 页面保存 P 都会清 stopCancel 并按新 P 重挂两档。
+ * 买入成交：加仓时按加权均价更新 P；页面手填 P 仍为覆盖。
+ * 成交 / 保存 P 都会清 stopCancel 并按新 P 重挂两档。
  */
 
 const { loadJson, saveJson } = require('./github-wecom');
@@ -107,23 +108,46 @@ function dropFixedStopTasks(tasks, symbol) {
 }
 
 /**
+ * 加仓加权均价：P' = (prevQty×prevP + fillQty×fillP) / (prevQty+fillQty)。
+ * 缺旧仓/旧 P 时退回 fillP。
+ */
+function computeWeightedEntryPrice(prevPrice, prevQty, fillPrice, fillQty) {
+  const p0 = Number(prevPrice);
+  const q0 = Number(prevQty);
+  const p1 = Number(fillPrice);
+  const q1 = Number(fillQty);
+  if (!(p1 > 0) || !(q1 > 0)) return null;
+  if (!(p0 > 0) || !(q0 > 0)) return p1;
+  const total = q0 + q1;
+  if (!(total > 0)) return p1;
+  return (q0 * p0 + q1 * p1) / total;
+}
+
+/**
  * 买入成交后：写 holdings.entryPrices，清空该币 stopCancel，种固定止损。
- * （页面手填 P 走 kline 自己的 patch，语义同为清 cancel + 重挂。）
+ * source=buy-fill 且提供 fillQty+prevQty（或 average:true）时做加权均价；
+ * 页面手填 P 走 kline 自己的 patch，语义仍为覆盖。
  */
 async function applyEntryPriceAndSeedStops(options) {
   const opts = options || {};
   const symbol = normalizeSymbol(opts.symbol);
-  const price = Number(opts.price);
+  const fillPrice = Number(opts.price);
   const now = Number(opts.now) || Date.now();
   const source = opts.source ? String(opts.source) : 'manual';
+  const wantAverage = opts.average === true || source === 'buy-fill';
   const result = {
     ok: false,
     reason: null,
     symbol,
-    price,
+    price: fillPrice,
+    fillPrice,
+    prevPrice: null,
+    prevQty: null,
+    fillQty: null,
+    averaged: false,
     seeded: false,
   };
-  if (!symbol || !(price > 0)) {
+  if (!symbol || !(fillPrice > 0)) {
     result.reason = 'bad-args';
     return result;
   }
@@ -147,7 +171,60 @@ async function applyEntryPriceAndSeedStops(options) {
     holdings.stopCancel && typeof holdings.stopCancel === 'object'
       ? { ...holdings.stopCancel }
       : {};
-  entryPrices[symbol] = { price, at: now, source };
+
+  let nextPrice = fillPrice;
+  if (wantAverage) {
+    const prevRow = entryPrices[symbol];
+    const prevPrice = Number(prevRow && prevRow.price);
+    const fillQty = Number(opts.fillQty);
+    let prevQty = Number(opts.prevQty);
+    if (!(prevQty > 0) && Number.isFinite(fillQty) && fillQty > 0) {
+      // 未显式传旧仓时：用 holdings 余额（可能已含本笔）反推
+      const asset = symbol.replace(/USDT$/i, '');
+      const bal =
+        holdings.balances && typeof holdings.balances === 'object'
+          ? holdings.balances[asset]
+          : null;
+      const free = Number(bal && bal.free) || 0;
+      const locked = Number(bal && bal.locked) || 0;
+      const total = free + locked;
+      if (total > 0) prevQty = Math.max(0, total - fillQty);
+    }
+    result.prevPrice = Number.isFinite(prevPrice) && prevPrice > 0 ? prevPrice : null;
+    result.prevQty = Number.isFinite(prevQty) && prevQty > 0 ? prevQty : null;
+    result.fillQty = Number.isFinite(fillQty) && fillQty > 0 ? fillQty : null;
+    const averaged = computeWeightedEntryPrice(
+      prevPrice,
+      prevQty,
+      fillPrice,
+      fillQty,
+    );
+    if (averaged > 0) {
+      nextPrice = averaged;
+      result.averaged = !!(
+        prevPrice > 0 &&
+        prevQty > 0 &&
+        fillQty > 0
+      );
+    }
+  }
+
+  result.price = nextPrice;
+  entryPrices[symbol] = {
+    price: nextPrice,
+    at: now,
+    source,
+    ...(result.averaged
+      ? {
+          avgFrom: {
+            prevPrice: result.prevPrice,
+            prevQty: result.prevQty,
+            fillPrice,
+            fillQty: result.fillQty,
+          },
+        }
+      : {}),
+  };
   if (stopCancel[symbol]) delete stopCancel[symbol];
   const symbols = Array.isArray(holdings.symbols) ? holdings.symbols.slice() : [];
   if (!symbols.includes(symbol)) symbols.push(symbol);
@@ -163,7 +240,9 @@ async function applyEntryPriceAndSeedStops(options) {
       HOLDINGS_PATH,
       nextHoldings,
       holdingsFile.sha,
-      `Entry price ${symbol} ${price}`,
+      result.averaged
+        ? `Entry VWAP ${symbol} ${nextPrice}`
+        : `Entry price ${symbol} ${nextPrice}`,
     );
   } catch (error) {
     const message = error && error.message ? error.message : String(error);
@@ -187,7 +266,7 @@ async function applyEntryPriceAndSeedStops(options) {
   const tasks = upsertFixedStopTasks(
     sellData.tasks,
     symbol,
-    price,
+    nextPrice,
     stopCancel,
     now,
   );
@@ -226,5 +305,6 @@ module.exports = {
   buildStopTask,
   upsertFixedStopTasks,
   dropFixedStopTasks,
+  computeWeightedEntryPrice,
   applyEntryPriceAndSeedStops,
 };

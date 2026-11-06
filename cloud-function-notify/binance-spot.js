@@ -263,13 +263,22 @@ async function getAccount(context) {
 }
 
 async function getFreeBalance(asset, context) {
+  const bal = await getAssetBalance(asset, context);
+  return bal.free;
+}
+
+/** @returns {{ free: number, locked: number, total: number }} */
+async function getAssetBalance(asset, context) {
   const account = await getAccount(context);
   const key = String(asset || '').toUpperCase();
   const row = (account.balances || []).find(
     (b) => String(b.asset || '').toUpperCase() === key,
   );
-  const free = Number(row && row.free);
-  return Number.isFinite(free) && free > 0 ? free : 0;
+  const freeRaw = Number(row && row.free);
+  const lockedRaw = Number(row && row.locked);
+  const free = Number.isFinite(freeRaw) && freeRaw > 0 ? freeRaw : 0;
+  const locked = Number.isFinite(lockedRaw) && lockedRaw > 0 ? lockedRaw : 0;
+  return { free, locked, total: free + locked };
 }
 
 async function limitSell(symbol, quantity, price, context) {
@@ -362,6 +371,7 @@ module.exports = {
   getBookTicker,
   getAccount,
   getFreeBalance,
+  getAssetBalance,
   floorToStep,
   alignPrice,
   alignPriceCeil,

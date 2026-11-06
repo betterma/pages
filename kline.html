@@ -3060,6 +3060,22 @@
         font-weight: 550;
         color: rgba(28, 28, 30, 0.45);
       }
+      .nail-hold-pnl {
+        font-size: 11px;
+        font-weight: 650;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.3;
+        margin-top: 1px;
+      }
+      .nail-hold-pnl.is-up {
+        color: var(--up, #16a66a);
+      }
+      .nail-hold-pnl.is-down {
+        color: var(--down, #e0444a);
+      }
+      .nail-hold-pnl.is-flat {
+        color: rgba(28, 28, 30, 0.45);
+      }
       .nail-hold-meta {
         color: rgba(28, 28, 30, 0.62);
         font-size: 12px;
@@ -12418,6 +12434,23 @@
               const buySpendHint = usdtFreeNum * (buyPct / 100);
               const entryPx = holdingsEntryPriceOf(symbol);
               const entryInput = entryPx != null ? String(entryPx) : "";
+              const holdQtyForPnl = isDust ? 0 : rawTotalQty;
+              let pnlHtml = "";
+              if (
+                entryPx != null &&
+                entryPx > 0 &&
+                Number.isFinite(px) &&
+                px > 0 &&
+                holdQtyForPnl > 0
+              ) {
+                const pnlUsdt = (px - entryPx) * holdQtyForPnl;
+                const pnlPct = ((px - entryPx) / entryPx) * 100;
+                const tone =
+                  pnlUsdt > 1e-8 ? "is-up" : pnlUsdt < -1e-8 ? "is-down" : "is-flat";
+                const usdtBit = `${pnlUsdt > 0 ? "+" : ""}${formatHoldingsUsdt(pnlUsdt)}`;
+                const pctBit = `${pnlPct > 0 ? "+" : ""}${pnlPct.toFixed(2)}%`;
+                pnlHtml = `<span class="nail-hold-pnl ${tone}" title="相对成本价 P 的浮动盈亏">${escapeHtml(usdtBit)} · ${escapeHtml(pctBit)}</span>`;
+              }
               const stop3Px =
                 entryPx != null
                   ? formatHoldingsPriceInput(entryPx * 0.97)
@@ -12522,6 +12555,7 @@
                     <span class="nail-hold-bal-label">总资产估值</span>
                     <span class="nail-hold-bal-value">${escapeHtml(totalText)}</span>
                     <span class="nail-hold-bal-unit">USDT</span>
+                    ${pnlHtml}
                   </div>
                   <div class="nail-hold-bal-cell${lockedNum > 0 ? " is-locked-hot" : ""}">
                     <span class="nail-hold-bal-label">冻结数量</span>

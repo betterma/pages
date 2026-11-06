@@ -4,7 +4,7 @@
  * 限价买入任务：网页写入 watch-buy-tasks.json。
  * 花费 = USDT 可用 × buyPercent%；价格 = min(maxBuy||∞, ask)；LIMIT BUY。
  * 默认 dry-run；`live: true`（页面开关）才真下单。
- * 成交后回写买入价 P 并种固定止损（-3%/-5%）。
+ * 成交后回写买入价 P（加仓加权均价）并种固定止损（-3%/-5%）。
  */
 
 const { loadJson, saveJson } = require('./github-wecom');
@@ -14,14 +14,45 @@ const { applyEntryPriceAndSeedStops } = require('./entry-stop');
 
 const BUY_TASKS_PATH = process.env.BUY_TASKS_PATH || 'watch-buy-tasks.json';
 
-async function seedStopsAfterBuyFill(task, now) {
+function baseAssetOf(symbol) {
+  return String(symbol || '')
+    .trim()
+    .toUpperCase()
+    .replace(/USDT$/i, '');
+}
+
+async function resolvePrevQtyAfterFill(symbol, fillQty, context) {
+  const qty = Number(fillQty);
+  if (!(qty > 0)) return 0;
+  const asset = baseAssetOf(symbol);
+  if (!asset) return 0;
+  try {
+    // 成交后账户余额已含本笔：旧仓 = 当前总量 − 本笔数量
+    const bal = await spot.getAssetBalance(asset, context);
+    const total = Number(bal && bal.total) || 0;
+    return Math.max(0, total - qty);
+  } catch (error) {
+    console.warn(
+      'buy-fill prevQty balance failed',
+      error && error.message ? error.message : error,
+    );
+    return 0;
+  }
+}
+
+async function seedStopsAfterBuyFill(task, now, context) {
   const price = Number(task && task.lastPrice);
+  const fillQty = Number(task && task.lastQty);
   const symbol = task && task.symbol;
   if (!symbol || !(price > 0)) return;
   try {
+    const prevQty = await resolvePrevQtyAfterFill(symbol, fillQty, context);
     const seeded = await applyEntryPriceAndSeedStops({
       symbol,
       price,
+      fillQty: fillQty > 0 ? fillQty : undefined,
+      prevQty: prevQty > 0 ? prevQty : undefined,
+      average: true,
       source: 'buy-fill',
       now: now || Date.now(),
     });
@@ -333,7 +364,7 @@ async function runBuyTasks(options) {
           changed = true;
           if (poll === 'filled') {
             result.filled += 1;
-            await seedStopsAfterBuyFill(task, now);
+            await seedStopsAfterBuyFill(task, now, context);
           }
         }
         continue;
@@ -343,7 +374,7 @@ async function runBuyTasks(options) {
         changed = true;
         if (poll === 'filled') {
           result.filled += 1;
-          await seedStopsAfterBuyFill(task, now);
+          await seedStopsAfterBuyFill(task, now, context);
         }
         continue;
       }
@@ -358,7 +389,7 @@ async function runBuyTasks(options) {
         else if (action === 'placed') result.placed += 1;
         else if (action === 'filled') {
           result.filled += 1;
-          await seedStopsAfterBuyFill(task, now);
+          await seedStopsAfterBuyFill(task, now, context);
         } else if (action === 'skip') result.skippedTask += 1;
       }
     } catch (error) {
