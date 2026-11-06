@@ -1,12 +1,15 @@
 'use strict';
 
 /**
- * 天平 / 直拉 企微推送（自动盯）：
+ * 天平 / 直拉（自动盯）：
  * - 天平：盯后曾影线跌破 pinPrice（low），现价 > 跌破 K 最低收盘
  * - 直拉：盯后实体从未跌破 pin（min(open,close)；下影不算），现价 > 盯价
- * 可同时命中 → 一条「天平·直拉」。同一币默认 30 分钟冷却。
- * 默认每轮检查全部冷却到期的自动盯（CHECK_MAX=0）；可用环境变量限流。
- * 不要求当前 4h 窗上涨。
+ * 可同时命中 → 一条「天平·直拉」。
+ * 网页 notices：形态命中即落盘（不要求当前 4h 窗上涨）。
+ * 企微：形态命中且当前 4h 窗上涨才推。
+ * 冷却：lastNoticeAt / lastSentAt 各管网页与企微，默认各 30 分钟；
+ * 未窗上涨时不写 lastSentAt，下轮继续查，窗翻红后再推企微。
+ * 默认每轮检查全部企微冷却到期的自动盯（CHECK_MAX=0）；可用环境变量限流。
  */
 
 const { loadJson, saveJson, sendWecomText, sendWecomImage, fetchBinanceTickers } =
@@ -254,6 +257,7 @@ function normalizeState(data) {
     out[String(key).toUpperCase()] = {
       pinnedAt: Number(row.pinnedAt) || 0,
       lastSentAt: Number(row.lastSentAt) || 0,
+      lastNoticeAt: Number(row.lastNoticeAt) || 0,
       pinPrice: Number(row.pinPrice) || 0,
       kinds: Array.isArray(row.kinds) ? row.kinds.map(String) : [],
     };
@@ -265,7 +269,7 @@ function normalizeState(data) {
 }
 
 /**
- * 现价相对正在形成的 4h 窗开盘是否上涨（仅作命中附加字段，不再作为天平/直拉门槛）。
+ * 现价相对正在形成的 4h 窗开盘是否上涨（企微门槛；网页 notices 不要求）。
  */
 function isCurrentWindowUp(candles, livePrice) {
   if (!Array.isArray(candles) || !candles.length) return false;
@@ -362,7 +366,15 @@ function evaluateStraight(candles, pin, livePrice) {
   };
 }
 
-/** @returns {{ balance: object|null, straight: object|null, kinds: string[], livePrice: number }|null} */
+/**
+ * @returns {{
+ *   balance: object|null,
+ *   straight: object|null,
+ *   kinds: string[],
+ *   livePrice: number,
+ *   windowUp: boolean,
+ * }|null}
+ */
 function evaluatePatterns(candles, pin, livePrice) {
   const balance = evaluateBalance(candles, pin, livePrice);
   const straight = evaluateStraight(candles, pin, livePrice);
@@ -370,11 +382,16 @@ function evaluatePatterns(candles, pin, livePrice) {
   const kinds = [];
   if (balance) kinds.push('天平');
   if (straight) kinds.push('直拉');
+  const windowUp = !!(
+    (balance && balance.windowUp) ||
+    (straight && straight.windowUp)
+  );
   return {
     balance,
     straight,
     kinds,
     livePrice: (balance && balance.livePrice) || (straight && straight.livePrice),
+    windowUp,
   };
 }
 
@@ -419,6 +436,8 @@ async function runBalanceAlerts(options) {
     hits: 0,
     sent: 0,
     notices: 0,
+    wecomDue: 0,
+    skippedWecomWindow: 0,
     symbols: [],
     kinds: [],
     errors: [],
@@ -542,6 +561,7 @@ async function runBalanceAlerts(options) {
   }));
 
   const noticeRows = [];
+  const wecomRows = [];
   for (const hit of hits) {
     const { pin, candles, verdict } = hit;
     const label = labelOf(pin.symbol);
@@ -549,9 +569,20 @@ async function runBalanceAlerts(options) {
     const openTime = Number(forming && forming.time) || currentWindowOpen(now);
     const note = noteMap[pin.symbol] || {};
     const livePrice = Number(verdict.livePrice) || 0;
+    const windowUp = !!verdict.windowUp;
     result.symbols.push(pin.symbol);
-    result.kinds.push({ symbol: pin.symbol, kinds: verdict.kinds });
-    noticeRows.push({
+    result.kinds.push({
+      symbol: pin.symbol,
+      kinds: verdict.kinds,
+      windowUp,
+    });
+    const prev = state.bySymbol[pin.symbol] || {};
+    const lastNoticeAt = Number(prev.lastNoticeAt) || 0;
+    const noticeDue =
+      !(lastNoticeAt > 0) ||
+      COOLDOWN_MS <= 0 ||
+      now - lastNoticeAt >= COOLDOWN_MS;
+    const row = {
       id: `${pin.symbol}:${openTime}:${now}`,
       symbol: pin.symbol,
       label,
@@ -564,11 +595,16 @@ async function runBalanceAlerts(options) {
       notifyPrice: livePrice,
       noteAt: Number(note.noteAt) || 0,
       interval: INTERVAL,
+      windowUp,
       _hit: hit,
-    });
+    };
+    if (noticeDue) noticeRows.push(row);
+    if (windowUp) wecomRows.push(row);
+    else result.skippedWecomWindow += 1;
   }
+  result.wecomDue = wecomRows.length;
 
-  // 先写网页列表；成功后再进冷却，避免「冷却已写、列表失败」空窗一整段冷却。
+  // 先写网页列表；失败则本轮不推企微、不写冷却，下轮重试。
   let noticesWritten = false;
   if (noticeRows.length) {
     try {
@@ -578,6 +614,17 @@ async function runBalanceAlerts(options) {
       });
       result.notices = await appendBalanceNotices(payload, now, noticesPath);
       noticesWritten = true;
+      for (const row of noticeRows) {
+        const prev = state.bySymbol[row.symbol] || {};
+        state.bySymbol[row.symbol] = {
+          pinnedAt: row.pinnedAt,
+          lastSentAt: Number(prev.lastSentAt) || 0,
+          lastNoticeAt: now,
+          pinPrice: row.pinPrice,
+          kinds: row.kinds,
+        };
+        stateDirty = true;
+      }
     } catch (error) {
       result.errors.push(
         `notices:${error && error.message ? error.message : error}`,
@@ -585,17 +632,19 @@ async function runBalanceAlerts(options) {
     }
   }
 
-  // 网页落盘失败：不推企微、不进冷却，下轮重试（避免企微有了、列表没有）。
-  // checkCursor 等仍可能 stateDirty，后面统一 save。
-  if (noticesWritten) {
-    for (const row of noticeRows) {
+  // 企微：仅窗上涨。未上涨的不写 lastSentAt，下轮继续查。
+  // 本轮若有新 notices 且落盘失败，连带跳过企微，避免「企微有、列表没有」。
+  const canWecom = !noticeRows.length || noticesWritten;
+  if (canWecom) {
+    for (const row of wecomRows) {
       const hit = row._hit;
       const { pin, candles, verdict } = hit;
       const title = patternTitle(verdict.kinds);
-
+      const prev = state.bySymbol[pin.symbol] || {};
       state.bySymbol[pin.symbol] = {
         pinnedAt: pin.pinnedAt,
         lastSentAt: now,
+        lastNoticeAt: Number(prev.lastNoticeAt) || 0,
         pinPrice: pin.pinPrice,
         kinds: verdict.kinds,
       };

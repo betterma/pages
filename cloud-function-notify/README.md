@@ -46,11 +46,11 @@
 1. **天平**：盯后曾 `low < pinPrice`（影线算跌破），现价 **>** 跌破 K 最低收盘  
 2. **直拉**：盯后实体从未跌破 pin（`min(open,close)`；下影不算），现价 **>** 盯价  
 
-命中则：
-1. 写入网页通知列表 `watch-balance-notices.json`（近 24h，同币只留最新）  
-2. 发企微「币名 · 天平 / 直拉 / 天平·直拉」+ 4h 图（有 webhook 时）  
+形态命中后：
+1. **网页** `watch-balance-notices.json`：落盘（近 24h，同币只留最新）——**不要求**当前 4h 窗上涨  
+2. **企微**：仅当现价相对当前 4h 窗开盘上涨时，才发「币名 · 天平 / 直拉 / 天平·直拉」+ 4h 图  
 
-**不要求**当前 4h 窗上涨。同一币 **30 分钟内**不重复（网页落盘与企微共用冷却）。
+冷却拆开（默认各 30 分钟）：网页用 `lastNoticeAt`，企微用 `lastSentAt`。未窗上涨时不写企微冷却，下轮继续查，窗翻红后再推。
 
 - 去重状态：`watch-balance-alert.json`
 - 网页列表：`watch-balance-notices.json`（`BALANCE_NOTICES_PATH`）
@@ -58,7 +58,7 @@
 - `BALANCE_ALERT_COOLDOWN_MS`：默认 `1800000`（30 分钟）
 - Webhook：`WECOM_WEBHOOK_PINS` → 否则 `WECOM_WEBHOOK_POSITIONS` / `WECOM_WEBHOOK_URL`
 - `BALANCE_ALERT_SEND_MAX`：默认 `0`=命中全推；设为正数可限流
-- `BALANCE_ALERT_CHECK_MAX`：默认 `0`=**冷却到期全查**；设为正数则单轮限量并用 `checkCursor` 轮询
+- `BALANCE_ALERT_CHECK_MAX`：默认 `0`=**企微冷却到期全查**；设为正数则单轮限量并用 `checkCursor` 轮询
 - 并发 `BALANCE_ALERT_CONCURRENCY`（默认 8）；全查时建议函数超时 ≥ 120s
 
 ## 排序动态（notes-rank 快照）
