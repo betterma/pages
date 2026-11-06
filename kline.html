@@ -21274,6 +21274,24 @@
         return `应查 ${due} · 已查 ${checked} · 冷却跳过 ${cool}${coolHint}`;
       }
 
+      function balanceHealthHitsText(bal) {
+        const b = bal || {};
+        const hits = Number(b.hits) || 0;
+        const sent = Number(b.sent) || 0;
+        const parts = [`${hits} / ${sent}`];
+        const wecomDue = Number(b.wecomDue) || 0;
+        const skippedWin = Number(b.skippedWecomWindow) || 0;
+        const deferred = Number(b.wecomDeferred) || 0;
+        const sendMax = Number(b.sendMax) || 0;
+        if (wecomDue > 0) parts.push(`窗涨 ${wecomDue}`);
+        if (skippedWin > 0) parts.push(`未涨 ${skippedWin}`);
+        if (sendMax > 0) parts.push(`限推 ${sendMax}`);
+        if (deferred > 0) parts.push(`改下轮 ${deferred}`);
+        const coolLabel = formatHealthCooldown(b.cooldownMs);
+        if (coolLabel) parts.push(`冷却 ${coolLabel}`);
+        return parts.join(" · ");
+      }
+
       function nailGreenHealthProgressText(ng) {
         const g = ng || {};
         if (g.skipped && g.reason && g.reason !== "not-run") {
@@ -21341,7 +21359,7 @@
           `<div class="nh-row"><span class="nh-k">自动盯</span><span class="nh-v">${Number(data.autoPins) || 0}</span></div>`,
           errLine,
           `<div class="nh-row"><span class="nh-k">天平·直拉</span><span class="nh-v">${escapeHtml(balanceHealthProgressText(bal))}</span></div>`,
-          `<div class="nh-row"><span class="nh-k">命中 / 推送</span><span class="nh-v">${Number(bal.hits) || 0} / ${Number(bal.sent) || 0}${Number(bal.cooldownMs) > 0 ? ` · 冷却 ${escapeHtml(formatHealthCooldown(bal.cooldownMs))}` : ""}</span></div>`,
+          `<div class="nh-row"><span class="nh-k">命中 / 推送</span><span class="nh-v">${escapeHtml(balanceHealthHitsText(bal))}</span></div>`,
           balErr,
           `<div class="nh-row"><span class="nh-k">荧光绿</span><span class="nh-v">${escapeHtml(nailGreenHealthProgressText(ng))}</span></div>`,
           `<div class="nh-row"><span class="nh-k">过期清钉</span><span class="nh-v">查 ${Number(stale.checked) || 0} · 候选 ${Number(stale.candidate) || 0} · 清 ${Number(stale.removed) || 0}${stale.skipped ? ` · 跳过 ${escapeHtml(String(stale.reason || ""))}` : ""}</span></div>`,

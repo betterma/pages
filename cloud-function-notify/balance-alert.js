@@ -9,7 +9,8 @@
  * 企微：形态命中且当前 4h 窗上涨才推。
  * 冷却：lastNoticeAt / lastSentAt 各管网页与企微，默认各 30 分钟；
  * 未窗上涨时不写 lastSentAt，下轮继续查，窗翻红后再推企微。
- * 默认每轮检查全部企微冷却到期的自动盯（CHECK_MAX=0）；可用环境变量限流。
+ * 默认每轮检查全部企微冷却到期的自动盯（CHECK_MAX=0）；
+ * 企微默认每轮最多推 5 只（SEND_MAX），间隔 SEND_GAP_MS。
  */
 
 const { loadJson, saveJson, sendWecomText, sendWecomImage, fetchBinanceTickers } =
@@ -36,14 +37,24 @@ const CONCURRENCY = Math.max(
   1,
   Number(process.env.BALANCE_ALERT_CONCURRENCY || 8),
 );
-/** 单轮最多推几只；默认 0=命中全推。 */
+/** 单轮最多推企微几只；默认 5（防 45009）。0=不限。只限企微，不影响网页 notices。 */
 const SEND_MAX = Math.max(
   0,
   Number(
     process.env.BALANCE_ALERT_SEND_MAX === undefined ||
       process.env.BALANCE_ALERT_SEND_MAX === ''
-      ? 0
+      ? 5
       : process.env.BALANCE_ALERT_SEND_MAX,
+  ),
+);
+/** 两只企微之间的间隔（默认 800ms），减轻文+图连打触发限流。 */
+const SEND_GAP_MS = Math.max(
+  0,
+  Number(
+    process.env.BALANCE_ALERT_SEND_GAP_MS === undefined ||
+      process.env.BALANCE_ALERT_SEND_GAP_MS === ''
+      ? 800
+      : process.env.BALANCE_ALERT_SEND_GAP_MS,
   ),
 );
 /** 单轮最多拉 K 检查几只；默认 0=冷却到期全查。>0 时用 checkCursor 轮询切片。 */
@@ -399,6 +410,19 @@ function patternTitle(kinds) {
   return (Array.isArray(kinds) ? kinds : []).join('·') || '天平';
 }
 
+function sleep(ms) {
+  const n = Number(ms) || 0;
+  if (n <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, n));
+}
+
+function isWecomRateLimited(error) {
+  const msg = String(
+    (error && error.message) || error || '',
+  );
+  return msg.includes('45009') || /too many requests/i.test(msg);
+}
+
 async function mapPool(items, concurrency, worker) {
   const list = Array.isArray(items) ? items : [];
   const out = new Array(list.length);
@@ -437,12 +461,15 @@ async function runBalanceAlerts(options) {
     sent: 0,
     notices: 0,
     wecomDue: 0,
+    wecomQueued: 0,
+    wecomDeferred: 0,
     skippedWecomWindow: 0,
     symbols: [],
     kinds: [],
     errors: [],
     push: pushEnabled && !!webhook,
     checkMax: CHECK_MAX,
+    sendMax: SEND_MAX,
     cooldownMs: COOLDOWN_MS,
   };
 
@@ -552,17 +579,16 @@ async function runBalanceAlerts(options) {
   });
 
   const matched = evaluated.filter(Boolean);
-  const hits = SEND_MAX > 0 ? matched.slice(0, SEND_MAX) : matched;
   result.hits = matched.length;
-  result.queued = hits.length;
   result.hitKinds = matched.map((row) => ({
     symbol: row.pin.symbol,
     kinds: row.verdict.kinds,
+    windowUp: !!(row.verdict && row.verdict.windowUp),
   }));
 
   const noticeRows = [];
-  const wecomRows = [];
-  for (const hit of hits) {
+  const wecomCandidates = [];
+  for (const hit of matched) {
     const { pin, candles, verdict } = hit;
     const label = labelOf(pin.symbol);
     const forming = candles && candles[candles.length - 1];
@@ -599,10 +625,18 @@ async function runBalanceAlerts(options) {
       _hit: hit,
     };
     if (noticeDue) noticeRows.push(row);
-    if (windowUp) wecomRows.push(row);
+    if (windowUp) wecomCandidates.push(row);
     else result.skippedWecomWindow += 1;
   }
-  result.wecomDue = wecomRows.length;
+  result.wecomDue = wecomCandidates.length;
+  const wecomRows =
+    SEND_MAX > 0 ? wecomCandidates.slice(0, SEND_MAX) : wecomCandidates;
+  result.wecomQueued = wecomRows.length;
+  result.queued = wecomRows.length;
+  result.wecomDeferred = Math.max(
+    0,
+    wecomCandidates.length - wecomRows.length,
+  );
 
   // 先写网页列表；失败则本轮不推企微、不写冷却，下轮重试。
   let noticesWritten = false;
@@ -632,25 +666,29 @@ async function runBalanceAlerts(options) {
     }
   }
 
-  // 企微：仅窗上涨。未上涨的不写 lastSentAt，下轮继续查。
+  // 企微：仅窗上涨 + 单轮 SEND_MAX。成功才写 lastSentAt；45009 停止本轮剩余。
   // 本轮若有新 notices 且落盘失败，连带跳过企微，避免「企微有、列表没有」。
   const canWecom = !noticeRows.length || noticesWritten;
   if (canWecom) {
-    for (const row of wecomRows) {
+    for (let i = 0; i < wecomRows.length; i += 1) {
+      const row = wecomRows[i];
       const hit = row._hit;
       const { pin, candles, verdict } = hit;
       const title = patternTitle(verdict.kinds);
       const prev = state.bySymbol[pin.symbol] || {};
-      state.bySymbol[pin.symbol] = {
-        pinnedAt: pin.pinnedAt,
-        lastSentAt: now,
-        lastNoticeAt: Number(prev.lastNoticeAt) || 0,
-        pinPrice: pin.pinPrice,
-        kinds: verdict.kinds,
-      };
-      stateDirty = true;
 
-      if (!webhook) continue;
+      if (!webhook) {
+        state.bySymbol[pin.symbol] = {
+          pinnedAt: pin.pinnedAt,
+          lastSentAt: now,
+          lastNoticeAt: Number(prev.lastNoticeAt) || 0,
+          pinPrice: pin.pinPrice,
+          kinds: verdict.kinds,
+        };
+        stateDirty = true;
+        continue;
+      }
+
       try {
         const text = `${row.label} · ${title}`;
         await sendWecomText(text, webhook);
@@ -662,10 +700,26 @@ async function runBalanceAlerts(options) {
         });
         await sendWecomImage(painted, webhook);
         result.sent += 1;
+        state.bySymbol[pin.symbol] = {
+          pinnedAt: pin.pinnedAt,
+          lastSentAt: now,
+          lastNoticeAt: Number(prev.lastNoticeAt) || 0,
+          pinPrice: pin.pinPrice,
+          kinds: verdict.kinds,
+        };
+        stateDirty = true;
       } catch (error) {
         result.errors.push(
           `send:${pin.symbol}:${error && error.message ? error.message : error}`,
         );
+        // 限流：本轮剩余改下轮再推，避免连打 + 误写冷却漏推。
+        if (isWecomRateLimited(error)) {
+          result.wecomDeferred += wecomRows.length - i;
+          break;
+        }
+      }
+      if (i + 1 < wecomRows.length && SEND_GAP_MS > 0) {
+        await sleep(SEND_GAP_MS);
       }
     }
   }
