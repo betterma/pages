@@ -3406,19 +3406,6 @@
         padding: 6px 8px 8px;
         min-width: 0;
       }
-      .nail-notice-card.is-reviewing {
-        outline: 1px solid rgba(120, 140, 160, 0.55);
-        outline-offset: -1px;
-      }
-      .nail-notice-card.is-reviewing .nail-notice-review-stamp {
-        display: inline;
-        margin-right: 6px;
-        color: #5a6a78;
-        font-size: 0.78em;
-      }
-      .nail-notice-review-stamp {
-        display: none;
-      }
       .nail-notice-card.is-focus {
         outline: 2px solid var(--accent, #2f8f6e);
         outline-offset: 2px;
@@ -5822,6 +5809,118 @@
       .kline-zoom-gate[hidden] {
         display: none !important;
       }
+      .notice-review-gate {
+        position: fixed;
+        inset: 0;
+        z-index: 185;
+        display: flex;
+        flex-direction: column;
+        background: color-mix(in srgb, var(--bg) 78%, transparent);
+        backdrop-filter: blur(10px) saturate(140%);
+        -webkit-backdrop-filter: blur(10px) saturate(140%);
+        padding: max(8px, env(safe-area-inset-top, 0px)) 8px
+          max(8px, env(safe-area-inset-bottom, 0px));
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+      .notice-review-gate[hidden] {
+        display: none !important;
+      }
+      .notice-review-panel {
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        border: 0.5px solid var(--separator);
+        border-radius: 14px;
+        background: color-mix(in srgb, var(--elevated) 92%, transparent);
+        overflow: hidden;
+        box-sizing: border-box;
+      }
+      .notice-review-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 10px 6px;
+        flex: 0 0 auto;
+      }
+      .notice-review-head h2 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .notice-review-head p {
+        margin: 2px 0 0;
+        font-size: 11px;
+        color: var(--muted, #6a7570);
+      }
+      .notice-review-head button {
+        flex: 0 0 auto;
+        min-height: 32px;
+        padding: 0 10px;
+        border-radius: 8px;
+        border: 0.5px solid var(--separator);
+        background: var(--elevated);
+        color: var(--text);
+        font-size: 13px;
+      }
+      .notice-review-compare {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: row;
+        gap: 8px;
+        padding: 0 8px 8px;
+        box-sizing: border-box;
+      }
+      .notice-review-pane {
+        flex: 1 1 50%;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        border: 0.5px solid var(--separator);
+        border-radius: 10px;
+        overflow: hidden;
+        background: color-mix(in srgb, var(--bg) 55%, transparent);
+      }
+      .notice-review-pane-title {
+        flex: 0 0 auto;
+        margin: 0;
+        padding: 6px 8px 4px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .notice-review-pane-meta {
+        flex: 0 0 auto;
+        margin: 0;
+        padding: 0 8px 4px;
+        font-size: 10px;
+        color: var(--muted, #6a7570);
+      }
+      .notice-review-pane-chart {
+        flex: 1 1 auto;
+        min-height: 120px;
+        position: relative;
+      }
+      .notice-review-pane-chart canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      @media (max-width: 560px) {
+        .notice-review-compare {
+          flex-direction: column;
+        }
+        .notice-review-pane {
+          flex: 1 1 50%;
+        }
+      }
       .kline-zoom-panel {
         flex: 1 1 auto;
         min-width: 0;
@@ -7638,7 +7737,7 @@
       <button
         type="button"
         data-focus-action="review"
-        title="按第一次进通知页时的 K 线回顾"
+        title="浮窗对比：首次通知时 K 线 vs 当前 K 线"
       >
         回顾
       </button>
@@ -7784,6 +7883,41 @@
             <canvas id="klineZoomLongCanvas"></canvas>
           </div>
         </section>
+      </div>
+    </div>
+
+    <div
+      id="noticeReviewGate"
+      class="notice-review-gate"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="noticeReviewTitle"
+    >
+      <div class="notice-review-panel">
+        <div class="notice-review-head">
+          <div>
+            <h2 id="noticeReviewTitle">回顾对比</h2>
+            <p id="noticeReviewMeta">左：首次进通知 · 右：当前</p>
+          </div>
+          <button type="button" id="noticeReviewClose">关闭</button>
+        </div>
+        <div class="notice-review-compare">
+          <section class="notice-review-pane" aria-label="首次通知时 K 线">
+            <h3 class="notice-review-pane-title">首次通知时</h3>
+            <p class="notice-review-pane-meta" id="noticeReviewPastMeta">—</p>
+            <div class="notice-review-pane-chart">
+              <canvas id="noticeReviewPastCanvas"></canvas>
+            </div>
+          </section>
+          <section class="notice-review-pane" aria-label="当前 K 线">
+            <h3 class="notice-review-pane-title">当前</h3>
+            <p class="notice-review-pane-meta" id="noticeReviewLiveMeta">—</p>
+            <div class="notice-review-pane-chart">
+              <canvas id="noticeReviewLiveCanvas"></canvas>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
 
@@ -19762,7 +19896,7 @@
           if (focusActionScope !== "notice") return;
           setFocusBarBusy(true, activeBtn, "回顾中");
           try {
-            const result = await reviewNailNoticeChart(symbol);
+            const result = await openNoticeReviewCompare(symbol);
             if (!result || !result.ok) {
               showToast(
                 result && result.reason === "no-first"
@@ -19771,9 +19905,6 @@
               );
               return;
             }
-            showToast(
-              `${symbol.replace(/USDT$/i, "")} 回顾 · ${formatNoticeTime(result.firstSeenAt)}`,
-            );
           } catch (error) {
             console.error(error);
             showToast(error.message || "回顾失败");
@@ -19911,7 +20042,11 @@
         const nailOpen = isNailDrawerOpen();
         const noticeOpen = nailNoticeMode === "open";
         document.body.style.overflow =
-          hiddenOpen || nailOpen || noticeOpen || isKlineZoomOpen()
+          hiddenOpen ||
+          nailOpen ||
+          noticeOpen ||
+          isKlineZoomOpen() ||
+          isNoticeReviewOpen()
             ? "hidden"
             : "";
       }
@@ -20378,7 +20513,7 @@
               check,
               `<div class="nail-notice-card-top">`,
               `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}</button>`,
-              `<span class="nail-notice-card-stamps"><span class="nail-notice-review-stamp" data-notice-review-stamp></span>${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
+              `<span class="nail-notice-card-stamps">${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
               `</div>`,
               `<div class="nail-notice-meta">`,
               `<span class="nail-notice-line"><span class="nail-notice-key">便签</span><span>${notePrice > 0 ? escapeHtml(formatPinPrice(notePrice)) : "—"}</span><span class="nail-notice-iv">${escapeHtml(item.interval || "4h")}</span></span>`,
@@ -20933,7 +21068,6 @@
           .trim()
           .toUpperCase();
         const force = !!opts.force;
-        const reviewMode = !!opts.review;
         const trackFilter = !!opts.trackFilter;
         const filterPass = Number(opts.filterPass) || 0;
         const filterLabel = String(opts.filterLabel || "").trim();
@@ -21068,40 +21202,18 @@
               return;
             }
             const card = canvas.closest(".nail-notice-card");
-            const firstSeenAt =
-              Number(canvas.getAttribute("data-notice-first")) ||
-              Number(card && card.getAttribute("data-notice-first")) ||
-              0;
-            const wantReview =
-              reviewMode ||
-              !!(card && card.classList.contains("is-reviewing"));
-            const reviewAt =
-              wantReview && firstSeenAt > 0 ? firstSeenAt : 0;
             try {
-              if (force) {
-                klineFetchCache.delete(`${symbol}|4h|18`);
-                if (reviewAt > 0) {
-                  klineFetchCache.delete(`${symbol}|4h|18|e${reviewAt}`);
-                }
-              }
-              const candles = await fetchKlines(
-                symbol,
-                "4h",
-                null,
-                18,
-                reviewAt > 0 ? reviewAt : 0,
-              );
+              if (force) klineFetchCache.delete(`${symbol}|4h|18`);
+              const candles = await fetchKlines(symbol, "4h", null, 18);
               const latestClose =
                 candles.length > 0
                   ? Number(candles[candles.length - 1].close)
                   : NaN;
               const tickerPrice = Number(marketMap[symbol]?.price);
               const livePrice =
-                reviewAt > 0
-                  ? latestClose
-                  : Number.isFinite(tickerPrice) && tickerPrice > 0
-                    ? tickerPrice
-                    : latestClose;
+                Number.isFinite(tickerPrice) && tickerPrice > 0
+                  ? tickerPrice
+                  : latestClose;
               const liveEl = canvas
                 .closest(".nail-notice-card")
                 ?.querySelector("[data-notice-live]");
@@ -21142,16 +21254,6 @@
                   "data-notice-straight-live",
                   noticeIsStraight(candles, livePrice, pin) ? "1" : "0",
                 );
-                const stamp = card.querySelector("[data-notice-review-stamp]");
-                if (reviewAt > 0) {
-                  card.classList.add("is-reviewing");
-                  if (stamp) {
-                    stamp.textContent = `回顾 ${formatNoticeTime(reviewAt)}`;
-                  }
-                } else {
-                  card.classList.remove("is-reviewing");
-                  if (stamp) stamp.textContent = "";
-                }
                 applyNailNoticeDeltaFilter();
               }
               const drawPin =
@@ -21177,7 +21279,6 @@
                     }
                   : null,
                 null,
-                reviewAt > 0 ? { reviewAt } : null,
               );
             } catch (error) {
               console.warn("notice chart failed", symbol, error);
@@ -21230,12 +21331,6 @@
               .toUpperCase() === key,
         );
         if (!canvas) return false;
-        const card = canvas.closest(".nail-notice-card");
-        if (card) {
-          card.classList.remove("is-reviewing");
-          const stamp = card.querySelector("[data-notice-review-stamp]");
-          if (stamp) stamp.textContent = "";
-        }
         klineFetchCache.delete(`${key}|4h|18`);
         try {
           await fetchBinanceTickerForSymbol(key);
@@ -21246,11 +21341,119 @@
         return true;
       }
 
-      async function reviewNailNoticeChart(symbol) {
+      let noticeReviewSymbol = null;
+      let noticeReviewFirstAt = 0;
+
+      function isNoticeReviewOpen() {
+        const gate = document.getElementById("noticeReviewGate");
+        return !!(gate && !gate.hidden);
+      }
+
+      function closeNoticeReviewCompare() {
+        const gate = document.getElementById("noticeReviewGate");
+        if (gate) gate.hidden = true;
+        noticeReviewSymbol = null;
+        noticeReviewFirstAt = 0;
+        document.body.classList.remove("is-notice-review");
+        syncBodyScrollLock();
+      }
+
+      function candlesUntilAt(candles, endAt) {
+        const end = Number(endAt) || 0;
+        const list = Array.isArray(candles) ? candles : [];
+        if (!(end > 0)) return list;
+        // 只保留 openTime <= 首次通知时刻的 K 线（之后的不画）。
+        return list.filter((bar) => Number(bar && bar.time) <= end);
+      }
+
+      function drawNoticeComparePane(canvas, candles, item, opts) {
+        if (!canvas) return;
+        const pin = pinItemBySymbol(item && item.symbol);
+        const pinPriceAttr = Number(item && item.pinPrice) || 0;
+        const alertPrice = Number(item && item.alertPrice) || 0;
+        const noteAt = Number(item && item.noteAt) || 0;
+        const drawPin =
+          pin && Number(pin.pinPrice) > 0
+            ? pin.pinPrice
+            : pinPriceAttr > 0
+              ? pinPriceAttr
+              : null;
+        const drawPinAt =
+          pin && Number(pin.pinnedAt) > 0 ? pin.pinnedAt : null;
+        const reviewAt = Number(opts && opts.reviewAt) || 0;
+        drawKline(
+          canvas,
+          candles,
+          drawPin,
+          drawPinAt,
+          [],
+          alertPrice > 0
+            ? {
+                price: alertPrice,
+                fromAt: noteAt > 0 ? noteAt : 0,
+              }
+            : null,
+          null,
+          reviewAt > 0 ? { reviewAt } : null,
+        );
+      }
+
+      async function paintNoticeReviewCompare(symbol, firstSeenAt) {
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
-        if (!key || nailNoticeMode !== "open") return { ok: false };
+        const at = Number(firstSeenAt) || 0;
+        if (!key || !(at > 0)) return;
+        const item =
+          (nailGreenNotices || []).find(
+            (row) => String(row.symbol || "").toUpperCase() === key,
+          ) || { symbol: key, pinPrice: 0, alertPrice: 0, noteAt: 0 };
+        const pastCanvas = document.getElementById("noticeReviewPastCanvas");
+        const liveCanvas = document.getElementById("noticeReviewLiveCanvas");
+        const pastMeta = document.getElementById("noticeReviewPastMeta");
+        const liveMeta = document.getElementById("noticeReviewLiveMeta");
+        if (pastMeta) pastMeta.textContent = `截至 ${formatNoticeTime(at)} · 加载中…`;
+        if (liveMeta) liveMeta.textContent = "加载中…";
+        const [pastRaw, liveCandles] = await Promise.all([
+          fetchKlines(key, "4h", null, 18, at),
+          fetchKlines(key, "4h", null, 18),
+        ]);
+        if (noticeReviewSymbol !== key) return;
+        const pastCandles = candlesUntilAt(pastRaw, at);
+        drawNoticeComparePane(pastCanvas, pastCandles, item, {
+          reviewAt: at,
+        });
+        drawNoticeComparePane(liveCanvas, liveCandles, item, null);
+        const pastClose =
+          pastCandles.length > 0
+            ? Number(pastCandles[pastCandles.length - 1].close)
+            : NaN;
+        const liveClose =
+          liveCandles.length > 0
+            ? Number(liveCandles[liveCandles.length - 1].close)
+            : NaN;
+        const tickerPrice = Number(marketMap[key]?.price);
+        const livePrice =
+          Number.isFinite(tickerPrice) && tickerPrice > 0
+            ? tickerPrice
+            : liveClose;
+        if (pastMeta) {
+          pastMeta.textContent = Number.isFinite(pastClose)
+            ? `截至 ${formatNoticeTime(at)} · 收 ${formatPinPrice(pastClose)}`
+            : `截至 ${formatNoticeTime(at)}`;
+        }
+        if (liveMeta) {
+          liveMeta.textContent = Number.isFinite(livePrice)
+            ? `现价 ${formatPinPrice(livePrice)}`
+            : "当前";
+        }
+      }
+
+      async function openNoticeReviewCompare(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return { ok: false };
         const item = (nailGreenNotices || []).find(
           (row) => String(row.symbol || "").toUpperCase() === key,
         );
@@ -21270,19 +21473,28 @@
           Number(item && item.at) ||
           0;
         if (!(firstSeenAt > 0)) return { ok: false, reason: "no-first" };
-        if (card) {
-          card.classList.add("is-reviewing");
-          card.setAttribute("data-notice-first", String(firstSeenAt));
-          const canvas = card.querySelector("canvas[data-notice-chart]");
-          if (canvas) {
-            canvas.setAttribute("data-notice-first", String(firstSeenAt));
-          }
+        const gate = document.getElementById("noticeReviewGate");
+        const title = document.getElementById("noticeReviewTitle");
+        const meta = document.getElementById("noticeReviewMeta");
+        if (!gate) return { ok: false };
+        noticeReviewSymbol = key;
+        noticeReviewFirstAt = firstSeenAt;
+        if (title) {
+          title.textContent = `${key.replace(/USDT$/i, "")} · 回顾对比`;
         }
-        await paintNailNoticeCharts({
-          symbol: key,
-          force: true,
-          review: true,
-        });
+        if (meta) {
+          meta.textContent = `左：首次进通知（${formatNoticeTime(firstSeenAt)}）· 右：当前`;
+        }
+        gate.hidden = false;
+        document.body.classList.add("is-notice-review");
+        syncBodyScrollLock();
+        try {
+          await paintNoticeReviewCompare(key, firstSeenAt);
+        } catch (error) {
+          console.error(error);
+          if (meta) meta.textContent = error.message || "回顾加载失败";
+          throw error;
+        }
         return { ok: true, firstSeenAt };
       }
 
@@ -27262,6 +27474,30 @@
       if (klineZoomClose) {
         klineZoomClose.addEventListener("click", () => closeKlineZoom());
       }
+      const noticeReviewClose = document.getElementById("noticeReviewClose");
+      if (noticeReviewClose) {
+        noticeReviewClose.addEventListener("click", () =>
+          closeNoticeReviewCompare(),
+        );
+      }
+      const syncNoticeReviewOnViewport = () => {
+        if (!isNoticeReviewOpen() || !noticeReviewSymbol) return;
+        const symbol = noticeReviewSymbol;
+        const at = noticeReviewFirstAt;
+        void paintNoticeReviewCompare(symbol, at).catch((error) => {
+          console.error(error);
+        });
+      };
+      window.addEventListener("resize", syncNoticeReviewOnViewport);
+      window.addEventListener("orientationchange", () => {
+        window.setTimeout(syncNoticeReviewOnViewport, 120);
+      });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener(
+          "resize",
+          syncNoticeReviewOnViewport,
+        );
+      }
       document.querySelectorAll("[data-kline-zoom-range]").forEach((button) => {
         button.addEventListener("click", () => {
           setKlineZoomLongRange(button.dataset.klineZoomRange);
@@ -27301,6 +27537,10 @@
           if (nailNoteEditor && !nailNoteEditor.hidden) {
             event.preventDefault();
             closeNailNoteEditor();
+            return;
+          }
+          if (isNoticeReviewOpen()) {
+            closeNoticeReviewCompare();
             return;
           }
           if (isKlineZoomOpen()) {
