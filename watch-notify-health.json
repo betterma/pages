@@ -1,53 +1,49 @@
 {
-  "updatedAt": 1793977860240,
-  "lastRunAt": 1793977800639,
-  "ok": false,
-  "error": "GitHub PUT watch-nail-green-alert.json failed: 409 {\"message\":\"is at 2cb2ca498d12fbb4e9a6b4421d2f25504c5bd5ce but expected cb58a2dddb572e919c712d69d841694b875ab802\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\": · GitHub PUT watch-balance-alert.json failed: 409 {\"message\":\"is at 711176b4b129bb831562d97123a42b72571666bd but expected 7c16bc2c96e40521a7b721cbab8ece64cc52760e\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\": · balance×1:GitHub PUT watch-balance-alert.json failed: 409 {\"message\":\"is at 711176b4b129bb831562d97123a42b72571666bd but expected 7c16bc2c96e40521a7b721cbab8ece64cc52760e\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\": · nail-green×1:GitHub PUT watch-nail-green-alert.json failed: 409 {\"message\":\"is at 2cb2ca498d12fbb4e9a6b4421d2f25504c5bd5ce but expected cb58a2dddb572e919c712d69d841694b875ab802\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":",
-  "durationMs": 59601,
-  "autoPins": 0,
+  "updatedAt": 1793978173012,
+  "lastRunAt": 1793978100985,
+  "ok": true,
+  "error": null,
+  "durationMs": 72027,
+  "autoPins": 132,
   "balance": {
-    "skipped": true,
-    "reason": "error",
-    "autoPins": 0,
-    "due": 0,
-    "checked": 0,
-    "hits": 0,
-    "sent": 0,
-    "wecomDue": 0,
-    "wecomQueued": 0,
+    "skipped": false,
+    "reason": null,
+    "autoPins": 132,
+    "due": 104,
+    "checked": 104,
+    "hits": 68,
+    "sent": 42,
+    "wecomDue": 42,
+    "wecomQueued": 42,
     "wecomDeferred": 0,
-    "skippedWecomWindow": 0,
+    "skippedWecomWindow": 26,
     "checkMax": 0,
     "sendMax": 0,
     "checkCursor": 0,
-    "cooldownMs": 0,
-    "cooldownSkipped": 0,
-    "errorCount": 1,
-    "errors": [
-      "GitHub PUT watch-balance-alert.json failed: 409 {\"message\":\"is at 711176b4b129bb831562d97123a42b72571666bd but expected 7c16bc2c96e40521a7b721cbab8ece64cc52760e\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":"
-    ]
+    "cooldownMs": 1800000,
+    "cooldownSkipped": 28,
+    "errorCount": 0,
+    "errors": []
   },
   "nailGreen": {
-    "skipped": true,
-    "reason": "error",
-    "nails": 0,
-    "pending": 0,
-    "checked": 0,
-    "hits": 0,
+    "skipped": false,
+    "reason": null,
+    "nails": 142,
+    "pending": 29,
+    "checked": 29,
+    "hits": 4,
     "sent": 0,
     "checkMax": 0,
     "checkCursor": 0,
-    "bucketSkipped": 0,
-    "errorCount": 1,
-    "errors": [
-      "GitHub PUT watch-nail-green-alert.json failed: 409 {\"message\":\"is at 2cb2ca498d12fbb4e9a6b4421d2f25504c5bd5ce but expected cb58a2dddb572e919c712d69d841694b875ab802\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":"
-    ]
+    "bucketSkipped": 113,
+    "errorCount": 0,
+    "errors": []
   },
   "staleNailPrune": {
     "skipped": false,
     "reason": "none-stale",
     "checked": 12,
-    "candidate": 115,
+    "candidate": 118,
     "removed": 0
   }
 }
