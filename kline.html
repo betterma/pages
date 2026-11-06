@@ -3176,6 +3176,105 @@
         justify-content: space-between;
         gap: 8px;
       }
+      .nail-notice-title-cluster {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .nail-notice-health-btn {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border: none;
+        background: var(--fill);
+        color: var(--secondary);
+        height: 28px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .nail-notice-health-btn.is-open,
+      .nail-notice-health-btn[aria-expanded="true"] {
+        color: var(--label);
+        background: color-mix(in srgb, var(--accent) 14%, var(--fill));
+      }
+      .nail-notice-health-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--secondary);
+        flex: 0 0 auto;
+      }
+      .nail-notice-health-dot[data-level="ok"] {
+        background: #2f8f6e;
+      }
+      .nail-notice-health-dot[data-level="warn"] {
+        background: var(--warn, #f2b84b);
+      }
+      .nail-notice-health-dot[data-level="bad"],
+      .nail-notice-health-dot[data-level="dead"] {
+        background: var(--down, #ff5c64);
+      }
+      .nail-notice-health-dot[data-level="unknown"] {
+        background: color-mix(in srgb, var(--secondary) 55%, transparent);
+      }
+      .nail-notice-health-panel {
+        margin: 8px 0 0;
+        padding: 10px 11px 9px;
+        border-radius: 10px;
+        border: 0.5px solid var(--separator);
+        background: color-mix(in srgb, var(--elevated) 92%, transparent);
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--label);
+      }
+      .nail-notice-health-panel[hidden] {
+        display: none !important;
+      }
+      .nail-notice-health-panel .nh-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 0 0 5px;
+      }
+      .nail-notice-health-panel .nh-row:last-child {
+        margin-bottom: 0;
+      }
+      .nail-notice-health-panel .nh-k {
+        color: var(--secondary);
+        flex: 0 0 auto;
+      }
+      .nail-notice-health-panel .nh-v {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        min-width: 0;
+        word-break: break-word;
+      }
+      .nail-notice-health-panel .nh-status {
+        font-weight: 700;
+        margin: 0 0 8px;
+      }
+      .nail-notice-health-panel .nh-status[data-level="ok"] {
+        color: #2f8f6e;
+      }
+      .nail-notice-health-panel .nh-status[data-level="warn"] {
+        color: var(--warn, #f2b84b);
+      }
+      .nail-notice-health-panel .nh-status[data-level="bad"],
+      .nail-notice-health-panel .nh-status[data-level="dead"] {
+        color: var(--down, #ff5c64);
+      }
+      .nail-notice-health-panel .nh-foot {
+        margin: 8px 0 0;
+        padding-top: 7px;
+        border-top: 0.5px solid var(--separator);
+        color: var(--secondary);
+        font-size: 11px;
+      }
       .nail-notice-title-row #nailNoticeCloseBtn {
         flex: 0 0 auto;
         border: none;
@@ -3259,6 +3358,28 @@
       .nail-notice-deblue.is-on {
         background: color-mix(in srgb, #3ecf8e 22%, var(--fill));
         color: #1f8f5f;
+      }
+      .nail-notice-filter-status {
+        margin: 4px 0 0;
+        font-size: 12px;
+        color: var(--secondary);
+        min-height: 1.2em;
+      }
+      .nail-notice-filter-status.is-loading {
+        color: #1f8f5f;
+      }
+      .nail-notice-filter-status.is-error {
+        color: #c45c5c;
+      }
+      .nail-notice-filter-status.is-done {
+        color: var(--secondary);
+      }
+      .nail-notice-list.is-filter-loading {
+        opacity: 0.55;
+        pointer-events: none;
+      }
+      .nail-notice-head-actions.is-filter-loading {
+        opacity: 0.72;
       }
       .nail-notice-list {
         flex: 1 1 auto;
@@ -3574,6 +3695,57 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
       }
+      .nail-section-label {
+        grid-column: 1 / -1;
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        margin: 2px 0 0;
+        padding: 7px 10px 6px;
+        border-radius: 8px;
+        border: 0.5px solid var(--separator);
+        background: color-mix(in srgb, var(--grouped, var(--bg)) 92%, transparent);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        line-height: 1.2;
+      }
+      .nail-section-label:first-child {
+        margin-top: 0;
+      }
+      .nail-section-label .nail-section-count {
+        font-variant-numeric: tabular-nums;
+        font-weight: 650;
+        opacity: 0.85;
+      }
+      .nail-section-label.is-held {
+        border-color: color-mix(in srgb, var(--warn, #f2b84b) 35%, var(--separator));
+        background: color-mix(
+          in srgb,
+          var(--warn, #f2b84b) 10%,
+          var(--grouped, var(--bg))
+        );
+        color: color-mix(in srgb, var(--warn, #f2b84b) 55%, var(--label));
+      }
+      .nail-section-label.is-pin {
+        border-color: color-mix(in srgb, var(--accent) 42%, var(--separator));
+        background: color-mix(
+          in srgb,
+          var(--accent) 14%,
+          var(--grouped, var(--bg))
+        );
+        color: color-mix(in srgb, var(--accent) 70%, var(--label));
+      }
+      .nail-section-label.is-rest {
+        opacity: 0.92;
+      }
       .nail-saving {
         position: absolute;
         inset: 0;
@@ -3602,8 +3774,11 @@
         user-select: none;
       }
       .nail-kcard.is-pinned {
-        border-color: color-mix(in srgb, var(--accent) 55%, var(--separator));
-        background: color-mix(in srgb, var(--accent) 12%, var(--elevated));
+        border-color: color-mix(in srgb, var(--accent) 58%, var(--separator));
+        background: color-mix(in srgb, var(--accent) 14%, var(--elevated));
+        box-shadow:
+          inset 3px 0 0 color-mix(in srgb, var(--accent) 78%, transparent),
+          0 1px 0 color-mix(in srgb, var(--accent) 12%, transparent);
       }
       .nail-kcard.is-dragging {
         opacity: 0.45;
@@ -7074,12 +7249,43 @@
         <div class="nail-notice-head">
           <div>
               <div class="nail-notice-title-row">
-                <h3 id="nailNoticeTitle">荧光绿通知</h3>
+                <div class="nail-notice-title-cluster">
+                  <h3 id="nailNoticeTitle">荧光绿通知</h3>
+                  <button
+                    type="button"
+                    id="nailNoticeHealthBtn"
+                    class="nail-notice-health-btn"
+                    aria-expanded="false"
+                    aria-controls="nailNoticeHealthPanel"
+                    title="定时检测健康度：上次跑到何时、本轮是否扫完"
+                  >
+                    <span
+                      class="nail-notice-health-dot"
+                      id="nailNoticeHealthDot"
+                      data-level="unknown"
+                      aria-hidden="true"
+                    ></span>
+                    健康
+                  </button>
+                </div>
                 <button type="button" id="nailNoticeCloseBtn" title="关闭通知页">
                   关闭
                 </button>
               </div>
             <p id="nailNoticeMeta">当前 4h 窗 · 最新在上</p>
+            <div
+              id="nailNoticeHealthPanel"
+              class="nail-notice-health-panel"
+              hidden
+              role="region"
+              aria-label="定时检测健康度"
+            ></div>
+            <p
+              id="nailNoticeFilterStatus"
+              class="nail-notice-filter-status"
+              hidden
+              aria-live="polite"
+            ></p>
           </div>
           <div class="nail-notice-head-actions">
             <div
@@ -7107,9 +7313,8 @@
               type="button"
               id="nailNoticeBalanceBtn"
               class="nail-notice-deblue"
-              hidden
               aria-pressed="false"
-              title="仅蓝筛选可用。打开：只显示天平（盯后曾跌破 pin，现价高于跌破K最低收盘，且当前4h窗上涨）。可与「直拉」同开（并集）。偏好保存在本机。"
+              title="打开：只显示天平（盯后曾跌破 pin，现价高于跌破K最低收盘，且当前4h窗上涨）。可与「直拉」同开（并集）；在全部/蓝/红下均可用。偏好保存在本机。"
             >
               天平
             </button>
@@ -7117,9 +7322,8 @@
               type="button"
               id="nailNoticeStraightBtn"
               class="nail-notice-deblue"
-              hidden
               aria-pressed="false"
-              title="仅蓝筛选可用。打开：只显示直拉（盯后实体从未跌破 pin，下影线不算；现价高于盯价，且当前4h窗上涨）。可与「天平」同开（并集）。偏好保存在本机。"
+              title="打开：只显示直拉（盯后实体从未跌破 pin，下影线不算；现价高于盯价，且当前4h窗上涨）。可与「天平」同开（并集）；在全部/蓝/红下均可用。偏好保存在本机。"
             >
               直拉
             </button>
@@ -7720,6 +7924,8 @@
         MOMENTUM_5M_LIMIT: 5,
         NOTIFY_STATE_PATH:
           KLINE_PATHS.NOTIFY_STATE_PATH || "watch-notify-state.json",
+        NOTIFY_HEALTH_PATH:
+          KLINE_PATHS.NOTIFY_HEALTH_PATH || "watch-notify-health.json",
         // WeCom notify runs ~5m; poll often enough without hammering GitHub.
         NOTIFY_POLL_MS: 60 * 1000,
         // 切回页面：距上次成功刷新不足此时长则跳过整页重拉。
@@ -19754,9 +19960,10 @@
       let nailNoticeAutoRefreshTimer = null;
       let nailNoticeAutoRefreshBusy = false;
       let nailNoticeChartsBusy = false;
-      let nailNoticeChartsQueued = false;
-      /** 排队重跑时合并 force / symbol，避免丢掉强刷。 */
-      let nailNoticeChartsQueuedOpts = null;
+      /** 串行化 paint，保证 await 等到本轮（含排队合并）真正跑完。 */
+      let nailNoticeChartsChain = Promise.resolve();
+      let nailNoticeFilterPass = 0;
+      let nailNoticeFilterStatusTimer = 0;
       let nailNoticeSelectMode = false;
       const selectedNoticeSymbols = new Set();
       /** 通知筛选偏好存本机：全部/蓝/红 + 天平/直拉（后两者可同开为并集）。 */
@@ -20357,9 +20564,8 @@
       function syncNailNoticeBalanceUi() {
         const btn = document.getElementById("nailNoticeBalanceBtn");
         if (!btn) return;
-        const show = nailNoticeDeltaFilter === "up";
-        const on = show && !!nailNoticeBalanceEnabled;
-        btn.hidden = !show;
+        const on = !!nailNoticeBalanceEnabled;
+        btn.hidden = false;
         btn.classList.toggle("is-on", on);
         btn.setAttribute("aria-pressed", on ? "true" : "false");
         btn.textContent = on ? "天平·开" : "天平";
@@ -20368,38 +20574,122 @@
       function syncNailNoticeStraightUi() {
         const btn = document.getElementById("nailNoticeStraightBtn");
         if (!btn) return;
-        const show = nailNoticeDeltaFilter === "up";
-        const on = show && !!nailNoticeStraightEnabled;
-        btn.hidden = !show;
+        const on = !!nailNoticeStraightEnabled;
+        btn.hidden = false;
         btn.classList.toggle("is-on", on);
         btn.setAttribute("aria-pressed", on ? "true" : "false");
         btn.textContent = on ? "直拉·开" : "直拉";
       }
 
+      function describeNailNoticeFilter() {
+        const bits = [];
+        if (nailNoticeDeltaFilter === "up") bits.push("蓝");
+        else if (nailNoticeDeltaFilter === "down") bits.push("红");
+        else bits.push("全部");
+        if (nailNoticeBalanceEnabled) bits.push("天平");
+        if (nailNoticeStraightEnabled) bits.push("直拉");
+        return bits.join("·");
+      }
+
+      function setNailNoticeFilterStatus(text, kind) {
+        const el = document.getElementById("nailNoticeFilterStatus");
+        if (!el) return;
+        if (nailNoticeFilterStatusTimer) {
+          window.clearTimeout(nailNoticeFilterStatusTimer);
+          nailNoticeFilterStatusTimer = 0;
+        }
+        const msg = String(text || "").trim();
+        if (!msg) {
+          el.hidden = true;
+          el.textContent = "";
+          el.classList.remove("is-loading", "is-error", "is-done");
+          return;
+        }
+        el.hidden = false;
+        el.textContent = msg;
+        el.classList.toggle("is-loading", kind === "loading");
+        el.classList.toggle("is-error", kind === "error");
+        el.classList.toggle("is-done", kind === "done");
+        if (kind === "done") {
+          nailNoticeFilterStatusTimer = window.setTimeout(() => {
+            if (el.classList.contains("is-done")) {
+              el.hidden = true;
+              el.textContent = "";
+              el.classList.remove("is-done");
+            }
+          }, 2200);
+        }
+      }
+
+      function setNailNoticeFilterLoadingChrome(loading) {
+        const listEl = document.getElementById("nailNoticeList");
+        const actions = document.querySelector(
+          "#nailNoticeDrawer .nail-notice-head-actions",
+        );
+        if (listEl) listEl.classList.toggle("is-filter-loading", !!loading);
+        if (actions) actions.classList.toggle("is-filter-loading", !!loading);
+      }
+
+      async function runNailNoticeFilterRefresh(reason) {
+        const pass = ++nailNoticeFilterPass;
+        const tag = describeNailNoticeFilter();
+        setNailNoticeFilterLoadingChrome(true);
+        setNailNoticeFilterStatus(`筛选生效中 · ${tag} · 计算 0/?`, "loading");
+        applyNailNoticeDeltaFilter();
+        try {
+          await paintNailNoticeCharts({
+            force: true,
+            trackFilter: true,
+            filterPass: pass,
+            filterLabel: tag,
+            filterReason: reason || "filter",
+          });
+          if (pass !== nailNoticeFilterPass) return;
+          applyNailNoticeDeltaFilter();
+          const metaEl = document.getElementById("nailNoticeMeta");
+          const summary = metaEl
+            ? String(metaEl.textContent || "").trim()
+            : "";
+          setNailNoticeFilterStatus(
+            summary
+              ? `已更新 · ${tag} · ${summary.replace(/^当前 4h 窗 ·\s*/, "")}`
+              : `已更新 · ${tag}`,
+            "done",
+          );
+        } catch (error) {
+          if (pass !== nailNoticeFilterPass) return;
+          console.warn("notice filter refresh failed", error);
+          setNailNoticeFilterStatus(
+            `筛选失败 · ${tag} · ${error && error.message ? error.message : "请重试"}`,
+            "error",
+          );
+        } finally {
+          if (pass === nailNoticeFilterPass) {
+            setNailNoticeFilterLoadingChrome(false);
+          }
+        }
+      }
+
       function setNailNoticeBalanceEnabled(enabled) {
-        if (nailNoticeDeltaFilter !== "up") return;
         nailNoticeBalanceEnabled = !!enabled;
         writeLocalNailNoticeBalance(nailNoticeBalanceEnabled);
         syncNailNoticeBalanceUi();
-        applyNailNoticeDeltaFilter();
-        void paintNailNoticeCharts();
+        void runNailNoticeFilterRefresh("balance");
       }
 
       function setNailNoticeStraightEnabled(enabled) {
-        if (nailNoticeDeltaFilter !== "up") return;
         nailNoticeStraightEnabled = !!enabled;
         writeLocalNailNoticeStraight(nailNoticeStraightEnabled);
         syncNailNoticeStraightUi();
-        applyNailNoticeDeltaFilter();
-        void paintNailNoticeCharts();
+        void runNailNoticeFilterRefresh("straight");
       }
 
       function applyNailNoticeDeltaFilter() {
         const listEl = document.getElementById("nailNoticeList");
         if (!listEl) return;
         const mode = nailNoticeDeltaFilter;
-        const balanceOn = mode === "up" && !!nailNoticeBalanceEnabled;
-        const straightOn = mode === "up" && !!nailNoticeStraightEnabled;
+        const balanceOn = !!nailNoticeBalanceEnabled;
+        const straightOn = !!nailNoticeStraightEnabled;
         const patternOn = balanceOn || straightOn;
         let visible = 0;
         listEl.querySelectorAll(".nail-notice-card").forEach((card) => {
@@ -20410,7 +20700,7 @@
               : mode === "down"
                 ? dir !== "down"
                 : false;
-          // 尚未算出涨跌时：筛选开启则先藏，避免闪一下再消失。
+          // 尚未算出涨跌时：蓝/红筛选先藏，避免闪一下再消失。
           const pending = !dir && mode !== "all";
           const balAttr = card.getAttribute("data-notice-balance");
           const straightAttr = card.getAttribute("data-notice-straight");
@@ -20467,12 +20757,7 @@
         const metaEl = document.getElementById("nailNoticeMeta");
         const total = (nailGreenNotices || []).length;
         if (metaEl && total) {
-          const bits = [];
-          if (mode === "up") bits.push("蓝");
-          else if (mode === "down") bits.push("红");
-          if (balanceOn) bits.push("天平");
-          if (straightOn) bits.push("直拉");
-          const tag = bits.join("·");
+          const tag = describeNailNoticeFilter();
           metaEl.textContent =
             mode === "all" && !patternOn
               ? `当前 4h 窗 · ${total} 条 · 最新在上`
@@ -20576,45 +20861,27 @@
         nailNoticeDeltaFilter =
           mode === "up" || mode === "down" ? mode : "all";
         writeLocalNailNoticeDelta(nailNoticeDeltaFilter);
-        // 切回蓝时按本机偏好恢复天平/直拉；其它筛选下 UI 隐藏，不改写偏好。
-        if (nailNoticeDeltaFilter === "up") {
-          nailNoticeBalanceEnabled = readLocalNailNoticeBalance();
-          nailNoticeStraightEnabled = readLocalNailNoticeStraight();
-        }
         syncNailNoticeDeltaFilterUi();
-        // 先立刻按新筛选显隐，避免「按钮已是全部、卡片仍被蓝筛 pending 藏住」的竞态。
-        applyNailNoticeDeltaFilter();
-        // 名单不变，只重画算涨跌；保留滚动。
-        await paintNailNoticeCharts({ force: true });
+        await runNailNoticeFilterRefresh("delta");
       }
 
-      async function paintNailNoticeCharts(options) {
+      function paintNailNoticeCharts(options) {
+        const job = nailNoticeChartsChain.then(() =>
+          paintNailNoticeChartsNow(options),
+        );
+        nailNoticeChartsChain = job.catch(() => {});
+        return job;
+      }
+
+      async function paintNailNoticeChartsNow(options) {
         const opts = options || {};
         const onlySymbol = String(opts.symbol || "")
           .trim()
           .toUpperCase();
         const force = !!opts.force;
-        if (nailNoticeChartsBusy) {
-          nailNoticeChartsQueued = true;
-          const prev = nailNoticeChartsQueuedOpts;
-          const prevForce = !!(prev && prev.force);
-          const prevSym = prev
-            ? String(prev.symbol || "")
-                .trim()
-                .toUpperCase()
-            : "";
-          // 合并：任一 force 则强刷；单币冲突或与全量混合 → 升为全量。
-          let nextSym = onlySymbol;
-          if (prev) {
-            if (!prevSym || !onlySymbol || prevSym !== onlySymbol) nextSym = "";
-            else nextSym = onlySymbol;
-          }
-          nailNoticeChartsQueuedOpts = {
-            force: prevForce || force,
-            ...(nextSym ? { symbol: nextSym } : {}),
-          };
-          return;
-        }
+        const trackFilter = !!opts.trackFilter;
+        const filterPass = Number(opts.filterPass) || 0;
+        const filterLabel = String(opts.filterLabel || "").trim();
         const canvases = [
           ...document.querySelectorAll(
             "#nailNoticeList canvas[data-notice-chart]",
@@ -20627,10 +20894,34 @@
               .toUpperCase() === onlySymbol
           );
         });
-        if (!canvases.length) return;
+        if (!canvases.length) {
+          if (
+            trackFilter &&
+            (!filterPass || filterPass === nailNoticeFilterPass)
+          ) {
+            setNailNoticeFilterStatus(
+              `筛选生效中 · ${filterLabel || describeNailNoticeFilter()} · 无卡片`,
+              "loading",
+            );
+          }
+          return;
+        }
         nailNoticeChartsBusy = true;
-        nailNoticeChartsQueued = false;
-        nailNoticeChartsQueuedOpts = null;
+        let doneCount = 0;
+        const totalCount = canvases.length;
+        const bumpFilterProgress = () => {
+          if (
+            !trackFilter ||
+            (filterPass && filterPass !== nailNoticeFilterPass)
+          ) {
+            return;
+          }
+          setNailNoticeFilterStatus(
+            `筛选生效中 · ${filterLabel || describeNailNoticeFilter()} · 计算 ${doneCount}/${totalCount}`,
+            "loading",
+          );
+        };
+        bumpFilterProgress();
         try {
           function noticePinLiveContext(candles, livePrice, pin) {
             if (!pin || !Array.isArray(candles) || !candles.length) return null;
@@ -20688,7 +20979,7 @@
           }
 
           /**
-           * 直拉：盯后到当前窗实体从未跌破 pin（min(open,close) < pinPrice；下影线不算），
+           * 直拉：盯后到当前窗实体从未跌破 pin（min(open,close)；下影线不算），
            * 现价高于盯价，且当前 4h 窗上涨。可与天平同筛（并集；天平仍用影线算跌破）。
            */
           function noticeIsStraight(candles, livePrice, pin) {
@@ -20716,7 +21007,11 @@
               canvas.getAttribute("data-notice-price"),
             );
             const noteAt = Number(canvas.getAttribute("data-notice-note-at"));
-            if (!symbol || !(alertPrice > 0)) return;
+            if (!symbol || !(alertPrice > 0)) {
+              doneCount += 1;
+              bumpFilterProgress();
+              return;
+            }
             const card = canvas.closest(".nail-notice-card");
             try {
               if (force) klineFetchCache.delete(`${symbol}|4h|18`);
@@ -20794,6 +21089,9 @@
                 }
                 applyNailNoticeDeltaFilter();
               }
+            } finally {
+              doneCount += 1;
+              bumpFilterProgress();
             }
           };
           // 并发画全部通知图（限并发，避免串行只画前几张 / 一次打爆限流）。
@@ -20813,12 +21111,6 @@
           applyNailNoticeDeltaFilter();
         } finally {
           nailNoticeChartsBusy = false;
-          if (nailNoticeChartsQueued) {
-            nailNoticeChartsQueued = false;
-            const queued = nailNoticeChartsQueuedOpts;
-            nailNoticeChartsQueuedOpts = null;
-            void paintNailNoticeCharts(queued || undefined);
-          }
         }
       }
 
@@ -20908,6 +21200,233 @@
         syncBodyScrollLock();
       }
 
+      let nailNoticeHealthCache = null;
+      let nailNoticeHealthLoading = false;
+
+      function formatHealthAge(ms) {
+        const age = Math.max(0, Number(ms) || 0);
+        if (!(age > 0)) return "—";
+        if (age < 60 * 1000) return "刚刚";
+        if (age < 60 * 60 * 1000) {
+          return `${Math.floor(age / 60000)} 分钟前`;
+        }
+        if (age < 24 * 60 * 60 * 1000) {
+          const h = Math.floor(age / 3600000);
+          const m = Math.floor((age % 3600000) / 60000);
+          return m ? `${h} 小时 ${m} 分前` : `${h} 小时前`;
+        }
+        const d = Math.floor(age / 86400000);
+        return `${d} 天前`;
+      }
+
+      function classifyNotifyHealth(data) {
+        const lastRunAt = Number(data && data.lastRunAt) || 0;
+        if (!(lastRunAt > 0)) {
+          return {
+            level: "unknown",
+            label: "尚无心跳",
+            ageMs: null,
+            lastRunAt: 0,
+          };
+        }
+        const ageMs = Math.max(0, Date.now() - lastRunAt);
+        let level = "ok";
+        let label = "正常";
+        if (ageMs >= 12 * 60 * 60 * 1000) {
+          level = "dead";
+          label = "超过半天未跑";
+        } else if (ageMs >= 2 * 60 * 60 * 1000) {
+          level = "bad";
+          label = "长时间未更新";
+        } else if (ageMs >= 15 * 60 * 1000) {
+          level = "warn";
+          label = "心跳偏慢";
+        }
+        const notOk = data && data.ok === false;
+        const degraded = !!(data && data.degraded);
+        if (notOk && level === "ok") {
+          level = degraded ? "warn" : "bad";
+          label = degraded ? "本轮有失败" : "本轮检测报错";
+        } else if (notOk && level === "warn") {
+          label = degraded
+            ? "心跳偏慢 · 本轮有失败"
+            : "心跳偏慢 · 曾报错";
+        } else if (notOk && (level === "bad" || level === "dead")) {
+          label = `${label} · 曾报错`;
+        }
+        return { level, label, ageMs, lastRunAt };
+      }
+
+      function balanceHealthProgressText(bal) {
+        const b = bal || {};
+        if (b.skipped && b.reason && b.reason !== "cooldown") {
+          return `跳过（${b.reason}）`;
+        }
+        const due = Number(b.due) || 0;
+        const checked = Number(b.checked) || 0;
+        const checkMax = Number(b.checkMax) || 0;
+        const cursor = Number(b.checkCursor) || 0;
+        const cool = Number(b.cooldownSkipped) || 0;
+        if (checkMax > 0 && due > checkMax) {
+          return `轮询 · 应查 ${due} · 本轮 ${checked}/${checkMax} · 游标 ${cursor} · 冷却跳过 ${cool}`;
+        }
+        if (due > 0 && checked >= due) {
+          return `本轮已扫完 · 应查 ${due} · 已查 ${checked} · 冷却跳过 ${cool}`;
+        }
+        if (due === 0 && (b.reason === "cooldown" || cool > 0)) {
+          return `冷却中 · 无需再查 · 冷却跳过 ${cool > 0 ? cool : "全部"}`;
+        }
+        return `应查 ${due} · 已查 ${checked} · 冷却跳过 ${cool}`;
+      }
+
+      function nailGreenHealthProgressText(ng) {
+        const g = ng || {};
+        if (g.skipped && g.reason && g.reason !== "not-run") {
+          return `跳过（${g.reason}）`;
+        }
+        const pending = Number(g.pending) || 0;
+        const checked = Number(g.checked) || 0;
+        const checkMax = Number(g.checkMax) || 0;
+        const cursor = Number(g.checkCursor) || 0;
+        const hits = Number(g.hits) || 0;
+        const sent = Number(g.sent) || 0;
+        const bucket = Number(g.bucketSkipped) || 0;
+        if (checkMax > 0 && pending > checkMax) {
+          return `轮询 · 待查 ${pending} · 本轮 ${checked}/${checkMax} · 游标 ${cursor} · 命中 ${hits} · 写入 ${sent}`;
+        }
+        if (pending > 0 && checked >= pending) {
+          return `本轮已扫完 · 待查 ${pending} · 已查 ${checked} · 命中 ${hits} · 写入 ${sent} · 本窗已记 ${bucket}`;
+        }
+        if (pending === 0 && bucket > 0) {
+          return `本窗已全部记过 · 钉子 ${Number(g.nails) || bucket} · 本窗已记 ${bucket}`;
+        }
+        return `待查 ${pending} · 已查 ${checked} · 命中 ${hits} · 写入 ${sent} · 本窗已记 ${bucket}`;
+      }
+
+      function renderNailNoticeHealthPanel(data) {
+        const panel = document.getElementById("nailNoticeHealthPanel");
+        const dot = document.getElementById("nailNoticeHealthDot");
+        const btn = document.getElementById("nailNoticeHealthBtn");
+        const info = classifyNotifyHealth(data);
+        if (dot) dot.dataset.level = info.level;
+        if (btn) {
+          btn.title =
+            info.level === "unknown"
+              ? "定时检测健康度（尚无云函数心跳）"
+              : `定时检测 · ${info.label} · ${formatHealthAge(info.ageMs)}`;
+        }
+        if (!panel) return info;
+        if (!data) {
+          panel.innerHTML =
+            `<p class="nh-status" data-level="unknown">加载失败</p>` +
+            `<p class="nh-foot">无法读取 watch-notify-health.json</p>`;
+          return info;
+        }
+        const bal = data.balance || {};
+        const ng = data.nailGreen || {};
+        const stale = data.staleNailPrune || {};
+        const when =
+          info.lastRunAt > 0
+            ? new Date(info.lastRunAt).toLocaleString("zh-CN", {
+                hour12: false,
+              })
+            : "—";
+        const errLine =
+          data.ok === false && data.error
+            ? `<div class="nh-row"><span class="nh-k">错误</span><span class="nh-v">${escapeHtml(String(data.error))}</span></div>`
+            : "";
+        const balErr =
+          Number(bal.errorCount) > 0 && Array.isArray(bal.errors) && bal.errors.length
+            ? `<div class="nh-row"><span class="nh-k">天平错误</span><span class="nh-v">${escapeHtml(bal.errors.slice(0, 2).join(" · "))}</span></div>`
+            : "";
+        panel.innerHTML = [
+          `<p class="nh-status" data-level="${info.level}">${escapeHtml(info.label)} · ${escapeHtml(formatHealthAge(info.ageMs))}</p>`,
+          `<div class="nh-row"><span class="nh-k">上次检测</span><span class="nh-v">${escapeHtml(when)}</span></div>`,
+          `<div class="nh-row"><span class="nh-k">耗时</span><span class="nh-v">${Number(data.durationMs) > 0 ? `${Math.round(Number(data.durationMs) / 1000)}s` : "—"}</span></div>`,
+          `<div class="nh-row"><span class="nh-k">自动盯</span><span class="nh-v">${Number(data.autoPins) || 0}</span></div>`,
+          errLine,
+          `<div class="nh-row"><span class="nh-k">天平·直拉</span><span class="nh-v">${escapeHtml(balanceHealthProgressText(bal))}</span></div>`,
+          `<div class="nh-row"><span class="nh-k">命中 / 推送</span><span class="nh-v">${Number(bal.hits) || 0} / ${Number(bal.sent) || 0}</span></div>`,
+          balErr,
+          `<div class="nh-row"><span class="nh-k">荧光绿</span><span class="nh-v">${escapeHtml(nailGreenHealthProgressText(ng))}</span></div>`,
+          `<div class="nh-row"><span class="nh-k">过期清钉</span><span class="nh-v">查 ${Number(stale.checked) || 0} · 候选 ${Number(stale.candidate) || 0} · 清 ${Number(stale.removed) || 0}${stale.skipped ? ` · 跳过 ${escapeHtml(String(stale.reason || ""))}` : ""}</span></div>`,
+          `<p class="nh-foot">云函数约每 5 分钟写一次心跳。超过 15 分钟偏慢，2 小时告警，12 小时（半天）标红。</p>`,
+        ].join("");
+        return info;
+      }
+
+      async function loadNotifyHealth() {
+        const path = CONFIG.NOTIFY_HEALTH_PATH || "watch-notify-health.json";
+        const repo = CONFIG.GITHUB_REPO;
+        const parse = (raw) =>
+          raw && typeof raw === "object" ? raw : null;
+        try {
+          const current = await WatchFavorites.fetchJsonFile({ repo, path });
+          if (current && current.data) return parse(current.data);
+        } catch (error) {
+          console.warn("loadNotifyHealth via API failed", error);
+        }
+        try {
+          const commitSha = await WatchFavorites.getMainCommitSha({ repo });
+          const response = await WatchFavorites.fetchRawJsonByCommit({
+            repo,
+            path,
+            commitSha,
+          });
+          if (response.ok) return parse(await response.json());
+        } catch (error) {
+          console.warn("loadNotifyHealth via commit-raw failed", error);
+        }
+        try {
+          const url = `https://raw.githubusercontent.com/${repo}/main/${path}?t=${Date.now()}`;
+          const response = await fetch(url, { cache: "no-store" });
+          if (!response.ok) return null;
+          return parse(await response.json());
+        } catch (error) {
+          console.warn("loadNotifyHealth failed", error);
+          return null;
+        }
+      }
+
+      async function refreshNailNoticeHealth(options) {
+        const opts = options || {};
+        if (nailNoticeHealthLoading) return nailNoticeHealthCache;
+        nailNoticeHealthLoading = true;
+        try {
+          const data = await loadNotifyHealth();
+          nailNoticeHealthCache = data;
+          renderNailNoticeHealthPanel(data);
+          return data;
+        } catch (error) {
+          console.warn(error);
+          if (!(opts && opts.silent)) {
+            showToast(error.message || "健康度加载失败");
+          }
+          renderNailNoticeHealthPanel(null);
+          return null;
+        } finally {
+          nailNoticeHealthLoading = false;
+        }
+      }
+
+      function setNailNoticeHealthPanelOpen(open) {
+        const panel = document.getElementById("nailNoticeHealthPanel");
+        const btn = document.getElementById("nailNoticeHealthBtn");
+        const want = !!open;
+        if (panel) panel.hidden = !want;
+        if (btn) {
+          btn.setAttribute("aria-expanded", want ? "true" : "false");
+          btn.classList.toggle("is-open", want);
+        }
+      }
+
+      function toggleNailNoticeHealthPanel() {
+        const panel = document.getElementById("nailNoticeHealthPanel");
+        const next = !panel || panel.hidden;
+        setNailNoticeHealthPanelOpen(next);
+        if (next) void refreshNailNoticeHealth();
+      }
+
       async function openNailNoticeDrawer(options) {
         const opts = options || {};
         // 打开通知页时恢复本机筛选：全部/蓝/红 + 天平/直拉。
@@ -20930,10 +21449,12 @@
             console.warn("open notice reload failed", error);
           },
         );
+        void refreshNailNoticeHealth({ silent: true });
       }
 
       function closeNailNoticeDrawer() {
         setNailNoticeDrawerMode("closed");
+        setNailNoticeHealthPanelOpen(false);
         hideNailNoticeScrollPct(true);
       }
 
@@ -22251,17 +22772,65 @@
       }
 
       /** 只挪 DOM 重排（持有优先 / 展示排序），避免整表重绘打断已画好的 K 线。 */
+      /** 钉子列表视觉分段：持有 → 置顶 → 其余（与 nailDrawerVisibleItems 排序一致）。 */
+      function nailDrawerSectionParts(items) {
+        const held = [];
+        const pinned = [];
+        const rest = [];
+        for (const item of items || []) {
+          if (nailSymbolIsHeld(item && item.symbol)) held.push(item);
+          else if (item && item.pinned) pinned.push(item);
+          else rest.push(item);
+        }
+        return [
+          { id: "held", label: "持有", className: "is-held", items: held },
+          { id: "pin", label: "置顶", className: "is-pin", items: pinned },
+          { id: "rest", label: "其余", className: "is-rest", items: rest },
+        ].filter((section) => section.items.length > 0);
+      }
+
+      function nailDrawerShowSectionLabels(sections) {
+        if (!sections || !sections.length) return false;
+        if (sections.length > 1) return true;
+        // 仅一段时：置顶/持有仍出标题；纯「其余」不出
+        const id = sections[0].id;
+        return id === "pin" || id === "held";
+      }
+
+      function nailSectionLabelHtml(section) {
+        return (
+          `<div class="nail-section-label ${section.className}" data-nail-section="${section.id}">` +
+          `<span>${section.label}</span>` +
+          `<span class="nail-section-count">${section.items.length}</span>` +
+          `</div>`
+        );
+      }
+
       function applyNailListOrder() {
         const grid = document.querySelector("#nailList .nail-grid");
         if (!grid) return;
-        nailDrawerVisibleItems().forEach((item) => {
-          const key = String(item.symbol || "").toUpperCase();
-          if (!key) return;
-          const card = grid.querySelector(
-            `.nail-kcard[data-nail-symbol="${CSS.escape ? CSS.escape(key) : key}"]`,
-          );
-          if (card) grid.appendChild(card);
-        });
+        const sections = nailDrawerSectionParts(nailDrawerVisibleItems());
+        const showLabels = nailDrawerShowSectionLabels(sections);
+        grid
+          .querySelectorAll(".nail-section-label")
+          .forEach((el) => el.remove());
+        for (const section of sections) {
+          if (showLabels) {
+            const wrap = document.createElement("div");
+            wrap.innerHTML = nailSectionLabelHtml(section);
+            const labelEl = wrap.firstElementChild;
+            if (labelEl) grid.appendChild(labelEl);
+          }
+          for (const item of section.items) {
+            const key = String(item.symbol || "").toUpperCase();
+            if (!key) continue;
+            const sel = CSS.escape
+              ? `.nail-kcard[data-nail-symbol="${CSS.escape(key)}"]`
+              : `.nail-kcard[data-nail-symbol="${key}"]`;
+            const card = grid.querySelector(sel);
+            if (card) grid.appendChild(card);
+          }
+        }
       }
 
       function renderNailDrawer() {
@@ -22284,18 +22853,25 @@
         if (tab) tab.dataset.count = String(n);
         if (badge) badge.textContent = String(n);
         if (meta) {
+          const pinnedCount = items.filter((item) => !!item.pinned).length;
+          const heldCount = items.filter((item) =>
+            nailSymbolIsHeld(item && item.symbol),
+          ).length;
           const sortHint =
             nailSortMode === "alertGreen"
               ? "持有优先 · 置顶 · 绿色面积"
               : nailSortMode === "change24h"
                 ? "持有优先 · 置顶 · 24h涨幅"
                 : "持有优先 · 置顶 / 长按拖动";
+          const pinHint =
+            pinnedCount > 0 ? `置顶 ${pinnedCount}` : "无置顶";
+          const holdHint = heldCount > 0 ? ` · 持有 ${heldCount}` : "";
           if (!total) {
             meta.textContent = `复制名称后新增 · ${sortHint}`;
           } else if (nailRisingFilterOn) {
-            meta.textContent = `窗口上涨 ${n}/${total} · ${sortHint}`;
+            meta.textContent = `窗口上涨 ${n}/${total} · ${pinHint}${holdHint} · ${sortHint}`;
           } else {
-            meta.textContent = `${n} 个钉子 · ${sortHint}`;
+            meta.textContent = `${n} 个 · ${pinHint}${holdHint} · ${sortHint}`;
           }
         }
         if (!listEl) return;
@@ -22325,58 +22901,65 @@
           syncNailSelectUi();
           return;
         }
-        listEl.innerHTML = `<div class="nail-grid">${items
-          .map((item) => {
-            const exited = Number(item.exitedAt) > 0;
-            const pinned = !!item.pinned;
-            const note = String(item.note || "").trim();
-            const tag = exited
-              ? '<span class="nail-exit-tag">退出</span>'
+        const sections = nailDrawerSectionParts(items);
+        const showLabels = nailDrawerShowSectionLabels(sections);
+        const cardHtml = (item) => {
+          const exited = Number(item.exitedAt) > 0;
+          const pinned = !!item.pinned;
+          const note = String(item.note || "").trim();
+          const tag = exited
+            ? '<span class="nail-exit-tag">退出</span>'
+            : "";
+          const label = escapeHtml(item.label || item.symbol);
+          const symbol = escapeHtml(item.symbol);
+          const key = String(item.symbol || "").toUpperCase();
+          const selected =
+            nailSelectMode && selectedNailSymbols.has(key)
+              ? " is-selected"
               : "";
-            const label = escapeHtml(item.label || item.symbol);
-            const symbol = escapeHtml(item.symbol);
-            const key = String(item.symbol || "").toUpperCase();
-            const selected =
-              nailSelectMode && selectedNailSymbols.has(key)
-                ? " is-selected"
-                : "";
-            const check = nailSelectMode
-              ? `<input type="checkbox" class="nail-check" data-nail-select="${symbol}" ${selectedNailSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
-              : "";
-            // 蒙蔽双击揭开暂时关闭（NAIL_BROWSE_MASK_ENABLED）
-            const veiled =
-              NAIL_BROWSE_MASK_ENABLED &&
-              nailBrowseMaskSession &&
-              !nailBrowseRevealed.has(key);
-            const veil = veiled
-              ? `<div class="nail-kline-veil" data-nail-unveil="${symbol}">双击查看</div>`
-              : "";
-            return [
-              `<article class="nail-kcard${pinned ? " is-pinned" : ""}${selected}" data-nail-symbol="${symbol}">`,
-              `<div class="nail-kcard-head">`,
-              nailSelectMode
-                ? ""
-                : `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "取消置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
-              `<button type="button" class="nail-name" data-nail-copy-name="${label}" data-copy="${label}" title="点击复制名称">${label}${tag}</button>`,
-              nailSelectMode
-                ? ""
-                : `<button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线" aria-label="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button>`,
-              nailSelectMode
-                ? ""
-                : `<button type="button" class="nail-del" data-nail-del="${symbol}">删除</button>`,
-              `</div>`,
-              nailPriceRowHtml(item.symbol),
-              `<div class="nail-kline-wrap">`,
-              `<canvas class="nail-kline" data-kline="${symbol}"></canvas>`,
-              veil,
-              `</div>`,
-              note
-                ? `<p class="nail-note" data-nail-note-display="${symbol}">${formatNailNoteHtml(note)}</p>`
-                : "",
-              check,
-              `</article>`,
-            ].join("");
-          })
+          const check = nailSelectMode
+            ? `<input type="checkbox" class="nail-check" data-nail-select="${symbol}" ${selectedNailSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
+            : "";
+          // 蒙蔽双击揭开暂时关闭（NAIL_BROWSE_MASK_ENABLED）
+          const veiled =
+            NAIL_BROWSE_MASK_ENABLED &&
+            nailBrowseMaskSession &&
+            !nailBrowseRevealed.has(key);
+          const veil = veiled
+            ? `<div class="nail-kline-veil" data-nail-unveil="${symbol}">双击查看</div>`
+            : "";
+          return [
+            `<article class="nail-kcard${pinned ? " is-pinned" : ""}${selected}" data-nail-symbol="${symbol}">`,
+            `<div class="nail-kcard-head">`,
+            nailSelectMode
+              ? ""
+              : `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "取消置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
+            `<button type="button" class="nail-name" data-nail-copy-name="${label}" data-copy="${label}" title="点击复制名称">${label}${tag}</button>`,
+            nailSelectMode
+              ? ""
+              : `<button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线" aria-label="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button>`,
+            nailSelectMode
+              ? ""
+              : `<button type="button" class="nail-del" data-nail-del="${symbol}">删除</button>`,
+            `</div>`,
+            nailPriceRowHtml(item.symbol),
+            `<div class="nail-kline-wrap">`,
+            `<canvas class="nail-kline" data-kline="${symbol}"></canvas>`,
+            veil,
+            `</div>`,
+            note
+              ? `<p class="nail-note" data-nail-note-display="${symbol}">${formatNailNoteHtml(note)}</p>`
+              : "",
+            check,
+            `</article>`,
+          ].join("");
+        };
+        listEl.innerHTML = `<div class="nail-grid">${sections
+          .map(
+            (section) =>
+              (showLabels ? nailSectionLabelHtml(section) : "") +
+              section.items.map(cardHtml).join(""),
+          )
           .join("")}</div>`;
         bindNailDrag(listEl);
         bindNailFocusSelect(listEl);
@@ -26273,6 +26856,14 @@
           closeAllFloatPanels();
         }
       });
+      const nailNoticeHealthBtn = document.getElementById(
+        "nailNoticeHealthBtn",
+      );
+      if (nailNoticeHealthBtn) {
+        nailNoticeHealthBtn.addEventListener("click", () => {
+          toggleNailNoticeHealthPanel();
+        });
+      }
       const nailNoticeCloseBtn = document.getElementById("nailNoticeCloseBtn");
       if (nailNoticeCloseBtn) {
         nailNoticeCloseBtn.addEventListener("click", () => {
@@ -26303,7 +26894,6 @@
       );
       if (nailNoticeBalanceBtn) {
         nailNoticeBalanceBtn.addEventListener("click", () => {
-          if (nailNoticeDeltaFilter !== "up") return;
           setNailNoticeBalanceEnabled(!nailNoticeBalanceEnabled);
         });
       }
@@ -26312,7 +26902,6 @@
       );
       if (nailNoticeStraightBtn) {
         nailNoticeStraightBtn.addEventListener("click", () => {
-          if (nailNoticeDeltaFilter !== "up") return;
           setNailNoticeStraightEnabled(!nailNoticeStraightEnabled);
         });
       }

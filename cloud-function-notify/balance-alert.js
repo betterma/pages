@@ -1,9 +1,11 @@
 'use strict';
 
 /**
- * 天平推送：自动盯 pin 后曾跌破 pinPrice（low），且现价高于跌破 K 最低收盘 → 企微文字 + 4h 图。
- * 另要求当前 4h 窗上涨（现价 > 窗开盘）；下跌窗不发企微。
- * 同一币 1 小时内不重复推；满 1 小时仍符合天平可再推。
+ * 天平 / 直拉 企微推送（自动盯）：
+ * - 天平：盯后曾影线跌破 pinPrice（low），现价 > 跌破 K 最低收盘，当前 4h 窗上涨
+ * - 直拉：盯后实体从未跌破 pin（min(open,close)；下影不算），现价 > 盯价，当前 4h 窗上涨
+ * 可同时命中 → 一条「天平·直拉」。同一币默认 1 小时冷却。
+ * 默认每轮检查全部冷却到期的自动盯（CHECK_MAX=0）；可用环境变量限流。
  */
 
 const { loadJson, saveJson, sendWecomText, sendWecomImage, fetchBinanceTickers } =
@@ -17,29 +19,29 @@ const INTERVAL = process.env.BALANCE_ALERT_INTERVAL || '4h';
 const LIMIT = Math.max(12, Number(process.env.BALANCE_ALERT_LIMIT || 18));
 const CONCURRENCY = Math.max(
   1,
-  Number(process.env.BALANCE_ALERT_CONCURRENCY || 6),
+  Number(process.env.BALANCE_ALERT_CONCURRENCY || 8),
 );
-/** 单轮最多推几只（默认 5）；0=不限制。首轮全量命中时避免企微连发超时。 */
+/** 单轮最多推几只；默认 0=命中全推。 */
 const SEND_MAX = Math.max(
   0,
   Number(
     process.env.BALANCE_ALERT_SEND_MAX === undefined ||
       process.env.BALANCE_ALERT_SEND_MAX === ''
-      ? 5
+      ? 0
       : process.env.BALANCE_ALERT_SEND_MAX,
   ),
 );
-/** 单轮最多拉 K 检查几只（默认 24）；0=冷却到期的全查。 */
+/** 单轮最多拉 K 检查几只；默认 0=冷却到期全查。>0 时用 checkCursor 轮询切片。 */
 const CHECK_MAX = Math.max(
   0,
   Number(
     process.env.BALANCE_ALERT_CHECK_MAX === undefined ||
       process.env.BALANCE_ALERT_CHECK_MAX === ''
-      ? 24
+      ? 0
       : process.env.BALANCE_ALERT_CHECK_MAX,
   ),
 );
-/** 同一币两次天平企微最短间隔（默认 1 小时）。 */
+/** 同一币两次企微最短间隔（默认 1 小时）。 */
 const COOLDOWN_MS = Math.max(
   0,
   Number(
@@ -124,9 +126,13 @@ function normalizeState(data) {
       pinnedAt: Number(row.pinnedAt) || 0,
       lastSentAt: Number(row.lastSentAt) || 0,
       pinPrice: Number(row.pinPrice) || 0,
+      kinds: Array.isArray(row.kinds) ? row.kinds.map(String) : [],
     };
   });
-  return { bySymbol: out };
+  return {
+    bySymbol: out,
+    checkCursor: Number(data && data.checkCursor) || 0,
+  };
 }
 
 /**
@@ -149,17 +155,14 @@ function isCurrentWindowUp(candles, livePrice) {
   return px > open;
 }
 
-/**
- * 与网页通知页天平同口径：
- * 盯后到当前窗（含）存在 low < pinPrice；现价 > 跌破 K 最低收盘。
- * 另：当前窗须上涨，否则不推企微（仍不算命中，不进冷却）。
- */
-function evaluateBalance(candles, pin, livePrice) {
+function pinLiveContext(candles, pin, livePrice) {
   if (!pin || !Array.isArray(candles) || !candles.length) return null;
   const line = Number(pin.pinPrice);
   if (!(Number.isFinite(line) && line > 0)) return null;
   const live = Number(livePrice);
-  const lastClose = Number(candles[candles.length - 1] && candles[candles.length - 1].close);
+  const lastClose = Number(
+    candles[candles.length - 1] && candles[candles.length - 1].close,
+  );
   const px =
     Number.isFinite(live) && live > 0
       ? live
@@ -171,12 +174,21 @@ function evaluateBalance(candles, pin, livePrice) {
   const pinIdx = findCandleIndexAt(candles, pin.pinnedAt);
   const lastIdx = candles.length - 1;
   if (pinIdx < 0 || lastIdx <= pinIdx) return null;
+  return { line, px, pinIdx, lastIdx };
+}
+
+/**
+ * 天平：盯后影线跌破 + 现价收回高于跌破 K 最低收盘 + 当前窗上涨。
+ */
+function evaluateBalance(candles, pin, livePrice) {
+  const ctx = pinLiveContext(candles, pin, livePrice);
+  if (!ctx) return null;
   let minDipClose = Infinity;
   let dipped = false;
-  for (let i = pinIdx + 1; i <= lastIdx; i += 1) {
+  for (let i = ctx.pinIdx + 1; i <= ctx.lastIdx; i += 1) {
     const bar = candles[i];
     const low = Number(bar && bar.low);
-    if (!(Number.isFinite(low) && low < line)) continue;
+    if (!(Number.isFinite(low) && low < ctx.line)) continue;
     dipped = true;
     const close = Number(bar && bar.close);
     if (Number.isFinite(close) && close < minDipClose) minDipClose = close;
@@ -184,8 +196,56 @@ function evaluateBalance(candles, pin, livePrice) {
   if (!dipped || !(Number.isFinite(minDipClose) && minDipClose < Infinity)) {
     return null;
   }
-  if (!(px > minDipClose)) return null;
-  return { livePrice: px, minDipClose, pinIdx, lastIdx, windowUp: true };
+  if (!(ctx.px > minDipClose)) return null;
+  return {
+    livePrice: ctx.px,
+    minDipClose,
+    pinIdx: ctx.pinIdx,
+    lastIdx: ctx.lastIdx,
+    windowUp: true,
+  };
+}
+
+/**
+ * 直拉：盯后实体从未跌破 pin（下影不算）+ 现价 > 盯价 + 当前窗上涨。
+ */
+function evaluateStraight(candles, pin, livePrice) {
+  const ctx = pinLiveContext(candles, pin, livePrice);
+  if (!ctx) return null;
+  if (!(ctx.px > ctx.line)) return null;
+  for (let i = ctx.pinIdx + 1; i <= ctx.lastIdx; i += 1) {
+    const bar = candles[i];
+    const open = Number(bar && bar.open);
+    const close = Number(bar && bar.close);
+    if (!Number.isFinite(open) || !Number.isFinite(close)) continue;
+    if (Math.min(open, close) < ctx.line) return null;
+  }
+  return {
+    livePrice: ctx.px,
+    pinIdx: ctx.pinIdx,
+    lastIdx: ctx.lastIdx,
+    windowUp: true,
+  };
+}
+
+/** @returns {{ balance: object|null, straight: object|null, kinds: string[], livePrice: number }|null} */
+function evaluatePatterns(candles, pin, livePrice) {
+  const balance = evaluateBalance(candles, pin, livePrice);
+  const straight = evaluateStraight(candles, pin, livePrice);
+  if (!balance && !straight) return null;
+  const kinds = [];
+  if (balance) kinds.push('天平');
+  if (straight) kinds.push('直拉');
+  return {
+    balance,
+    straight,
+    kinds,
+    livePrice: (balance && balance.livePrice) || (straight && straight.livePrice),
+  };
+}
+
+function patternTitle(kinds) {
+  return (Array.isArray(kinds) ? kinds : []).join('·') || '天平';
 }
 
 async function mapPool(items, concurrency, worker) {
@@ -222,8 +282,10 @@ async function runBalanceAlerts(options) {
     hits: 0,
     sent: 0,
     symbols: [],
+    kinds: [],
     errors: [],
     push: pushEnabled && !!webhook,
+    checkMax: CHECK_MAX,
   };
 
   if (!enabled()) {
@@ -247,8 +309,10 @@ async function runBalanceAlerts(options) {
   if (!pins.length) {
     result.skipped = true;
     result.reason = 'no-auto-pins';
+    result.autoPins = 0;
     return result;
   }
+  result.autoPins = pins.length;
 
   const stateFile = await loadJson(statePath);
   let state = normalizeState(stateFile && stateFile.data);
@@ -262,15 +326,30 @@ async function runBalanceAlerts(options) {
     if (COOLDOWN_MS <= 0) return true;
     return now - lastSentAt >= COOLDOWN_MS;
   });
-  // 优先更早盯上的，避免总扫同一批新币。
-  due.sort((a, b) => (a.pinnedAt || 0) - (b.pinnedAt || 0));
-  const pending =
-    CHECK_MAX > 0 && due.length > CHECK_MAX ? due.slice(0, CHECK_MAX) : due;
+  // 稳定序 + 可选轮询切片（仅 CHECK_MAX>0 时）。
+  due.sort((a, b) =>
+    String(a.symbol || '').localeCompare(String(b.symbol || '')),
+  );
+  let cursor = Number(state.checkCursor) || 0;
+  if (cursor < 0 || cursor >= due.length) cursor = 0;
+  let pending = due;
+  if (CHECK_MAX > 0 && due.length > CHECK_MAX) {
+    pending = [];
+    for (let i = 0; i < CHECK_MAX; i += 1) {
+      pending.push(due[(cursor + i) % due.length]);
+    }
+    state.checkCursor = (cursor + CHECK_MAX) % due.length;
+    stateDirty = true;
+  } else {
+    state.checkCursor = 0;
+  }
   result.due = due.length;
   result.checked = pending.length;
+  result.checkCursor = state.checkCursor;
   result.skippedFetch = pins.length - due.length;
   result.cooldownMs = COOLDOWN_MS;
   if (!pending.length) {
+    result.skipped = true;
     result.reason = 'cooldown';
     return result;
   }
@@ -292,7 +371,7 @@ async function runBalanceAlerts(options) {
       const candles = await fetchKlines(pin.symbol, INTERVAL, LIMIT);
       const live =
         tickers && tickers[pin.symbol] && Number(tickers[pin.symbol].price);
-      const verdict = evaluateBalance(candles, pin, live);
+      const verdict = evaluatePatterns(candles, pin, live);
       if (!verdict) return null;
       return { pin, candles, verdict };
     } catch (error) {
@@ -307,31 +386,37 @@ async function runBalanceAlerts(options) {
   const hits = SEND_MAX > 0 ? matched.slice(0, SEND_MAX) : matched;
   result.hits = matched.length;
   result.queued = hits.length;
+  result.hitKinds = matched.map((row) => ({
+    symbol: row.pin.symbol,
+    kinds: row.verdict.kinds,
+  }));
 
   for (const hit of hits) {
-    const { pin, candles } = hit;
+    const { pin, candles, verdict } = hit;
     const label = labelOf(pin.symbol);
+    const title = patternTitle(verdict.kinds);
     result.symbols.push(pin.symbol);
+    result.kinds.push({ symbol: pin.symbol, kinds: verdict.kinds });
 
     if (!webhook) {
       // 无 webhook：只记命中，不进入冷却（下次仍可推）。
       continue;
     }
     try {
-      const text = `${label} · 天平`;
+      const text = `${label} · ${title}`;
       await sendWecomText(text, webhook);
       const painted = renderCandlesPng(candles, {
-        title: `${label} 天平`,
+        title: `${label} ${title}`,
         pinPrice: pin.pinPrice,
         autoPin: true,
         height: 280,
       });
       await sendWecomImage(painted, webhook);
-      // 仅发送成功才开 1h 冷却，失败则下轮可重试。
       state.bySymbol[pin.symbol] = {
         pinnedAt: pin.pinnedAt,
         lastSentAt: now,
         pinPrice: pin.pinPrice,
+        kinds: verdict.kinds,
       };
       stateDirty = true;
       result.sent += 1;
@@ -342,7 +427,6 @@ async function runBalanceAlerts(options) {
     }
   }
 
-  // 清理已不在自动盯列表的状态。
   const keep = new Set(pins.map((p) => p.symbol));
   Object.keys(state.bySymbol).forEach((key) => {
     if (!keep.has(key)) {
@@ -356,11 +440,12 @@ async function runBalanceAlerts(options) {
       statePath,
       {
         bySymbol: state.bySymbol,
+        checkCursor: Number(state.checkCursor) || 0,
         updatedAt: now,
       },
       stateFile && stateFile.sha,
       result.sent
-        ? `Balance alert x${result.sent}`
+        ? `Balance/straight alert x${result.sent}`
         : 'Balance alert state',
     );
   }
@@ -371,6 +456,8 @@ async function runBalanceAlerts(options) {
 module.exports = {
   runBalanceAlerts,
   evaluateBalance,
+  evaluateStraight,
+  evaluatePatterns,
   isCurrentWindowUp,
   normalizePins,
 };

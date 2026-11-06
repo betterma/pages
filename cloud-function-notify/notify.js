@@ -158,6 +158,9 @@ const CONFIG = {
   PINS_PATH: process.env.PINS_PATH || 'watch-pins.json',
   POSITIONS_PATH: process.env.POSITIONS_PATH || 'watch-positions.json',
   NOTIFY_STATE_PATH: process.env.NOTIFY_STATE_PATH || 'watch-notify-state.json',
+  /** 定时检测心跳 / 进度（网页通知页健康度入口只读这份）。 */
+  NOTIFY_HEALTH_PATH:
+    process.env.NOTIFY_HEALTH_PATH || 'watch-notify-health.json',
   ACTION_LOG_PATH: process.env.ACTION_LOG_PATH || 'watch-action-log.json',
   ACTION_LOG_MAX: Number(process.env.ACTION_LOG_MAX || 10000),
   ACTION_LOG_TTL_MS: Number(
@@ -1450,6 +1453,87 @@ async function runBstockSideMaintenance(now) {
   return out;
 }
 
+function summarizeBalanceHealth(result) {
+  const r = result && typeof result === 'object' ? result : {};
+  const errors = Array.isArray(r.errors) ? r.errors.map(String) : [];
+  const due = Number(r.due) || 0;
+  const cool = Number(r.skippedFetch) || 0;
+  const autoPins =
+    Number(r.autoPins) > 0
+      ? Number(r.autoPins)
+      : due + cool > 0
+        ? due + cool
+        : 0;
+  return {
+    skipped: !!r.skipped,
+    reason: r.reason != null ? String(r.reason) : null,
+    autoPins,
+    due,
+    checked: Number(r.checked) || 0,
+    hits: Number(r.hits) || 0,
+    sent: Number(r.sent) || 0,
+    checkMax: Number(r.checkMax) || 0,
+    checkCursor: Number(r.checkCursor) || 0,
+    cooldownSkipped: cool,
+    errorCount: errors.length,
+    errors: errors.slice(0, 5),
+  };
+}
+
+function summarizeNailGreenHealth(result) {
+  const r = result && typeof result === 'object' ? result : {};
+  const errors = Array.isArray(r.errors) ? r.errors.map(String) : [];
+  return {
+    skipped: !!r.skipped,
+    reason: r.reason != null ? String(r.reason) : null,
+    nails: Number(r.nails) || 0,
+    pending: Number(r.pending) || 0,
+    checked: Number(r.checked) || 0,
+    hits: Number(r.hits) || 0,
+    sent: Number(r.sent) || 0,
+    checkMax: Number(r.checkMax) || 0,
+    checkCursor: Number(r.checkCursor) || 0,
+    bucketSkipped: Number(r.skippedFetch) || 0,
+    errorCount: errors.length,
+    errors: errors.slice(0, 5),
+  };
+}
+
+function summarizeStaleNailHealth(result) {
+  const r = result && typeof result === 'object' ? result : {};
+  const removed = Array.isArray(r.removed) ? r.removed : [];
+  return {
+    skipped: !!r.skipped,
+    reason: r.reason != null ? String(r.reason) : null,
+    checked: Number(r.checked) || 0,
+    candidate: Number(r.candidate) || 0,
+    removed: removed.length,
+  };
+}
+
+/**
+ * 每轮定时写心跳，供网页「健康度」判断是否停摆 / 本轮是否扫完。
+ * 与业务状态分离，避免 notify-state 条件保存时漏掉心跳。
+ */
+async function saveNotifyDetectorHealth(payload) {
+  const path =
+    String(CONFIG.NOTIFY_HEALTH_PATH || '').trim() ||
+    'watch-notify-health.json';
+  const body =
+    payload && typeof payload === 'object'
+      ? payload
+      : { ok: false, error: 'empty-payload', lastRunAt: Date.now() };
+  let sha;
+  try {
+    const prev = await loadJson(path);
+    sha = prev && prev.sha;
+  } catch (error) {
+    /* 首写或文件不存在 */
+  }
+  await saveJson(path, body, sha, 'Notify detector health');
+  return body;
+}
+
 async function main(event, context) {
   // 缺 token/webhook 时降级关闭推送，避免整轮 notify 直接抛死（控制台只见「执行失败」）。
   if (CONFIG.AUTO_PIN_PUSHPLUS && !CONFIG.PUSHPLUS_TOKEN) {
@@ -1974,6 +2058,14 @@ async function main(event, context) {
       'nail-green-alert failed',
       error && error.message ? error.message : error,
     );
+    nailGreenAlert = {
+      skipped: true,
+      reason: 'error',
+      errors: [error && error.message ? error.message : String(error)],
+      checked: 0,
+      hits: 0,
+      sent: 0,
+    };
   }
 
   let balanceAlert = { skipped: true, reason: 'not-run', sent: 0, symbols: [] };
@@ -1987,6 +2079,77 @@ async function main(event, context) {
   } catch (error) {
     console.warn(
       'balance-alert failed',
+      error && error.message ? error.message : error,
+    );
+    balanceAlert = {
+      skipped: true,
+      reason: 'error',
+      errors: [error && error.message ? error.message : String(error)],
+      checked: 0,
+      hits: 0,
+      sent: 0,
+    };
+  }
+
+  // 检测段一结束就写心跳：后面业务再崩，网页仍能看到「本轮已跑过」。
+  try {
+    const balanceHealth = summarizeBalanceHealth(balanceAlert);
+    const nailGreenHealth = summarizeNailGreenHealth(nailGreenAlert);
+    const healthBody = {
+      updatedAt: Date.now(),
+      lastRunAt: now,
+      ok: true,
+      error: null,
+      durationMs: Date.now() - now,
+      // 自动盯口径：天平候选池（auto-*），不是全部 pins。
+      autoPins: Number(balanceHealth.autoPins) || 0,
+      balance: balanceHealth,
+      nailGreen: nailGreenHealth,
+      staleNailPrune: summarizeStaleNailHealth(staleNailPrune),
+    };
+    const failBits = [];
+    const softBits = [];
+    if (nailGreenAlert && nailGreenAlert.reason === 'error') {
+      failBits.push(
+        String(
+          (nailGreenAlert.errors && nailGreenAlert.errors[0]) || 'nail-green',
+        ),
+      );
+    }
+    if (balanceAlert && balanceAlert.reason === 'error') {
+      failBits.push(
+        String((balanceAlert.errors && balanceAlert.errors[0]) || 'balance'),
+      );
+    }
+    // 模块缺失 / 显式关闭：心跳在，但检测没真正跑——标坏，避免「绿灯却从不查」。
+    ['module-missing', 'disabled'].forEach((bad) => {
+      if (balanceHealth.reason === bad) failBits.push(`balance:${bad}`);
+      if (nailGreenHealth.reason === bad) failBits.push(`nail-green:${bad}`);
+    });
+    if (balanceHealth.errorCount > 0) {
+      softBits.push(
+        `balance×${balanceHealth.errorCount}:${balanceHealth.errors[0] || 'err'}`,
+      );
+    }
+    if (nailGreenHealth.errorCount > 0) {
+      softBits.push(
+        `nail-green×${nailGreenHealth.errorCount}:${nailGreenHealth.errors[0] || 'err'}`,
+      );
+    }
+    if (failBits.length) {
+      healthBody.ok = false;
+      healthBody.error = failBits.concat(softBits).join(' · ');
+    } else if (softBits.length) {
+      // 软错误：本轮跑过但有拉 K / 推送失败，标 degraded（网页按非 ok 告警）。
+      healthBody.ok = false;
+      healthBody.degraded = true;
+      healthBody.error = softBits.join(' · ');
+    }
+    await saveNotifyDetectorHealth(healthBody);
+    console.log('notify-health', JSON.stringify(healthBody));
+  } catch (error) {
+    console.warn(
+      'notify-health save failed',
       error && error.message ? error.message : error,
     );
   }
@@ -2256,7 +2419,7 @@ async function main(event, context) {
     sendErrors.push(...nailGreenAlert.errors.slice(0, 5));
   }
   if (balanceAlert && balanceAlert.sent) {
-    sent.push(`balance:${balanceAlert.sent}`);
+    sent.push(`balance/straight:${balanceAlert.sent}`);
   }
   if (balanceAlert && balanceAlert.errors && balanceAlert.errors.length) {
     sendErrors.push(...balanceAlert.errors.slice(0, 5));

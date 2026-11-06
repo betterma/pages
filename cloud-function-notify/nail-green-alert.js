@@ -403,6 +403,9 @@ async function runNailGreenAlerts(options) {
   }
   result.pending = pending.length;
   result.checked = toCheck.length;
+  result.checkMax = CHECK_MAX;
+  result.checkCursor = Number(state.checkCursor) || 0;
+  result.nails = nails.length;
   result.bucketOpen = bucketOpen;
   result.skippedFetch = nails.length - pending.length;
 

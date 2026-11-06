@@ -31,19 +31,31 @@
 - 剩余时间不足 25s 时本轮跳过清退
 - 现货与 bStock 各跑一轮（各自 pins/nails 路径）
 
-## 天平（企微文字 + K 线）
+## 检测健康度（网页入口）
 
-对自动盯（`auto-rising` / `auto-cloud` / `auto-rewarm`）检查：盯后到当前 4h 窗曾 `low < pinPrice`，且现价 **>** 跌破 K 的最低收盘，且**当前 4h 窗上涨**（现价 > 窗开盘）→ 发企微「币名 · 天平」+ 4h 图（含盯住价线）。  
-当前窗下跌则不发企微、不进冷却（窗翻红后再符合时可推）。  
-同一币 **1 小时内**不重复推；满 1 小时仍符合天平可再推（`lastSentAt` 冷却）。
+每轮定时在天平 / 荧光绿跑完后写入 `watch-notify-health.json`（与业务状态分离，避免 `notify-state` 条件保存漏心跳）。  
+网页通知页标题旁「健康」可读：上次跑到何时、本轮应查/已查、是否全量扫完、游标（`CHECK_MAX>0` 时）、命中/推送、错误。  
+超过约 15 分钟未更新视为偏慢，2 小时告警，**12 小时（半天）标红**——用来发现云函数停摆。
+
+- 路径：`NOTIFY_HEALTH_PATH`（默认 `watch-notify-health.json`）
+
+## 天平 / 直拉（企微文字 + K 线）
+
+对自动盯（`auto-rising` / `auto-cloud` / `auto-rewarm`）每轮检查（默认**全查**冷却到期的）：
+
+1. **天平**：盯后曾 `low < pinPrice`（影线算跌破），现价 **>** 跌破 K 最低收盘，且当前 4h 窗上涨  
+2. **直拉**：盯后实体从未跌破 pin（`min(open,close)`；下影不算），现价 **>** 盯价，且当前 4h 窗上涨  
+
+命中则发企微「币名 · 天平 / 直拉 / 天平·直拉」+ 4h 图。当前窗下跌不推、不进冷却。  
+同一币 **1 小时内**不重复推（两种命中共用冷却）。
 
 - 去重状态：`watch-balance-alert.json`
 - `BALANCE_ALERT`：默认 `1`；`0` 关闭
 - `BALANCE_ALERT_COOLDOWN_MS`：默认 `3600000`（1 小时）
 - Webhook：`WECOM_WEBHOOK_PINS` → 否则 `WECOM_WEBHOOK_POSITIONS` / `WECOM_WEBHOOK_URL`
-- `BALANCE_ALERT_SEND_MAX`：默认 `5`（防首轮连发超时）；`0`=不限制
-- `BALANCE_ALERT_CHECK_MAX`：默认 `24`（单轮最多拉 K 检查几只）；`0`=冷却到期全查
-- 并发 `BALANCE_ALERT_CONCURRENCY`（默认 6）
+- `BALANCE_ALERT_SEND_MAX`：默认 `0`=命中全推；设为正数可限流
+- `BALANCE_ALERT_CHECK_MAX`：默认 `0`=**冷却到期全查**；设为正数则单轮限量并用 `checkCursor` 轮询
+- 并发 `BALANCE_ALERT_CONCURRENCY`（默认 8）；全查时建议函数超时 ≥ 120s
 
 ## 排序动态（notes-rank 快照）
 
