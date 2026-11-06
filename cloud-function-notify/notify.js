@@ -1474,6 +1474,7 @@ function summarizeBalanceHealth(result) {
     sent: Number(r.sent) || 0,
     checkMax: Number(r.checkMax) || 0,
     checkCursor: Number(r.checkCursor) || 0,
+    cooldownMs: Number(r.cooldownMs) || 0,
     cooldownSkipped: cool,
     errorCount: errors.length,
     errors: errors.slice(0, 5),

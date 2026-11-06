@@ -2,10 +2,11 @@
 
 /**
  * 天平 / 直拉 企微推送（自动盯）：
- * - 天平：盯后曾影线跌破 pinPrice（low），现价 > 跌破 K 最低收盘，当前 4h 窗上涨
- * - 直拉：盯后实体从未跌破 pin（min(open,close)；下影不算），现价 > 盯价，当前 4h 窗上涨
- * 可同时命中 → 一条「天平·直拉」。同一币默认 1 小时冷却。
+ * - 天平：盯后曾影线跌破 pinPrice（low），现价 > 跌破 K 最低收盘
+ * - 直拉：盯后实体从未跌破 pin（min(open,close)；下影不算），现价 > 盯价
+ * 可同时命中 → 一条「天平·直拉」。同一币默认 30 分钟冷却。
  * 默认每轮检查全部冷却到期的自动盯（CHECK_MAX=0）；可用环境变量限流。
+ * 不要求当前 4h 窗上涨。
  */
 
 const { loadJson, saveJson, sendWecomText, sendWecomImage, fetchBinanceTickers } =
@@ -14,9 +15,20 @@ const { fetchKlines, renderCandlesPng } = require('./kline-chart');
 
 const STATE_PATH =
   process.env.BALANCE_ALERT_PATH || 'watch-balance-alert.json';
+const NOTICES_PATH =
+  process.env.BALANCE_NOTICES_PATH || 'watch-balance-notices.json';
+const NAILS_PATH = process.env.NAILS_PATH || 'watch-nails.json';
 const PINS_PATH = process.env.PINS_PATH || 'watch-pins.json';
 const INTERVAL = process.env.BALANCE_ALERT_INTERVAL || '4h';
 const LIMIT = Math.max(12, Number(process.env.BALANCE_ALERT_LIMIT || 18));
+const NOTICES_TTL_MS = 24 * 60 * 60 * 1000;
+const DURATION_MS = {
+  '15m': 15 * 60 * 1000,
+  '1h': 60 * 60 * 1000,
+  '2h': 2 * 60 * 60 * 1000,
+  '4h': 4 * 60 * 60 * 1000,
+  '1d': 24 * 60 * 60 * 1000,
+};
 const CONCURRENCY = Math.max(
   1,
   Number(process.env.BALANCE_ALERT_CONCURRENCY || 8),
@@ -41,13 +53,13 @@ const CHECK_MAX = Math.max(
       : process.env.BALANCE_ALERT_CHECK_MAX,
   ),
 );
-/** 同一币两次企微最短间隔（默认 1 小时）。 */
+/** 同一币两次企微最短间隔（默认 30 分钟）。 */
 const COOLDOWN_MS = Math.max(
   0,
   Number(
     process.env.BALANCE_ALERT_COOLDOWN_MS === undefined ||
       process.env.BALANCE_ALERT_COOLDOWN_MS === ''
-      ? 60 * 60 * 1000
+      ? 30 * 60 * 1000
       : process.env.BALANCE_ALERT_COOLDOWN_MS,
   ),
 );
@@ -71,6 +83,123 @@ function resolveWebhook() {
 
 function labelOf(symbol) {
   return String(symbol || '').replace(/USDT$/i, '');
+}
+
+function parseAlertPrice(note) {
+  const text = String(note || '').trim();
+  if (!text) return null;
+  const match = text.match(/(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/);
+  if (!match) return null;
+  const n = Number(match[1]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function currentWindowOpen(now) {
+  const durationMs = DURATION_MS[INTERVAL] || DURATION_MS['4h'];
+  const ts = Number(now) || Date.now();
+  return Math.floor(ts / durationMs) * durationMs;
+}
+
+function notePriceBySymbol(nailsRaw) {
+  const list = Array.isArray(nailsRaw)
+    ? nailsRaw
+    : Array.isArray(nailsRaw && nailsRaw.nails)
+      ? nailsRaw.nails
+      : [];
+  const map = {};
+  list.forEach((item) => {
+    if (!item || typeof item !== 'object') return;
+    const symbol = String(item.symbol || '')
+      .trim()
+      .toUpperCase();
+    if (!symbol) return;
+    const price = parseAlertPrice(item.note);
+    if (!(Number.isFinite(price) && price > 0)) return;
+    map[symbol] = {
+      alertPrice: price,
+      noteAt: Number(item.noteAt) || 0,
+    };
+  });
+  return map;
+}
+
+function trimBalanceNotices(list, now) {
+  const cutoff = (Number(now) || Date.now()) - NOTICES_TTL_MS;
+  const seen = new Set();
+  const out = [];
+  (Array.isArray(list) ? list : [])
+    .filter((item) => item && Number(item.at) >= cutoff)
+    .sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0))
+    .forEach((item) => {
+      const symbol = String(item.symbol || '')
+        .trim()
+        .toUpperCase();
+      if (!symbol || seen.has(symbol)) return;
+      seen.add(symbol);
+      const kinds = Array.isArray(item.kinds)
+        ? item.kinds.map(String).filter(Boolean)
+        : [];
+      const pinPrice = Number(item.pinPrice);
+      const at = Number(item.at) || 0;
+      const openTime = Number(item.openTime) || currentWindowOpen(at);
+      if (!(at > 0) || !(Number.isFinite(pinPrice) && pinPrice > 0)) return;
+      const alertPrice = Number(item.alertPrice);
+      const notifyPrice = Number(item.notifyPrice);
+      out.push({
+        id: item.id || `${symbol}:${openTime}:${at}`,
+        symbol,
+        label: item.label
+          ? String(item.label).trim().slice(0, 32)
+          : labelOf(symbol),
+        kinds: kinds.length ? kinds : ['天平'],
+        at,
+        openTime,
+        pinPrice,
+        pinnedAt: Number(item.pinnedAt) || 0,
+        alertPrice:
+          Number.isFinite(alertPrice) && alertPrice > 0 ? alertPrice : 0,
+        notifyPrice:
+          Number.isFinite(notifyPrice) && notifyPrice > 0 ? notifyPrice : 0,
+        noteAt: Number(item.noteAt) || 0,
+        interval: item.interval ? String(item.interval) : INTERVAL,
+      });
+    });
+  return out;
+}
+
+function noticeItemsFingerprint(list) {
+  return (Array.isArray(list) ? list : [])
+    .map(
+      (item) =>
+        `${item && item.id}:${(item && item.kinds) || []}:${item && item.at}`,
+    )
+    .join('|');
+}
+
+async function appendBalanceNotices(rows, now, noticesPath) {
+  const path = String(noticesPath || NOTICES_PATH).trim() || NOTICES_PATH;
+  const file = await loadJson(path);
+  const prev = (file && file.data) || {};
+  const prevItems = Array.isArray(prev.items) ? prev.items : [];
+  const incoming = Array.isArray(rows) ? rows : [];
+  const merged = trimBalanceNotices([...incoming, ...prevItems], now);
+  const changed =
+    incoming.length > 0 ||
+    noticeItemsFingerprint(merged) !== noticeItemsFingerprint(prevItems);
+  if (!changed) return merged.length;
+  await saveJson(
+    path,
+    {
+      updatedAt: now,
+      readAt: Number(prev.readAt) || 0,
+      items: merged,
+    },
+    file && file.sha,
+    incoming.length
+      ? `Balance/straight notices +${incoming.length}`
+      : 'Balance notices prune',
+  );
+  return merged.length;
 }
 
 function findCandleIndexAt(candles, timestamp) {
@@ -136,7 +265,7 @@ function normalizeState(data) {
 }
 
 /**
- * 与盯一下「当前窗口上涨」同口径：现价相对正在形成的 4h 窗开盘。
+ * 现价相对正在形成的 4h 窗开盘是否上涨（仅作命中附加字段，不再作为天平/直拉门槛）。
  */
 function isCurrentWindowUp(candles, livePrice) {
   if (!Array.isArray(candles) || !candles.length) return false;
@@ -170,15 +299,20 @@ function pinLiveContext(candles, pin, livePrice) {
         ? lastClose
         : NaN;
   if (!(Number.isFinite(px) && px > 0)) return null;
-  if (!isCurrentWindowUp(candles, px)) return null;
   const pinIdx = findCandleIndexAt(candles, pin.pinnedAt);
   const lastIdx = candles.length - 1;
   if (pinIdx < 0 || lastIdx <= pinIdx) return null;
-  return { line, px, pinIdx, lastIdx };
+  return {
+    line,
+    px,
+    pinIdx,
+    lastIdx,
+    windowUp: isCurrentWindowUp(candles, px),
+  };
 }
 
 /**
- * 天平：盯后影线跌破 + 现价收回高于跌破 K 最低收盘 + 当前窗上涨。
+ * 天平：盯后影线跌破 + 现价收回高于跌破 K 最低收盘（不要求当前窗上涨）。
  */
 function evaluateBalance(candles, pin, livePrice) {
   const ctx = pinLiveContext(candles, pin, livePrice);
@@ -202,12 +336,12 @@ function evaluateBalance(candles, pin, livePrice) {
     minDipClose,
     pinIdx: ctx.pinIdx,
     lastIdx: ctx.lastIdx,
-    windowUp: true,
+    windowUp: !!ctx.windowUp,
   };
 }
 
 /**
- * 直拉：盯后实体从未跌破 pin（下影不算）+ 现价 > 盯价 + 当前窗上涨。
+ * 直拉：盯后实体从未跌破 pin（下影不算）+ 现价 > 盯价（不要求当前窗上涨）。
  */
 function evaluateStraight(candles, pin, livePrice) {
   const ctx = pinLiveContext(candles, pin, livePrice);
@@ -224,7 +358,7 @@ function evaluateStraight(candles, pin, livePrice) {
     livePrice: ctx.px,
     pinIdx: ctx.pinIdx,
     lastIdx: ctx.lastIdx,
-    windowUp: true,
+    windowUp: !!ctx.windowUp,
   };
 }
 
@@ -271,6 +405,9 @@ async function runBalanceAlerts(options) {
   const now = Number(opts.now) || Date.now();
   const pinsPath = String(opts.pinsPath || PINS_PATH).trim() || PINS_PATH;
   const statePath = String(opts.statePath || STATE_PATH).trim() || STATE_PATH;
+  const noticesPath =
+    String(opts.noticesPath || NOTICES_PATH).trim() || NOTICES_PATH;
+  const nailsPath = String(opts.nailsPath || NAILS_PATH).trim() || NAILS_PATH;
   const pushEnabled = opts.push !== false;
   const webhook = pushEnabled
     ? String(opts.webhook || resolveWebhook() || '').trim()
@@ -281,11 +418,13 @@ async function runBalanceAlerts(options) {
     checked: 0,
     hits: 0,
     sent: 0,
+    notices: 0,
     symbols: [],
     kinds: [],
     errors: [],
     push: pushEnabled && !!webhook,
     checkMax: CHECK_MAX,
+    cooldownMs: COOLDOWN_MS,
   };
 
   if (!enabled()) {
@@ -313,6 +452,17 @@ async function runBalanceAlerts(options) {
     return result;
   }
   result.autoPins = pins.length;
+
+  let noteMap = {};
+  try {
+    const nailsFile = await loadJson(nailsPath);
+    noteMap = notePriceBySymbol(nailsFile && nailsFile.data);
+  } catch (error) {
+    console.warn(
+      'balance-alert: load nails for note price failed',
+      error && error.message ? error.message : error,
+    );
+  }
 
   const stateFile = await loadJson(statePath);
   let state = normalizeState(stateFile && stateFile.data);
@@ -391,27 +541,58 @@ async function runBalanceAlerts(options) {
     kinds: row.verdict.kinds,
   }));
 
+  const noticeRows = [];
   for (const hit of hits) {
     const { pin, candles, verdict } = hit;
     const label = labelOf(pin.symbol);
-    const title = patternTitle(verdict.kinds);
+    const forming = candles && candles[candles.length - 1];
+    const openTime = Number(forming && forming.time) || currentWindowOpen(now);
+    const note = noteMap[pin.symbol] || {};
+    const livePrice = Number(verdict.livePrice) || 0;
     result.symbols.push(pin.symbol);
     result.kinds.push({ symbol: pin.symbol, kinds: verdict.kinds });
+    noticeRows.push({
+      id: `${pin.symbol}:${openTime}:${now}`,
+      symbol: pin.symbol,
+      label,
+      kinds: verdict.kinds,
+      at: now,
+      openTime,
+      pinPrice: pin.pinPrice,
+      pinnedAt: pin.pinnedAt,
+      alertPrice: Number(note.alertPrice) || 0,
+      notifyPrice: livePrice,
+      noteAt: Number(note.noteAt) || 0,
+      interval: INTERVAL,
+      _hit: hit,
+    });
+  }
 
-    if (!webhook) {
-      // 无 webhook：只记命中，不进入冷却（下次仍可推）。
-      continue;
-    }
+  // 先写网页列表；成功后再进冷却，避免「冷却已写、列表失败」空窗一整段冷却。
+  let noticesWritten = false;
+  if (noticeRows.length) {
     try {
-      const text = `${label} · ${title}`;
-      await sendWecomText(text, webhook);
-      const painted = renderCandlesPng(candles, {
-        title: `${label} ${title}`,
-        pinPrice: pin.pinPrice,
-        autoPin: true,
-        height: 280,
+      const payload = noticeRows.map((row) => {
+        const { _hit, ...rest } = row;
+        return rest;
       });
-      await sendWecomImage(painted, webhook);
+      result.notices = await appendBalanceNotices(payload, now, noticesPath);
+      noticesWritten = true;
+    } catch (error) {
+      result.errors.push(
+        `notices:${error && error.message ? error.message : error}`,
+      );
+    }
+  }
+
+  // 网页落盘失败：不推企微、不进冷却，下轮重试（避免企微有了、列表没有）。
+  // checkCursor 等仍可能 stateDirty，后面统一 save。
+  if (noticesWritten) {
+    for (const row of noticeRows) {
+      const hit = row._hit;
+      const { pin, candles, verdict } = hit;
+      const title = patternTitle(verdict.kinds);
+
       state.bySymbol[pin.symbol] = {
         pinnedAt: pin.pinnedAt,
         lastSentAt: now,
@@ -419,11 +600,24 @@ async function runBalanceAlerts(options) {
         kinds: verdict.kinds,
       };
       stateDirty = true;
-      result.sent += 1;
-    } catch (error) {
-      result.errors.push(
-        `send:${pin.symbol}:${error && error.message ? error.message : error}`,
-      );
+
+      if (!webhook) continue;
+      try {
+        const text = `${row.label} · ${title}`;
+        await sendWecomText(text, webhook);
+        const painted = renderCandlesPng(candles, {
+          title: `${row.label} ${title}`,
+          pinPrice: pin.pinPrice,
+          autoPin: true,
+          height: 280,
+        });
+        await sendWecomImage(painted, webhook);
+        result.sent += 1;
+      } catch (error) {
+        result.errors.push(
+          `send:${pin.symbol}:${error && error.message ? error.message : error}`,
+        );
+      }
     }
   }
 
@@ -435,7 +629,7 @@ async function runBalanceAlerts(options) {
     }
   });
 
-  if (stateDirty || result.sent) {
+  if (stateDirty || result.sent || noticeRows.length) {
     await saveJson(
       statePath,
       {
@@ -446,7 +640,9 @@ async function runBalanceAlerts(options) {
       stateFile && stateFile.sha,
       result.sent
         ? `Balance/straight alert x${result.sent}`
-        : 'Balance alert state',
+        : noticeRows.length
+          ? `Balance/straight notices +${noticeRows.length}`
+          : 'Balance alert state',
     );
   }
 

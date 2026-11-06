@@ -29,6 +29,9 @@
   const NAILS_PATH = "watch-nails.json";
   const NAIL_GREEN_NOTICES_PATH = "watch-nail-green-notices.json";
   const NAIL_GREEN_NOTICES_TTL_MS = 24 * 60 * 60 * 1000;
+  /** 天平 / 直拉通知页列表（云函数命中写入）。 */
+  const BALANCE_NOTICES_PATH = "watch-balance-notices.json";
+  const BALANCE_NOTICES_TTL_MS = 24 * 60 * 60 * 1000;
   const NAIL_DAILY_RESET_PATH = "watch-nail-daily-reset.json";
   const NAIL_DAILY_RESET_PROMPT_MS = 2 * 60 * 60 * 1000;
   const NOTES_RANK_SNAPS_PATH = "watch-notes-rank-snaps.json";
@@ -1621,6 +1624,220 @@
       sha: null,
       source: "empty",
     };
+  }
+
+  function balanceNoticeId(item) {
+    const symbol = nailSymbolKey(item && (item.symbol || item.id));
+    const openTime = Number(item && item.openTime) || 0;
+    const at = Number(item && item.at) || 0;
+    if (!symbol || !at) return "";
+    return `${symbol}:${openTime || at}:${at}`;
+  }
+
+  function normalizeBalanceNotice(item) {
+    if (!item || typeof item !== "object") return null;
+    const symbol = nailSymbolKey(item.symbol);
+    if (!symbol) return null;
+    const at = Number(item.at) || 0;
+    const pinPrice = Number(item.pinPrice);
+    if (!(at > 0) || !(Number.isFinite(pinPrice) && pinPrice > 0)) return null;
+    const kinds = Array.isArray(item.kinds)
+      ? item.kinds.map(String).filter(Boolean)
+      : [];
+    const openTime = Number(item.openTime) || at;
+    const alertPrice = Number(item.alertPrice);
+    const notifyPrice = Number(item.notifyPrice);
+    const label = item.label
+      ? String(item.label).trim().slice(0, 32)
+      : symbol.replace(/USDT$/i, "");
+    return {
+      id: item.id ? String(item.id) : balanceNoticeId({ symbol, openTime, at }),
+      symbol,
+      label,
+      kinds: kinds.length ? kinds : ["天平"],
+      at,
+      openTime,
+      pinPrice,
+      pinnedAt: Number(item.pinnedAt) || 0,
+      // 便签水位；无便签时为 0（绿/红筛只进「全部」）。
+      alertPrice:
+        Number.isFinite(alertPrice) && alertPrice > 0 ? alertPrice : 0,
+      notifyPrice:
+        Number.isFinite(notifyPrice) && notifyPrice > 0 ? notifyPrice : 0,
+      noteAt: Number(item.noteAt) || 0,
+      interval: item.interval ? String(item.interval) : "4h",
+    };
+  }
+
+  function normalizeBalanceNotices(raw) {
+    const cutoff = Date.now() - BALANCE_NOTICES_TTL_MS;
+    const list = Array.isArray(raw)
+      ? raw
+      : Array.isArray(raw && raw.items)
+        ? raw.items
+        : [];
+    const seen = new Set();
+    const out = [];
+    list
+      .map(normalizeBalanceNotice)
+      .filter((item) => item && item.at >= cutoff)
+      .sort((a, b) => (b.at || 0) - (a.at || 0))
+      .forEach((item) => {
+        const key = String(item.symbol || "").toUpperCase();
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        out.push(item);
+      });
+    return out;
+  }
+
+  function serializeBalanceNotices(list, readAt) {
+    return {
+      updatedAt: Date.now(),
+      readAt:
+        Number.isFinite(Number(readAt)) && Number(readAt) > 0
+          ? Number(readAt)
+          : 0,
+      items: normalizeBalanceNotices(list),
+    };
+  }
+
+  function countUnreadBalanceNotices(list, readAt) {
+    const read = Number(readAt) || 0;
+    return normalizeBalanceNotices(list).filter((item) => item.at > read)
+      .length;
+  }
+
+  async function loadBalanceNoticesRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || BALANCE_NOTICES_PATH;
+    const force = !!(options && options.force);
+    const pack = (data, sha, source, commitSha) => ({
+      items: normalizeBalanceNotices(data && (data.items || data)),
+      readAt: Number(data && data.readAt) || 0,
+      updatedAt: Number(data && data.updatedAt) || null,
+      sha: sha || null,
+      source,
+      commitSha: commitSha || null,
+    });
+    if (force) {
+      try {
+        const commitSha = await getMainCommitSha({
+          repo,
+          token: options && options.token,
+        });
+        try {
+          const current = await fetchJsonFile({
+            repo,
+            path,
+            token: options && options.token,
+            ref: commitSha,
+          });
+          if (current.data) {
+            return pack(current.data, current.sha, "api-commit", commitSha);
+          }
+        } catch (error) {
+          console.warn(
+            "loadBalanceNotices force api-commit failed, trying raw",
+            error,
+          );
+        }
+        const response = await fetchRawJsonByCommit({
+          repo,
+          path,
+          commitSha,
+        });
+        if (response.ok) {
+          return pack(await response.json(), null, "raw-commit", commitSha);
+        }
+      } catch (error) {
+        console.warn("loadBalanceNotices force path failed", error);
+      }
+    }
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return pack(current.data, current.sha, "api");
+      }
+    } catch (error) {
+      console.warn("loadBalanceNotices via API failed, trying raw", error);
+    }
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        return pack(await response.json(), null, "raw-commit", commitSha);
+      }
+    } catch (error) {
+      console.warn("loadBalanceNotices via commit-raw failed", error);
+    }
+    return {
+      items: [],
+      readAt: 0,
+      updatedAt: null,
+      sha: null,
+      source: "empty",
+    };
+  }
+
+  async function patchBalanceNotices(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || BALANCE_NOTICES_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = current.data || { items: [], readAt: 0 };
+        const items = normalizeBalanceNotices(base.items || base);
+        const readAt = Number(base.readAt) || 0;
+        const mutated =
+          typeof options.mutate === "function"
+            ? options.mutate(items, { readAt })
+            : null;
+        const nextItems = normalizeBalanceNotices(
+          mutated && mutated.items != null ? mutated.items : items,
+        );
+        const nextReadAt =
+          mutated && mutated.readAt != null
+            ? Number(mutated.readAt) || 0
+            : readAt;
+        const nextData = serializeBalanceNotices(nextItems, nextReadAt);
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message:
+            (options && options.message) || "Update balance/straight notices",
+        });
+        return {
+          items: nextItems,
+          readAt: nextReadAt,
+          updatedAt: nextData.updatedAt,
+        };
+      } catch (error) {
+        lastError = error;
+        if (error && error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存天平/直拉通知失败");
   }
 
   async function patchNailGreenNotices(options) {
@@ -4339,6 +4556,13 @@
     countUnreadNailGreenNotices,
     loadNailGreenNoticesRaw,
     patchNailGreenNotices,
+    BALANCE_NOTICES_PATH,
+    BALANCE_NOTICES_TTL_MS,
+    normalizeBalanceNotices,
+    serializeBalanceNotices,
+    countUnreadBalanceNotices,
+    loadBalanceNoticesRaw,
+    patchBalanceNotices,
     NAIL_DAILY_RESET_PATH,
     NAIL_DAILY_RESET_PROMPT_MS,
     normalizeNailDailyReset,

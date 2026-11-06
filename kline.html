@@ -3336,7 +3336,7 @@
         color: var(--label);
       }
       .nail-notice-delta-filter button[data-notice-delta-filter="up"].is-active {
-        color: #3a7fc4;
+        color: #2f8f6e;
       }
       .nail-notice-delta-filter button[data-notice-delta-filter="down"].is-active {
         color: #c45c5c;
@@ -6809,7 +6809,7 @@
                 type="button"
                 class="nail-notice-entry"
                 id="nailNoticeEntry"
-                title="近 24h 荧光绿通知"
+                title="天平·直拉命中（近 24h）"
               >
                 <svg
                   class="nail-notice-bell"
@@ -7250,7 +7250,7 @@
           <div>
               <div class="nail-notice-title-row">
                 <div class="nail-notice-title-cluster">
-                  <h3 id="nailNoticeTitle">荧光绿通知</h3>
+                  <h3 id="nailNoticeTitle">天平·直拉</h3>
                   <button
                     type="button"
                     id="nailNoticeHealthBtn"
@@ -7272,7 +7272,7 @@
                   关闭
                 </button>
               </div>
-            <p id="nailNoticeMeta">当前 4h 窗 · 最新在上</p>
+            <p id="nailNoticeMeta">近 24h 命中 · 最新在上</p>
             <div
               id="nailNoticeHealthPanel"
               class="nail-notice-health-panel"
@@ -7292,8 +7292,8 @@
               class="nail-notice-delta-filter"
               id="nailNoticeDeltaFilter"
               role="group"
-              aria-label="按涨跌筛选"
-              title="相对便签水位：全部 / 蓝涨 / 红跌"
+              aria-label="按便签水位筛选"
+              title="相对便签水位：全部 / 绿（现价在上）/ 红（现价在下）"
             >
               <button
                 type="button"
@@ -7302,10 +7302,10 @@
               >
                 全部
               </button>
-              <button type="button" data-notice-delta-filter="up" title="相对便签水位上涨（蓝）">
-                蓝
+              <button type="button" data-notice-delta-filter="up" title="相对便签水位：现价在上（绿）">
+                绿
               </button>
-              <button type="button" data-notice-delta-filter="down" title="相对便签水位下跌（红）">
+              <button type="button" data-notice-delta-filter="down" title="相对便签水位：现价在下（红）">
                 红
               </button>
             </div>
@@ -7314,7 +7314,7 @@
               id="nailNoticeBalanceBtn"
               class="nail-notice-deblue"
               aria-pressed="false"
-              title="打开：只显示天平（盯后曾跌破 pin，现价高于跌破K最低收盘，且当前4h窗上涨）。可与「直拉」同开（并集）；在全部/蓝/红下均可用。偏好保存在本机。"
+              title="打开：只显示天平（盯后曾跌破 pin，现价高于跌破K最低收盘；不要求当前窗上涨）。可与「直拉」同开（并集）；在全部/绿/红下均可用。偏好保存在本机。"
             >
               天平
             </button>
@@ -7323,7 +7323,7 @@
               id="nailNoticeStraightBtn"
               class="nail-notice-deblue"
               aria-pressed="false"
-              title="打开：只显示直拉（盯后实体从未跌破 pin，下影线不算；现价高于盯价，且当前4h窗上涨）。可与「天平」同开（并集）；在全部/蓝/红下均可用。偏好保存在本机。"
+              title="打开：只显示直拉（盯后实体从未跌破 pin，下影线不算；现价高于盯价；不要求当前窗上涨）。可与「天平」同开（并集）；在全部/绿/红下均可用。偏好保存在本机。"
             >
               直拉
             </button>
@@ -7903,6 +7903,8 @@
         NAIL_GREEN_NOTICES_PATH:
           KLINE_PATHS.NAIL_GREEN_NOTICES_PATH ||
           "watch-nail-green-notices.json",
+        BALANCE_NOTICES_PATH:
+          KLINE_PATHS.BALANCE_NOTICES_PATH || "watch-balance-notices.json",
         NAIL_DAILY_RESET_PATH:
           KLINE_PATHS.NAIL_DAILY_RESET_PATH || "watch-nail-daily-reset.json",
         WATCH_POOL_RANK: 30,
@@ -19966,7 +19968,7 @@
       let nailNoticeFilterStatusTimer = 0;
       let nailNoticeSelectMode = false;
       const selectedNoticeSymbols = new Set();
-      /** 通知筛选偏好存本机：全部/蓝/红 + 天平/直拉（后两者可同开为并集）。 */
+      /** 通知筛选偏好存本机：全部/绿/红 + 天平/直拉（后两者可同开为并集）。 */
       const NAIL_NOTICE_DELTA_KEY = "kline-nail-notice-delta-v1";
       const NAIL_NOTICE_BALANCE_KEY = "kline-nail-notice-balance-v1";
       const NAIL_NOTICE_STRAIGHT_KEY = "kline-nail-notice-straight-v1";
@@ -20164,10 +20166,8 @@
       document.body.dataset.activeView = activeView;
 
       function nailGreenUnreadCount() {
-        if (
-          typeof WatchFavorites.countUnreadNailGreenNotices === "function"
-        ) {
-          return WatchFavorites.countUnreadNailGreenNotices(
+        if (typeof WatchFavorites.countUnreadBalanceNotices === "function") {
+          return WatchFavorites.countUnreadBalanceNotices(
             nailGreenNotices,
             nailGreenNoticesReadAt,
           );
@@ -20191,23 +20191,12 @@
         }
       }
 
-      function currentNailNoticeWindowOpen() {
-        const duration = 4 * 60 * 60 * 1000;
-        return Math.floor(Date.now() / duration) * duration;
-      }
-
-      function filterNailNoticesCurrentWindow(items) {
-        const open = currentNailNoticeWindowOpen();
-        return (Array.isArray(items) ? items : []).filter(
-          (item) => Number(item && item.openTime) === open,
-        );
-      }
-
       async function refreshNailGreenNotices(options) {
         const opts = options || {};
+        // 通知页：天平/直拉命中列表（近 24h）。
         if (
           !WatchFavorites ||
-          typeof WatchFavorites.loadNailGreenNoticesRaw !== "function"
+          typeof WatchFavorites.loadBalanceNoticesRaw !== "function"
         ) {
           nailGreenNotices = [];
           nailGreenNoticesReadAt = 0;
@@ -20215,14 +20204,13 @@
           return { items: [], readAt: 0 };
         }
         try {
-          const state = await WatchFavorites.loadNailGreenNoticesRaw({
+          const state = await WatchFavorites.loadBalanceNoticesRaw({
             repo: CONFIG.GITHUB_REPO,
             path:
-              WatchFavorites.NAIL_GREEN_NOTICES_PATH ||
-              CONFIG.NAIL_GREEN_NOTICES_PATH,
+              WatchFavorites.BALANCE_NOTICES_PATH ||
+              CONFIG.BALANCE_NOTICES_PATH,
             force: !!opts.force,
           });
-          // 强制刷新却读空：多半是瞬时失败，保留旧名单，避免列表被清空。
           if (
             opts.force &&
             state &&
@@ -20236,37 +20224,15 @@
               stale: true,
             };
           }
-          const raw = state.items || [];
-          const filtered = filterNailNoticesCurrentWindow(raw);
-          nailGreenNotices = filtered;
+          nailGreenNotices = state.items || [];
           nailGreenNoticesReadAt = Number(state.readAt) || 0;
           syncNailNoticeEntryUi();
-          // 页面侧立刻丢掉旧窗；并异步写回 GitHub，避免等下一轮云函数。
-          if (filtered.length !== raw.length) {
-            void (async () => {
-              try {
-                if (typeof WatchFavorites.patchNailGreenNotices !== "function") {
-                  return;
-                }
-                await WatchFavorites.patchNailGreenNotices({
-                  repo: CONFIG.GITHUB_REPO,
-                  path:
-                    WatchFavorites.NAIL_GREEN_NOTICES_PATH ||
-                    CONFIG.NAIL_GREEN_NOTICES_PATH,
-                  message: "Prune nail green notices to current window",
-                  mutate: (items, meta) => ({
-                    items: filterNailNoticesCurrentWindow(items),
-                    readAt: Number(meta && meta.readAt) || 0,
-                  }),
-                });
-              } catch (error) {
-                console.warn("prune nail notices window failed", error);
-              }
-            })();
-          }
-          return { items: filtered, readAt: nailGreenNoticesReadAt };
+          return {
+            items: nailGreenNotices,
+            readAt: nailGreenNoticesReadAt,
+          };
         } catch (error) {
-          console.warn("load nail green notices failed", error);
+          console.warn("load balance/straight notices failed", error);
           syncNailNoticeEntryUi();
           return {
             items: nailGreenNotices,
@@ -20291,14 +20257,14 @@
         const items = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
         if (metaEl) {
           metaEl.textContent = items.length
-            ? `当前 4h 窗 · ${items.length} 条 · 最新在上`
-            : "当前 4h 窗暂无通知";
+            ? `近 24h · ${items.length} 条 · 最新在上`
+            : "近 24h 暂无天平/直拉命中";
         }
         listEl.classList.toggle("is-selecting", nailNoticeSelectMode);
         if (!items.length) {
           if (focusActionScope === "notice") setFocusActionSymbol(null);
           listEl.innerHTML =
-            '<div class="nail-notice-empty">暂无荧光绿通知</div>';
+            '<div class="nail-notice-empty">暂无天平/直拉命中</div>';
           syncNailNoticeSelectUi();
           return;
         }
@@ -20311,8 +20277,14 @@
             );
             const id = escapeHtml(item.id || `${item.symbol}:${item.openTime}`);
             const isNew = Number(item.at) > (Number(nailGreenNoticesReadAt) || 0);
-            const kind =
-              item.kind === "首绿" || item.kind === "续绿" ? item.kind : "";
+            const kinds = Array.isArray(item.kinds)
+              ? item.kinds.map(String).filter(Boolean)
+              : [];
+            const kindText = kinds.length ? kinds.join("·") : "";
+            const hitBal = kinds.includes("天平");
+            const hitStraight = kinds.includes("直拉");
+            const notePrice = Number(item.alertPrice);
+            const pinPrice = Number(item.pinPrice);
             const selected =
               nailNoticeSelectMode && selectedNoticeSymbols.has(key)
                 ? " is-selected"
@@ -20321,17 +20293,18 @@
               ? `<input type="checkbox" class="nail-notice-check" data-notice-select="${symbol}" ${selectedNoticeSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
               : "";
             return [
-              `<article class="nail-notice-card${selected}" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}">`,
+              `<article class="nail-notice-card${selected}" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-balance="${hitBal ? "1" : "0"}" data-notice-straight="${hitStraight ? "1" : "0"}">`,
               check,
               `<div class="nail-notice-card-top">`,
-              `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}${kind ? ` · ${escapeHtml(kind)}` : ""}</button>`,
+              `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}${kindText ? ` · ${escapeHtml(kindText)}` : ""}</button>`,
               `<span class="nail-notice-card-stamps">${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
               `</div>`,
               `<div class="nail-notice-meta">`,
-              `<span class="nail-notice-line"><span class="nail-notice-key">水位</span><span>${escapeHtml(formatPinPrice(item.alertPrice))}</span><span class="nail-notice-iv">${escapeHtml(item.interval || "4h")}</span></span>`,
+              `<span class="nail-notice-line"><span class="nail-notice-key">便签</span><span>${notePrice > 0 ? escapeHtml(formatPinPrice(notePrice)) : "—"}</span><span class="nail-notice-iv">${escapeHtml(item.interval || "4h")}</span></span>`,
+              `<span class="nail-notice-line"><span class="nail-notice-key">盯价</span><span>${pinPrice > 0 ? escapeHtml(formatPinPrice(pinPrice)) : "—"}</span></span>`,
               `<span class="nail-notice-line"><span class="nail-notice-key">现价</span><span data-notice-live>--</span><span class="nail-notice-delta" data-notice-delta></span></span>`,
               `</div>`,
-              `<canvas width="640" height="160" data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${Number(item.alertPrice) || 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
+              `<canvas width="640" height="160" data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${notePrice > 0 ? notePrice : 0}" data-notice-pin-price="${pinPrice > 0 ? pinPrice : 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
               `</article>`,
             ].join("");
           })
@@ -20583,7 +20556,7 @@
 
       function describeNailNoticeFilter() {
         const bits = [];
-        if (nailNoticeDeltaFilter === "up") bits.push("蓝");
+        if (nailNoticeDeltaFilter === "up") bits.push("绿");
         else if (nailNoticeDeltaFilter === "down") bits.push("红");
         else bits.push("全部");
         if (nailNoticeBalanceEnabled) bits.push("天平");
@@ -20652,7 +20625,7 @@
             : "";
           setNailNoticeFilterStatus(
             summary
-              ? `已更新 · ${tag} · ${summary.replace(/^当前 4h 窗 ·\s*/, "")}`
+              ? `已更新 · ${tag} · ${summary.replace(/^近 24h ·\s*/, "")}`
               : `已更新 · ${tag}`,
             "done",
           );
@@ -20700,7 +20673,7 @@
               : mode === "down"
                 ? dir !== "down"
                 : false;
-          // 尚未算出涨跌时：蓝/红筛选先藏，避免闪一下再消失。
+          // 尚未算出涨跌时：绿/红筛选先藏，避免闪一下再消失。
           const pending = !dir && mode !== "all";
           const balAttr = card.getAttribute("data-notice-balance");
           const straightAttr = card.getAttribute("data-notice-straight");
@@ -20748,8 +20721,8 @@
                 : straightOn
                   ? "暂无直拉通知"
                   : mode === "up"
-                    ? "暂无上涨（蓝）通知"
-                    : "暂无下跌（红）通知";
+                    ? "暂无绿（便签上）通知"
+                    : "暂无红（便签下）通知";
           emptyEl.hidden = false;
         } else if (emptyEl) {
           emptyEl.hidden = true;
@@ -20760,8 +20733,8 @@
           const tag = describeNailNoticeFilter();
           metaEl.textContent =
             mode === "all" && !patternOn
-              ? `当前 4h 窗 · ${total} 条 · 最新在上`
-              : `当前 4h 窗 · 显示 ${visible}/${total} · ${tag}`;
+              ? `近 24h · ${total} 条 · 最新在上`
+              : `近 24h · 显示 ${visible}/${total} · ${tag}`;
         }
       }
 
@@ -20940,10 +20913,6 @@
                   ? lastClose
                   : NaN;
             if (!(Number.isFinite(px) && px > 0)) return null;
-            const windowOpen = Number(forming && forming.open);
-            if (!(Number.isFinite(windowOpen) && windowOpen > 0 && px > windowOpen)) {
-              return null;
-            }
             const pinnedAt = Number(pin.pinnedAt) || 0;
             if (!(pinnedAt > 0)) return null;
             const pinIdx = findCandleIndexAt(candles, pinnedAt);
@@ -20954,8 +20923,8 @@
 
           /**
            * 天平：盯所在 K 之后到当前窗（含）存在 low < pinPrice（影线算跌破）；
-           * 收回：现价 > 这些跌破 K 的最低收盘（对比只用收盘，影线不算）；
-           * 另须当前 4h 窗上涨（现价 > 窗开盘），与企微推送同口径。
+           * 收回：现价 > 这些跌破 K 的最低收盘（对比只用收盘，影线不算）。
+           * 与企微推送同口径；不要求当前 4h 窗上涨。
            */
           function noticeIsBalance(candles, livePrice, pin) {
             const ctx = noticePinLiveContext(candles, livePrice, pin);
@@ -20980,7 +20949,8 @@
 
           /**
            * 直拉：盯后到当前窗实体从未跌破 pin（min(open,close)；下影线不算），
-           * 现价高于盯价，且当前 4h 窗上涨。可与天平同筛（并集；天平仍用影线算跌破）。
+           * 现价高于盯价。可与天平同筛（并集；天平仍用影线算跌破）。
+           * 与企微推送同口径；不要求当前 4h 窗上涨。
            */
           function noticeIsStraight(candles, livePrice, pin) {
             const ctx = noticePinLiveContext(candles, livePrice, pin);
@@ -21006,8 +20976,11 @@
             const alertPrice = Number(
               canvas.getAttribute("data-notice-price"),
             );
+            const pinPriceAttr = Number(
+              canvas.getAttribute("data-notice-pin-price"),
+            );
             const noteAt = Number(canvas.getAttribute("data-notice-note-at"));
-            if (!symbol || !(alertPrice > 0)) {
+            if (!symbol) {
               doneCount += 1;
               bumpFilterProgress();
               return;
@@ -21034,8 +21007,11 @@
               const deltaEl = canvas
                 .closest(".nail-notice-card")
                 ?.querySelector("[data-notice-delta]");
-              // 涨跌相对便签水位；现价优先用 ticker，否则用最新 K 收盘。
-              const delta = formatNoticeDeltaPct(alertPrice, livePrice);
+              // 绿/红相对便签水位；无便签则不计方向（仅「全部」可见）。
+              const delta =
+                alertPrice > 0
+                  ? formatNoticeDeltaPct(alertPrice, livePrice)
+                  : null;
               if (deltaEl) {
                 if (delta) {
                   deltaEl.textContent = delta.text;
@@ -21052,40 +21028,49 @@
                   "data-notice-dir",
                   delta ? (delta.up ? "up" : "down") : "flat",
                 );
+                // 天平/直拉筛选用落盘 kinds（渲染时已写入），不因现价回撤把历史命中滤掉。
+                // 实时形态仅作标记，供排查。
                 card.setAttribute(
-                  "data-notice-balance",
+                  "data-notice-balance-live",
                   noticeIsBalance(candles, livePrice, pin) ? "1" : "0",
                 );
                 card.setAttribute(
-                  "data-notice-straight",
+                  "data-notice-straight-live",
                   noticeIsStraight(candles, livePrice, pin) ? "1" : "0",
                 );
                 applyNailNoticeDeltaFilter();
               }
+              const drawPin =
+                pin && Number(pin.pinPrice) > 0
+                  ? pin.pinPrice
+                  : pinPriceAttr > 0
+                    ? pinPriceAttr
+                    : null;
+              const drawPinAt =
+                pin && Number(pin.pinnedAt) > 0
+                  ? pin.pinnedAt
+                  : null;
               drawKline(
                 canvas,
                 candles,
-                pin ? pin.pinPrice : null,
-                pin ? pin.pinnedAt : null,
+                drawPin,
+                drawPinAt,
                 [],
-                {
-                  price: alertPrice,
-                  fromAt: noteAt > 0 ? noteAt : 0,
-                },
+                alertPrice > 0
+                  ? {
+                      price: alertPrice,
+                      fromAt: noteAt > 0 ? noteAt : 0,
+                    }
+                  : null,
                 null,
               );
             } catch (error) {
               console.warn("notice chart failed", symbol, error);
-              // 失败也写入方向/天平/直拉，避免筛选下一直 pending 被藏死。
+              // 失败也写入方向，避免绿/红筛选一直 pending 被藏死。
+              // 天平/直拉仍用渲染时的落盘 kinds，不在此覆盖。
               if (card) {
                 if (!card.getAttribute("data-notice-dir")) {
                   card.setAttribute("data-notice-dir", "flat");
-                }
-                if (card.getAttribute("data-notice-balance") === null) {
-                  card.setAttribute("data-notice-balance", "0");
-                }
-                if (card.getAttribute("data-notice-straight") === null) {
-                  card.setAttribute("data-notice-straight", "0");
                 }
                 applyNailNoticeDeltaFilter();
               }
@@ -21155,24 +21140,24 @@
         syncNailNoticeEntryUi();
         if (
           !WatchFavorites ||
-          typeof WatchFavorites.patchNailGreenNotices !== "function"
+          typeof WatchFavorites.patchBalanceNotices !== "function"
         ) {
           return;
         }
         try {
-          await WatchFavorites.patchNailGreenNotices({
+          await WatchFavorites.patchBalanceNotices({
             repo: CONFIG.GITHUB_REPO,
             path:
-              WatchFavorites.NAIL_GREEN_NOTICES_PATH ||
-              CONFIG.NAIL_GREEN_NOTICES_PATH,
-            message: "Mark nail green notices read",
+              WatchFavorites.BALANCE_NOTICES_PATH ||
+              CONFIG.BALANCE_NOTICES_PATH,
+            message: "Mark balance/straight notices read",
             mutate: (items, meta) => ({
               items,
               readAt: Math.max(nextReadAt, Number(meta && meta.readAt) || 0),
             }),
           });
         } catch (error) {
-          console.warn("mark nail notices read failed", error);
+          console.warn("mark balance notices read failed", error);
         }
       }
 
@@ -21257,6 +21242,14 @@
         return { level, label, ageMs, lastRunAt };
       }
 
+      function formatHealthCooldown(ms) {
+        const n = Number(ms) || 0;
+        if (!(n > 0)) return "";
+        if (n % (60 * 60 * 1000) === 0) return `${n / (60 * 60 * 1000)}h`;
+        if (n % (60 * 1000) === 0) return `${n / (60 * 1000)}min`;
+        return `${Math.round(n / 1000)}s`;
+      }
+
       function balanceHealthProgressText(bal) {
         const b = bal || {};
         if (b.skipped && b.reason && b.reason !== "cooldown") {
@@ -21267,16 +21260,18 @@
         const checkMax = Number(b.checkMax) || 0;
         const cursor = Number(b.checkCursor) || 0;
         const cool = Number(b.cooldownSkipped) || 0;
+        const coolLabel = formatHealthCooldown(b.cooldownMs);
+        const coolHint = coolLabel ? ` · 冷却 ${coolLabel}` : "";
         if (checkMax > 0 && due > checkMax) {
-          return `轮询 · 应查 ${due} · 本轮 ${checked}/${checkMax} · 游标 ${cursor} · 冷却跳过 ${cool}`;
+          return `轮询 · 应查 ${due} · 本轮 ${checked}/${checkMax} · 游标 ${cursor} · 冷却跳过 ${cool}${coolHint}`;
         }
         if (due > 0 && checked >= due) {
-          return `本轮已扫完 · 应查 ${due} · 已查 ${checked} · 冷却跳过 ${cool}`;
+          return `本轮已扫完 · 应查 ${due} · 已查 ${checked} · 冷却跳过 ${cool}${coolHint}`;
         }
         if (due === 0 && (b.reason === "cooldown" || cool > 0)) {
-          return `冷却中 · 无需再查 · 冷却跳过 ${cool > 0 ? cool : "全部"}`;
+          return `冷却中 · 无需再查 · 冷却跳过 ${cool > 0 ? cool : "全部"}${coolHint}`;
         }
-        return `应查 ${due} · 已查 ${checked} · 冷却跳过 ${cool}`;
+        return `应查 ${due} · 已查 ${checked} · 冷却跳过 ${cool}${coolHint}`;
       }
 
       function nailGreenHealthProgressText(ng) {
@@ -21346,7 +21341,7 @@
           `<div class="nh-row"><span class="nh-k">自动盯</span><span class="nh-v">${Number(data.autoPins) || 0}</span></div>`,
           errLine,
           `<div class="nh-row"><span class="nh-k">天平·直拉</span><span class="nh-v">${escapeHtml(balanceHealthProgressText(bal))}</span></div>`,
-          `<div class="nh-row"><span class="nh-k">命中 / 推送</span><span class="nh-v">${Number(bal.hits) || 0} / ${Number(bal.sent) || 0}</span></div>`,
+          `<div class="nh-row"><span class="nh-k">命中 / 推送</span><span class="nh-v">${Number(bal.hits) || 0} / ${Number(bal.sent) || 0}${Number(bal.cooldownMs) > 0 ? ` · 冷却 ${escapeHtml(formatHealthCooldown(bal.cooldownMs))}` : ""}</span></div>`,
           balErr,
           `<div class="nh-row"><span class="nh-k">荧光绿</span><span class="nh-v">${escapeHtml(nailGreenHealthProgressText(ng))}</span></div>`,
           `<div class="nh-row"><span class="nh-k">过期清钉</span><span class="nh-v">查 ${Number(stale.checked) || 0} · 候选 ${Number(stale.candidate) || 0} · 清 ${Number(stale.removed) || 0}${stale.skipped ? ` · 跳过 ${escapeHtml(String(stale.reason || ""))}` : ""}</span></div>`,
