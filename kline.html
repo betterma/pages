@@ -12413,15 +12413,16 @@
               // 规范：成本/止损区始终可见（USDT 除外）；无仓也可先配成本。
               const showCost = true;
               const costConfigured = entryPx != null;
+              // 有成本但无止损任务：只是「未挂任务」，不是排队待挂单。
               const stop3Status = stop3Task
                 ? holdTaskBadgeLabel(stop3Task)
                 : costConfigured
-                  ? "待挂"
+                  ? "无任务"
                   : "未设置";
               const stop5Status = stop5Task
                 ? holdTaskBadgeLabel(stop5Task)
                 : costConfigured
-                  ? "待挂"
+                  ? "无任务"
                   : "未设置";
               const costTag = costConfigured
                 ? hasTaskError
