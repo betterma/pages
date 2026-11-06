@@ -435,6 +435,18 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, n));
 }
 
+/** 企微每批推送前的时间戳，如 =====12:30=====（北京时间）。 */
+function formatWecomBatchStamp(ms) {
+  const ts = Number(ms) || Date.now();
+  const text = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Shanghai',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(ts));
+  return `=====${text}=====`;
+}
+
 function isWecomRateLimited(error) {
   const msg = String(
     (error && error.message) || error || '',
@@ -691,6 +703,7 @@ async function runBalanceAlerts(options) {
   // 本轮若有新 notices 且落盘失败，连带跳过企微，避免「企微有、列表没有」。
   const canWecom = !noticeRows.length || noticesWritten;
   if (canWecom) {
+    let batchHeaderSent = false;
     for (let i = 0; i < wecomRows.length; i += 1) {
       const row = wecomRows[i];
       const hit = row._hit;
@@ -711,6 +724,13 @@ async function runBalanceAlerts(options) {
       }
 
       try {
+        if (!batchHeaderSent) {
+          const header = formatWecomBatchStamp(now);
+          await sendWecomText(header, webhook);
+          batchHeaderSent = true;
+          result.batchHeader = header;
+          if (SEND_GAP_MS > 0) await sleep(SEND_GAP_MS);
+        }
         const text = `${row.label} · ${title}`;
         await sendWecomText(text, webhook);
         const painted = renderCandlesPng(candles, {

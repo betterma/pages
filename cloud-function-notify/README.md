@@ -59,6 +59,7 @@
 - Webhook：`WECOM_WEBHOOK_PINS` → 否则 `WECOM_WEBHOOK_POSITIONS` / `WECOM_WEBHOOK_URL`
 - `BALANCE_ALERT_SEND_MAX`：默认 `5`=单轮最多推企微 5 只（只限企微，网页 notices 不限）；`0`=不限
 - `BALANCE_ALERT_SEND_GAP_MS`：默认 `800`，两只企微之间的间隔
+- 每批企微推送前先发一行时间戳：`=====12:30=====`（北京时间）
 - 企微推送失败（含 45009）**不写**企微冷却；遇 45009 本轮停止，剩余改下轮
 - `BALANCE_ALERT_CHECK_MAX`：默认 `0`=**企微冷却到期全查**；设为正数则单轮限量并用 `checkCursor` 轮询
 - 并发 `BALANCE_ALERT_CONCURRENCY`（默认 8）；全查时建议函数超时 ≥ 120s
