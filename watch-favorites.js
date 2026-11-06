@@ -1650,6 +1650,7 @@
     const firstRaw = Number(item.firstSeenAt);
     const firstSeenAt =
       Number.isFinite(firstRaw) && firstRaw > 0 ? firstRaw : at;
+    const batchAt = Number(item.batchAt) || 0;
     const label = item.label
       ? String(item.label).trim().slice(0, 32)
       : symbol.replace(/USDT$/i, "");
@@ -1660,10 +1661,11 @@
       kinds: kinds.length ? kinds : ["天平"],
       at,
       firstSeenAt,
+      batchAt: batchAt > 0 ? batchAt : 0,
       openTime,
       pinPrice,
       pinnedAt: Number(item.pinnedAt) || 0,
-      // 便签水位；无便签时为 0（绿/红筛只进「全部」）。
+      // 便签水位；无便签时为 0。
       alertPrice:
         Number.isFinite(alertPrice) && alertPrice > 0 ? alertPrice : 0,
       notifyPrice:
@@ -1671,6 +1673,30 @@
       noteAt: Number(item.noteAt) || 0,
       interval: item.interval ? String(item.interval) : "4h",
     };
+  }
+
+  function rebuildBalanceNoticeBatches(items) {
+    const cutoff = Date.now() - BALANCE_NOTICES_TTL_MS;
+    const byAt = {};
+    (Array.isArray(items) ? items : []).forEach((item) => {
+      if (!item || !item.symbol) return;
+      const bat = Number(item.batchAt) || 0;
+      if (!(bat >= cutoff)) return;
+      const symbol = String(item.symbol).trim().toUpperCase();
+      if (!symbol) return;
+      if (!byAt[bat]) byAt[bat] = [];
+      if (!byAt[bat].includes(symbol)) byAt[bat].push(symbol);
+    });
+    return Object.keys(byAt)
+      .map((key) => Number(key))
+      .filter((at) => at > 0)
+      .sort((a, b) => b - a)
+      .map((at) => ({
+        at,
+        count: byAt[at].length,
+        symbols: byAt[at].slice().sort(),
+      }))
+      .filter((row) => row.count > 0);
   }
 
   function normalizeBalanceNotices(raw) {
@@ -1683,15 +1709,19 @@
     const normalized = list
       .map(normalizeBalanceNotice)
       .filter((item) => item && item.at >= cutoff);
-    // 同币取最早 firstSeenAt；列表仍按最新 at 排序（回顾不影响排序）。
+    // 同币取最早 firstSeenAt；保留较大 batchAt（最新企微批次）。
     const firstBySymbol = {};
+    const batchBySymbol = {};
     normalized.forEach((item) => {
       const key = String(item.symbol || "").toUpperCase();
       if (!key) return;
       const first = Number(item.firstSeenAt) || Number(item.at) || 0;
-      if (!(first > 0)) return;
-      if (!firstBySymbol[key] || first < firstBySymbol[key]) {
+      if (first > 0 && (!firstBySymbol[key] || first < firstBySymbol[key])) {
         firstBySymbol[key] = first;
+      }
+      const bat = Number(item.batchAt) || 0;
+      if (bat > 0 && (!batchBySymbol[key] || bat > batchBySymbol[key])) {
+        batchBySymbol[key] = bat;
       }
     });
     const seen = new Set();
@@ -1705,19 +1735,22 @@
         out.push({
           ...item,
           firstSeenAt: firstBySymbol[key] || item.firstSeenAt || item.at,
+          batchAt: batchBySymbol[key] || item.batchAt || 0,
         });
       });
     return out;
   }
 
   function serializeBalanceNotices(list, readAt) {
+    const items = normalizeBalanceNotices(list);
     return {
       updatedAt: Date.now(),
       readAt:
         Number.isFinite(Number(readAt)) && Number(readAt) > 0
           ? Number(readAt)
           : 0,
-      items: normalizeBalanceNotices(list),
+      items,
+      batches: rebuildBalanceNoticeBatches(items),
     };
   }
 

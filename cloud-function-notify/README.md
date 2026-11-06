@@ -47,21 +47,20 @@
 2. **直拉**：盯后实体从未跌破 pin（`min(open,close)`；下影不算），现价 **>** 盯价  
 
 形态命中后：
-1. **网页** `watch-balance-notices.json`：落盘（近 24h，同币只留最新）——**不要求**当前 4h 窗上涨  
-2. **企微**：仅当现价相对当前 4h 窗开盘上涨时，才发「币名 · 天平 / 直拉 / 天平·直拉」+ 4h 图  
+1. **网页** `watch-balance-notices.json`：落盘（近 24h，同币只留最新）——**不要求**当前 4h 窗上涨；按企微批次 `batchAt` 分组展示  
+2. **企微**：仅窗上涨时发一条摘要：`======20.27======` + 换行 + `N个`（不再逐币发图）；详情看网页  
 
-冷却拆开（默认各 30 分钟）：网页用 `lastNoticeAt`，企微用 `lastSentAt`。未窗上涨时不写企微冷却，下轮继续查，窗翻红后再推。
+冷却拆开（默认各 30 分钟）：网页用 `lastNoticeAt`，企微用 `lastSentAt`。未窗上涨时不写企微冷却。币被新批次带走后，旧批次若空则网页不再显示该时段。
 
 - 去重状态：`watch-balance-alert.json`
 - 网页列表：`watch-balance-notices.json`（`BALANCE_NOTICES_PATH`）
 - `BALANCE_ALERT`：默认 `1`；`0` 关闭
 - `BALANCE_ALERT_COOLDOWN_MS`：默认 `1800000`（30 分钟）
 - Webhook：`WECOM_WEBHOOK_PINS` → 否则 `WECOM_WEBHOOK_POSITIONS` / `WECOM_WEBHOOK_URL`
-- `BALANCE_ALERT_SEND_MAX`：默认 `0`=窗上涨命中**全推**；设为正数可限流（只限企微）
+- `BALANCE_ALERT_SEND_MAX`：默认 `0`=窗上涨命中全部计入本批摘要；设为正数可限制单批个数
 - 若设置了限推：优先从未发过企微的，再按冷却更久 / 首次进通知更早
-- `BALANCE_ALERT_SEND_GAP_MS`：默认 `800`，两只企微之间的间隔（减轻 45009）
-- 每批企微推送前先发一行时间戳：`=====12:30=====`（北京时间）
-- 企微推送失败（含 45009）**不写**企微冷却；遇 45009 本轮停止，剩余改下轮
+- 企微每批仅 1 条文本摘要（时间戳 + 数量）
+- 企微推送失败**不写**企微冷却与 `batchAt`，下轮再发
 - `BALANCE_ALERT_CHECK_MAX`：默认 `0`=**企微冷却到期全查**；设为正数则单轮限量并用 `checkCursor` 轮询
 - 并发 `BALANCE_ALERT_CONCURRENCY`（默认 8）；全查时建议函数超时 ≥ 120s
 

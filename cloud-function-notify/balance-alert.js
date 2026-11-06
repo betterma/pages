@@ -10,12 +10,12 @@
  * 冷却：lastNoticeAt / lastSentAt 各管网页与企微，默认各 30 分钟；
  * 未窗上涨时不写 lastSentAt，下轮继续查，窗翻红后再推企微。
  * 默认每轮检查全部企微冷却到期的自动盯（CHECK_MAX=0）；
- * 企微默认窗上涨命中全推（SEND_MAX=0），条与条之间隔 SEND_GAP_MS。
+ * 企微默认窗上涨命中全计入一批摘要（SEND_MAX=0）：只发时间戳+数量。
  */
 
-const { loadJson, saveJson, sendWecomText, sendWecomImage, fetchBinanceTickers } =
+const { loadJson, saveJson, sendWecomText, fetchBinanceTickers } =
   require('./github-wecom');
-const { fetchKlines, renderCandlesPng } = require('./kline-chart');
+const { fetchKlines } = require('./kline-chart');
 
 const STATE_PATH =
   process.env.BALANCE_ALERT_PATH || 'watch-balance-alert.json';
@@ -142,8 +142,9 @@ function trimBalanceNotices(list, now) {
   const filtered = (Array.isArray(list) ? list : []).filter(
     (item) => item && Number(item.at) >= cutoff,
   );
-  // 同币保留「第一次进通知页」时间；重复命中只更新 at，不覆盖 firstSeenAt。
+  // 同币：保留最早 firstSeenAt；保留最大 batchAt（避免普通 notices 写入冲掉企微批次）。
   const firstBySymbol = {};
+  const batchBySymbol = {};
   filtered.forEach((item) => {
     const symbol = String(item.symbol || '')
       .trim()
@@ -151,9 +152,12 @@ function trimBalanceNotices(list, now) {
     if (!symbol) return;
     const at = Number(item.at) || 0;
     const first = Number(item.firstSeenAt) || at;
-    if (!(first > 0)) return;
-    if (!firstBySymbol[symbol] || first < firstBySymbol[symbol]) {
+    if (first > 0 && (!firstBySymbol[symbol] || first < firstBySymbol[symbol])) {
       firstBySymbol[symbol] = first;
+    }
+    const bat = Number(item.batchAt) || 0;
+    if (bat > 0 && (!batchBySymbol[symbol] || bat > batchBySymbol[symbol])) {
+      batchBySymbol[symbol] = bat;
     }
   });
   const seen = new Set();
@@ -195,44 +199,124 @@ function trimBalanceNotices(list, now) {
         noteAt: Number(item.noteAt) || 0,
         interval: item.interval ? String(item.interval) : INTERVAL,
         windowUp: !!item.windowUp,
+        batchAt: batchBySymbol[symbol] || Number(item.batchAt) || 0,
       });
     });
   return out;
+}
+
+/** 按 item.batchAt 重建批次；空批次不出现（币被新批次带走即消失）。 */
+function rebuildBalanceBatches(items, now) {
+  const cutoff = (Number(now) || Date.now()) - NOTICES_TTL_MS;
+  const byAt = {};
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    if (!item || !item.symbol) return;
+    const bat = Number(item.batchAt) || 0;
+    if (!(bat >= cutoff)) return;
+    const symbol = String(item.symbol).trim().toUpperCase();
+    if (!symbol) return;
+    if (!byAt[bat]) byAt[bat] = [];
+    if (!byAt[bat].includes(symbol)) byAt[bat].push(symbol);
+  });
+  return Object.keys(byAt)
+    .map((key) => Number(key))
+    .filter((at) => at > 0)
+    .sort((a, b) => b - a)
+    .map((at) => ({
+      at,
+      count: byAt[at].length,
+      symbols: byAt[at].slice().sort(),
+    }))
+    .filter((row) => row.count > 0);
 }
 
 function noticeItemsFingerprint(list) {
   return (Array.isArray(list) ? list : [])
     .map(
       (item) =>
-        `${item && item.id}:${(item && item.kinds) || []}:${item && item.at}:${item && item.firstSeenAt}`,
+        `${item && item.id}:${(item && item.kinds) || []}:${item && item.at}:${item && item.firstSeenAt}:${item && item.batchAt}`,
     )
     .join('|');
 }
 
-async function appendBalanceNotices(rows, now, noticesPath) {
+function batchesFingerprint(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((row) => `${row && row.at}:${(row && row.symbols) || []}`)
+    .join('|');
+}
+
+/**
+ * 写入通知 items；可选把 batchSymbols 标到 batchAt（企微摘要批次）。
+ * 同币只会留在最新 batchAt；旧批次符号被掏空后不再出现。
+ */
+async function appendBalanceNotices(rows, now, noticesPath, batchOpts) {
   const path = String(noticesPath || NOTICES_PATH).trim() || NOTICES_PATH;
   const file = await loadJson(path);
   const prev = (file && file.data) || {};
   const prevItems = Array.isArray(prev.items) ? prev.items : [];
+  const prevBatches = Array.isArray(prev.batches) ? prev.batches : [];
   const incoming = Array.isArray(rows) ? rows : [];
-  const merged = trimBalanceNotices([...incoming, ...prevItems], now);
+  let merged = trimBalanceNotices([...incoming, ...prevItems], now);
+  const batchAt = Number(batchOpts && batchOpts.batchAt) || 0;
+  const batchSymbols = Array.isArray(batchOpts && batchOpts.symbols)
+    ? batchOpts.symbols
+        .map((s) => String(s || '').trim().toUpperCase())
+        .filter(Boolean)
+    : [];
+  if (batchAt > 0 && batchSymbols.length) {
+    const want = new Set(batchSymbols);
+    const have = new Set(merged.map((item) => item.symbol));
+    merged = merged.map((item) => {
+      if (!want.has(item.symbol)) return item;
+      return {
+        ...item,
+        batchAt,
+        windowUp: true,
+        at: Math.max(Number(item.at) || 0, batchAt),
+      };
+    });
+    // 批次里有、items 尚无的：用 incoming 补一条（通常 wecom 行已在 incoming）。
+    incoming.forEach((row) => {
+      const symbol = String((row && row.symbol) || '')
+        .trim()
+        .toUpperCase();
+      if (!symbol || !want.has(symbol) || have.has(symbol)) return;
+      have.add(symbol);
+      merged.push({
+        ...row,
+        symbol,
+        batchAt,
+        windowUp: true,
+        at: Math.max(Number(row.at) || 0, batchAt),
+      });
+    });
+    merged = trimBalanceNotices(merged, now);
+  }
+  const batches = rebuildBalanceBatches(merged, now);
   const changed =
     incoming.length > 0 ||
-    noticeItemsFingerprint(merged) !== noticeItemsFingerprint(prevItems);
-  if (!changed) return merged.length;
+    batchSymbols.length > 0 ||
+    noticeItemsFingerprint(merged) !== noticeItemsFingerprint(prevItems) ||
+    batchesFingerprint(batches) !== batchesFingerprint(prevBatches);
+  if (!changed) {
+    return { notices: merged.length, batches: batches.length };
+  }
   await saveJson(
     path,
     {
       updatedAt: now,
       readAt: Number(prev.readAt) || 0,
       items: merged,
+      batches,
     },
     file && file.sha,
-    incoming.length
-      ? `Balance/straight notices +${incoming.length}`
-      : 'Balance notices prune',
+    batchSymbols.length
+      ? `Balance batch ${batchSymbols.length}@${batchAt}`
+      : incoming.length
+        ? `Balance/straight notices +${incoming.length}`
+        : 'Balance notices prune',
   );
-  return merged.length;
+  return { notices: merged.length, batches: batches.length };
 }
 
 function findCandleIndexAt(candles, timestamp) {
@@ -425,26 +509,29 @@ function evaluatePatterns(candles, pin, livePrice) {
   };
 }
 
-function patternTitle(kinds) {
-  return (Array.isArray(kinds) ? kinds : []).join('·') || '天平';
-}
-
 function sleep(ms) {
   const n = Number(ms) || 0;
   if (n <= 0) return Promise.resolve();
   return new Promise((resolve) => setTimeout(resolve, n));
 }
 
-/** 企微每批推送前的时间戳，如 =====12:30=====（北京时间）。 */
+/** 企微/网页批次戳，如 ======20.27======（北京时间，点分隔）。 */
 function formatWecomBatchStamp(ms) {
   const ts = Number(ms) || Date.now();
-  const text = new Intl.DateTimeFormat('en-GB', {
+  const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Asia/Shanghai',
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
-  }).format(new Date(ts));
-  return `=====${text}=====`;
+  }).formatToParts(new Date(ts));
+  const hour = (parts.find((p) => p.type === 'hour') || {}).value || '00';
+  const minute = (parts.find((p) => p.type === 'minute') || {}).value || '00';
+  return `======${hour}.${minute}======`;
+}
+
+function formatWecomBatchSummary(ms, count) {
+  const n = Math.max(0, Number(count) || 0);
+  return `${formatWecomBatchStamp(ms)}\n${n}个`;
 }
 
 function isWecomRateLimited(error) {
@@ -686,15 +773,16 @@ async function runBalanceAlerts(options) {
     wecomCandidates.length - wecomRows.length,
   );
 
-  // 先写网页列表；失败则本轮不推企微、不写冷却，下轮重试。
-  let noticesWritten = false;
+  // 先落网页列表（形态命中）；失败则本轮不推企微。
+  let noticesWritten = !noticeRows.length;
   if (noticeRows.length) {
     try {
       const payload = noticeRows.map((row) => {
         const { _hit, ...rest } = row;
         return rest;
       });
-      result.notices = await appendBalanceNotices(payload, now, noticesPath);
+      const saved = await appendBalanceNotices(payload, now, noticesPath);
+      result.notices = Number(saved && saved.notices) || payload.length;
       noticesWritten = true;
       for (const row of noticeRows) {
         const prev = state.bySymbol[row.symbol] || {};
@@ -714,68 +802,74 @@ async function runBalanceAlerts(options) {
     }
   }
 
-  // 企微：仅窗上涨 + 单轮 SEND_MAX。成功才写 lastSentAt；45009 停止本轮剩余。
-  // 本轮若有新 notices 且落盘失败，连带跳过企微，避免「企微有、列表没有」。
-  const canWecom = !noticeRows.length || noticesWritten;
+  // 企微：只发「======20.27======\nN个」；详情看网页批次。
+  // 顺序：先发企微 → 再写 batchAt → 最后写 lastSentAt。
+  // 若摘要已发出但网页落盘失败，不写冷却，下轮可补批次（可能多一条企微摘要）。
+  const canWecom = noticesWritten && wecomRows.length > 0;
   if (canWecom) {
-    let batchHeaderSent = false;
-    for (let i = 0; i < wecomRows.length; i += 1) {
-      const row = wecomRows[i];
-      const hit = row._hit;
-      const { pin, candles, verdict } = hit;
-      const title = patternTitle(verdict.kinds);
-      const prev = state.bySymbol[pin.symbol] || {};
+    const batchSymbols = wecomRows.map((row) => row.symbol);
+    const summary = formatWecomBatchSummary(now, batchSymbols.length);
+    result.batchHeader = formatWecomBatchStamp(now);
+    result.wecomQueued = batchSymbols.length;
+    const payload = wecomRows.map((row) => {
+      const { _hit, ...rest } = row;
+      return rest;
+    });
 
-      if (!webhook) {
-        state.bySymbol[pin.symbol] = {
-          pinnedAt: pin.pinnedAt,
+    const markBatchLocal = () => {
+      for (const row of wecomRows) {
+        const prev = state.bySymbol[row.symbol] || {};
+        state.bySymbol[row.symbol] = {
+          pinnedAt: row.pinnedAt,
           lastSentAt: now,
           lastNoticeAt: Number(prev.lastNoticeAt) || 0,
-          pinPrice: pin.pinPrice,
-          kinds: verdict.kinds,
+          pinPrice: row.pinPrice,
+          kinds: row.kinds,
         };
         stateDirty = true;
-        continue;
       }
+    };
 
+    const persistBatch = async () => {
+      await appendBalanceNotices(payload, now, noticesPath, {
+        batchAt: now,
+        symbols: batchSymbols,
+      });
+    };
+
+    if (!webhook) {
       try {
-        if (!batchHeaderSent) {
-          const header = formatWecomBatchStamp(now);
-          await sendWecomText(header, webhook);
-          batchHeaderSent = true;
-          result.batchHeader = header;
-          if (SEND_GAP_MS > 0) await sleep(SEND_GAP_MS);
-        }
-        const text = `${row.label} · ${title}`;
-        await sendWecomText(text, webhook);
-        const painted = renderCandlesPng(candles, {
-          title: `${row.label} ${title}`,
-          pinPrice: pin.pinPrice,
-          autoPin: true,
-          height: 280,
-        });
-        await sendWecomImage(painted, webhook);
-        result.sent += 1;
-        state.bySymbol[pin.symbol] = {
-          pinnedAt: pin.pinnedAt,
-          lastSentAt: now,
-          lastNoticeAt: Number(prev.lastNoticeAt) || 0,
-          pinPrice: pin.pinPrice,
-          kinds: verdict.kinds,
-        };
-        stateDirty = true;
+        await persistBatch();
+        markBatchLocal();
+        result.sent = batchSymbols.length;
       } catch (error) {
         result.errors.push(
-          `send:${pin.symbol}:${error && error.message ? error.message : error}`,
+          `batch-notices:${error && error.message ? error.message : error}`,
         );
-        // 限流：本轮剩余改下轮再推，避免连打 + 误写冷却漏推。
+      }
+    } else {
+      let wecomSent = false;
+      try {
+        await sendWecomText(summary, webhook);
+        wecomSent = true;
+      } catch (error) {
+        result.errors.push(
+          `send:batch:${error && error.message ? error.message : error}`,
+        );
         if (isWecomRateLimited(error)) {
-          result.wecomDeferred += wecomRows.length - i;
-          break;
+          result.wecomDeferred += batchSymbols.length;
         }
       }
-      if (i + 1 < wecomRows.length && SEND_GAP_MS > 0) {
-        await sleep(SEND_GAP_MS);
+      if (wecomSent) {
+        try {
+          await persistBatch();
+          markBatchLocal();
+          result.sent = batchSymbols.length;
+        } catch (error) {
+          result.errors.push(
+            `batch-notices:${error && error.message ? error.message : error}`,
+          );
+        }
       }
     }
   }

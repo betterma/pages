@@ -3399,6 +3399,36 @@
         color: var(--secondary);
         font-size: 13px;
       }
+      .nail-notice-batch {
+        grid-column: 1 / -1;
+        margin: 0 0 10px;
+        min-width: 0;
+      }
+      .nail-notice-batch[hidden] {
+        display: none !important;
+      }
+      .nail-notice-batch-head {
+        margin: 0 0 6px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--fill) 88%, transparent);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        color: var(--label);
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-notice-batch-count {
+        margin-left: 8px;
+        font-weight: 600;
+        color: var(--secondary);
+        font-size: 12px;
+      }
+      .nail-notice-batch-list {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
       .nail-notice-card {
         border: 0.5px solid var(--separator);
         border-radius: 10px;
@@ -20464,14 +20494,91 @@
         return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
       }
 
+      /** 与企微摘要一致：======20.27====== */
+      function formatNoticeBatchStamp(at) {
+        const n = Number(at);
+        if (!Number.isFinite(n) || n <= 0) return "======--.--======";
+        const d = new Date(n);
+        const pad = (v) => String(v).padStart(2, "0");
+        return `======${pad(d.getHours())}.${pad(d.getMinutes())}======`;
+      }
+
+      function buildNailNoticeCardHtml(item) {
+        const key = String(item.symbol || "").toUpperCase();
+        const symbol = escapeHtml(item.symbol);
+        const label = escapeHtml(
+          item.label || String(item.symbol || "").replace(/USDT$/i, ""),
+        );
+        const id = escapeHtml(item.id || `${item.symbol}:${item.openTime}`);
+        const isNew = Number(item.at) > (Number(nailGreenNoticesReadAt) || 0);
+        const kinds = Array.isArray(item.kinds)
+          ? item.kinds.map(String).filter(Boolean)
+          : [];
+        const hitBal = kinds.includes("天平");
+        const hitStraight = kinds.includes("直拉");
+        const notePrice = Number(item.alertPrice);
+        const pinPrice = Number(item.pinPrice);
+        const firstSeenAt =
+          Number(item.firstSeenAt) > 0
+            ? Number(item.firstSeenAt)
+            : Number(item.at) || 0;
+        const batchAt = Number(item.batchAt) || 0;
+        const selected =
+          nailNoticeSelectMode && selectedNoticeSymbols.has(key)
+            ? " is-selected"
+            : "";
+        const check = nailNoticeSelectMode
+          ? `<input type="checkbox" class="nail-notice-check" data-notice-select="${symbol}" ${selectedNoticeSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
+          : "";
+        return [
+          `<article class="nail-notice-card${selected}" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-batch="${batchAt}" data-notice-first="${firstSeenAt}" data-notice-balance="${hitBal ? "1" : "0"}" data-notice-straight="${hitStraight ? "1" : "0"}">`,
+          check,
+          `<div class="nail-notice-card-top">`,
+          `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}</button>`,
+          `<span class="nail-notice-card-stamps">${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
+          `</div>`,
+          `<div class="nail-notice-meta">`,
+          `<span class="nail-notice-line"><span class="nail-notice-key">便签</span><span>${notePrice > 0 ? escapeHtml(formatPinPrice(notePrice)) : "—"}</span><span class="nail-notice-iv">${escapeHtml(item.interval || "4h")}</span></span>`,
+          `<span class="nail-notice-line"><span class="nail-notice-key">盯价</span><span>${pinPrice > 0 ? escapeHtml(formatPinPrice(pinPrice)) : "—"}</span></span>`,
+          `<span class="nail-notice-line"><span class="nail-notice-key">现价</span><span data-notice-live>--</span><span class="nail-notice-delta" data-notice-delta></span></span>`,
+          `</div>`,
+          `<canvas width="640" height="160" data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-first="${firstSeenAt}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${notePrice > 0 ? notePrice : 0}" data-notice-pin-price="${pinPrice > 0 ? pinPrice : 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
+          `</article>`,
+        ].join("");
+      }
+
+      /** 按 batchAt 分组：新批次在上；币被新批次带走后旧批次自动变少，空则不展示。 */
+      function groupNailNoticesByBatch(items) {
+        const map = new Map();
+        const unbatched = [];
+        (Array.isArray(items) ? items : []).forEach((item) => {
+          const bat = Number(item && item.batchAt) || 0;
+          if (!(bat > 0)) {
+            unbatched.push(item);
+            return;
+          }
+          if (!map.has(bat)) map.set(bat, []);
+          map.get(bat).push(item);
+        });
+        const batches = [...map.entries()]
+          .map(([at, rows]) => ({
+            at: Number(at),
+            items: rows.slice().sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0)),
+          }))
+          .filter((row) => row.items.length > 0)
+          .sort((a, b) => b.at - a.at);
+        return { batches, unbatched };
+      }
+
       function renderNailNoticeList() {
         const listEl = document.getElementById("nailNoticeList");
         const metaEl = document.getElementById("nailNoticeMeta");
         if (!listEl) return;
         const items = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
+        const grouped = groupNailNoticesByBatch(items);
         if (metaEl) {
           metaEl.textContent = items.length
-            ? `近 24h · ${items.length} 条 · 最新在上`
+            ? `近 24h · ${items.length} 条 · ${grouped.batches.length} 个企微批次 · 最新在上`
             : "近 24h 暂无天平/直拉命中";
         }
         listEl.classList.toggle("is-selecting", nailNoticeSelectMode);
@@ -20482,50 +20589,28 @@
           syncNailNoticeSelectUi();
           return;
         }
-        listEl.innerHTML = items
-          .map((item) => {
-            const key = String(item.symbol || "").toUpperCase();
-            const symbol = escapeHtml(item.symbol);
-            const label = escapeHtml(
-              item.label || String(item.symbol || "").replace(/USDT$/i, ""),
-            );
-            const id = escapeHtml(item.id || `${item.symbol}:${item.openTime}`);
-            const isNew = Number(item.at) > (Number(nailGreenNoticesReadAt) || 0);
-            const kinds = Array.isArray(item.kinds)
-              ? item.kinds.map(String).filter(Boolean)
-              : [];
-            const hitBal = kinds.includes("天平");
-            const hitStraight = kinds.includes("直拉");
-            const notePrice = Number(item.alertPrice);
-            const pinPrice = Number(item.pinPrice);
-            const firstSeenAt =
-              Number(item.firstSeenAt) > 0
-                ? Number(item.firstSeenAt)
-                : Number(item.at) || 0;
-            const selected =
-              nailNoticeSelectMode && selectedNoticeSymbols.has(key)
-                ? " is-selected"
-                : "";
-            const check = nailNoticeSelectMode
-              ? `<input type="checkbox" class="nail-notice-check" data-notice-select="${symbol}" ${selectedNoticeSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
-              : "";
-            return [
-              `<article class="nail-notice-card${selected}" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-first="${firstSeenAt}" data-notice-balance="${hitBal ? "1" : "0"}" data-notice-straight="${hitStraight ? "1" : "0"}">`,
-              check,
-              `<div class="nail-notice-card-top">`,
-              `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}</button>`,
-              `<span class="nail-notice-card-stamps">${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
-              `</div>`,
-              `<div class="nail-notice-meta">`,
-              `<span class="nail-notice-line"><span class="nail-notice-key">便签</span><span>${notePrice > 0 ? escapeHtml(formatPinPrice(notePrice)) : "—"}</span><span class="nail-notice-iv">${escapeHtml(item.interval || "4h")}</span></span>`,
-              `<span class="nail-notice-line"><span class="nail-notice-key">盯价</span><span>${pinPrice > 0 ? escapeHtml(formatPinPrice(pinPrice)) : "—"}</span></span>`,
-              `<span class="nail-notice-line"><span class="nail-notice-key">现价</span><span data-notice-live>--</span><span class="nail-notice-delta" data-notice-delta></span></span>`,
-              `</div>`,
-              `<canvas width="640" height="160" data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-first="${firstSeenAt}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${notePrice > 0 ? notePrice : 0}" data-notice-pin-price="${pinPrice > 0 ? pinPrice : 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
-              `</article>`,
-            ].join("");
-          })
-          .join("");
+        const parts = [];
+        grouped.batches.forEach((batch) => {
+          parts.push(
+            `<section class="nail-notice-batch" data-notice-batch-at="${batch.at}">`,
+            `<h4 class="nail-notice-batch-head">${escapeHtml(formatNoticeBatchStamp(batch.at))}<span class="nail-notice-batch-count">${batch.items.length}个</span></h4>`,
+            `<div class="nail-notice-batch-list">`,
+            batch.items.map((item) => buildNailNoticeCardHtml(item)).join(""),
+            `</div></section>`,
+          );
+        });
+        if (grouped.unbatched.length) {
+          parts.push(
+            `<section class="nail-notice-batch" data-notice-batch-at="0">`,
+            `<h4 class="nail-notice-batch-head">尚未进企微批次<span class="nail-notice-batch-count">${grouped.unbatched.length}个</span></h4>`,
+            `<div class="nail-notice-batch-list">`,
+            grouped.unbatched
+              .map((item) => buildNailNoticeCardHtml(item))
+              .join(""),
+            `</div></section>`,
+          );
+        }
+        listEl.innerHTML = parts.join("");
         listEl.querySelectorAll("[data-notice-jump]").forEach((btn) => {
           btn.addEventListener("click", (event) => {
             event.preventDefault();
@@ -20919,6 +21004,25 @@
             hide || pending || patternHide || patternPending;
           card.classList.toggle("is-delta-filtered", filtered);
           if (!filtered) visible += 1;
+        });
+        // 批次内卡片全被筛掉时，整段时间头也藏掉。
+        listEl.querySelectorAll(".nail-notice-batch").forEach((batch) => {
+          const cards = batch.querySelectorAll(".nail-notice-card");
+          if (!cards.length) {
+            batch.hidden = true;
+            return;
+          }
+          const anyVisible = [...cards].some(
+            (card) => !card.classList.contains("is-delta-filtered"),
+          );
+          batch.hidden = !anyVisible;
+          const countEl = batch.querySelector(".nail-notice-batch-count");
+          if (countEl && anyVisible) {
+            const n = [...cards].filter(
+              (card) => !card.classList.contains("is-delta-filtered"),
+            ).length;
+            countEl.textContent = `${n}个`;
+          }
         });
         let emptyEl = listEl.querySelector(".nail-notice-filter-empty");
         if (
@@ -21665,14 +21769,19 @@
         if (balPref) text = String(balPref[1] || "").trim();
         const nailPref = text.match(/^nail-green×\d+:\s*(.*)$/i);
         if (nailPref) text = String(nailPref[1] || "").trim();
+        if (/^send:batch:/i.test(text)) {
+          if (/45009/i.test(text) || /too many requests/i.test(text)) {
+            return "企微发太快被限流；批次摘要会在后续几轮再发（常见约 5～20 分钟）";
+          }
+          const rest = text.replace(/^send:batch:\s*/i, "").slice(0, 72);
+          return `企微批次摘要发送失败：${rest || "未知原因"}`;
+        }
         const sendSym = (text.match(/^send:([A-Za-z0-9]+)/i) || [])[1];
         const label = sendSym
           ? String(sendSym).replace(/USDT$/i, "")
           : "";
         if (/45009/i.test(text) || /too many requests/i.test(text)) {
-          return label
-            ? `企微发太快被限流，卡在 ${label}；约 5 分钟后再补推`
-            : "企微发太快被限流；约 5 分钟后再补推";
+          return "企微发太快被限流；批次摘要会在后续几轮再发（常见约 5～20 分钟）";
         }
         if (/^send:/i.test(text)) {
           const rest = text
