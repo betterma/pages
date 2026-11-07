@@ -3,25 +3,6 @@
   "readAt": 1794009373496,
   "items": [
     {
-      "id": "BOMEUSDT:1794009600000:1794011700586",
-      "symbol": "BOMEUSDT",
-      "label": "BOME",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1794011700586,
-      "firstSeenAt": 1793957700629,
-      "openTime": 1794009600000,
-      "pinPrice": 0.000643,
-      "pinnedAt": 1793942400610,
-      "alertPrice": 0.0006484,
-      "notifyPrice": 0.0006307,
-      "noteAt": 1793980800642,
-      "interval": "4h",
-      "windowUp": true,
-      "batchAt": 1794009600393
-    },
-    {
       "id": "PORTALUSDT:1794009600000:1794011700586",
       "symbol": "PORTALUSDT",
       "label": "PORTAL",
@@ -38,7 +19,64 @@
       "noteAt": 1793980800642,
       "interval": "4h",
       "windowUp": true,
-      "batchAt": 0
+      "batchAt": 1794011700586
+    },
+    {
+      "id": "MRNABUSDT:1794009600000:1794011700586",
+      "symbol": "MRNABUSDT",
+      "label": "MRNAB",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1794011700586,
+      "firstSeenAt": 1793958900619,
+      "openTime": 1794009600000,
+      "pinPrice": 257.2,
+      "pinnedAt": 1793881490271,
+      "alertPrice": 259,
+      "notifyPrice": 256.98,
+      "noteAt": 1793980800642,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1794011700586
+    },
+    {
+      "id": "MAGICUSDT:1794009600000:1794011700586",
+      "symbol": "MAGICUSDT",
+      "label": "MAGIC",
+      "kinds": [
+        "直拉"
+      ],
+      "at": 1794011700586,
+      "firstSeenAt": 1793959500592,
+      "openTime": 1794009600000,
+      "pinPrice": 0.0847,
+      "pinnedAt": 1793925900565,
+      "alertPrice": 0.0901,
+      "notifyPrice": 0.0892,
+      "noteAt": 1793980800642,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1794011700586
+    },
+    {
+      "id": "BOMEUSDT:1794009600000:1794011700586",
+      "symbol": "BOMEUSDT",
+      "label": "BOME",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1794011700586,
+      "firstSeenAt": 1793957700629,
+      "openTime": 1794009600000,
+      "pinPrice": 0.000643,
+      "pinnedAt": 1793942400610,
+      "alertPrice": 0.0006484,
+      "notifyPrice": 0.0006307,
+      "noteAt": 1793980800642,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1794011700586
     },
     {
       "id": "BRKBBUSDT:1794009600000:1794011400419",
@@ -420,25 +458,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1793994900787
-    },
-    {
-      "id": "MRNABUSDT:1794009600000:1794011400419",
-      "symbol": "MRNABUSDT",
-      "label": "MRNAB",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1794011400419,
-      "firstSeenAt": 1793958900619,
-      "openTime": 1794009600000,
-      "pinPrice": 257.2,
-      "pinnedAt": 1793881490271,
-      "alertPrice": 259,
-      "notifyPrice": 256.9,
-      "noteAt": 1793980800642,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1793995800567
     },
     {
       "id": "PDDBUSDT:1794009600000:1794011400419",
@@ -1543,25 +1562,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1794008400615
-    },
-    {
-      "id": "MAGICUSDT:1794009600000:1794010500570",
-      "symbol": "MAGICUSDT",
-      "label": "MAGIC",
-      "kinds": [
-        "直拉"
-      ],
-      "at": 1794010500570,
-      "firstSeenAt": 1793959500592,
-      "openTime": 1794009600000,
-      "pinPrice": 0.0847,
-      "pinnedAt": 1793925900565,
-      "alertPrice": 0.0901,
-      "notifyPrice": 0.0884,
-      "noteAt": 1793980800642,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1794006300988
     },
     {
       "id": "VSTBUSDT:1794009600000:1794010500570",
@@ -3146,6 +3146,16 @@
   ],
   "batches": [
     {
+      "at": 1794011700586,
+      "count": 4,
+      "symbols": [
+        "BOMEUSDT",
+        "MAGICUSDT",
+        "MRNABUSDT",
+        "PORTALUSDT"
+      ]
+    },
+    {
       "at": 1794011400419,
       "count": 17,
       "symbols": [
@@ -3264,10 +3274,9 @@
     },
     {
       "at": 1794009600393,
-      "count": 12,
+      "count": 11,
       "symbols": [
         "BCHUSDT",
-        "BOMEUSDT",
         "MOVRUSDT",
         "NBISBUSDT",
         "PEPEUSDT",
@@ -3337,9 +3346,8 @@
     },
     {
       "at": 1794006300988,
-      "count": 2,
+      "count": 1,
       "symbols": [
-        "MAGICUSDT",
         "VSTBUSDT"
       ]
     },
@@ -3404,12 +3412,11 @@
     },
     {
       "at": 1793995800567,
-      "count": 7,
+      "count": 6,
       "symbols": [
         "ARKUSDT",
         "BEBUSDT",
         "IOSTUSDT",
-        "MRNABUSDT",
         "NFLXBUSDT",
         "PDDBUSDT",
         "SHAZBUSDT"
