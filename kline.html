@@ -11943,31 +11943,29 @@
       }
 
       /**
-       * 安卓优先 Intent(bnc) 唤起官方 App；失败则走网页。
-       * iOS 先试 bnc://，仍停在页内再回落 https。
+       * 唤起币安 App / 打开网页交易页。
+       * 注意：bnc://…/trade/{PAIR} 在现行 App 会弹「该链接有误」（与版本无关），
+       * 故手机打开行情页 markets（可搜索）；未装 App 时回落到 https 现货页。
        */
       function openBinanceSpotTrade(symbol) {
-        const pair = binanceSpotTradePair(symbol);
         const httpsUrl = binanceSpotTradeUrl(symbol);
-        if (!pair || !httpsUrl) return false;
+        if (!httpsUrl) return false;
         const ua = String(navigator.userAgent || "");
         const isAndroid = /Android/i.test(ua);
         const isIOS = /iPhone|iPad|iPod/i.test(ua);
+        // 社区确认可用：行情总页（比首页少一步）
+        const marketsBnc = "bnc://app.binance.com/markets/markets";
         if (isAndroid) {
-          // 不强制 package：兼容 com.binance.app / .global 等包名
           const intent =
-            "intent://app.binance.com/trade/" +
-            encodeURIComponent(pair) +
-            "#Intent;scheme=bnc;S.browser_fallback_url=" +
+            "intent://app.binance.com/markets/markets#Intent;scheme=bnc;S.browser_fallback_url=" +
             encodeURIComponent(httpsUrl) +
             ";end";
           window.location.href = intent;
           return true;
         }
         if (isIOS) {
-          const bnc = "bnc://app.binance.com/trade/" + encodeURIComponent(pair);
           const started = Date.now();
-          window.location.href = bnc;
+          window.location.href = marketsBnc;
           window.setTimeout(() => {
             if (
               document.visibilityState === "visible" &&
@@ -11998,6 +11996,8 @@
         const minSell = Number(minEl && minEl.value);
         const sellPercent = Number(pctEl && pctEl.value);
         const asset = holdingsBaseAsset(key);
+        // 剪贴板只放币名，方便在 App 搜索框粘贴
+        const searchToken = asset;
         const hintParts = [`${asset}/USDT`];
         if (Number.isFinite(minSell) && minSell > 0) {
           hintParts.push(`护栏≥${formatHoldingsPriceInput(minSell)}`);
@@ -12005,18 +12005,23 @@
         if (Number.isFinite(sellPercent) && sellPercent > 0) {
           hintParts.push(`${sellPercent}%`);
         }
-        const clip = hintParts.join(" · ");
+        const hint = hintParts.join(" · ");
         try {
           if (navigator.clipboard && navigator.clipboard.writeText) {
-            await navigator.clipboard.writeText(clip);
+            await navigator.clipboard.writeText(searchToken);
           }
         } catch (_err) {
           /* ignore */
         }
         openBinanceSpotTrade(key);
-        showToast(`已打开币安 · ${clip}（请选手动市价卖出）`, {
-          duration: 2800,
-        });
+        const ua = String(navigator.userAgent || "");
+        const isPhone = /Android|iPhone|iPad|iPod/i.test(ua);
+        showToast(
+          isPhone
+            ? `已打开币安行情 · 已复制 ${searchToken}，请搜索后手动市价卖出`
+            : `已打开币安网页 · ${hint}`,
+          { duration: 3200 },
+        );
       }
 
       function setNailHoldRefreshBusy(btn, busy) {
