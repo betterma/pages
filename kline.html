@@ -2715,6 +2715,38 @@
         font-weight: 650;
         cursor: pointer;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        -webkit-tap-highlight-color: transparent;
+      }
+      /* 盖过全局 button:hover（安卓点击后 :hover 常粘住变深色） */
+      .nail-hold-refresh:hover,
+      .nail-hold-refresh:focus,
+      .nail-hold-refresh:focus-visible,
+      .nail-hold-refresh:active,
+      .nail-hold-settings-btn:hover,
+      .nail-hold-settings-btn:focus,
+      .nail-hold-settings-btn:focus-visible,
+      .nail-hold-settings-btn:active {
+        background: rgba(255, 255, 255, 0.88);
+        color: #1c1c1e;
+      }
+      .nail-hold-refresh {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-width: 52px;
+      }
+      .nail-hold-refresh-spin {
+        width: 12px;
+        height: 12px;
+        border: 2px solid rgba(28, 28, 30, 0.2);
+        border-top-color: rgba(28, 28, 30, 0.75);
+        border-radius: 50%;
+        animation: nail-hold-spin 0.7s linear infinite;
+        flex: 0 0 auto;
+      }
+      .nail-hold-refresh-spin[hidden] {
+        display: none !important;
       }
       .nail-hold-settings-btn {
         width: 30px;
@@ -2728,13 +2760,23 @@
         height: 15px;
         display: block;
       }
-      .nail-hold-settings-btn.is-open {
+      .nail-hold-settings-btn.is-open,
+      .nail-hold-settings-btn.is-open:hover,
+      .nail-hold-settings-btn.is-open:focus,
+      .nail-hold-settings-btn.is-open:active {
         background: color-mix(in srgb, var(--accent, #2f8f6e) 22%, #fff);
         color: var(--accent, #2f8f6e);
       }
-      .nail-hold-refresh:disabled {
+      .nail-hold-refresh:disabled,
+      .nail-hold-refresh.is-loading,
+      .nail-hold-refresh.is-loading:hover,
+      .nail-hold-refresh.is-loading:focus,
+      .nail-hold-refresh.is-loading:active {
         opacity: 0.55;
         cursor: wait;
+        background: rgba(255, 255, 255, 0.55);
+        color: #1c1c1e;
+        box-shadow: none;
       }
       .nail-hold-hint {
         margin: 0;
@@ -7563,7 +7605,8 @@
             <div class="nail-hold-list-head">
               <span>币列表</span>
               <button type="button" class="nail-hold-refresh" id="nailHoldRefreshBtn" title="拉取余额、现价与买卖任务">
-                刷新
+                <span class="nail-hold-refresh-spin" hidden aria-hidden="true"></span>
+                <span class="nail-hold-refresh-label">刷新</span>
               </button>
             </div>
             <div class="nail-hold-list" id="nailHoldList"></div>
@@ -11882,7 +11925,7 @@
         return key.endsWith("USDT") ? key.slice(0, -4) : key;
       }
 
-      /** 币安现货交易页（手机常可唤起 App；桌面开网页）。 */
+      /** 币安现货交易页（网页兜底）。 */
       function binanceSpotTradeUrl(symbol) {
         const base = holdingsBaseAsset(symbol);
         if (!base || base === "USDT") return "";
@@ -11893,12 +11936,57 @@
         );
       }
 
+      function binanceSpotTradePair(symbol) {
+        const base = holdingsBaseAsset(symbol);
+        if (!base || base === "USDT") return "";
+        return base + "_USDT";
+      }
+
+      /**
+       * 安卓优先 Intent(bnc) 唤起官方 App；失败则走网页。
+       * iOS 先试 bnc://，仍停在页内再回落 https。
+       */
+      function openBinanceSpotTrade(symbol) {
+        const pair = binanceSpotTradePair(symbol);
+        const httpsUrl = binanceSpotTradeUrl(symbol);
+        if (!pair || !httpsUrl) return false;
+        const ua = String(navigator.userAgent || "");
+        const isAndroid = /Android/i.test(ua);
+        const isIOS = /iPhone|iPad|iPod/i.test(ua);
+        if (isAndroid) {
+          // 不强制 package：兼容 com.binance.app / .global 等包名
+          const intent =
+            "intent://app.binance.com/trade/" +
+            encodeURIComponent(pair) +
+            "#Intent;scheme=bnc;S.browser_fallback_url=" +
+            encodeURIComponent(httpsUrl) +
+            ";end";
+          window.location.href = intent;
+          return true;
+        }
+        if (isIOS) {
+          const bnc = "bnc://app.binance.com/trade/" + encodeURIComponent(pair);
+          const started = Date.now();
+          window.location.href = bnc;
+          window.setTimeout(() => {
+            if (
+              document.visibilityState === "visible" &&
+              Date.now() - started < 2200
+            ) {
+              window.location.href = httpsUrl;
+            }
+          }, 1100);
+          return true;
+        }
+        window.open(httpsUrl, "_blank", "noopener,noreferrer");
+        return true;
+      }
+
       async function jumpNailHoldInstantSell(symbol) {
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
-        const url = binanceSpotTradeUrl(key);
-        if (!url) {
+        if (!binanceSpotTradeUrl(key)) {
           showToast("无法打开币安交易页");
           return;
         }
@@ -11925,23 +12013,31 @@
         } catch (_err) {
           /* ignore */
         }
-        // 移动端用当前页跳转更易唤起 App；桌面新开标签。
-        const isMobile =
-          /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "") ||
-          (typeof window.matchMedia === "function" &&
-            window.matchMedia("(pointer: coarse)").matches);
-        try {
-          if (isMobile) {
-            window.location.href = url;
-          } else {
-            window.open(url, "_blank", "noopener,noreferrer");
-          }
-        } catch (_err) {
-          window.open(url, "_blank");
-        }
+        openBinanceSpotTrade(key);
         showToast(`已打开币安 · ${clip}（请选手动市价卖出）`, {
           duration: 2800,
         });
+      }
+
+      function setNailHoldRefreshBusy(btn, busy) {
+        if (!btn) return;
+        const on = !!busy;
+        btn.disabled = on;
+        btn.classList.toggle("is-loading", on);
+        let spin = btn.querySelector(".nail-hold-refresh-spin");
+        let label = btn.querySelector(".nail-hold-refresh-label");
+        if (!label) {
+          btn.textContent = "";
+          spin = document.createElement("span");
+          spin.className = "nail-hold-refresh-spin";
+          spin.setAttribute("aria-hidden", "true");
+          label = document.createElement("span");
+          label.className = "nail-hold-refresh-label";
+          btn.appendChild(spin);
+          btn.appendChild(label);
+        }
+        if (spin) spin.hidden = !on;
+        label.textContent = on ? "刷新中" : "刷新";
       }
 
       function formatHoldingsQty(value) {
@@ -12920,10 +13016,7 @@
           if (!silent) showToast("持有模块未就绪");
           return;
         }
-        if (refreshBtn) {
-          refreshBtn.disabled = true;
-          refreshBtn.textContent = "刷新中…";
-        }
+        if (!silent) setNailHoldRefreshBusy(refreshBtn, true);
         if (!silent) showToast("正在拉取余额 / 现价 / 任务…");
         try {
           const [raw, sellRaw, buyRaw] = await Promise.all([
@@ -12978,10 +13071,7 @@
           console.warn("reloadNailHoldings failed", error);
           if (!silent) showToast("刷新持有失败");
         } finally {
-          if (refreshBtn) {
-            refreshBtn.disabled = false;
-            refreshBtn.textContent = "刷新";
-          }
+          if (!silent) setNailHoldRefreshBusy(refreshBtn, false);
         }
       }
 
