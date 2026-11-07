@@ -1,27 +1,27 @@
 {
-  "updatedAt": 1794026151839,
-  "lastRunAt": 1794026100610,
-  "ok": true,
-  "error": null,
-  "durationMs": 51229,
+  "updatedAt": 1794026457983,
+  "lastRunAt": 1794026400612,
+  "ok": false,
+  "error": "nail-green×1:notices:GitHub PUT watch-nail-green-notices.json failed: 409 {\"message\":\"is at ffc232945c6ef2267b72e542c38ac4ab0a9f6a60 but expected 3358499b8dd4585453c59e45d2d69bbb2cc1a3ce\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":",
+  "durationMs": 57371,
   "autoPins": 152,
   "balance": {
     "skipped": false,
     "reason": null,
     "autoPins": 152,
-    "due": 111,
-    "checked": 111,
-    "hits": 94,
-    "sent": 56,
-    "wecomDue": 56,
-    "wecomQueued": 56,
+    "due": 70,
+    "checked": 70,
+    "hits": 56,
+    "sent": 20,
+    "wecomDue": 20,
+    "wecomQueued": 20,
     "wecomDeferred": 0,
-    "skippedWecomWindow": 38,
+    "skippedWecomWindow": 36,
     "checkMax": 0,
     "sendMax": 0,
     "checkCursor": 0,
     "cooldownMs": 1800000,
-    "cooldownSkipped": 41,
+    "cooldownSkipped": 82,
     "errorCount": 0,
     "errors": []
   },
@@ -29,15 +29,17 @@
     "skipped": false,
     "reason": null,
     "nails": 162,
-    "pending": 92,
-    "checked": 92,
-    "hits": 1,
+    "pending": 91,
+    "checked": 91,
+    "hits": 2,
     "sent": 0,
     "checkMax": 0,
     "checkCursor": 0,
-    "bucketSkipped": 70,
-    "errorCount": 0,
-    "errors": []
+    "bucketSkipped": 71,
+    "errorCount": 1,
+    "errors": [
+      "notices:GitHub PUT watch-nail-green-notices.json failed: 409 {\"message\":\"is at ffc232945c6ef2267b72e542c38ac4ab0a9f6a60 but expected 3358499b8dd4585453c59e45d2d69bbb2cc1a3ce\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":"
+    ]
   },
   "staleNailPrune": {
     "skipped": false,
@@ -45,5 +47,6 @@
     "checked": 12,
     "candidate": 130,
     "removed": 0
-  }
+  },
+  "degraded": true
 }
