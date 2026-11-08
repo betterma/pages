@@ -1,38 +1,58 @@
 {
   "risingZoneSnap": [
     "SKUUBUSDT",
-    "KORUBUSDT",
-    "GPROBUSDT",
-    "FWDIBUSDT",
     "SKHYBUSDT",
-    "KSTRBUSDT",
     "SOXSBUSDT",
-    "IRENBUSDT",
-    "MUUBUSDT",
-    "CRDOBUSDT",
+    "KORUBUSDT",
     "DJTBUSDT",
-    "GEVBUSDT",
-    "SHAZBUSDT",
-    "AVGOBUSDT",
+    "QNTBUSDT",
+    "KSTRBUSDT",
+    "FWDIBUSDT",
+    "CRDOBUSDT",
     "TMFBUSDT",
-    "DRAMBUSDT",
-    "STXBUSDT",
-    "DELLBUSDT",
-    "MRNABUSDT",
-    "MRVLBUSDT",
-    "COHRBUSDT",
-    "LLYBUSDT",
-    "EWYBUSDT",
+    "IRENBUSDT",
+    "SHAZBUSDT",
     "BNCBUSDT",
-    "MUBUSDT",
-    "SMCIBUSDT",
-    "WDCBUSDT",
+    "STXBUSDT",
+    "GEVBUSDT",
+    "MRNABUSDT",
+    "DRAMBUSDT",
+    "EWYBUSDT",
+    "AVGOBUSDT",
+    "DELLBUSDT",
     "CRWDBUSDT",
+    "COHRBUSDT",
+    "QCOMBUSDT",
+    "MRVLBUSDT",
+    "MVLLBUSDT",
+    "MUBUSDT",
+    "PYPLBUSDT",
     "AMATBUSDT",
-    "HPEBUSDT"
+    "PDDBUSDT",
+    "WDCBUSDT"
   ],
   "risingZoneSnapSeeded": true,
   "autoPinEvents": [
+    {
+      "at": 1794096300969,
+      "symbols": [
+        "KORUBUSDT",
+        "IRENBUSDT"
+      ],
+      "source": "auto-cloud",
+      "kind": "catch-up"
+    },
+    {
+      "at": 1794096300969,
+      "symbols": [
+        "GPROBUSDT",
+        "MUUBUSDT",
+        "LLYBUSDT",
+        "HPEBUSDT"
+      ],
+      "source": "zone-drop",
+      "kind": "zone-drop"
+    },
     {
       "at": 1794096000979,
       "symbols": [
@@ -402,29 +422,9 @@
       ],
       "source": "zone-drop",
       "kind": "zone-drop"
-    },
-    {
-      "at": 1794089701077,
-      "symbols": [
-        "SMCIBUSDT",
-        "GPROBUSDT",
-        "AMCBUSDT",
-        "EWYBUSDT",
-        "METABUSDT"
-      ],
-      "source": "zone-drop",
-      "kind": "zone-drop"
-    },
-    {
-      "at": 1794089400387,
-      "symbols": [
-        "KORUBUSDT"
-      ],
-      "source": "auto-cloud",
-      "kind": "catch-up"
     }
   ],
-  "updatedAt": 1794096049225,
+  "updatedAt": 1794096317889,
   "dropAlerts": {},
   "lastPinPrices": {
     "USDEBUSDT": 6.64,
