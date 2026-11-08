@@ -2533,6 +2533,91 @@
         font-size: 12px;
         text-align: center;
       }
+      .nail-auto-pin-section {
+        padding: 10px 12px 6px;
+        border-bottom: 0.5px solid var(--separator);
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 650;
+      }
+      .nail-auto-pin-card {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 8px 10px;
+        padding: 8px 10px 10px;
+        border: 0.5px solid var(--separator);
+        border-radius: 9px;
+        background: color-mix(in srgb, var(--label, #808080) 5%, transparent);
+      }
+      .nail-auto-pin-card-head {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .nail-auto-pin-card-name {
+        border: none;
+        background: transparent;
+        padding: 0;
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .nail-auto-pin-card-name:hover {
+        text-decoration: underline;
+      }
+      .nail-auto-pin-card-time {
+        margin-left: auto;
+        color: var(--secondary);
+        font-size: 10px;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-auto-pin-card-prices {
+        display: flex;
+        gap: 12px;
+        color: var(--secondary);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-auto-pin-card-prices b {
+        font-weight: 650;
+        color: var(--text, inherit);
+      }
+      .nail-auto-pin-card-live.is-up {
+        color: #3a7fc4;
+      }
+      .nail-auto-pin-card-live.is-down {
+        color: #c45c5c;
+      }
+      .nail-auto-pin-kline {
+        display: block;
+        width: 100%;
+        height: 92px;
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--label, #808080) 4%, transparent);
+        pointer-events: none;
+      }
+      .nail-auto-pin-more {
+        padding: 2px 12px 10px;
+        color: var(--secondary);
+        font-size: 11px;
+        line-height: 1.6;
+      }
+      .nail-head-actions .nail-icon-btn {
+        position: relative;
+      }
+      .nail-head-actions #nailAutoPinBtn.has-unread::after {
+        content: "";
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #e5484d;
+        box-shadow: 0 0 0 1.5px var(--grouped, #ffffff);
+      }
       .nail-radar-popover {
         position: absolute;
         top: calc(100% - 2px);
@@ -9322,6 +9407,13 @@
           "sim-sell-stop",
         ]),
       };
+      const AUTO_PIN_SEEN_KEY = "kline-nail-autopin-seen-v1";
+      /** 近 2 个 4h 窗口（8 小时）内的自动盯，展开成带 K 线的卡片。 */
+      const AUTO_PIN_RECENT_MS = 8 * 60 * 60 * 1000;
+      const AUTO_PIN_RECENT_MAX_CARDS = 10;
+      /** 入口红点只看近 24h，避免陈年记录一直亮着。 */
+      const AUTO_PIN_BADGE_MS = 24 * 60 * 60 * 1000;
+      let nailAutoPinPaintToken = 0;
       let priceAlertItems = [];
       let priceAlertSaving = false;
       let focusActionSymbol = null;
@@ -11308,6 +11400,8 @@
         } catch (error) {
           console.warn("action log cache save failed", error);
         }
+        // 日志变了就刷新入口红点（弹层打开时会再同步一次已读）。
+        syncNailAutoPinBadge();
       }
 
       /**
@@ -11822,35 +11916,246 @@
           .join("");
       }
 
-      function renderNailAutoPinList() {
-        const list = document.getElementById("nailAutoPinList");
-        if (!list) return;
-        const entries = readActionLog()
+      function nailAutoPinEntries() {
+        return readActionLog()
           .filter(
             (entry) => actionLogCategoryForKind(entry.kind) === "capture",
           )
-          .sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0))
-          .slice(0, 80);
+          .sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+      }
+
+      function writeNailAutoPinSeenAt(at) {
+        const n = Number(at) > 0 ? Number(at) : Date.now();
+        try {
+          localStorage.setItem(AUTO_PIN_SEEN_KEY, String(n));
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
+      /** 给定时间窗内最新一条自动盯的时间戳；没有则 0。 */
+      function nailAutoPinLatestAtWithin(windowMs) {
+        const cutoff = Date.now() - (Number(windowMs) || 0);
+        const hit = nailAutoPinEntries().find((entry) => {
+          const at = Number(entry.at) || 0;
+          return (
+            at >= cutoff &&
+            Array.isArray(entry.symbols) &&
+            entry.symbols.length > 0
+          );
+        });
+        return hit ? Number(hit.at) || 0 : 0;
+      }
+
+      /** 入口按钮红点：近 24h 内有比上次查看更新的自动盯。 */
+      function syncNailAutoPinBadge() {
+        const btn = document.getElementById("nailAutoPinBtn");
+        if (!btn) return;
+        const popover = document.getElementById("nailAutoPinPopover");
+        const open = !!(popover && !popover.hidden);
+        let raw = null;
+        try {
+          raw = localStorage.getItem(AUTO_PIN_SEEN_KEY);
+        } catch (_) {
+          raw = null;
+        }
+        const latest = nailAutoPinLatestAtWithin(AUTO_PIN_BADGE_MS);
+        // 弹层开着 = 正在看，直接记为已读，避免自己给自己亮红点。
+        if (open) {
+          writeNailAutoPinSeenAt(latest || Date.now());
+          btn.classList.remove("has-unread");
+          btn.title = "自动盯记录";
+          return;
+        }
+        // 首次进入以当前最新为基线，避免一打开就红点。
+        if (raw === null) {
+          writeNailAutoPinSeenAt(latest || Date.now());
+          btn.classList.remove("has-unread");
+          btn.title = "自动盯记录";
+          return;
+        }
+        const seen = Number(raw) || 0;
+        const unread = latest > 0 && latest > seen;
+        btn.classList.toggle("has-unread", unread);
+        btn.title = unread
+          ? `自动盯记录 · ${formatActionLogTime(latest)} 有新记录`
+          : "自动盯记录";
+      }
+
+      function buildNailAutoPinCardHtml(symbol, at) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const label = escapeHtml(key.replace(/USDT$/i, ""));
+        const pin = pinItemBySymbol(key);
+        const pinPrice =
+          pin && Number(pin.pinPrice) > 0 ? Number(pin.pinPrice) : 0;
+        const price = Number(marketMap[key] && marketMap[key].price);
+        const liveText =
+          Number.isFinite(price) && price > 0
+            ? escapeHtml(formatPinPrice(price))
+            : "—";
+        return [
+          `<article class="nail-auto-pin-card" data-autopin-card="${escapeHtml(key)}">`,
+          `<div class="nail-auto-pin-card-head">`,
+          `<button type="button" class="nail-auto-pin-card-name" data-nail-auto-symbol="${escapeHtml(key)}">${label}</button>`,
+          `<span class="nail-auto-pin-card-time">${escapeHtml(formatActionLogTime(at))}</span>`,
+          `</div>`,
+          `<div class="nail-auto-pin-card-prices">`,
+          `<span>盯 <b data-autopin-pin>${pinPrice > 0 ? escapeHtml(formatPinPrice(pinPrice)) : "—"}</b></span>`,
+          `<span>现 <b class="nail-auto-pin-card-live" data-autopin-live>${liveText}</b></span>`,
+          `</div>`,
+          `<canvas class="nail-auto-pin-kline" data-kline="${escapeHtml(key)}" data-autopin-chart="${escapeHtml(key)}"></canvas>`,
+          `</article>`,
+        ].join("");
+      }
+
+      function renderNailAutoPinList() {
+        const list = document.getElementById("nailAutoPinList");
+        if (!list) return;
+        // 作废上一轮未画完的请求。
+        nailAutoPinPaintToken += 1;
+        const entries = nailAutoPinEntries().slice(0, 80);
         if (!entries.length) {
           list.innerHTML = '<div class="nail-auto-pin-empty">暂无自动盯记录</div>';
           return;
         }
-        list.innerHTML = entries
-          .map((entry) => {
-            const names = (entry.symbols || [])
-              .map((symbol) => {
-                const key = String(symbol || "")
-                  .trim()
-                  .toUpperCase();
-                if (!key) return "";
-                const label = key.replace(/USDT$/i, "");
-                return `<button type="button" class="nail-auto-pin-symbol" data-nail-auto-symbol="${escapeHtml(key)}">${escapeHtml(label)}</button>`;
+        const cutoff = Date.now() - AUTO_PIN_RECENT_MS;
+        const seen = new Set();
+        const cards = [];
+        const overflow = [];
+        const older = [];
+        entries.forEach((entry) => {
+          const at = Number(entry.at) || 0;
+          if (at < cutoff) {
+            older.push(entry);
+            return;
+          }
+          const symbols = (entry.symbols || [])
+            .map((symbol) => String(symbol || "").trim().toUpperCase())
+            .filter(Boolean);
+          if (!symbols.length) return;
+          // 同一币只保留最近一次（K 线是当前快照，重复画没意义）。
+          symbols.forEach((symbol) => {
+            if (seen.has(symbol)) return;
+            seen.add(symbol);
+            if (cards.length >= AUTO_PIN_RECENT_MAX_CARDS) overflow.push(symbol);
+            else cards.push({ symbol, at });
+          });
+        });
+        const parts = [];
+        if (cards.length) {
+          parts.push(
+            `<div class="nail-auto-pin-section">近 8 小时 · ${cards.length} 个币</div>`,
+            cards
+              .map((row) => buildNailAutoPinCardHtml(row.symbol, row.at))
+              .join(""),
+          );
+          if (overflow.length) {
+            parts.push(
+              `<div class="nail-auto-pin-more">另有 ${overflow.length} 个：${overflow
+                .map((symbol) => escapeHtml(symbol.replace(/USDT$/i, "")))
+                .join(" ")}</div>`,
+            );
+          }
+        }
+        if (older.length) {
+          parts.push(
+            `<div class="nail-auto-pin-section">更早</div>`,
+            older
+              .map((entry) => {
+                const names = (entry.symbols || [])
+                  .map((symbol) => {
+                    const key = String(symbol || "")
+                      .trim()
+                      .toUpperCase();
+                    if (!key) return "";
+                    const label = key.replace(/USDT$/i, "");
+                    return `<button type="button" class="nail-auto-pin-symbol" data-nail-auto-symbol="${escapeHtml(key)}">${escapeHtml(label)}</button>`;
+                  })
+                  .filter(Boolean)
+                  .join("");
+                return `<div class="nail-auto-pin-row"><time class="nail-auto-pin-time">${escapeHtml(formatActionLogTime(entry.at))}</time><div class="nail-auto-pin-symbols"><span>${escapeHtml(actionLogKindLabel(entry.kind))}</span>${names}</div></div>`;
               })
-              .filter(Boolean)
-              .join("");
-            return `<div class="nail-auto-pin-row"><time class="nail-auto-pin-time">${escapeHtml(formatActionLogTime(entry.at))}</time><div class="nail-auto-pin-symbols"><span>${escapeHtml(actionLogKindLabel(entry.kind))}</span>${names}</div></div>`;
-          })
-          .join("");
+              .join(""),
+          );
+        }
+        if (!parts.length) {
+          list.innerHTML =
+            '<div class="nail-auto-pin-empty">暂无自动盯记录</div>';
+          return;
+        }
+        list.innerHTML = parts.join("");
+      }
+
+      /** 给「近 8 小时」卡片补 K 线与实时价；弹层关闭或重渲时自动作废。 */
+      async function paintNailAutoPinCharts() {
+        const list = document.getElementById("nailAutoPinList");
+        if (!list) return;
+        const canvases = [
+          ...list.querySelectorAll("canvas[data-autopin-chart]"),
+        ];
+        if (!canvases.length) return;
+        const token = ++nailAutoPinPaintToken;
+        const paintOne = async (canvas) => {
+          if (token !== nailAutoPinPaintToken) return;
+          const symbol = String(canvas.getAttribute("data-autopin-chart") || "")
+            .trim()
+            .toUpperCase();
+          if (!symbol) return;
+          const card = canvas.closest(".nail-auto-pin-card");
+          try {
+            const candles = await fetchKlines(symbol, chartInterval());
+            if (token !== nailAutoPinPaintToken) return;
+            if (!Array.isArray(candles) || !candles.length) return;
+            const pin = pinItemBySymbol(symbol);
+            const pinPrice =
+              pin && Number(pin.pinPrice) > 0 ? Number(pin.pinPrice) : 0;
+            const ticker = Number(marketMap[symbol] && marketMap[symbol].price);
+            const lastClose = Number(candles[candles.length - 1].close);
+            const live =
+              Number.isFinite(ticker) && ticker > 0 ? ticker : lastClose;
+            const liveEl = card
+              ? card.querySelector("[data-autopin-live]")
+              : null;
+            if (liveEl && Number.isFinite(live) && live > 0) {
+              liveEl.textContent = formatPinPrice(live);
+              liveEl.classList.toggle(
+                "is-up",
+                pinPrice > 0 && live > pinPrice,
+              );
+              liveEl.classList.toggle(
+                "is-down",
+                pinPrice > 0 && live < pinPrice,
+              );
+            }
+            drawKline(
+              canvas,
+              candles,
+              pinPrice > 0 ? pinPrice : null,
+              pin && Number(pin.pinnedAt) > 0 ? pin.pinnedAt : null,
+              [],
+              null,
+              null,
+              { symbol },
+            );
+          } catch (error) {
+            console.warn("auto-pin kline failed", symbol, error);
+          }
+        };
+        const concurrency = 3;
+        let cursor = 0;
+        const workers = Array.from(
+          { length: Math.min(concurrency, canvases.length) },
+          async () => {
+            while (cursor < canvases.length) {
+              const i = cursor;
+              cursor += 1;
+              await paintOne(canvases[i]);
+            }
+          },
+        );
+        await Promise.all(workers);
       }
 
       async function setNailAutoPinPopoverOpen(open) {
@@ -11870,6 +12175,11 @@
         if (next) {
           await loadSharedActionLog();
           renderNailAutoPinList();
+          writeNailAutoPinSeenAt(Date.now());
+          syncNailAutoPinBadge();
+          void paintNailAutoPinCharts();
+        } else {
+          nailAutoPinPaintToken += 1;
         }
       }
 
