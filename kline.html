@@ -9437,7 +9437,7 @@
       const AUTO_PIN_SEEN_KEY = "kline-nail-autopin-seen-v1";
       /** 近 2 个 4h 窗口（8 小时）内的自动盯，展开成带 K 线的卡片。 */
       const AUTO_PIN_RECENT_MS = 8 * 60 * 60 * 1000;
-      const AUTO_PIN_RECENT_MAX_CARDS = 10;
+      const AUTO_PIN_RECENT_MAX_CARDS = 20;
       /** 入口红点只看近 24h，避免陈年记录一直亮着。 */
       const AUTO_PIN_BADGE_MS = 24 * 60 * 60 * 1000;
       /** 挂着钉子页不动时，每 60 拍（5 分钟）拉一次日志刷新红点。 */
@@ -12198,7 +12198,8 @@
             console.warn("auto-pin kline failed", symbol, error);
           }
         };
-        const concurrency = 3;
+        // 上限 20 张卡，并发 5 大约 4 批画完；再高意义不大，交易所也会限速。
+        const concurrency = 5;
         let cursor = 0;
         const workers = Array.from(
           { length: Math.min(concurrency, canvases.length) },
