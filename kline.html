@@ -4345,6 +4345,26 @@
         font-weight: 650;
         font-variant-numeric: tabular-nums;
       }
+      .nail-pin-review-chart {
+        position: relative;
+        width: 100%;
+        margin-top: 2px;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #111214;
+        border: 0.5px solid var(--separator);
+      }
+      .nail-pin-review-kline {
+        display: block;
+        width: 100%;
+        height: 168px;
+        pointer-events: none;
+      }
+      @media (max-height: 700px) {
+        .nail-pin-review-kline {
+          height: 132px;
+        }
+      }
       .nail-pin-review-note {
         margin: 4px 0 0;
         font-size: 13px;
@@ -8118,6 +8138,13 @@
           <div class="nail-pin-review-pair" id="nailPinReviewPair">—</div>
           <div class="nail-pin-review-px" id="nailPinReviewPx">—</div>
           <div class="nail-pin-review-chg" id="nailPinReviewChg">—</div>
+          <div class="nail-pin-review-chart" id="nailPinReviewChart">
+            <canvas
+              class="nail-pin-review-kline"
+              id="nailPinReviewKline"
+              aria-label="K 线"
+            ></canvas>
+          </div>
           <p class="nail-pin-review-note" id="nailPinReviewNote" hidden></p>
         </div>
         <div class="nail-pin-review-empty" id="nailPinReviewEmpty" hidden>
@@ -8976,6 +9003,7 @@
       const nailPinReviewUnpin = new Set();
       let nailPinReviewDragging = false;
       let nailPinReviewBusy = false;
+      let nailPinReviewKlineAbort = null;
       const NAIL_RISING_FILTER_KEY = "kline-nail-rising-filter-v1";
       let nailRisingFilterOn = true;
       try {
@@ -24879,12 +24907,67 @@
         }
       }
 
+      function clearNailPinReviewKline() {
+        if (nailPinReviewKlineAbort) {
+          nailPinReviewKlineAbort.abort();
+          nailPinReviewKlineAbort = null;
+        }
+        const canvas = document.getElementById("nailPinReviewKline");
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+
+      async function paintNailPinReviewKline(item) {
+        clearNailPinReviewKline();
+        const canvas = document.getElementById("nailPinReviewKline");
+        if (!canvas || !item) return;
+        const key = String(item.symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        const controller = new AbortController();
+        nailPinReviewKlineAbort = controller;
+        try {
+          const candles = await fetchKlines(
+            key,
+            chartInterval(),
+            controller.signal,
+          );
+          if (nailPinReviewKlineAbort !== controller) return;
+          if (!Array.isArray(candles) || !candles.length) return;
+          const pin = pinItemBySymbol(key);
+          const notes = notesMarksForSymbol(key);
+          const alertMark = nailAlertMarkForSymbol(key);
+          // 让 drawKline 的自动置顶线判定认准当前币，避免误用放大页的全局 symbol
+          canvas.setAttribute("data-kline", key);
+          drawKline(
+            canvas,
+            candles,
+            pin ? pin.pinPrice : null,
+            pin ? pin.pinnedAt : null,
+            notes,
+            alertMark,
+            null,
+            { symbol: key },
+          );
+        } catch (error) {
+          if (error && error.name === "AbortError") return;
+          console.warn("paint nail pin review kline failed", key, error);
+        } finally {
+          if (nailPinReviewKlineAbort === controller) {
+            nailPinReviewKlineAbort = null;
+          }
+        }
+      }
+
       function showNailPinReviewCurrent() {
         const item =
           nailPinReviewIndex < nailPinReviewQueue.length
             ? nailPinReviewQueue[nailPinReviewIndex]
             : null;
         fillNailPinReviewCard(item);
+        void paintNailPinReviewKline(item);
         syncNailPinReviewChrome();
       }
 
@@ -24894,6 +24977,7 @@
           el.hidden = true;
           el.setAttribute("aria-hidden", "true");
         }
+        clearNailPinReviewKline();
         nailPinReviewQueue = [];
         nailPinReviewIndex = 0;
         nailPinReviewUnpin.clear();
