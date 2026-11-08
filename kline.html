@@ -4207,6 +4207,225 @@
         font-weight: 650;
         opacity: 0.85;
       }
+      .nail-section-label-end {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+      }
+      .nail-pin-review-eye {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        margin: 0;
+        padding: 0;
+        border: none;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--accent) 18%, transparent);
+        color: inherit;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        flex: 0 0 auto;
+      }
+      .nail-pin-review-eye:hover,
+      .nail-pin-review-eye:focus-visible {
+        background: color-mix(in srgb, var(--accent) 28%, transparent);
+      }
+      .nail-pin-review-eye svg {
+        width: 15px;
+        height: 15px;
+        display: block;
+      }
+      .nail-pin-review {
+        position: fixed;
+        inset: 0;
+        z-index: 120;
+        display: flex;
+        flex-direction: column;
+        background: color-mix(in srgb, var(--bg, #111214) 92%, #000);
+        color: var(--label);
+      }
+      .nail-pin-review[hidden] {
+        display: none !important;
+      }
+      .nail-pin-review-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 14px 16px 10px;
+        padding-top: max(14px, env(safe-area-inset-top, 0px));
+      }
+      .nail-pin-review-title {
+        font-size: 16px;
+        font-weight: 750;
+      }
+      .nail-pin-review-progress {
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+        color: var(--secondary);
+      }
+      .nail-pin-review-stage {
+        position: relative;
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 20px 12px;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      .nail-pin-review-hint {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 1;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        opacity: 0.35;
+        pointer-events: none;
+        writing-mode: vertical-rl;
+      }
+      .nail-pin-review-hint.is-left {
+        left: 10px;
+        color: var(--down, #ff5c64);
+      }
+      .nail-pin-review-hint.is-right {
+        right: 10px;
+        color: var(--up, #35c98a);
+      }
+      .nail-pin-review-card {
+        position: relative;
+        z-index: 2;
+        width: min(340px, calc(100vw - 56px));
+        min-height: 220px;
+        padding: 22px 20px 20px;
+        border-radius: 18px;
+        border: 0.5px solid var(--separator);
+        background: var(--elevated, var(--grouped));
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        will-change: transform;
+        transition: box-shadow 0.15s ease;
+      }
+      .nail-pin-review-card.is-dragging {
+        transition: none;
+        box-shadow: 0 22px 48px rgba(0, 0, 0, 0.36);
+      }
+      .nail-pin-review-card.is-fly {
+        transition: transform 0.28s ease, opacity 0.28s ease;
+      }
+      .nail-pin-review-sym {
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        line-height: 1.15;
+      }
+      .nail-pin-review-pair {
+        font-size: 13px;
+        color: var(--secondary);
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-pin-review-px {
+        font-size: 22px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-pin-review-chg {
+        font-size: 15px;
+        font-weight: 650;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-pin-review-note {
+        margin: 4px 0 0;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--secondary);
+        max-height: 4.2em;
+        overflow: hidden;
+      }
+      .nail-pin-review-stamp {
+        position: absolute;
+        top: 18px;
+        padding: 6px 10px;
+        border-radius: 8px;
+        border: 2px solid;
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        opacity: 0;
+        pointer-events: none;
+        transform: rotate(-18deg);
+      }
+      .nail-pin-review-stamp.is-unpin {
+        left: 16px;
+        color: var(--down, #ff5c64);
+        border-color: var(--down, #ff5c64);
+      }
+      .nail-pin-review-stamp.is-keep {
+        right: 16px;
+        color: var(--up, #35c98a);
+        border-color: var(--up, #35c98a);
+        transform: rotate(18deg);
+      }
+      .nail-pin-review-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        padding: 0 16px 10px;
+      }
+      .nail-pin-review-actions button {
+        min-width: 108px;
+        height: 40px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .nail-pin-review-actions .is-unpin-btn {
+        background: color-mix(in srgb, var(--down, #ff5c64) 18%, var(--elevated));
+        color: var(--down, #ff5c64);
+        border-color: color-mix(in srgb, var(--down, #ff5c64) 35%, var(--separator));
+      }
+      .nail-pin-review-actions .is-keep-btn {
+        background: color-mix(in srgb, var(--up, #35c98a) 18%, var(--elevated));
+        color: var(--up, #35c98a);
+        border-color: color-mix(in srgb, var(--up, #35c98a) 35%, var(--separator));
+      }
+      .nail-pin-review-foot {
+        display: flex;
+        gap: 10px;
+        padding: 10px 16px max(16px, env(safe-area-inset-bottom, 0px));
+        border-top: 0.5px solid var(--separator);
+        background: color-mix(in srgb, var(--grouped, var(--bg)) 88%, transparent);
+      }
+      .nail-pin-review-foot button {
+        flex: 1 1 0;
+        height: 42px;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .nail-pin-review-foot .is-primary {
+        background: color-mix(in srgb, var(--accent) 28%, var(--elevated));
+        color: var(--accent);
+        border-color: color-mix(in srgb, var(--accent) 40%, var(--separator));
+      }
+      .nail-pin-review-foot .is-primary:disabled {
+        opacity: 0.45;
+      }
+      .nail-pin-review-empty {
+        text-align: center;
+        color: var(--secondary);
+        font-size: 14px;
+        padding: 24px;
+      }
       .nail-section-label.is-held {
         border-color: color-mix(in srgb, var(--warn, #f2b84b) 35%, var(--separator));
         background: color-mix(
@@ -7875,6 +8094,51 @@
     </div>
 
     <div
+      id="nailPinReview"
+      class="nail-pin-review"
+      hidden
+      aria-hidden="true"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="nailPinReviewTitle"
+    >
+      <div class="nail-pin-review-head">
+        <div class="nail-pin-review-title" id="nailPinReviewTitle">筛选置顶</div>
+        <div class="nail-pin-review-progress" id="nailPinReviewProgress">0 / 0</div>
+      </div>
+      <div class="nail-pin-review-stage" id="nailPinReviewStage">
+        <span class="nail-pin-review-hint is-left" aria-hidden="true">取消置顶</span>
+        <span class="nail-pin-review-hint is-right" aria-hidden="true">保留</span>
+        <div class="nail-pin-review-card" id="nailPinReviewCard" hidden>
+          <span class="nail-pin-review-stamp is-unpin" id="nailPinReviewStampUnpin">取消</span>
+          <span class="nail-pin-review-stamp is-keep" id="nailPinReviewStampKeep">保留</span>
+          <div class="nail-pin-review-sym" id="nailPinReviewSym">—</div>
+          <div class="nail-pin-review-pair" id="nailPinReviewPair">—</div>
+          <div class="nail-pin-review-px" id="nailPinReviewPx">—</div>
+          <div class="nail-pin-review-chg" id="nailPinReviewChg">—</div>
+          <p class="nail-pin-review-note" id="nailPinReviewNote" hidden></p>
+        </div>
+        <div class="nail-pin-review-empty" id="nailPinReviewEmpty" hidden>
+          本批已滑完，点确定提交或放弃
+        </div>
+      </div>
+      <div class="nail-pin-review-actions">
+        <button type="button" class="is-unpin-btn" id="nailPinReviewUnpinBtn">
+          ← 取消置顶
+        </button>
+        <button type="button" class="is-keep-btn" id="nailPinReviewKeepBtn">
+          保留 →
+        </button>
+      </div>
+      <div class="nail-pin-review-foot">
+        <button type="button" id="nailPinReviewAbortBtn">放弃</button>
+        <button type="button" class="is-primary" id="nailPinReviewConfirmBtn">
+          确定
+        </button>
+      </div>
+    </div>
+
+    <div
       id="nailNoticeDrawer"
       class="nail-notice-drawer"
       hidden
@@ -8704,6 +8968,12 @@
       const nailBrowseRevealed = new Set();
       const NAIL_BROWSE_MASK_COOLDOWN_MS = 2 * 60 * 60 * 1000;
       const selectedNailSymbols = new Set();
+      /** 置顶滑动筛选：队列 / 进度 / 待取消置顶（仅内存，确定后一次落盘）。 */
+      let nailPinReviewQueue = [];
+      let nailPinReviewIndex = 0;
+      const nailPinReviewUnpin = new Set();
+      let nailPinReviewDragging = false;
+      let nailPinReviewBusy = false;
       const NAIL_RISING_FILTER_KEY = "kline-nail-rising-filter-v1";
       let nailRisingFilterOn = true;
       try {
@@ -24044,13 +24314,14 @@
             target &&
             target.closest &&
             target.closest(
-              'input, textarea, select, [contenteditable="true"], button, a, .notes-rank-gate, .kline-zoom-gate, .stop-loss-gate, .buy-sl-gate, .boot-init-gate, .card-actions, .notify-float, .momentum-float, .float-tabs, .app-chrome, .nail-tab, .hidden-pin-tab',
+              'input, textarea, select, [contenteditable="true"], button, a, .notes-rank-gate, .kline-zoom-gate, .stop-loss-gate, .buy-sl-gate, .boot-init-gate, .card-actions, .notify-float, .momentum-float, .float-tabs, .app-chrome, .nail-tab, .hidden-pin-tab, .nail-pin-review',
             )
           );
         }
 
         function canSwipeOpenNail() {
           if (isJijiView() || isNotesRankOpen() || isKlineZoomOpen()) return false;
+          if (isNailPinReviewOpen()) return false;
           if (isNailDrawerOpen() || isHiddenPinDrawerOpen() || isNailNoticeOpen())
             return false;
           if (document.body.classList.contains("is-stop-loss-locked")) return false;
@@ -24061,6 +24332,7 @@
           return (
             isNailDrawerOpen() &&
             !isNailNoticeOpen() &&
+            !isNailPinReviewOpen() &&
             !nailReorderDragging &&
             !document.querySelector("#nailList .nail-kcard.is-dragging")
           );
@@ -24517,6 +24789,309 @@
         }
       }
 
+      function isNailPinReviewOpen() {
+        const el = document.getElementById("nailPinReview");
+        return !!(el && !el.hidden);
+      }
+
+      function syncNailPinReviewChrome() {
+        const progress = document.getElementById("nailPinReviewProgress");
+        const confirmBtn = document.getElementById("nailPinReviewConfirmBtn");
+        const total = nailPinReviewQueue.length;
+        const at = Math.min(nailPinReviewIndex + 1, Math.max(total, 0));
+        const done = nailPinReviewIndex >= total;
+        if (progress) {
+          progress.textContent = total
+            ? done
+              ? `${total} / ${total}`
+              : `${at} / ${total}`
+            : "0 / 0";
+        }
+        if (confirmBtn) {
+          const n = nailPinReviewUnpin.size;
+          confirmBtn.textContent = n > 0 ? `确定（取消 ${n}）` : "确定";
+          confirmBtn.disabled = nailPinReviewBusy;
+        }
+        const unpinBtn = document.getElementById("nailPinReviewUnpinBtn");
+        const keepBtn = document.getElementById("nailPinReviewKeepBtn");
+        if (unpinBtn) unpinBtn.disabled = done || nailPinReviewBusy;
+        if (keepBtn) keepBtn.disabled = done || nailPinReviewBusy;
+      }
+
+      function fillNailPinReviewCard(item) {
+        const card = document.getElementById("nailPinReviewCard");
+        const empty = document.getElementById("nailPinReviewEmpty");
+        const symEl = document.getElementById("nailPinReviewSym");
+        const pairEl = document.getElementById("nailPinReviewPair");
+        const pxEl = document.getElementById("nailPinReviewPx");
+        const chgEl = document.getElementById("nailPinReviewChg");
+        const noteEl = document.getElementById("nailPinReviewNote");
+        const stampUnpin = document.getElementById("nailPinReviewStampUnpin");
+        const stampKeep = document.getElementById("nailPinReviewStampKeep");
+        if (!item) {
+          if (card) card.hidden = true;
+          if (empty) empty.hidden = false;
+          return;
+        }
+        if (empty) empty.hidden = true;
+        if (card) {
+          card.hidden = false;
+          card.style.transform = "";
+          card.style.opacity = "";
+          card.classList.remove("is-dragging", "is-fly");
+        }
+        if (stampUnpin) stampUnpin.style.opacity = "0";
+        if (stampKeep) stampKeep.style.opacity = "0";
+        const key = String(item.symbol || "").toUpperCase();
+        const label =
+          String(item.label || "").trim() ||
+          key.replace(/USDT$/i, "") ||
+          key;
+        const m = marketMap && marketMap[key];
+        const px = Number(m && (m.lastPrice ?? m.price ?? m.close));
+        const chg = Number(m && m.change24h);
+        if (symEl) symEl.textContent = label;
+        if (pairEl) pairEl.textContent = key;
+        if (pxEl) {
+          pxEl.textContent = Number.isFinite(px) && px > 0
+            ? formatHoldingsPriceInput(px) || String(px)
+            : "—";
+        }
+        if (chgEl) {
+          chgEl.textContent = Number.isFinite(chg)
+            ? formatPercent(chg)
+            : "—";
+          chgEl.className =
+            "nail-pin-review-chg" +
+            (Number.isFinite(chg) ? ` ${pctClass(chg)}` : "");
+        }
+        const note = String(item.note || "").trim();
+        if (noteEl) {
+          if (note) {
+            noteEl.hidden = false;
+            noteEl.textContent = note;
+          } else {
+            noteEl.hidden = true;
+            noteEl.textContent = "";
+          }
+        }
+      }
+
+      function showNailPinReviewCurrent() {
+        const item =
+          nailPinReviewIndex < nailPinReviewQueue.length
+            ? nailPinReviewQueue[nailPinReviewIndex]
+            : null;
+        fillNailPinReviewCard(item);
+        syncNailPinReviewChrome();
+      }
+
+      function closeNailPinReview() {
+        const el = document.getElementById("nailPinReview");
+        if (el) {
+          el.hidden = true;
+          el.setAttribute("aria-hidden", "true");
+        }
+        nailPinReviewQueue = [];
+        nailPinReviewIndex = 0;
+        nailPinReviewUnpin.clear();
+        nailPinReviewDragging = false;
+        nailPinReviewBusy = false;
+        const card = document.getElementById("nailPinReviewCard");
+        if (card) {
+          card.style.transform = "";
+          card.style.opacity = "";
+          card.classList.remove("is-dragging", "is-fly");
+        }
+      }
+
+      function openNailPinReview() {
+        const sections = nailDrawerSectionParts(nailDrawerVisibleItems());
+        const pinSec = sections.find((s) => s.id === "pin");
+        const items = pinSec && Array.isArray(pinSec.items) ? pinSec.items : [];
+        if (!items.length) {
+          showToast("当前没有置顶币");
+          return;
+        }
+        nailPinReviewQueue = items.map((it) => ({
+          symbol: String(it.symbol || "").toUpperCase(),
+          label: it.label || "",
+          note: it.note || "",
+        }));
+        nailPinReviewIndex = 0;
+        nailPinReviewUnpin.clear();
+        nailPinReviewBusy = false;
+        const el = document.getElementById("nailPinReview");
+        if (el) {
+          el.hidden = false;
+          el.setAttribute("aria-hidden", "false");
+        }
+        showNailPinReviewCurrent();
+      }
+
+      function applyNailPinReviewDragVisual(dx) {
+        const card = document.getElementById("nailPinReviewCard");
+        const stampUnpin = document.getElementById("nailPinReviewStampUnpin");
+        const stampKeep = document.getElementById("nailPinReviewStampKeep");
+        if (!card || card.hidden) return;
+        const rot = Math.max(-12, Math.min(12, dx / 18));
+        card.style.transform = `translate3d(${dx}px,0,0) rotate(${rot}deg)`;
+        const t = Math.min(1, Math.abs(dx) / 90);
+        if (stampUnpin) stampUnpin.style.opacity = dx < 0 ? String(t) : "0";
+        if (stampKeep) stampKeep.style.opacity = dx > 0 ? String(t) : "0";
+      }
+
+      function commitNailPinReviewSwipe(dir) {
+        if (nailPinReviewBusy) return;
+        if (nailPinReviewIndex >= nailPinReviewQueue.length) return;
+        const item = nailPinReviewQueue[nailPinReviewIndex];
+        const key = String(item && item.symbol || "").toUpperCase();
+        if (dir === "left" && key) nailPinReviewUnpin.add(key);
+        // right = keep: do nothing to unpin set
+        nailPinReviewIndex += 1;
+        showNailPinReviewCurrent();
+      }
+
+      function flyNailPinReviewCard(dir, done) {
+        const card = document.getElementById("nailPinReviewCard");
+        if (!card || card.hidden) {
+          if (done) done();
+          return;
+        }
+        const dx = dir === "left" ? -window.innerWidth : window.innerWidth;
+        card.classList.add("is-fly");
+        card.style.transform = `translate3d(${dx}px,0,0) rotate(${dir === "left" ? -18 : 18}deg)`;
+        card.style.opacity = "0";
+        window.setTimeout(() => {
+          card.classList.remove("is-fly");
+          if (done) done();
+        }, 260);
+      }
+
+      function decideNailPinReview(dir) {
+        if (nailPinReviewBusy || nailPinReviewDragging) return;
+        if (nailPinReviewIndex >= nailPinReviewQueue.length) return;
+        nailPinReviewDragging = true;
+        flyNailPinReviewCard(dir, () => {
+          nailPinReviewDragging = false;
+          commitNailPinReviewSwipe(dir);
+        });
+      }
+
+      async function confirmNailPinReview() {
+        if (nailPinReviewBusy) return;
+        const symbols = [...nailPinReviewUnpin].filter(Boolean);
+        if (!symbols.length) {
+          showToast("未取消任何置顶");
+          closeNailPinReview();
+          return;
+        }
+        nailPinReviewBusy = true;
+        syncNailPinReviewChrome();
+        try {
+          await persistNails(
+            (list) =>
+              typeof WatchFavorites.setNailsPinnedBatch === "function"
+                ? WatchFavorites.setNailsPinnedBatch(list, symbols, false)
+                : symbols.reduce(
+                    (acc, symbol) =>
+                      WatchFavorites.setNailPinned(acc, symbol, false),
+                    list,
+                  ),
+            `Unpin nails x${symbols.length} (review)`,
+            { loadingText: `取消置顶 ${symbols.length}…` },
+          );
+          closeNailPinReview();
+          showToast(`已取消置顶 ${symbols.length} 个`);
+        } catch (error) {
+          console.warn(error);
+          nailPinReviewBusy = false;
+          syncNailPinReviewChrome();
+          showToast(error.message || "批量取消置顶失败");
+        }
+      }
+
+      function bindNailPinReviewGestures() {
+        const stage = document.getElementById("nailPinReviewStage");
+        const card = document.getElementById("nailPinReviewCard");
+        if (!stage || stage.dataset.pinReviewBound === "1") return;
+        stage.dataset.pinReviewBound = "1";
+        let startX = 0;
+        let startY = 0;
+        let dx = 0;
+        let active = false;
+        let pointerId = null;
+
+        function onDown(event) {
+          if (nailPinReviewBusy) return;
+          if (nailPinReviewIndex >= nailPinReviewQueue.length) return;
+          if (!card || card.hidden) return;
+          if (event.target && event.target.closest && event.target.closest("button"))
+            return;
+          active = true;
+          pointerId = event.pointerId;
+          startX = event.clientX;
+          startY = event.clientY;
+          dx = 0;
+          nailPinReviewDragging = true;
+          card.classList.add("is-dragging");
+          try {
+            stage.setPointerCapture(pointerId);
+          } catch (_err) {
+            /* ignore */
+          }
+        }
+
+        function onMove(event) {
+          if (!active || event.pointerId !== pointerId) return;
+          dx = event.clientX - startX;
+          const dy = event.clientY - startY;
+          if (Math.abs(dy) > Math.abs(dx) * 1.2 && Math.abs(dx) < 24) {
+            // mostly vertical — still allow horizontal feedback once committed
+          }
+          applyNailPinReviewDragVisual(dx);
+        }
+
+        function onUp(event) {
+          if (!active || event.pointerId !== pointerId) return;
+          active = false;
+          try {
+            stage.releasePointerCapture(pointerId);
+          } catch (_err) {
+            /* ignore */
+          }
+          pointerId = null;
+          card.classList.remove("is-dragging");
+          const threshold = Math.max(80, Math.min(140, window.innerWidth * 0.28));
+          if (dx <= -threshold) {
+            flyNailPinReviewCard("left", () => {
+              nailPinReviewDragging = false;
+              commitNailPinReviewSwipe("left");
+            });
+            return;
+          }
+          if (dx >= threshold) {
+            flyNailPinReviewCard("right", () => {
+              nailPinReviewDragging = false;
+              commitNailPinReviewSwipe("right");
+            });
+            return;
+          }
+          nailPinReviewDragging = false;
+          card.style.transform = "";
+          card.style.opacity = "";
+          const stampUnpin = document.getElementById("nailPinReviewStampUnpin");
+          const stampKeep = document.getElementById("nailPinReviewStampKeep");
+          if (stampUnpin) stampUnpin.style.opacity = "0";
+          if (stampKeep) stampKeep.style.opacity = "0";
+        }
+
+        stage.addEventListener("pointerdown", onDown);
+        stage.addEventListener("pointermove", onMove);
+        stage.addEventListener("pointerup", onUp);
+        stage.addEventListener("pointercancel", onUp);
+      }
+
       async function deleteSelectedNails() {
         const symbols = [...selectedNailSymbols];
         if (!symbols.length) {
@@ -24796,11 +25371,18 @@
         return id === "pin" || id === "held";
       }
 
+      const NAIL_PIN_REVIEW_EYE_SVG =
+        '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+
       function nailSectionLabelHtml(section) {
+        const eye =
+          section.id === "pin"
+            ? `<button type="button" class="nail-pin-review-eye" data-nail-pin-review aria-label="筛选置顶" title="滑动筛选置顶">${NAIL_PIN_REVIEW_EYE_SVG}</button>`
+            : "";
         return (
           `<div class="nail-section-label ${section.className}" data-nail-section="${section.id}">` +
           `<span>${section.label}</span>` +
-          `<span class="nail-section-count">${section.items.length}</span>` +
+          `<span class="nail-section-label-end">${eye}<span class="nail-section-count">${section.items.length}</span></span>` +
           `</div>`
         );
       }
@@ -28127,11 +28709,51 @@
         });
       }
       bindNailDrawerSwipeGestures();
+      bindNailPinReviewGestures();
+      const nailPinReviewAbortBtn = document.getElementById(
+        "nailPinReviewAbortBtn",
+      );
+      if (nailPinReviewAbortBtn) {
+        nailPinReviewAbortBtn.addEventListener("click", () => {
+          closeNailPinReview();
+        });
+      }
+      const nailPinReviewConfirmBtn = document.getElementById(
+        "nailPinReviewConfirmBtn",
+      );
+      if (nailPinReviewConfirmBtn) {
+        nailPinReviewConfirmBtn.addEventListener("click", () => {
+          void confirmNailPinReview();
+        });
+      }
+      const nailPinReviewUnpinBtn = document.getElementById(
+        "nailPinReviewUnpinBtn",
+      );
+      if (nailPinReviewUnpinBtn) {
+        nailPinReviewUnpinBtn.addEventListener("click", () => {
+          decideNailPinReview("left");
+        });
+      }
+      const nailPinReviewKeepBtn = document.getElementById(
+        "nailPinReviewKeepBtn",
+      );
+      if (nailPinReviewKeepBtn) {
+        nailPinReviewKeepBtn.addEventListener("click", () => {
+          decideNailPinReview("right");
+        });
+      }
       const nailDrawer = document.getElementById("nailDrawer");
       if (nailDrawer) {
         nailDrawer.addEventListener("click", (event) => {
           if (event.target && event.target.hasAttribute("data-close-nails")) {
             setNailDrawerOpen(false);
+            return;
+          }
+          const pinReviewEye = event.target.closest("[data-nail-pin-review]");
+          if (pinReviewEye) {
+            event.preventDefault();
+            event.stopPropagation();
+            openNailPinReview();
             return;
           }
           if (!event.target.closest(".nail-pin-wrap")) {
