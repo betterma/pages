@@ -12194,7 +12194,7 @@
               [],
               null,
               null,
-              { symbol },
+              { symbol, pinSplitGreen: true },
             );
           } catch (error) {
             console.warn("auto-pin kline failed", symbol, error);
@@ -20432,10 +20432,17 @@
           ctx.restore();
         }
 
+        // 自动盯卡片：超过盯价的部分染绿（与通知页染绿同色）。
+        // 只做几何分割，不套便签那套「绿色会话」有效期判定——钉子是个静态水位，
+        // 回撤或连阴都不该让线以上那段颜色消失。
+        const splitAt =
+          options && options.pinSplitGreen && hasPin ? pin : NaN;
+
         candles.forEach((candle, index) => {
           const x = pad.left + slot * index + slot / 2;
           const up = candle.close >= candle.open;
           const base = up ? "#8a9a96" : "#9a8e88";
+          const aboveTone = Number.isFinite(splitAt) ? NAIL_ALERT_GREEN : base;
           const useAlert =
             hasAlert &&
             up &&
@@ -20448,10 +20455,10 @@
             x,
             candle.high,
             candle.low,
-            NaN,
+            splitAt,
             yOf,
             base,
-            base,
+            aboveTone,
           );
           fillCandleBody(
             ctx,
@@ -20459,10 +20466,10 @@
             bodyW,
             candle.open,
             candle.close,
-            NaN,
+            splitAt,
             yOf,
             base,
-            base,
+            aboveTone,
           );
 
           if (useAlert) {
