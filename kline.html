@@ -2470,7 +2470,8 @@
         right: 10px;
         z-index: 9;
         width: min(440px, calc(100vw - 20px));
-        max-height: min(52vh, 440px);
+        /* 两列 x 最多 10 行，高度给足才能少滚；vh 上限防止在小屏超出可视区。 */
+        max-height: min(68vh, 600px);
         border: 0.5px solid var(--separator);
         border-radius: 10px;
         background: var(--elevated, var(--grouped));
@@ -2488,7 +2489,8 @@
         font-weight: 650;
       }
       .nail-auto-pin-list {
-        max-height: min(48vh, 400px);
+        /* 比弹层少 40px，留给标题栏。 */
+        max-height: min(64vh, 560px);
         overflow: auto;
         overscroll-behavior: contain;
       }
