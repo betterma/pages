@@ -2540,12 +2540,27 @@
         font-size: 11px;
         font-weight: 650;
       }
+      /* 近 8 小时的自动盯按两列排，一屏能看更多；间距交给 grid gap。 */
+      .nail-auto-pin-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        padding: 8px 10px;
+      }
+      .nail-auto-pin-grid .nail-auto-pin-card {
+        margin: 0;
+      }
+      /* 只有一个币时不必留半屏空白。 */
+      .nail-auto-pin-grid .nail-auto-pin-card:only-child {
+        grid-column: span 2;
+      }
       .nail-auto-pin-card {
         display: flex;
         flex-direction: column;
         gap: 6px;
         margin: 8px 10px;
         padding: 8px 10px 10px;
+        min-width: 0;
         border: 0.5px solid var(--separator);
         border-radius: 9px;
         background: color-mix(in srgb, var(--label, #808080) 5%, transparent);
@@ -2559,6 +2574,10 @@
         border: none;
         background: transparent;
         padding: 0;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         color: var(--accent);
         font-size: 13px;
         font-weight: 650;
@@ -2569,13 +2588,15 @@
       }
       .nail-auto-pin-card-time {
         margin-left: auto;
+        flex-shrink: 0;
         color: var(--secondary);
         font-size: 10px;
         font-variant-numeric: tabular-nums;
       }
       .nail-auto-pin-card-prices {
         display: flex;
-        gap: 12px;
+        flex-wrap: wrap;
+        gap: 2px 10px;
         color: var(--secondary);
         font-size: 11px;
         font-variant-numeric: tabular-nums;
@@ -2597,6 +2618,12 @@
         border-radius: 6px;
         background: color-mix(in srgb, var(--label, #808080) 4%, transparent);
         pointer-events: none;
+      }
+      /* 两列后单卡只有一百多像素宽，压一点高度否则卡片显得瘦长。 */
+      @media (max-width: 430px) {
+        .nail-auto-pin-grid .nail-auto-pin-kline {
+          height: 74px;
+        }
       }
       .nail-auto-pin-more {
         padding: 2px 12px 10px;
@@ -9413,6 +9440,11 @@
       const AUTO_PIN_RECENT_MAX_CARDS = 10;
       /** 入口红点只看近 24h，避免陈年记录一直亮着。 */
       const AUTO_PIN_BADGE_MS = 24 * 60 * 60 * 1000;
+      /** 挂着钉子页不动时，每 60 拍（5 分钟）拉一次日志刷新红点。 */
+      const AUTO_PIN_BADGE_POLL_TICKS = Math.max(
+        1,
+        Math.round((5 * 60 * 1000) / NAIL_AUTO_REFRESH_TOP_MS),
+      );
       let nailAutoPinPaintToken = 0;
       let priceAlertItems = [];
       let priceAlertSaving = false;
@@ -11594,7 +11626,8 @@
         return toAdd;
       }
 
-      async function loadSharedActionLog() {
+      async function loadSharedActionLog(options) {
+        const opts = options && typeof options === "object" ? options : {};
         let remote = [];
         try {
           const state = await WatchFavorites.loadActionLogRaw({
@@ -11632,7 +11665,9 @@
             console.warn("migrate action log failed", error);
           }
         }
-        renderActionLogBody();
+        // 后台轮询只关心红点（writeActionLogCache 里已同步），不重绘日志正文，
+        // 否则日志面板开着时会跟着闪。
+        if (!opts.skipBodyRender) renderActionLogBody();
         return actionLogEntries;
       }
 
@@ -11982,6 +12017,26 @@
           : "自动盯记录";
       }
 
+      let autoPinBadgePolling = false;
+
+      /**
+       * 钉子页挂着不动时的红点轮询：拉一次日志、只同步红点，不重绘日志正文。
+       * 弹层开着就跳过（打开时已记为已读，刷新也没意义）。
+       */
+      async function pollAutoPinBadgeOnce() {
+        if (autoPinBadgePolling) return;
+        const popover = document.getElementById("nailAutoPinPopover");
+        if (popover && !popover.hidden) return;
+        autoPinBadgePolling = true;
+        try {
+          await loadSharedActionLog({ skipBodyRender: true });
+        } catch (error) {
+          console.warn("auto-pin badge poll failed", error);
+        } finally {
+          autoPinBadgePolling = false;
+        }
+      }
+
       function buildNailAutoPinCardHtml(symbol, at) {
         const key = String(symbol || "")
           .trim()
@@ -12047,9 +12102,9 @@
         if (cards.length) {
           parts.push(
             `<div class="nail-auto-pin-section">近 8 小时 · ${cards.length} 个币</div>`,
-            cards
+            `<div class="nail-auto-pin-grid">${cards
               .map((row) => buildNailAutoPinCardHtml(row.symbol, row.at))
-              .join(""),
+              .join("")}</div>`,
           );
           if (overflow.length) {
             parts.push(
@@ -26194,6 +26249,10 @@
         void refreshNailTopPrices();
         nailAutoRefreshTimer = window.setInterval(() => {
           nailAutoRefreshTick += 1;
+          // 每 5 分钟顺带刷一次自动盯红点（页面挂着不动也能亮起来）。
+          if (nailAutoRefreshTick % AUTO_PIN_BADGE_POLL_TICKS === 0) {
+            void pollAutoPinBadgeOnce();
+          }
           if (
             NAIL_AUTO_REFRESH_ALL_EVERY > 0 &&
             nailAutoRefreshTick % NAIL_AUTO_REFRESH_ALL_EVERY === 0
