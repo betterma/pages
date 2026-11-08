@@ -20385,6 +20385,18 @@
         const bodyW = Math.max(1, slot * 0.62);
         const yOf = (price) => pad.top + ((max - price) / range) * chartH;
 
+        // options.maxIndex：只画到第 N 根为止，但 slot / 价格区间仍按全部 candles 计算。
+        // 回顾对比用它让左右两栏共用同一时间轴与价格轴，左栏在锚点处截断、右侧留白。
+        const maxIndex =
+          options &&
+          Number.isInteger(options.maxIndex) &&
+          options.maxIndex >= 0 &&
+          options.maxIndex < candles.length
+            ? options.maxIndex
+            : candles.length - 1;
+        // 水位横线也画到截断处为止，避免伸进空白区假装「后面还有行情」。
+        const lineRight = pad.left + slot * (maxIndex + 1);
+
         const pinIndex = hasPin ? findCandleIndexAt(candles, pinnedAt) : -1;
         const alertFromAt = Number(alertMark && alertMark.fromAt) || 0;
         const alertFromIndex =
@@ -20413,7 +20425,7 @@
           ctx.setLineDash([]);
           ctx.beginPath();
           ctx.moveTo(pad.left, y);
-          ctx.lineTo(pad.left + chartW, y);
+          ctx.lineTo(lineRight, y);
           ctx.stroke();
           ctx.restore();
         }
@@ -20426,7 +20438,7 @@
           ctx.setLineDash([4, 3]);
           ctx.beginPath();
           ctx.moveTo(pad.left, y);
-          ctx.lineTo(pad.left + chartW, y);
+          ctx.lineTo(lineRight, y);
           ctx.stroke();
           ctx.setLineDash([]);
           ctx.restore();
@@ -20439,6 +20451,7 @@
           options && options.pinSplitGreen && hasPin ? pinIndex : -1;
 
         candles.forEach((candle, index) => {
+          if (index > maxIndex) return;
           const x = pad.left + slot * index + slot / 2;
           const up = candle.close >= candle.open;
           const base = up ? "#8a9a96" : "#9a8e88";
@@ -20504,7 +20517,8 @@
         });
 
         // 盯住：竖虚线 + 白心绿边点。
-        if (hasPin && pinIndex >= 0) {
+        // 钉子晚于截断点时（回顾左栏），竖线会落在空白区，索性不画。
+        if (hasPin && pinIndex >= 0 && pinIndex <= maxIndex) {
           const x = pad.left + slot * pinIndex + slot / 2;
           const y = yOf(pin);
           ctx.save();
@@ -20530,7 +20544,7 @@
         const reviewAt = Number(options && options.reviewAt) || 0;
         if (reviewAt > 0) {
           const reviewIndex = findCandleIndexAt(candles, reviewAt);
-          if (reviewIndex >= 0) {
+          if (reviewIndex >= 0 && reviewIndex <= maxIndex) {
             const x = pad.left + slot * reviewIndex + slot / 2;
             ctx.save();
             ctx.strokeStyle = "rgba(70, 110, 150, 0.85)";
@@ -20549,7 +20563,7 @@
         const noteRadius = Math.max(2.2, Math.min(3.2, slot * 0.28));
         notes.forEach((note) => {
           const idx = findCandleIndexAt(candles, note && note.at);
-          if (idx < 0) return;
+          if (idx < 0 || idx > maxIndex) return;
           let price = Number(note.price);
           if (!Number.isFinite(price) || price <= 0) {
             price = Number(candles[idx].close);
@@ -23563,14 +23577,6 @@
         syncBodyScrollLock();
       }
 
-      function candlesUntilAt(candles, endAt) {
-        const end = Number(endAt) || 0;
-        const list = Array.isArray(candles) ? candles : [];
-        if (!(end > 0)) return list;
-        // 只保留 openTime <= 首次通知时刻的 K 线（之后的不画）。
-        return list.filter((bar) => Number(bar && bar.time) <= end);
-      }
-
       function drawNoticeComparePane(canvas, candles, item, opts) {
         if (!canvas) return;
         const pin = pinItemBySymbol(item && item.symbol);
@@ -23586,6 +23592,17 @@
         const drawPinAt =
           pin && Number(pin.pinnedAt) > 0 ? pin.pinnedAt : null;
         const reviewAt = Number(opts && opts.reviewAt) || 0;
+        const maxIndex = Number.isInteger(opts && opts.maxIndex)
+          ? opts.maxIndex
+          : -1;
+        const drawOptions =
+          reviewAt > 0 || maxIndex >= 0
+            ? Object.assign(
+                {},
+                reviewAt > 0 ? { reviewAt } : {},
+                maxIndex >= 0 ? { maxIndex } : {},
+              )
+            : null;
         drawKline(
           canvas,
           candles,
@@ -23599,7 +23616,7 @@
               }
             : null,
           null,
-          reviewAt > 0 ? { reviewAt } : null,
+          drawOptions,
         );
       }
 
@@ -23617,25 +23634,45 @@
         const liveCanvas = document.getElementById("noticeReviewLiveCanvas");
         const pastMeta = document.getElementById("noticeReviewPastMeta");
         const liveMeta = document.getElementById("noticeReviewLiveMeta");
+        // 给两栏画布打上币种，否则 drawKline 判断「是否自动盯线」时会退化到
+        // 放大页当前的币（klineZoomSymbol），横线颜色会随机跑偏。
+        if (pastCanvas) pastCanvas.setAttribute("data-kline", key);
+        if (liveCanvas) liveCanvas.setAttribute("data-kline", key);
         if (pastMeta) pastMeta.textContent = `截至 ${formatNoticeTime(at)} · 加载中…`;
         if (liveMeta) liveMeta.textContent = "加载中…";
-        const [pastRaw, liveCandles] = await Promise.all([
-          fetchKlines(key, "4h", null, 18, at),
-          fetchKlines(key, "4h", null, 18),
-        ]);
+        // 两栏共用同一份 K 线：slot 与价格区间都由 drawKline 按 candles 全量算，
+        // 所以左右时间轴、价格轴天然一致；左栏只靠 maxIndex 在锚点处截断，右侧留白。
+        // limit 至少保证锚点之前还有 18 根，锚点越久远窗口自动加长（上限 72 根）。
+        const REVIEW_BARS = 18;
+        const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+        const spanBars = Math.max(
+          0,
+          Math.ceil((Date.now() - at) / FOUR_HOURS_MS),
+        );
+        const limit = Math.min(
+          Math.max(REVIEW_BARS, spanBars + REVIEW_BARS),
+          72,
+        );
+        const windowCandles = await fetchKlines(key, "4h", null, limit);
         if (noticeReviewSymbol !== key) return;
-        const pastCandles = candlesUntilAt(pastRaw, at);
-        drawNoticeComparePane(pastCanvas, pastCandles, item, {
+        const windowFirstTime = Number(windowCandles[0] && windowCandles[0].time) || 0;
+        // 锚点若早于整个窗口（正常不会发生），退化成不截断，避免误画成「只有第一根」。
+        const cutIndex =
+          windowFirstTime > 0 && at < windowFirstTime
+            ? windowCandles.length - 1
+            : findCandleIndexAt(windowCandles, at);
+        drawNoticeComparePane(pastCanvas, windowCandles, item, {
           reviewAt: at,
+          maxIndex: cutIndex,
         });
-        drawNoticeComparePane(liveCanvas, liveCandles, item, null);
+        drawNoticeComparePane(liveCanvas, windowCandles, item, null);
         const pastClose =
-          pastCandles.length > 0
-            ? Number(pastCandles[pastCandles.length - 1].close)
+          cutIndex >= 0 && windowCandles[cutIndex]
+            ? Number(windowCandles[cutIndex].close)
             : NaN;
         const liveClose =
-          liveCandles.length > 0
-            ? Number(liveCandles[liveCandles.length - 1].close)
+          windowCandles.length > 0
+            ? Number(windowCandles[windowCandles.length - 1].close)
             : NaN;
         const tickerPrice = Number(marketMap[key]?.price);
         const livePrice =
