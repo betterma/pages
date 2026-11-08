@@ -4241,7 +4241,9 @@
       .nail-pin-review {
         position: fixed;
         inset: 0;
-        z-index: 120;
+        /* 必须高于 .nail-drawer(122) 与 .nail-notice-drawer(130)，
+           否则从钉子屏点眼睛时弹层被抽屉盖住，表现为「点了没反应」 */
+        z-index: 186;
         display: flex;
         flex-direction: column;
         background: color-mix(in srgb, var(--bg, #111214) 92%, #000);
