@@ -1,38 +1,68 @@
 {
   "risingZoneSnap": [
     "IRENBUSDT",
+    "MUUBUSDT",
+    "SNXXBUSDT",
     "BNCBUSDT",
     "COHRBUSDT",
-    "MUUBUSDT",
-    "GPROBUSDT",
     "APPBUSDT",
+    "SOXLBUSDT",
     "ASTSBUSDT",
-    "AMCBUSDT",
-    "BMNRBUSDT",
-    "SNXXBUSDT",
-    "NBISBUSDT",
     "MUBUSDT",
+    "NBISBUSDT",
     "AGPUBUSDT",
-    "INTWBUSDT",
-    "GOOGLBUSDT",
-    "GEVBUSDT",
+    "BMNRBUSDT",
+    "SNDKBUSDT",
+    "SKUUBUSDT",
     "TSMBUSDT",
     "UVXYBUSDT",
-    "MSTRBUSDT",
+    "CRWVBUSDT",
+    "DRAMBUSDT",
     "CRCLBUSDT",
     "SPCXBUSDT",
-    "SOXLBUSDT",
-    "CRWVBUSDT",
-    "SKUUBUSDT",
+    "MSTRBUSDT",
+    "GOOGLBUSDT",
     "MRNABUSDT",
-    "SNDKBUSDT",
+    "KORUBUSDT",
+    "SKHYBUSDT",
     "WDCBUSDT",
     "KSTRBUSDT",
+    "INTWBUSDT",
     "BOTBUSDT",
-    "CRMBUSDT"
+    "AMATBUSDT"
   ],
   "risingZoneSnapSeeded": true,
   "autoPinEvents": [
+    {
+      "at": 1794154200564,
+      "symbols": [
+        "KORUBUSDT"
+      ],
+      "source": "auto-cloud",
+      "kind": "new"
+    },
+    {
+      "at": 1794154200564,
+      "symbols": [
+        "BNCBUSDT",
+        "APPBUSDT",
+        "MRNABUSDT",
+        "BOTBUSDT"
+      ],
+      "source": "auto-cloud",
+      "kind": "catch-up"
+    },
+    {
+      "at": 1794154200564,
+      "symbols": [
+        "GPROBUSDT",
+        "AMCBUSDT",
+        "GEVBUSDT",
+        "CRMBUSDT"
+      ],
+      "source": "zone-drop",
+      "kind": "zone-drop"
+    },
     {
       "at": 1794153900391,
       "symbols": [
@@ -423,39 +453,9 @@
       ],
       "source": "auto-cloud",
       "kind": "catch-up"
-    },
-    {
-      "at": 1794144300982,
-      "symbols": [
-        "BBBUSDT",
-        "MSTRBUSDT",
-        "USARBUSDT",
-        "AGPUBUSDT"
-      ],
-      "source": "zone-drop",
-      "kind": "zone-drop"
-    },
-    {
-      "at": 1794144000409,
-      "symbols": [
-        "KORUBUSDT"
-      ],
-      "source": "auto-cloud",
-      "kind": "catch-up"
-    },
-    {
-      "at": 1794144000409,
-      "symbols": [
-        "FLNCBUSDT",
-        "MRVLBUSDT",
-        "DRAMBUSDT",
-        "SNXXBUSDT"
-      ],
-      "source": "zone-drop",
-      "kind": "zone-drop"
     }
   ],
-  "updatedAt": 1794153942031,
+  "updatedAt": 1794154215727,
   "dropAlerts": {},
   "lastPinPrices": {
     "USDEBUSDT": 6.66,
