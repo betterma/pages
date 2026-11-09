@@ -1,49 +1,52 @@
 {
-  "updatedAt": 1794225353503,
-  "lastRunAt": 1794225300619,
-  "ok": true,
-  "error": null,
-  "durationMs": 52884,
-  "autoPins": 147,
+  "updatedAt": 1794225662838,
+  "lastRunAt": 1794225601045,
+  "ok": false,
+  "error": "balance×1:notices:GitHub PUT watch-balance-notices.json failed: 409 {\"message\":\"is at 320b2035e3c4793b1d3c3facf6c332f668db75c3 but expected 138fb97d33b35d10257671345f653281bb38005d\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":",
+  "durationMs": 61793,
+  "autoPins": 134,
   "balance": {
     "skipped": false,
     "reason": null,
-    "autoPins": 147,
-    "due": 81,
-    "checked": 81,
-    "hits": 45,
-    "sent": 33,
-    "wecomDue": 33,
-    "wecomQueued": 33,
+    "autoPins": 134,
+    "due": 44,
+    "checked": 44,
+    "hits": 21,
+    "sent": 0,
+    "wecomDue": 4,
+    "wecomQueued": 4,
     "wecomDeferred": 0,
-    "skippedWecomWindow": 12,
+    "skippedWecomWindow": 17,
     "checkMax": 0,
     "sendMax": 0,
     "checkCursor": 0,
     "cooldownMs": 1800000,
-    "cooldownSkipped": 66,
-    "errorCount": 0,
-    "errors": []
+    "cooldownSkipped": 90,
+    "errorCount": 1,
+    "errors": [
+      "notices:GitHub PUT watch-balance-notices.json failed: 409 {\"message\":\"is at 320b2035e3c4793b1d3c3facf6c332f668db75c3 but expected 138fb97d33b35d10257671345f653281bb38005d\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":"
+    ]
   },
   "nailGreen": {
     "skipped": false,
     "reason": null,
-    "nails": 154,
-    "pending": 42,
-    "checked": 42,
-    "hits": 0,
+    "nails": 141,
+    "pending": 141,
+    "checked": 141,
+    "hits": 61,
     "sent": 0,
     "checkMax": 0,
     "checkCursor": 0,
-    "bucketSkipped": 112,
+    "bucketSkipped": 0,
     "errorCount": 0,
     "errors": []
   },
   "staleNailPrune": {
     "skipped": false,
-    "reason": "none-stale",
+    "reason": null,
     "checked": 12,
-    "candidate": 120,
-    "removed": 0
-  }
+    "candidate": 119,
+    "removed": 12
+  },
+  "degraded": true
 }
