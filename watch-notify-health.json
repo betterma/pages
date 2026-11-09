@@ -1,27 +1,27 @@
 {
-  "updatedAt": 1794199553730,
-  "lastRunAt": 1794199500756,
-  "ok": true,
-  "error": null,
-  "durationMs": 52974,
+  "updatedAt": 1794199855378,
+  "lastRunAt": 1794199800964,
+  "ok": false,
+  "error": "nail-green×1:notices:GitHub PUT watch-nail-green-notices.json failed: 409 {\"message\":\"is at e7be3bdeaa3b5d31cfb3ac3dad35b371709eb6ff but expected e2a32284fd3f3d1ec144b9df63411d99e8260533\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":",
+  "durationMs": 54414,
   "autoPins": 130,
   "balance": {
     "skipped": false,
     "reason": null,
     "autoPins": 130,
-    "due": 68,
-    "checked": 68,
-    "hits": 36,
-    "sent": 12,
-    "wecomDue": 12,
-    "wecomQueued": 12,
+    "due": 59,
+    "checked": 59,
+    "hits": 29,
+    "sent": 5,
+    "wecomDue": 5,
+    "wecomQueued": 5,
     "wecomDeferred": 0,
     "skippedWecomWindow": 24,
     "checkMax": 0,
     "sendMax": 0,
     "checkCursor": 0,
     "cooldownMs": 1800000,
-    "cooldownSkipped": 62,
+    "cooldownSkipped": 71,
     "errorCount": 0,
     "errors": []
   },
@@ -29,15 +29,17 @@
     "skipped": false,
     "reason": null,
     "nails": 139,
-    "pending": 44,
-    "checked": 44,
-    "hits": 2,
+    "pending": 42,
+    "checked": 42,
+    "hits": 1,
     "sent": 0,
     "checkMax": 0,
     "checkCursor": 0,
-    "bucketSkipped": 95,
-    "errorCount": 0,
-    "errors": []
+    "bucketSkipped": 97,
+    "errorCount": 1,
+    "errors": [
+      "notices:GitHub PUT watch-nail-green-notices.json failed: 409 {\"message\":\"is at e7be3bdeaa3b5d31cfb3ac3dad35b371709eb6ff but expected e2a32284fd3f3d1ec144b9df63411d99e8260533\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":"
+    ]
   },
   "staleNailPrune": {
     "skipped": false,
@@ -45,5 +47,6 @@
     "checked": 12,
     "candidate": 110,
     "removed": 0
-  }
+  },
+  "degraded": true
 }
