@@ -8159,6 +8159,18 @@
                 aria-label="当前窗口上涨"
               ></button>
             </div>
+            <div class="nail-rising-row">
+              <span>只看置顶区</span>
+              <button
+                type="button"
+                class="nail-switch"
+                id="nailPinnedOnlySwitch"
+                role="switch"
+                aria-checked="false"
+                title="开启后钉子页只显示置顶的币；持有且置顶的仍归「持有」段"
+                aria-label="只看置顶区"
+              ></button>
+            </div>
             <div class="nail-rising-row nail-sort-row">
               <span>排序</span>
               <div
@@ -8166,7 +8178,7 @@
                 id="nailSortSwitch"
                 role="group"
                 aria-label="钉子排序"
-                title="默认：置顶/拖拽顺序；荧光绿/24h：置顶区内保持手动顺序，仅「其余」按指标排序"
+                title="默认：置顶/拖拽顺序；荧光绿：置顶区也按绿色面积排序；24h：置顶区保持手动序，仅「其余」按涨幅排"
               >
                 <button type="button" data-nail-sort="order" class="is-active">
                   默认
@@ -8174,7 +8186,7 @@
                 <button
                   type="button"
                   data-nail-sort="alertGreen"
-                  title="置顶仍在最上且保持手动序；其余按绿色K线占用面积从大到小"
+                  title="置顶区与「其余」都按绿色K线占用面积从大到小；切回「默认」恢复手动拖拽序"
                 >
                   荧光绿
                 </button>
@@ -9186,6 +9198,13 @@
         else if (savedNailRising === "1") nailRisingFilterOn = true;
       } catch (_) {
         nailRisingFilterOn = true;
+      }
+      const NAIL_PINNED_ONLY_KEY = "kline-nail-pinned-only-v1";
+      let nailPinnedOnlyOn = false;
+      try {
+        nailPinnedOnlyOn = localStorage.getItem(NAIL_PINNED_ONLY_KEY) === "1";
+      } catch (_) {
+        nailPinnedOnlyOn = false;
       }
       const NAIL_SORT_KEY = "kline-nail-sort-v1";
       const NAIL_NOTE_TIME_MODE_KEY = "kline-nail-note-time-mode-v1";
@@ -25854,6 +25873,26 @@
         renderNailDrawer();
       }
 
+      function syncNailPinnedOnlyUi() {
+        const sw = document.getElementById("nailPinnedOnlySwitch");
+        if (!sw) return;
+        sw.setAttribute("aria-checked", nailPinnedOnlyOn ? "true" : "false");
+      }
+
+      function setNailPinnedOnly(on) {
+        nailPinnedOnlyOn = !!on;
+        try {
+          localStorage.setItem(
+            NAIL_PINNED_ONLY_KEY,
+            nailPinnedOnlyOn ? "1" : "0",
+          );
+        } catch (_) {
+          /* ignore */
+        }
+        syncNailPinnedOnlyUi();
+        renderNailDrawer();
+      }
+
       function formatNailNoteHtml(note) {
         const text = String(note || "");
         if (!text) return "";
@@ -25870,21 +25909,17 @@
         let items = nailRisingFilterOn
           ? all.filter((item) => hasWindowGain(item.symbol, interval))
           : all.slice();
+        if (nailPinnedOnlyOn) {
+          items = items.filter((item) => !!(item && item.pinned));
+        }
         if (nailSortMode === "alertGreen") {
+          // 荧光绿模式：置顶区也按绿色面积排（切回「默认」即恢复手动拖拽序）；
+          // 持有/置顶/其余的分段不受影响，这里只决定段内顺序。
           items = items.slice().sort((a, b) => {
-            const ap = a.pinned ? 0 : 1;
-            const bp = b.pinned ? 0 : 1;
-            if (ap !== bp) return ap - bp;
-            // 置顶区内保持手动/拖拽序（「排第一」才生效）；指标只排「其余」。
-            if (a.pinned && b.pinned) {
-              return (a.order || 0) - (b.order || 0);
-            }
             const ka = String(a.symbol || "").toUpperCase();
             const kb = String(b.symbol || "").toUpperCase();
-            const hasA = nailAlertGreenScores.has(ka);
-            const hasB = nailAlertGreenScores.has(kb);
-            const sa = hasA ? nailAlertGreenScores.get(ka) : undefined;
-            const sb = hasB ? nailAlertGreenScores.get(kb) : undefined;
+            const sa = nailAlertGreenScores.get(ka);
+            const sb = nailAlertGreenScores.get(kb);
             const scoreA = Number.isFinite(sa) ? sa : null;
             const scoreB = Number.isFinite(sb) ? sb : null;
             if (scoreA == null && scoreB == null) {
@@ -26153,12 +26188,13 @@
           const pinHint =
             pinnedCount > 0 ? `置顶 ${pinnedCount}` : "无置顶";
           const holdHint = heldCount > 0 ? ` · 持有 ${heldCount}` : "";
+          const pinnedOnlyHint = nailPinnedOnlyOn ? " · 只看置顶" : "";
           if (!total) {
             meta.textContent = `复制名称后新增 · ${sortHint}`;
           } else if (nailRisingFilterOn) {
-            meta.textContent = `窗口上涨 ${n}/${total} · ${pinHint}${holdHint} · ${sortHint}`;
+            meta.textContent = `窗口上涨 ${n}/${total} · ${pinHint}${holdHint} · ${sortHint}${pinnedOnlyHint}`;
           } else {
-            meta.textContent = `${n} 个 · ${pinHint}${holdHint} · ${sortHint}`;
+            meta.textContent = `${n} 个 · ${pinHint}${holdHint} · ${sortHint}${pinnedOnlyHint}`;
           }
         }
         if (!listEl) return;
@@ -26181,9 +26217,11 @@
         }
         if (!n) {
           abortNailKlines();
-          listEl.innerHTML = nailRisingFilterOn
-            ? '<div class="nail-empty">当前没有窗口上涨的钉子 · 可关闭上方开关查看全部</div>'
-            : '<div class="nail-empty">还没有钉子</div>';
+          listEl.innerHTML = nailPinnedOnlyOn
+            ? '<div class="nail-empty">没有置顶的钉子 · 可在设置里关闭「只看置顶区」</div>'
+            : nailRisingFilterOn
+              ? '<div class="nail-empty">当前没有窗口上涨的钉子 · 可关闭上方开关查看全部</div>'
+              : '<div class="nail-empty">还没有钉子</div>';
           applyFocusActionChrome();
           syncNailSelectUi();
           return;
@@ -29769,6 +29807,15 @@
         syncNailRisingFilterUi();
         nailRisingFilter.addEventListener("click", () => {
           setNailRisingFilter(!nailRisingFilterOn);
+        });
+      }
+      const nailPinnedOnlySwitch = document.getElementById(
+        "nailPinnedOnlySwitch",
+      );
+      if (nailPinnedOnlySwitch) {
+        syncNailPinnedOnlyUi();
+        nailPinnedOnlySwitch.addEventListener("click", () => {
+          setNailPinnedOnly(!nailPinnedOnlyOn);
         });
       }
       const nailSortSwitch = document.getElementById("nailSortSwitch");
