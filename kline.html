@@ -24853,11 +24853,12 @@
         }
 
         function ignoreSwipeTarget(target) {
+          // 浮窗内的左右滑一律不吃页面切换（自动盯/雷达/持有/模拟弹层，含贴边全宽面板）
           return !!(
             target &&
             target.closest &&
             target.closest(
-              'input, textarea, select, [contenteditable="true"], button, a, .notes-rank-gate, .kline-zoom-gate, .stop-loss-gate, .buy-sl-gate, .boot-init-gate, .card-actions, .notify-float, .momentum-float, .float-tabs, .app-chrome, .nail-tab, .hidden-pin-tab, .nail-pin-review',
+              'input, textarea, select, [contenteditable="true"], button, a, .notes-rank-gate, .kline-zoom-gate, .stop-loss-gate, .buy-sl-gate, .boot-init-gate, .card-actions, .notify-float, .momentum-float, .float-tabs, .app-chrome, .nail-tab, .hidden-pin-tab, .nail-pin-review, #nailAutoPinPopover, #nailRadarPopover, #nailHoldPopover, #simHoldFloat',
             )
           );
         }
