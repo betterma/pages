@@ -4061,6 +4061,19 @@
         padding: 6px 8px 8px;
         min-width: 0;
       }
+      /* 第一次进通知的卡（区别于被新命中顶上来的）：淡绿底 + 绿边。 */
+      .nail-notice-card.is-first {
+        background: color-mix(
+          in srgb,
+          var(--accent, #2f8f6e) 10%,
+          var(--elevated)
+        );
+        border-color: color-mix(
+          in srgb,
+          var(--accent, #2f8f6e) 45%,
+          var(--separator)
+        );
+      }
       .nail-notice-card.is-focus {
         outline: 2px solid var(--accent, #2f8f6e);
         outline-offset: 2px;
@@ -22827,6 +22840,12 @@
           Number(item.firstSeenAt) > 0
             ? Number(item.firstSeenAt)
             : Number(item.at) || 0;
+        // 首次进通知：at 与 firstSeenAt 几乎相同；被顶上来 = at 明显晚于 firstSeenAt。
+        // 容差 5 分钟：企微批次会把 at 抬到批次时间（同轮，差几秒），而冷却期 30 分钟，
+        // 真实的二次命中至少差 30 分钟，5 分钟足以区分两者。
+        const NOTICE_FIRST_ENTRY_MS = 5 * 60 * 1000;
+        const isFirstEntry =
+          Number(item.at) - firstSeenAt <= NOTICE_FIRST_ENTRY_MS;
         const batchAt = Number(item.batchAt) || 0;
         const selected =
           nailNoticeSelectMode && selectedNoticeSymbols.has(key)
@@ -22836,7 +22855,7 @@
           ? `<input type="checkbox" class="nail-notice-check" data-notice-select="${symbol}" ${selectedNoticeSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
           : "";
         return [
-          `<article class="nail-notice-card${selected}" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-batch="${batchAt}" data-notice-first="${firstSeenAt}" data-notice-balance="${hitBal ? "1" : "0"}" data-notice-straight="${hitStraight ? "1" : "0"}">`,
+          `<article class="nail-notice-card${isFirstEntry ? " is-first" : ""}${selected}" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-batch="${batchAt}" data-notice-first="${firstSeenAt}" data-notice-balance="${hitBal ? "1" : "0"}" data-notice-straight="${hitStraight ? "1" : "0"}">`,
           check,
           `<div class="nail-notice-card-top">`,
           `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}</button>`,
