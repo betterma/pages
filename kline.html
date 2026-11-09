@@ -2742,16 +2742,50 @@
       }
       .nail-radar-table th:nth-child(4),
       .nail-radar-table td:nth-child(4) {
-        width: 124px;
+        width: 182px;
       }
-      /* 置顶币迷你 K 线：比钉子 K 线（112px）小，但保持可读。 */
+      /* 置顶币迷你 K 线：比钉子 K 线（112px 高）略小，但要看清形态。 */
       .nail-radar-kline {
         display: block;
-        width: 112px;
-        height: 44px;
+        width: 168px;
+        height: 62px;
         border-radius: 4px;
         background: color-mix(in srgb, var(--label, #808080) 4%, transparent);
         pointer-events: none;
+      }
+      /* K 线请求未返回前的扫光 loading，画完即移除。 */
+      .nail-radar-kline.is-loading,
+      .nail-auto-pin-kline.is-loading {
+        background: linear-gradient(
+            100deg,
+            transparent 25%,
+            color-mix(in srgb, var(--label, #808080) 16%, transparent) 50%,
+            transparent 75%
+          ),
+          color-mix(in srgb, var(--label, #808080) 4%, transparent);
+        background-size:
+          220% 100%,
+          100% 100%;
+        animation: nailKlineShimmer 1.2s linear infinite;
+      }
+      @keyframes nailKlineShimmer {
+        from {
+          background-position:
+            130% 0,
+            0 0;
+        }
+        to {
+          background-position:
+            -90% 0,
+            0 0;
+        }
+      }
+      /* 浮窗打开、后端数据未回时的整区 loading。 */
+      .nail-sheet-loading {
+        padding: 44px 16px;
+        text-align: center;
+        color: var(--secondary);
+        font-size: 13px;
       }
       .nail-radar-table tr.is-pool {
         background: color-mix(in srgb, var(--accent, #2f8f6e) 8%, transparent);
@@ -9476,6 +9510,8 @@
       let nailAutoPinPaintToken = 0;
       /** 冲榜雷达迷你 K 线的绘制令牌：重渲/关闭即作废。 */
       let nailRadarPaintToken = 0;
+      /** 雷达浮窗开着时的实时刷新定时器：让当前窗口的 K 线肉眼可见地生长。 */
+      let nailRadarLiveTimer = 0;
       let priceAlertItems = [];
       let priceAlertSaving = false;
       let focusActionSymbol = null;
@@ -12090,7 +12126,7 @@
           `<span>盯 <b data-autopin-pin>${pinPrice > 0 ? escapeHtml(formatPinPrice(pinPrice)) : "—"}</b></span>`,
           `<span>现 <b class="nail-auto-pin-card-live" data-autopin-live>${liveText}</b></span>`,
           `</div>`,
-          `<canvas class="nail-auto-pin-kline" data-kline="${escapeHtml(key)}" data-autopin-chart="${escapeHtml(key)}"></canvas>`,
+          `<canvas class="nail-auto-pin-kline is-loading" data-kline="${escapeHtml(key)}" data-autopin-chart="${escapeHtml(key)}"></canvas>`,
           `</article>`,
         ].join("");
       }
@@ -12226,6 +12262,8 @@
             );
           } catch (error) {
             console.warn("auto-pin kline failed", symbol, error);
+          } finally {
+            canvas.classList.remove("is-loading");
           }
         };
         // 上限 20 张卡，并发 5 大约 4 批画完；再高意义不大，交易所也会限速。
@@ -12260,6 +12298,11 @@
         }
         if (next) {
           layoutNailHeadSheet(popover);
+          // 日志要请求后端，先给整区 loading，避免旧内容让人误以为是最新的。
+          const listEl = document.getElementById("nailAutoPinList");
+          if (listEl) {
+            listEl.innerHTML = '<div class="nail-sheet-loading">加载中…</div>';
+          }
           await loadSharedActionLog();
           renderNailAutoPinList();
           writeNailAutoPinSeenAt(Date.now());
@@ -12360,7 +12403,7 @@
             const klineHtml = radarPinnedSet.has(
               String(symbol).trim().toUpperCase(),
             )
-              ? `<canvas class="nail-radar-kline" data-kline="${escapeHtml(symbol)}" data-radar-chart="${escapeHtml(symbol)}"></canvas>`
+              ? `<canvas class="nail-radar-kline is-loading" data-kline="${escapeHtml(symbol)}" data-radar-chart="${escapeHtml(symbol)}"></canvas>`
               : "";
             return `<tr class="${rowClass}"><td>${rank}</td><td><button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${winCls}">${escapeHtml(formatPercent(win))}</td><td>${rankHtml}</td></tr>`;
           })
@@ -12401,6 +12444,8 @@
             );
           } catch (error) {
             console.warn("radar kline failed", symbol, error);
+          } finally {
+            canvas.classList.remove("is-loading");
           }
         };
         // 置顶币通常只有几个，并发 4 足够；交易所也会限速。
@@ -12417,6 +12462,65 @@
           },
         );
         await Promise.all(workers);
+      }
+
+      function stopNailRadarLive() {
+        if (nailRadarLiveTimer) {
+          clearInterval(nailRadarLiveTimer);
+          nailRadarLiveTimer = 0;
+        }
+      }
+
+      function startNailRadarLive() {
+        stopNailRadarLive();
+        nailRadarLiveTimer = setInterval(() => {
+          const popover = document.getElementById("nailRadarPopover");
+          if (!popover || popover.hidden) {
+            stopNailRadarLive();
+            return;
+          }
+          // 页面退到后台时不白跑请求。
+          if (document.visibilityState === "hidden") return;
+          updateNailRadarLiveCells();
+          void paintNailRadarKlines();
+        }, 10000);
+      }
+
+      /** 不重渲整表，只刷新 24h / 窗涨两列数字（K 线由 paintNailRadarKlines 负责）。 */
+      function updateNailRadarLiveCells() {
+        const body = document.getElementById("nailRadarBody");
+        if (!body) return;
+        const interval = CONFIG.KLINE_INTERVAL;
+        body.querySelectorAll("tr").forEach((tr) => {
+          const btn = tr.querySelector("[data-nail-radar-symbol]");
+          if (!btn) return;
+          const symbol = String(
+            btn.getAttribute("data-nail-radar-symbol") || "",
+          )
+            .trim()
+            .toUpperCase();
+          if (!symbol) return;
+          const cells = tr.children;
+          const change24h = Number(
+            marketMap[symbol] && marketMap[symbol].change24h,
+          );
+          const win = windowPriceChange(symbol, interval);
+          const syncCell = (cell, value) => {
+            if (!cell) return;
+            const text = formatPercent(value);
+            if (cell.textContent !== text) cell.textContent = text;
+            cell.classList.toggle(
+              "nail-radar-up",
+              Number.isFinite(value) && value > 0,
+            );
+            cell.classList.toggle(
+              "nail-radar-down",
+              Number.isFinite(value) && value < 0,
+            );
+          };
+          syncCell(cells[2], change24h);
+          syncCell(cells[4], win);
+        });
       }
 
       async function setNailRadarPopoverOpen(open) {
@@ -12437,7 +12541,9 @@
           layoutNailHeadSheet(popover);
           renderNailRadarTable();
           void paintNailRadarKlines();
+          startNailRadarLive();
         } else {
+          stopNailRadarLive();
           nailRadarPaintToken += 1;
           popover.style.top = "";
         }
