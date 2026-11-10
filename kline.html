@@ -25060,6 +25060,12 @@
         if (pinnedPanel && list && list.parentElement !== pinnedPanel) {
           pinnedPanel.appendChild(list);
         }
+        // 新增表单原来在头部下方；分栏化后不搬的话它会掉到分栏容器下面，
+        // 输入框出现在面板最底部，得滚到底才能看见。这里插回列表正上方。
+        const form = document.getElementById("nailForm");
+        if (pinnedPanel && form && list && form.parentElement !== pinnedPanel) {
+          pinnedPanel.insertBefore(form, list);
+        }
         const oldNoticeBody = document.querySelector(
           "#nailNoticeDrawer .nail-notice-panel",
         );
@@ -25170,6 +25176,8 @@
         if (next !== "autopin") await setNailAutoPinPopoverOpen(false);
         if (next !== "radar") await setNailRadarPopoverOpen(false);
         if (next !== "notice") closeNailNoticeDrawer();
+        // 多选针对的是钉子列表；离开置顶分栏就退出，否则批量条会悬在别的分栏底部。
+        if (next !== "pinned" && nailSelectMode) setNailSelectMode(false);
         // 收起过程中用户又点了别的分栏，这次就不必再打开了。
         if (token !== nailSegSwitchToken) return;
         if (next === "notice") {
@@ -25494,6 +25502,8 @@
         if (!form) return;
         form.hidden = !open;
         if (!open) return;
+        // 表单在置顶面板内：当前停在通知/自动盯/雷达分栏时先切回来，否则看不见。
+        if (nailSegment !== "pinned") void setNailSegment("pinned");
         const nameInput = document.getElementById("nailNameInput");
         const noteInput = document.getElementById("nailNoteInput");
         if (nameInput) nameInput.value = "";
@@ -27689,7 +27699,11 @@
             `Add nail ${key.replace(/USDT$/i, "")}`,
           );
           setNailFormOpen(false);
-          showToast(`${key.replace(/USDT$/i, "")} 已钉住`);
+          showToast(
+            nailPinnedOnlyOn
+              ? `${key.replace(/USDT$/i, "")} 已钉住 · 「只看置顶区」开着，可在设置里关闭查看`
+              : `${key.replace(/USDT$/i, "")} 已钉住`,
+          );
         } catch (error) {
           console.warn(error);
           showToast(error.message || "保存钉子失败");
