@@ -30228,7 +30228,15 @@
           ) {
             return;
           }
-          document.getElementById("nailList")?.scrollTo({
+          // 双击钉头回页首：四个分栏共用同一个钉头，滚的是当前分栏的内容区。
+          const scrollerBySeg = {
+            pinned: "nailList",
+            notice: "nailNoticeList",
+            autopin: "nailAutoPinList",
+            radar: "nailRadarTableWrap",
+          };
+          const targetId = scrollerBySeg[nailSegment] || "nailList";
+          document.getElementById(targetId)?.scrollTo({
             top: 0,
             behavior: "smooth",
           });
