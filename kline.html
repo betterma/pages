@@ -4255,6 +4255,135 @@
         touch-action: pan-y;
         padding: 10px 12px 16px;
       }
+      /* ===== 钉子页分栏：置顶 / 通知 / 自动盯 / 雷达 平铺在同一层 ===== */
+      .nail-segments {
+        display: flex;
+        align-items: stretch;
+        gap: 2px;
+        padding: 0 6px;
+        border-bottom: 0.5px solid var(--separator);
+        background: var(--grouped);
+        flex: 0 0 auto;
+      }
+      .nail-seg-tab {
+        position: relative;
+        flex: 1 1 0;
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 8px 2px 10px;
+        border: 0;
+        background: transparent;
+        color: var(--secondary);
+        font-family: inherit;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .nail-seg-tab.is-active {
+        color: var(--label);
+        font-weight: 650;
+      }
+      .nail-seg-tab.is-active::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: 3px;
+        width: 24px;
+        height: 2px;
+        border-radius: 2px;
+        background: var(--accent, #2f8f6e);
+        transform: translateX(-50%);
+      }
+      .nail-seg-badge {
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        border-radius: 8px;
+        background: #d9534f;
+        color: #fff;
+        font-size: 10.5px;
+        font-weight: 650;
+        line-height: 16px;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-seg-badge[hidden] {
+        display: none !important;
+      }
+      .nail-seg-host {
+        position: relative;
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+      }
+      .nail-seg-panel {
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .nail-seg-panel[hidden] {
+        display: none !important;
+      }
+      .nail-seg-panel > [hidden] {
+        display: none !important;
+      }
+      /* 通知页内容搬进分栏后，本体不再单独占据整屏遮罩层。 */
+      #nailNoticeDrawer {
+        display: none !important;
+      }
+      #nailSegNoticePanel .nail-notice-list {
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+      /* 自动盯 / 雷达：原本是贴边浮窗，现在改为同一层内的分栏内容。 */
+      .nail-seg-panel > .nail-auto-pin-popover,
+      .nail-seg-panel > .nail-radar-popover {
+        position: static;
+        inset: auto;
+        width: auto;
+        height: auto;
+        top: auto;
+        flex: 1 1 auto;
+        min-height: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        padding-bottom: 0;
+      }
+      /* 置顶分栏顶部的新通知摘要条：一眼知道有几个新目标，点一下直达通知栏。 */
+      .nail-digest {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin: 8px 12px 0;
+        padding: 7px 10px;
+        border-radius: 8px;
+        border: 0.5px solid
+          color-mix(in srgb, var(--accent, #2f8f6e) 38%, var(--separator));
+        background: color-mix(
+          in srgb,
+          var(--accent, #2f8f6e) 10%,
+          transparent
+        );
+        color: var(--label);
+        font-size: 12px;
+        cursor: pointer;
+        flex: 0 0 auto;
+      }
+      .nail-digest[hidden] {
+        display: none !important;
+      }
+      .nail-digest-go {
+        color: var(--accent, #2f8f6e);
+        font-weight: 650;
+      }
       /* 24h 排序：滚动时右侧位置百分比（类阅读进度气泡） */
       .nail-scroll-pct {
         position: absolute;
@@ -7752,61 +7881,7 @@
           </div>
           </div>
           <div class="nail-head-actions">
-            <div class="nail-head-actions-left">
-              <button
-                type="button"
-                class="nail-icon-btn"
-                id="nailAutoPinBtn"
-                aria-expanded="false"
-                aria-controls="nailAutoPinPopover"
-                title="自动盯记录"
-                aria-label="自动盯"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                class="nail-icon-btn"
-                id="nailRadarBtn"
-                aria-expanded="false"
-                aria-controls="nailRadarPopover"
-                title="冲榜雷达（24h 排名）"
-                aria-label="雷达"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="9" />
-                  <circle cx="12" cy="12" r="5" />
-                  <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
-                  <path d="M12 12 18.5 7" />
-                </svg>
-              </button>
-            </div>
             <div class="nail-head-actions-right">
-              <button
-                type="button"
-                class="nail-notice-entry"
-                id="nailNoticeEntry"
-                title="天平·直拉命中（近 24h）"
-              >
-                <svg
-                  class="nail-notice-bell"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M6 9a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-                </svg>
-                通知
-                <span class="nail-notice-entry-meta" id="nailNoticeEntryMeta"></span>
-              </button>
               <button
                 type="button"
                 class="nail-notice-entry"
@@ -8157,6 +8232,92 @@
             </div>
           </div>
         </div>
+        <div
+          class="nail-segments"
+          id="nailSegments"
+          role="tablist"
+          aria-label="钉子分栏"
+        >
+          <button
+            type="button"
+            class="nail-seg-tab is-active"
+            data-nail-seg="pinned"
+            role="tab"
+            aria-selected="true"
+          >
+            置顶
+          </button>
+          <button
+            type="button"
+            class="nail-seg-tab"
+            data-nail-seg="notice"
+            role="tab"
+            aria-selected="false"
+            title="天平·直拉命中（近 24h）"
+          >
+            通知<span class="nail-seg-badge" id="nailSegNoticeBadge" hidden></span>
+          </button>
+          <button
+            type="button"
+            class="nail-seg-tab"
+            data-nail-seg="autopin"
+            role="tab"
+            aria-selected="false"
+            title="自动盯记录（近 8h 带 K 线）"
+          >
+            自动盯<span
+              class="nail-seg-badge"
+              id="nailSegAutoPinBadge"
+              hidden
+            ></span>
+          </button>
+          <button
+            type="button"
+            class="nail-seg-tab"
+            data-nail-seg="radar"
+            role="tab"
+            aria-selected="false"
+            title="冲榜雷达（24h 排名）"
+          >
+            雷达
+          </button>
+        </div>
+        <div class="nail-seg-host" id="nailSegHost">
+          <div
+            class="nail-seg-panel"
+            id="nailSegPinnedPanel"
+            data-nail-seg-panel="pinned"
+          >
+            <div
+              class="nail-digest"
+              id="nailDigestBar"
+              role="button"
+              tabindex="0"
+              hidden
+            >
+              <span id="nailDigestText">新通知 0</span>
+              <span class="nail-digest-go">查看 →</span>
+            </div>
+          </div>
+          <div
+            class="nail-seg-panel"
+            id="nailSegNoticePanel"
+            data-nail-seg-panel="notice"
+            hidden
+          ></div>
+          <div
+            class="nail-seg-panel"
+            id="nailSegAutoPinPanel"
+            data-nail-seg-panel="autopin"
+            hidden
+          ></div>
+          <div
+            class="nail-seg-panel"
+            id="nailSegRadarPanel"
+            data-nail-seg-panel="radar"
+            hidden
+          ></div>
+        </div>
         <form class="nail-form" id="nailForm" hidden>
           <input
             id="nailNameInput"
@@ -8314,8 +8475,12 @@
                     健康
                   </button>
                 </div>
-                <button type="button" id="nailNoticeCloseBtn" title="关闭通知页">
-                  关闭
+                <button
+                  type="button"
+                  id="nailNoticeCloseBtn"
+                  title="回到置顶栏"
+                >
+                  置顶
                 </button>
               </div>
             <p id="nailNoticeMeta">近 24h 命中 · 最新在上</p>
@@ -9132,6 +9297,18 @@
       } catch (_) {
         nailPinnedOnlyOn = false;
       }
+      /* 钉子页分栏：置顶 / 通知 / 自动盯 / 雷达，同一层平铺切换。 */
+      const NAIL_SEGMENTS = ["pinned", "notice", "autopin", "radar"];
+      const NAIL_SEG_LABELS = {
+        pinned: "置顶",
+        notice: "通知",
+        autopin: "自动盯",
+        radar: "雷达",
+      };
+      let nailSegment = "pinned";
+      let nailSegmentsReady = false;
+      /** 连续点分栏时作废过期的异步打开，避免内容错位。 */
+      let nailSegSwitchToken = 0;
       const NAIL_SORT_KEY = "kline-nail-sort-v1";
       const NAIL_NOTE_TIME_MODE_KEY = "kline-nail-note-time-mode-v1";
       let nailNoteTimeMode = "original";
@@ -11993,10 +12170,10 @@
         return hit ? Number(hit.at) || 0 : 0;
       }
 
-      /** 入口按钮红点：近 24h 内有比上次查看更新的自动盯。 */
+      /** 分栏角标：近 24h 内有比上次查看更新的自动盯，就亮出条数。 */
       function syncNailAutoPinBadge() {
-        const btn = document.getElementById("nailAutoPinBtn");
-        if (!btn) return;
+        const badge = document.getElementById("nailSegAutoPinBadge");
+        const badgeEl = badge || document.getElementById("nailAutoPinBtn");
         const popover = document.getElementById("nailAutoPinPopover");
         const open = !!(popover && !popover.hidden);
         let raw = null;
@@ -12006,26 +12183,13 @@
           raw = null;
         }
         const latest = nailAutoPinLatestAtWithin(AUTO_PIN_BADGE_MS);
-        // 弹层开着 = 正在看，直接记为已读，避免自己给自己亮红点。
-        if (open) {
+        // 正在看 = 直接记为已读，避免自己给自己亮角标；首次进入同理。
+        if (open || raw === null) {
           writeNailAutoPinSeenAt(latest || Date.now());
-          btn.classList.remove("has-unread");
-          btn.title = "自动盯记录";
+          if (badge) nailSegBadge(badge, 0);
           return;
         }
-        // 首次进入以当前最新为基线，避免一打开就红点。
-        if (raw === null) {
-          writeNailAutoPinSeenAt(latest || Date.now());
-          btn.classList.remove("has-unread");
-          btn.title = "自动盯记录";
-          return;
-        }
-        const seen = Number(raw) || 0;
-        const unread = latest > 0 && latest > seen;
-        btn.classList.toggle("has-unread", unread);
-        btn.title = unread
-          ? `自动盯记录 · ${formatActionLogTime(latest)} 有新记录`
-          : "自动盯记录";
+        nailSegBadge(badgeEl, nailAutoPinUnreadCount());
       }
 
       let autoPinBadgePolling = false;
@@ -22671,6 +22835,9 @@
           else if (unread > 0) meta.textContent = String(unread);
           else meta.textContent = String(total);
         }
+        // 分栏角标与置顶栏摘要条跟这里同源，避免两套计数。
+        nailSegBadge(document.getElementById("nailSegNoticeBadge"), unread);
+        syncNailDigest();
       }
 
       async function refreshNailGreenNotices(options) {
@@ -23142,9 +23309,8 @@
 
       function setNailNoticeFilterLoadingChrome(loading) {
         const listEl = document.getElementById("nailNoticeList");
-        const actions = document.querySelector(
-          "#nailNoticeDrawer .nail-notice-head-actions",
-        );
+        // 通知已并入钉子页分栏，标题条不再挂在独立抽屉下，按类名取即可。
+        const actions = document.querySelector(".nail-notice-head-actions");
         if (listEl) listEl.classList.toggle("is-filter-loading", !!loading);
         if (actions) actions.classList.toggle("is-filter-loading", !!loading);
       }
@@ -24289,6 +24455,12 @@
 
       async function openNailNoticeDrawer(options) {
         const opts = options || {};
+        // 通知已是钉子页的一个分栏：任何入口进来都先切到该分栏，保证看得见。
+        if (nailSegment !== "notice") {
+          nailSegment = "notice";
+          initNailSegments();
+          applyNailSegmentUi();
+        }
         // 打开通知页时恢复本机筛选：全部/蓝/红 + 天平/直拉。
         nailNoticeDeltaFilter = readLocalNailNoticeDelta();
         nailNoticeBalanceEnabled = readLocalNailNoticeBalance();
@@ -24316,6 +24488,11 @@
         setNailNoticeDrawerMode("closed");
         setNailNoticeHealthPanelOpen(false);
         hideNailNoticeScrollPct(true);
+        // 通知分栏被关掉时退回置顶栏（分栏内的「关闭」按钮即此语义）。
+        if (nailSegment === "notice") {
+          nailSegment = "pinned";
+          applyNailSegmentUi();
+        }
       }
 
       let nailNoticeScrollPctHideTimer = 0;
@@ -24442,10 +24619,9 @@
 
       async function maybeOpenNailNoticeOnEntry() {
         await refreshNailGreenNotices();
-        if (
-          (nailDefaultNoticeOnEnter || nailGreenUnreadCount() > 0) &&
-          nailNoticeMode === "closed"
-        ) {
+        // 分栏化后，未读不再强行切走主视图——置顶栏顶部的摘要条负责提示；
+        // 只有用户在设置里显式勾了「进入即打开通知」才自动落到通知栏。
+        if (nailDefaultNoticeOnEnter && nailNoticeMode === "closed") {
           void openNailNoticeDrawer();
         }
       }
@@ -24824,6 +25000,13 @@
         }
         syncBodyScrollLock();
         if (next === "nails") {
+          // 每次进钉子页都回到「置顶」主视图（其余分栏按需点开）。
+          if (entering) {
+            nailSegment = "pinned";
+            initNailSegments();
+            applyNailSegmentUi();
+            syncNailSegBadges();
+          }
           if (entering || opts.forceRefresh) {
             void openNailDrawerWithBrowse();
           } else {
@@ -24842,12 +25025,198 @@
           setNailSelectMode(false);
           setNailSettingsOpen(false);
           closeNailNoticeDrawer();
+          // 分栏对应的浮层状态一并收掉，避免定时器在后台空转。
+          void setNailAutoPinPopoverOpen(false);
+          void setNailRadarPopoverOpen(false);
           hideNailScrollPct(true);
         }
       }
 
       function setNailDrawerOpen(open) {
         setActiveView(open ? "nails" : "market");
+      }
+
+      /* ===== 钉子页分栏 ===== */
+
+      /**
+       * 把原本分散在三处的四块内容搬进分栏容器，只执行一次：
+       * - 置顶：原来的 #nailList
+       * - 通知：原通知抽屉的面板内容（标题/筛选、批量条、列表、滚动百分比）
+       * - 自动盯 / 雷达：原来的贴边浮窗
+       * 只搬 DOM，不改 id，故所有既有渲染函数与事件绑定继续有效。
+       */
+      function initNailSegments() {
+        if (nailSegmentsReady) return;
+        nailSegmentsReady = true;
+        const pinnedPanel = document.getElementById("nailSegPinnedPanel");
+        const noticePanel = document.getElementById("nailSegNoticePanel");
+        const autoPinPanel = document.getElementById("nailSegAutoPinPanel");
+        const radarPanel = document.getElementById("nailSegRadarPanel");
+        const list = document.getElementById("nailList");
+        if (pinnedPanel && list && list.parentElement !== pinnedPanel) {
+          pinnedPanel.appendChild(list);
+        }
+        const oldNoticeBody = document.querySelector(
+          "#nailNoticeDrawer .nail-notice-panel",
+        );
+        if (noticePanel && oldNoticeBody) {
+          [
+            ".nail-notice-head",
+            "#nailNoticeBatchBar",
+            "#nailNoticeList",
+            "#nailNoticeScrollPct",
+          ].forEach((selector) => {
+            const el = oldNoticeBody.querySelector(selector);
+            if (el) noticePanel.appendChild(el);
+          });
+        }
+        const autoPin = document.getElementById("nailAutoPinPopover");
+        if (autoPinPanel && autoPin) autoPinPanel.appendChild(autoPin);
+        const radar = document.getElementById("nailRadarPopover");
+        if (radarPanel && radar) radarPanel.appendChild(radar);
+      }
+
+      function applyNailSegmentUi() {
+        document.querySelectorAll("[data-nail-seg]").forEach((btn) => {
+          const on = btn.getAttribute("data-nail-seg") === nailSegment;
+          btn.classList.toggle("is-active", on);
+          btn.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        document.querySelectorAll("[data-nail-seg-panel]").forEach((panel) => {
+          panel.hidden =
+            panel.getAttribute("data-nail-seg-panel") !== nailSegment;
+        });
+      }
+
+      function nailSegBadge(el, count) {
+        if (!el) return;
+        const n = Math.max(0, Math.floor(Number(count) || 0));
+        el.hidden = !(n > 0);
+        el.textContent = n > 99 ? "99+" : String(n);
+      }
+
+      /** 近 24h、且晚于「已读基线」的自动盯条数（一次打钉算一条）。 */
+      function nailAutoPinUnreadCount() {
+        let raw = null;
+        try {
+          raw = localStorage.getItem(AUTO_PIN_SEEN_KEY);
+        } catch (_) {
+          raw = null;
+        }
+        const seen = Number(raw) || 0;
+        const cutoff = Date.now() - AUTO_PIN_BADGE_MS;
+        return nailAutoPinEntries().filter((entry) => {
+          const at = Number(entry.at) || 0;
+          return (
+            at > seen &&
+            at >= cutoff &&
+            Array.isArray(entry.symbols) &&
+            entry.symbols.length > 0
+          );
+        }).length;
+      }
+
+      /** 置顶分栏顶部摘要条：有未读通知才出现，点一下直达通知栏。 */
+      function syncNailDigest() {
+        const bar = document.getElementById("nailDigestBar");
+        const text = document.getElementById("nailDigestText");
+        if (!bar || !text) return;
+        const list = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
+        const unread = nailGreenUnreadCount();
+        if (!unread) {
+          bar.hidden = true;
+          return;
+        }
+        const readAt = Number(nailGreenNoticesReadAt) || 0;
+        let fresh = 0;
+        list.forEach((item) => {
+          const at = Number(item.at) || 0;
+          if (at <= readAt) return;
+          const first =
+            Number(item.firstSeenAt) > 0 ? Number(item.firstSeenAt) : at;
+          if (at - first <= 5 * 60 * 1000) fresh += 1;
+        });
+        bar.hidden = false;
+        text.textContent = fresh
+          ? `新通知 ${unread} · 首次进通知 ${fresh}`
+          : `新通知 ${unread}`;
+      }
+
+      function syncNailSegBadges() {
+        nailSegBadge(
+          document.getElementById("nailSegNoticeBadge"),
+          nailGreenUnreadCount(),
+        );
+        nailSegBadge(
+          document.getElementById("nailSegAutoPinBadge"),
+          nailAutoPinUnreadCount(),
+        );
+        syncNailDigest();
+      }
+
+      async function setNailSegment(seg, options) {
+        const opts = options || {};
+        initNailSegments();
+        const next = NAIL_SEGMENTS.includes(seg) ? seg : "pinned";
+        const changed = next !== nailSegment;
+        const token = ++nailSegSwitchToken;
+        nailSegment = next;
+        applyNailSegmentUi();
+        // 四个面互斥：进哪个，其余三个的浮层状态全部收起。
+        if (next !== "autopin") await setNailAutoPinPopoverOpen(false);
+        if (next !== "radar") await setNailRadarPopoverOpen(false);
+        if (next !== "notice") closeNailNoticeDrawer();
+        // 收起过程中用户又点了别的分栏，这次就不必再打开了。
+        if (token !== nailSegSwitchToken) return;
+        if (next === "notice") {
+          if (changed || opts.force) await openNailNoticeDrawer();
+        } else if (next === "autopin") {
+          await setNailAutoPinPopoverOpen(true);
+        } else if (next === "radar") {
+          await setNailRadarPopoverOpen(true);
+        } else if (changed || opts.force) {
+          // renderNailDrawer 内部已排队重画 K 线，这里不再重复请求。
+          renderNailDrawer();
+        }
+        syncNailSegBadges();
+      }
+
+      /** 左右滑切分栏：越过两端就回行情，保留原来的滑出手感。 */
+      function nailSwipeSegment(dir) {
+        const idx = NAIL_SEGMENTS.indexOf(nailSegment);
+        const next = idx + (dir > 0 ? 1 : -1);
+        if (next < 0 || next >= NAIL_SEGMENTS.length) {
+          setNailDrawerOpen(false);
+          return true;
+        }
+        void setNailSegment(NAIL_SEGMENTS[next]);
+        return true;
+      }
+
+      function bindNailSegments() {
+        initNailSegments();
+        applyNailSegmentUi();
+        document.querySelectorAll("[data-nail-seg]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const seg = btn.getAttribute("data-nail-seg");
+            if (seg === nailSegment) return;
+            void setNailSegment(seg);
+          });
+        });
+        const digest = document.getElementById("nailDigestBar");
+        if (digest) {
+          const go = () => {
+            void setNailSegment("notice");
+          };
+          digest.addEventListener("click", go);
+          digest.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              go();
+            }
+          });
+        }
+        syncNailSegBadges();
       }
 
       function setNailSettingsOpen(open) {
@@ -24862,6 +25231,8 @@
       function openNailDrawerAtSymbol(symbol) {
         const key = String(symbol || "").trim().toUpperCase();
         if (!key) return;
+        // 目标卡片在「置顶」分栏里，先切过去再定位。
+        if (nailSegment !== "pinned") void setNailSegment("pinned");
         const visibleHas = () =>
           nailDrawerVisibleItems().some(
             (item) => String(item.symbol || "").toUpperCase() === key,
@@ -24939,7 +25310,6 @@
         function canSwipeNailActions() {
           return (
             isNailDrawerOpen() &&
-            !isNailNoticeOpen() &&
             !isNailPinReviewOpen() &&
             !nailReorderDragging &&
             !document.querySelector("#nailList .nail-kcard.is-dragging")
@@ -24963,17 +25333,15 @@
             setNailDrawerOpen(true);
             return true;
           }
-          // 钉子屏：左滑回行情，右滑开通知
+          // 钉子屏：左右滑切换分栏；首栏右滑 / 末栏左滑回行情
           if (mode === "nail" && canSwipeNailActions()) {
             if (dx < 0) {
               tracking = null;
-              setNailDrawerOpen(false);
-              return true;
+              return nailSwipeSegment(1);
             }
             if (dx > 0) {
               tracking = null;
-              void openNailNoticeDrawer();
-              return true;
+              return nailSwipeSegment(-1);
             }
           }
           if (mode === "close-notice" && dx < 0 && isNailNoticeOpen()) {
@@ -25000,23 +25368,7 @@
             if (ignoreSwipeTarget(event.target)) return;
             const pt = touchPoint(event);
             if (!pt) return;
-            // 通知打开时优先：左滑关闭通知（不关钉子抽屉）
-            if (isNailNoticeOpen()) {
-              if (
-                !event.target.closest ||
-                !event.target.closest("#nailNoticeDrawer")
-              ) {
-                return;
-              }
-              tracking = {
-                id: pt.id,
-                x0: pt.x,
-                y0: pt.y,
-                mode: "close-notice",
-                locked: false,
-              };
-              return;
-            }
+            // 通知分栏的内容现在同在钉子抽屉里，统一走 nail 模式做分栏切换。
             if (isNailDrawerOpen()) {
               if (!event.target.closest || !event.target.closest("#nailDrawer")) {
                 return;
@@ -29202,6 +29554,7 @@
         });
       }
       bindNailDrawerSwipeGestures();
+      bindNailSegments();
       bindNailPinReviewGestures();
       const nailPinReviewAbortBtn = document.getElementById(
         "nailPinReviewAbortBtn",
@@ -30153,10 +30506,19 @@
         ) {
           return;
         }
-        if (nailAutoPinPopover && !nailAutoPinPopover.hidden) {
+        // 自动盯 / 雷达已经是钉子页的分栏内容，分栏激活时不能再被「点外面就关」。
+        if (
+          nailSegment !== "autopin" &&
+          nailAutoPinPopover &&
+          !nailAutoPinPopover.hidden
+        ) {
           void setNailAutoPinPopoverOpen(false);
         }
-        if (nailRadarPopover && !nailRadarPopover.hidden) {
+        if (
+          nailSegment !== "radar" &&
+          nailRadarPopover &&
+          !nailRadarPopover.hidden
+        ) {
           void setNailRadarPopoverOpen(false);
         }
         if (nailHoldPopover && !nailHoldPopover.hidden) {
