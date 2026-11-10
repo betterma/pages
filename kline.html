@@ -2202,6 +2202,8 @@
       }
       .nail-head-title-block {
         min-width: 0;
+        /* 与右侧「模拟 / 持有」同行后需要可压缩，否则窄屏会撑破标题行。 */
+        flex: 1 1 auto;
       }
       .nail-head-title-line {
         display: flex;
@@ -2216,6 +2218,10 @@
         margin: 4px 0 0;
         font-size: 12px;
         color: var(--secondary);
+        /* 单行省略：左边保留「窗口上涨 N/M」等关键信息，不挤占右侧按钮。 */
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .nail-settings-btn {
         display: inline-flex;
@@ -2300,7 +2306,9 @@
         align-items: center;
         gap: 6px;
         flex-shrink: 0;
-        width: 100%;
+        /* 已并入标题行右侧（原为占满整行的第二行容器）。 */
+        width: auto;
+        margin-left: auto;
       }
       .nail-head-actions-left,
       .nail-head-actions-right {
@@ -2326,19 +2334,23 @@
         height: 16px;
         display: block;
       }
-      .nail-head-primary-actions {
+      /* 置顶栏工具条：新增 / 多选 / 刷新，只作用于钉子列表，故收进分栏内容区。 */
+      .nail-pin-toolbar {
+        flex: 0 0 auto;
         display: flex;
         align-items: center;
-        gap: 4px;
-        flex: 0 0 auto;
+        justify-content: flex-end;
+        gap: 6px;
+        padding: 8px 12px 6px;
+        border-bottom: 0.5px solid var(--separator);
       }
-      .nail-head .nail-head-primary-actions button {
-        height: 30px;
-        padding: 0 8px;
-        font-size: 12px;
+      .nail-pin-toolbar button.is-active {
+        border-color: color-mix(in srgb, var(--label) 38%, transparent);
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+        color: var(--accent);
       }
       .nail-head-actions button,
-      .nail-head-primary-actions button,
+      .nail-pin-toolbar button,
       .nail-form button,
       .nail-del {
         border: none;
@@ -2350,6 +2362,18 @@
         font-size: 13px;
         font-weight: 600;
         cursor: pointer;
+      }
+      /* 工具条按钮比头部按钮小一号，避免抢视觉重心。 */
+      .nail-pin-toolbar button {
+        height: 26px;
+        font-size: 12px;
+        border-radius: 7px;
+        border: 0.5px solid color-mix(in srgb, var(--label) 22%, transparent);
+        background: color-mix(in srgb, var(--fill) 55%, transparent);
+      }
+      .nail-pin-toolbar button:disabled {
+        opacity: 0.45;
+        cursor: wait;
       }
       .nail-head-actions button:disabled {
         opacity: 0.45;
@@ -4220,6 +4244,7 @@
         background: color-mix(in srgb, var(--bg) 80%, transparent);
       }
       .nail-form {
+        flex: 0 0 auto;
         padding: 10px 14px;
         border-bottom: 0.5px solid var(--separator);
         display: grid;
@@ -4363,6 +4388,7 @@
       /* 置顶分栏顶部的新通知摘要条：一眼知道有几个新目标，点一下直达通知栏。 */
       .nail-digest {
         display: flex;
+        flex: 0 0 auto;
         align-items: center;
         justify-content: space-between;
         gap: 8px;
@@ -7869,21 +7895,6 @@
             </div>
             <p id="nailMeta">复制名称后新增 · 置顶 / 长按拖动排序</p>
           </div>
-          <div class="nail-head-primary-actions">
-            <button
-              type="button"
-              id="nailSelectBtn"
-              title="多选后批量删除"
-              aria-pressed="false"
-            >
-              多选
-            </button>
-            <button type="button" id="nailRefreshBtn" title="重新拉取钉子列表和 K 线">
-              刷新
-            </button>
-            <button type="button" id="nailAddBtn">新增</button>
-          </div>
-          </div>
           <div class="nail-head-actions">
             <div class="nail-head-actions-right">
               <button
@@ -7922,6 +7933,7 @@
                 持有
               </button>
             </div>
+          </div>
           </div>
           <div class="nail-auto-pin-popover" id="nailAutoPinPopover" hidden>
             <div class="nail-auto-pin-popover-title">自动盯记录</div>
@@ -8301,6 +8313,26 @@
             >
               <span id="nailDigestText">新通知 0</span>
               <span class="nail-digest-go">查看 →</span>
+            </div>
+            <div class="nail-pin-toolbar" id="nailPinToolbar">
+              <button type="button" id="nailAddBtn" title="钉一个新币种">
+                新增
+              </button>
+              <button
+                type="button"
+                id="nailSelectBtn"
+                title="多选后批量置顶 / 写便签 / 删除"
+                aria-pressed="false"
+              >
+                多选
+              </button>
+              <button
+                type="button"
+                id="nailRefreshBtn"
+                title="重新拉取钉子列表、K 线与通知"
+              >
+                刷新
+              </button>
             </div>
           </div>
           <div
@@ -25052,6 +25084,20 @@
       function initNailSegments() {
         if (nailSegmentsReady) return;
         nailSegmentsReady = true;
+        // 头部由两行收紧为一行：「模拟 / 持有」并入标题行右侧，空出来的第二行还给列表。
+        const mainline = document.querySelector(".nail-head-mainline");
+        const headActions = document.querySelector(
+          ".nail-head .nail-head-actions",
+        );
+        if (mainline && headActions && headActions.parentElement !== mainline) {
+          mainline.appendChild(headActions);
+        }
+        // 两个批量条统一到面板底部：原来通知的在列表上方、钉子的在面板底部。
+        const noticeBatchBar = document.getElementById("nailNoticeBatchBar");
+        const pinBatchBar = document.getElementById("nailBatchBar");
+        if (noticeBatchBar && pinBatchBar && pinBatchBar.parentElement) {
+          pinBatchBar.parentElement.insertBefore(noticeBatchBar, pinBatchBar);
+        }
         const pinnedPanel = document.getElementById("nailSegPinnedPanel");
         const noticePanel = document.getElementById("nailSegNoticePanel");
         const autoPinPanel = document.getElementById("nailSegAutoPinPanel");
