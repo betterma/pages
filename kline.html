@@ -2646,21 +2646,34 @@
       }
       .nail-radar-table th:nth-child(1),
       .nail-radar-table td:nth-child(1) {
-        width: 2.2em;
+        /* 序号只到 3 位数，压到极限给 K 线列腾地方。 */
+        width: 1.4em;
+        padding-left: 3px;
+        padding-right: 3px;
         color: var(--secondary);
       }
       /* 列序：#(1) 币(2) 24h(3) K线(4) 窗涨(5) 名次(6)；数字列右对齐，K线列固定宽。 */
-      .nail-radar-table th:nth-child(3),
-      .nail-radar-table td:nth-child(3),
       .nail-radar-table th:nth-child(5),
       .nail-radar-table td:nth-child(5),
       .nail-radar-table th:nth-child(6),
       .nail-radar-table td:nth-child(6) {
         text-align: right;
+        padding-left: 4px;
+        padding-right: 4px;
+      }
+      .nail-radar-table th:nth-child(3),
+      .nail-radar-table td:nth-child(3) {
+        /* 24h 涨幅：小字号 + 窄内边距，尽量不挤占 K 线列的可视宽度。 */
+        text-align: right;
+        font-size: 10.5px;
+        padding-left: 4px;
+        padding-right: 4px;
       }
       .nail-radar-table th:nth-child(4),
       .nail-radar-table td:nth-child(4) {
         width: 182px;
+        padding-left: 4px;
+        padding-right: 4px;
       }
       /* 置顶币迷你 K 线：比钉子 K 线（112px 高）略小，但要看清形态。 */
       .nail-radar-kline {
