@@ -12372,7 +12372,7 @@
               [],
               null,
               null,
-              { symbol, pinSplitGreen: true },
+              { symbol, pinSplitGreen: true, pinSplitGreenUpOnly: true },
             );
           } catch (error) {
             console.warn("radar kline failed", symbol, error);
@@ -20591,8 +20591,15 @@
           const x = pad.left + slot * index + slot / 2;
           const up = candle.close >= candle.open;
           const base = up ? "#8a9a96" : "#9a8e88";
+          // options.pinSplitGreenUpOnly：只给上涨柱（收盘 ≥ 开盘）染绿。
+          // 下跌柱即使整根站在水线之上也保持原色，避免把「冲高回落」误读成强势；
+          // 最后一根未收盘的柱子按现价判断，正在上涨时同样会染绿。
           const splitAt =
-            splitFrom >= 0 && index >= splitFrom ? pin : NaN;
+            splitFrom >= 0 &&
+            index >= splitFrom &&
+            (!(options && options.pinSplitGreenUpOnly) || up)
+              ? pin
+              : NaN;
           const aboveTone = Number.isFinite(splitAt) ? NAIL_ALERT_GREEN : base;
           const useAlert =
             hasAlert &&
