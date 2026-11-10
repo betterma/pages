@@ -2664,6 +2664,33 @@
       .nail-radar-open-full:hover {
         text-decoration: underline;
       }
+      .nail-radar-updated {
+        flex: 0 0 auto;
+        color: var(--secondary);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .nail-radar-updated.is-stale {
+        color: var(--warn);
+      }
+      .nail-radar-refresh {
+        flex: 0 0 auto;
+        border: none;
+        background: none;
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 650;
+        padding: 0;
+        cursor: pointer;
+      }
+      .nail-radar-refresh:hover {
+        text-decoration: underline;
+      }
+      .nail-radar-refresh:disabled {
+        opacity: 0.5;
+        cursor: default;
+        text-decoration: none;
+      }
       .nail-radar-table-wrap {
         flex: 1 1 auto;
         min-height: 0;
@@ -7966,6 +7993,14 @@
           <div class="nail-radar-popover" id="nailRadarPopover" hidden>
             <div class="nail-radar-popover-head">
               <div class="nail-auto-pin-popover-title">冲榜雷达</div>
+              <span id="nailRadarUpdated" class="nail-radar-updated"></span>
+              <button
+                type="button"
+                id="nailRadarRefreshBtn"
+                class="nail-radar-refresh"
+              >
+                刷新
+              </button>
               <a
                 class="nail-radar-open-full"
                 href="./watch.html"
@@ -9708,6 +9743,10 @@
       let nailRadarLiveTimer = 0;
       let nailRadarLiveTick = 0;
       let nailRadarTickerBusy = false;
+      /** 雷达名单 ticker 最近一次成功补拉时间，用于头部时效提示。 */
+      let nailRadarTickerAt = 0;
+      /** 手动刷新按钮的防重入。 */
+      let nailRadarRefreshBusy = false;
       /** 轻提醒轮询（通知角标/摘要条 + 自动盯红点）的定时器与并发锁。 */
       let nailReminderPollTimer = null;
       let nailReminderPollBusy = false;
@@ -12639,7 +12678,12 @@
               [],
               null,
               null,
-              { symbol, pinSplitGreen: true, pinSplitGreenUpOnly: true },
+              {
+                symbol,
+                pinSplitGreen: true,
+                pinSplitGreenUpOnly: true,
+                priceLabel: true,
+              },
             );
           } catch (error) {
             console.warn("radar kline failed", symbol, error);
@@ -12688,6 +12732,7 @@
             void refreshNailRadarTickers();
           }
           updateNailRadarLiveCells();
+          syncNailRadarUpdatedUi();
           void paintNailRadarKlines();
         }, NAIL_RADAR_LIVE_TICK_MS);
       }
@@ -12716,6 +12761,8 @@
         nailRadarTickerBusy = true;
         try {
           await fetchBinanceTickersForSymbols(before);
+          nailRadarTickerAt = Date.now();
+          syncNailRadarUpdatedUi();
         } catch (error) {
           console.warn("radar ticker refresh failed", error);
           return;
@@ -12732,6 +12779,21 @@
           renderNailRadarTable();
           void paintNailRadarKlines();
         }
+      }
+
+      /** 雷达头部时效提示：显示最近一次 ticker 补拉时刻；超过 90s 标"偏旧"。 */
+      function syncNailRadarUpdatedUi() {
+        const el = document.getElementById("nailRadarUpdated");
+        if (!el) return;
+        const at = Number(nailRadarTickerAt) || 0;
+        if (!(at > 0)) {
+          el.textContent = "";
+          el.classList.remove("is-stale");
+          return;
+        }
+        const stale = Date.now() - at > 90 * 1000;
+        el.textContent = `更新 ${formatClock(at)}${stale ? " · 偏旧" : ""}`;
+        el.classList.toggle("is-stale", stale);
       }
 
       /** 不重渲整表，只刷新 24h / 窗涨两列数字（K 线由 paintNailRadarKlines 负责）。 */
@@ -12788,6 +12850,10 @@
         if (next) {
           layoutNailHeadSheet(popover);
           renderNailRadarTable();
+          syncNailRadarUpdatedUi();
+          // 打开即补拉一次名单 ticker，保证第一眼看到的就是新数据；
+          // 之后交给 30s 节拍，靠头部时间戳感知新旧。
+          void refreshNailRadarTickers();
           void paintNailRadarKlines();
           startNailRadarLive();
         } else {
@@ -21106,6 +21172,44 @@
           ctx.stroke();
           ctx.restore();
         });
+
+        // 现价角标：右上角淡色小字，不抢眼。默认关闭，调用方传 priceLabel: true 才画；
+        // 画布太窄时自动跳过。优先用实时 ticker，回落到最后可见柱收盘。
+        const wantPriceLabel = !!(options && options.priceLabel === true);
+        if (wantPriceLabel && width >= 96) {
+          const priceSymbol = String((options && options.symbol) || "")
+            .trim()
+            .toUpperCase();
+          let livePrice = priceSymbol
+            ? Number(marketMap[priceSymbol] && marketMap[priceSymbol].price)
+            : NaN;
+          if (!Number.isFinite(livePrice) || livePrice <= 0) {
+            livePrice = Number(candles[maxIndex] && candles[maxIndex].close);
+          }
+          if (Number.isFinite(livePrice) && livePrice > 0) {
+            let labelColor = "";
+            try {
+              labelColor = getComputedStyle(document.documentElement)
+                .getPropertyValue("--secondary")
+                .trim();
+            } catch (_) {
+              labelColor = "";
+            }
+            ctx.save();
+            ctx.font =
+              '10px -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif';
+            ctx.textAlign = "right";
+            ctx.textBaseline = "top";
+            ctx.globalAlpha = 0.85;
+            ctx.fillStyle = labelColor || "rgba(150, 158, 168, 1)";
+            ctx.fillText(
+              formatPinPrice(livePrice),
+              width - pad.right - 1,
+              pad.top + 1,
+            );
+            ctx.restore();
+          }
+        }
 
         // 供长按十字线反查坐标
         canvas.__klineMeta = {
@@ -30445,6 +30549,25 @@
           void setNailRadarPopoverOpen(
             !nailRadarPopover || nailRadarPopover.hidden,
           );
+        });
+      }
+      const nailRadarRefreshBtn = document.getElementById(
+        "nailRadarRefreshBtn",
+      );
+      if (nailRadarRefreshBtn) {
+        nailRadarRefreshBtn.addEventListener("click", async () => {
+          if (nailRadarRefreshBusy) return;
+          nailRadarRefreshBusy = true;
+          nailRadarRefreshBtn.disabled = true;
+          try {
+            await refreshNailRadarTickers();
+            updateNailRadarLiveCells();
+            void paintNailRadarKlines();
+          } finally {
+            nailRadarRefreshBusy = false;
+            nailRadarRefreshBtn.disabled = false;
+            syncNailRadarUpdatedUi();
+          }
         });
       }
       if (nailRadarBody) {
