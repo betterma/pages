@@ -2543,6 +2543,30 @@
         font-size: 10px;
         font-variant-numeric: tabular-nums;
       }
+      /* 卡头置顶按钮：沿用钉子卡的「↑ / 顶」语言，尺寸压到 20px 塞进两列卡头。 */
+      .nail-auto-pin-pin {
+        flex: 0 0 auto;
+        align-self: center;
+        border: none;
+        background: var(--fill);
+        color: var(--secondary);
+        height: 20px;
+        min-width: 20px;
+        padding: 0 4px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .nail-auto-pin-pin.is-on {
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 18%, transparent);
+        cursor: default;
+      }
+      .nail-auto-pin-pin:disabled {
+        cursor: default;
+      }
       .nail-auto-pin-card-prices {
         display: flex;
         flex-wrap: wrap;
@@ -12251,6 +12275,17 @@
         }
       }
 
+      /** 自动盯卡片上该币的钉子状态：none 未钉 / nailed 已钉未置顶 / pinned 已置顶。 */
+      function nailAutoPinPinState(symbol) {
+        const key = String(symbol || "").trim().toUpperCase();
+        if (!key) return "none";
+        const item = (nailItems || []).find(
+          (row) => String((row && row.symbol) || "").toUpperCase() === key,
+        );
+        if (!item) return "none";
+        return item.pinned ? "pinned" : "nailed";
+      }
+
       function buildNailAutoPinCardHtml(symbol, at) {
         const key = String(symbol || "")
           .trim()
@@ -12264,10 +12299,16 @@
           Number.isFinite(price) && price > 0
             ? escapeHtml(formatPinPrice(price))
             : "—";
+        const pinState = nailAutoPinPinState(key);
+        const pinBtn =
+          pinState === "pinned"
+            ? `<button type="button" class="nail-auto-pin-pin is-on" data-autopin-pin-btn="${escapeHtml(key)}" disabled title="已在钉子置顶">顶</button>`
+            : `<button type="button" class="nail-auto-pin-pin" data-autopin-pin-btn="${escapeHtml(key)}" title="${pinState === "nailed" ? "置顶排第一" : "置顶到钉子页"}">↑</button>`;
         return [
           `<article class="nail-auto-pin-card" data-autopin-card="${escapeHtml(key)}">`,
           `<div class="nail-auto-pin-card-head">`,
           `<button type="button" class="nail-auto-pin-card-name" data-nail-auto-symbol="${escapeHtml(key)}">${label}</button>`,
+          pinBtn,
           `<span class="nail-auto-pin-card-time">${escapeHtml(formatActionLogTime(at))}</span>`,
           `</div>`,
           `<div class="nail-auto-pin-card-prices">`,
@@ -23255,6 +23296,38 @@
         return { pinned: keys.length, added: fresh.length };
       }
 
+      /**
+       * 自动盯卡片的一键置顶：只动这一张卡的按钮，不重排列表、不重画 K 线。
+       * 已钉未置顶的只补 pinned 标记，不在抽屉里的按现价补钉后再置顶。
+       */
+      async function pinAutoPinSymbol(btn) {
+        const key = String(btn.getAttribute("data-autopin-pin-btn") || "")
+          .trim()
+          .toUpperCase();
+        if (!key || btn.disabled) return;
+        const prevTitle = btn.title;
+        btn.disabled = true;
+        try {
+          const result = await pinNoticeSymbolsToNails([key], {
+            message: `Pin auto-pin ${key} to nails`,
+            toastOk: (label) => `${label} 已置顶`,
+          });
+          if (!result) {
+            btn.disabled = false;
+            btn.title = prevTitle;
+            return;
+          }
+          btn.classList.add("is-on");
+          btn.textContent = "顶";
+          btn.title = "已在钉子置顶";
+        } catch (error) {
+          console.warn("auto-pin pin failed", error);
+          btn.disabled = false;
+          btn.title = prevTitle;
+          showToast(error.message || "置顶失败");
+        }
+      }
+
       async function pinSelectedNoticesToNails() {
         const symbols = [...selectedNoticeSymbols];
         if (!symbols.length) {
@@ -30181,6 +30254,11 @@
       }
       if (nailAutoPinList) {
         nailAutoPinList.addEventListener("click", (event) => {
+          const pinBtn = event.target.closest("[data-autopin-pin-btn]");
+          if (pinBtn) {
+            void pinAutoPinSymbol(pinBtn);
+            return;
+          }
           const button = event.target.closest("[data-nail-auto-symbol]");
           if (!button) return;
           void setNailAutoPinPopoverOpen(false);
