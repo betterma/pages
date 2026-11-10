@@ -4341,6 +4341,10 @@
         min-height: 0;
       }
       /* 自动盯 / 雷达：原本是贴边浮窗，现在改为同一层内的分栏内容。 */
+      .nail-seg-panel > .nail-auto-pin-popover > .nail-auto-pin-popover-title {
+        /* 分栏标签已经写着「自动盯」，重复标题省掉，多留内容高度。 */
+        display: none;
+      }
       .nail-seg-panel > .nail-auto-pin-popover,
       .nail-seg-panel > .nail-radar-popover {
         position: static;
