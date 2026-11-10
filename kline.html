@@ -9297,6 +9297,9 @@
       let nailItems = [];
       let nailSaving = false;
       let nailKlineAbort = null;
+      /** 钉子快速通道：首屏作画完成的信号（不阻塞主流程，带超时兜底）。 */
+      let nailBootFirstPaint = null;
+      let nailBootFirstPaintResolve = null;
       let nailSelectMode = false;
       /** 长按拖排序进行中：禁用抽屉左滑关闭。 */
       let nailReorderDragging = false;
@@ -15972,6 +15975,11 @@
 
       async function loadSharedFeatureState(options) {
         const force = !!(options && options.force);
+        // 钉子快速通道：任一子任务落地就回调，供启动时提前开钉子抽屉。
+        const onEarlyDone =
+          options && typeof options.onEarlyDone === "function"
+            ? options.onEarlyDone
+            : null;
         const now = Date.now();
         const cacheMs = Number(CONFIG.SHARED_STATE_CACHE_MS) || 5 * 60 * 1000;
         if (
@@ -15986,6 +15994,9 @@
               if (row && row.status === "pending") bootInitMark(task.id, "done");
             }
           }
+          if (onEarlyDone) {
+            ["nails", "pins", "notes", "alerts"].forEach((id) => onEarlyDone(id));
+          }
           return { fromCache: true };
         }
         const soft = async (id, label, fn) => {
@@ -15993,6 +16004,8 @@
             await bootTrack(id, label, fn);
           } catch (error) {
             console.warn(error);
+          } finally {
+            if (onEarlyDone) onEarlyDone(id);
           }
         };
         // 各 watch-*.json 彼此独立，并行拉以压掉串行 RTT。
@@ -27193,14 +27206,27 @@
         }
       }
 
+      function resolveNailBootFirstPaint() {
+        if (!nailBootFirstPaintResolve) return;
+        const resolve = nailBootFirstPaintResolve;
+        nailBootFirstPaintResolve = null;
+        resolve();
+      }
+
       async function paintNailKlines() {
         abortNailKlines();
-        if (!isNailDrawerOpen()) return;
+        if (!isNailDrawerOpen()) {
+          resolveNailBootFirstPaint();
+          return;
+        }
         syncNailPriceRows();
         const canvases = [
           ...document.querySelectorAll("#nailList canvas.nail-kline"),
         ];
-        if (!canvases.length) return;
+        if (!canvases.length) {
+          resolveNailBootFirstPaint();
+          return;
+        }
         const controller = new AbortController();
         nailKlineAbort = controller;
         const interval = chartInterval();
@@ -27255,6 +27281,8 @@
         if (nailKlineAbort === controller) {
           nailKlineAbort = null;
           if (nailSortMode !== "order") applyNailListOrder();
+          // 只有本次作画仍是最新一次时才放行（被新一轮接管则由后者负责）。
+          resolveNailBootFirstPaint();
         }
       }
 
@@ -29133,6 +29161,24 @@
         });
         // 冷启动与「同步池」都弹出并行初始化进度框；轻刷新只用顶栏进度。
         const showBootInit = reason === "boot" || reason === "sync-pool";
+        // 钉子快速通道：首页偏好=钉子时，不等两波全部跑完。
+        // 钉子列表 / 盯价 / 记一笔 / 预警 / ticker 这五项到位即可渲染并作画，
+        // 观察池、收藏、日志、彩蛋、行情页 K 线批量等继续在后台跑。
+        const fastNailBoot = reason === "boot" && getHomePref() === "nails";
+        let nailFastOpened = false;
+        let nailFastKick = null;
+        let markFastDone = () => {};
+        if (fastNailBoot) {
+          const missing = new Set(["nails", "pins", "notes", "alerts", "ticker"]);
+          let resolveFast = () => {};
+          nailFastKick = new Promise((resolve) => {
+            resolveFast = resolve;
+          });
+          markFastDone = (id) => {
+            if (!missing.delete(id)) return;
+            if (!missing.size) resolveFast();
+          };
+        }
         if (showBootInit) {
           bootInitBegin(
             reason === "sync-pool"
@@ -29163,10 +29209,40 @@
                 : "WAVE 1 · 共享态 / 行情 并行（观察池可用缓存）",
             );
             // GitHub 观察池/共享态与币安 ticker 无依赖，并行重叠 RTT。
-            const storagePromise = loadGithubStorage({ force: forceObs });
+            const storagePromise = loadGithubStorage({
+              force: forceObs,
+              onEarlyDone: fastNailBoot ? markFastDone : null,
+            });
             const tickerPromise = bootTrack("ticker", "币安 24h ticker", () =>
               loadBinanceTicker(),
+            ).then(
+              (value) => {
+                if (fastNailBoot) markFastDone("ticker");
+                return value;
+              },
+              (error) => {
+                if (fastNailBoot) markFastDone("ticker");
+                throw error;
+              },
             );
+            if (fastNailBoot) {
+              bootInitSetStep("钉子快速通道 · 置顶 / 盯价 / 行情");
+              void nailFastKick.then(() => {
+                // GitHub 上的首页偏好可能比本地新，落地后以最新值再确认一次。
+                if (nailFastOpened || getHomePref() !== "nails") return;
+                nailFastOpened = true;
+                nailBootFirstPaint = new Promise((resolve) => {
+                  nailBootFirstPaintResolve = resolve;
+                });
+                setActiveView("nails", {
+                  forceRefresh: true,
+                  persistHome: false,
+                });
+                bootInitEnd();
+                const bgLabel = document.getElementById("modeProgressLabel");
+                if (bgLabel) bgLabel.textContent = "后台初始化中…";
+              });
+            }
             watchMeta = (await storagePromise) || watchMeta;
             updateNotifyFloatPanel();
             await tickerPromise;
@@ -29182,6 +29258,15 @@
           }
           syncStopLossGate();
 
+          // 快速通道：等钉子首屏画完（最多 4s）再批量拉行情页 K 线，
+          // 避免后台的卡片 K 线抢带宽和主线程，把钉子页拖慢。
+          if (fastNailBoot && nailBootFirstPaint) {
+            await Promise.race([
+              nailBootFirstPaint,
+              new Promise((resolve) => window.setTimeout(resolve, 4000)),
+            ]);
+          }
+
           {
             setStatus(
               false,
@@ -29194,10 +29279,14 @@
             await bootTrack("klines", "卡片 K 线批量拉取", () =>
               renderKlines({
                 onProgress: (done, total) => {
+                  // 钉子快速通道下这一波已转后台，文案不再提 WAVE 2。
+                  const prefix = nailFastOpened
+                    ? "后台初始化 "
+                    : mode === "full"
+                      ? "WAVE 2 · 加载K线 "
+                      : "加载K线 ";
                   const label =
-                    total > 0
-                      ? `${mode === "full" ? "WAVE 2 · " : ""}加载K线 ${done}/${total}`
-                      : `${mode === "full" ? "WAVE 2 · " : ""}加载K线…`;
+                    total > 0 ? `${prefix}${done}/${total}` : prefix.trimEnd() + "…";
                   setStatus(false, label);
                   if (total > 0) setTopProgressValue(done / total, label);
                   if (bootInitState.active) {
@@ -29278,11 +29367,14 @@
           }
         } finally {
           // 冷启动：先切到偏好首页，再关进度层，避免首页=钉子时先闪行情。
-          if (reason === "boot") {
+          // 走了钉子快速通道就不再回切：抽屉可能已开，且用户可能已手动切走。
+          if (reason === "boot" && !nailFastOpened) {
             setActiveView(getHomePref(), {
               forceRefresh: true,
               persistHome: false,
             });
+            // 兜底路径已切换完成，快速通道的迟到回调不再二次开抽屉。
+            nailFastOpened = true;
           }
           if (showBootInit) {
             const homeLabel =
@@ -29295,6 +29387,14 @@
             window.setTimeout(() => bootInitEnd(), 420);
           } else {
             bootInitEnd();
+          }
+          // 快速通道提前开的抽屉：通知/自动盯状态可能晚到，补刷一次分栏角标。
+          if (reason === "boot" && isNailDrawerOpen()) {
+            try {
+              syncNailSegBadges();
+            } catch (error) {
+              /* ignore */
+            }
           }
           setTopProgress(false);
           loading = false;
