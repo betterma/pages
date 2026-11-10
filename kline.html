@@ -9687,16 +9687,30 @@
       const AUTO_PIN_RECENT_MAX_CARDS = 20;
       /** 入口红点只看近 24h，避免陈年记录一直亮着。 */
       const AUTO_PIN_BADGE_MS = 24 * 60 * 60 * 1000;
-      /** 挂着钉子页不动时，每 60 拍（5 分钟）拉一次日志刷新红点。 */
-      const AUTO_PIN_BADGE_POLL_TICKS = Math.max(
+      /**
+       * 轻提醒轮询：抽屉开着就每 60s 拉一次通知 + 日志，只更角标/摘要条。
+       * 独立于「钉子自动刷新」开关——高频刷价是用户显式开的，轻提醒是默认能力。
+       */
+      const NAIL_REMINDER_POLL_MS = 60 * 1000;
+      /** 雷达分栏开着时，每 30s 批量补拉一次名单 ticker（K 线仍走 10s 节拍）。 */
+      const NAIL_RADAR_TICKER_MS = 30 * 1000;
+      const NAIL_RADAR_LIVE_TICK_MS = 10 * 1000;
+      const NAIL_RADAR_TICKER_EVERY_TICKS = Math.max(
         1,
-        Math.round((5 * 60 * 1000) / NAIL_AUTO_REFRESH_TOP_MS),
+        Math.round(NAIL_RADAR_TICKER_MS / NAIL_RADAR_LIVE_TICK_MS),
       );
+      /** 币安 symbols 参数单次最多 100 个。 */
+      const NAIL_RADAR_TICKER_MAX_SYMBOLS = 100;
       let nailAutoPinPaintToken = 0;
       /** 冲榜雷达迷你 K 线的绘制令牌：重渲/关闭即作废。 */
       let nailRadarPaintToken = 0;
       /** 雷达浮窗开着时的实时刷新定时器：让当前窗口的 K 线肉眼可见地生长。 */
       let nailRadarLiveTimer = 0;
+      let nailRadarLiveTick = 0;
+      let nailRadarTickerBusy = false;
+      /** 轻提醒轮询（通知角标/摘要条 + 自动盯红点）的定时器与并发锁。 */
+      let nailReminderPollTimer = null;
+      let nailReminderPollBusy = false;
       let priceAlertItems = [];
       let priceAlertSaving = false;
       let focusActionSymbol = null;
@@ -12525,11 +12539,7 @@
         const wrap = document.getElementById("nailRadarTableWrap");
         if (!body) return;
         const interval = CONFIG.KLINE_INTERVAL;
-        const maxRank = Math.max(
-          Number(CONFIG.WATCH_POOL_RANK) || 30,
-          100,
-        );
-        const list = ranking().slice(0, maxRank);
+        const list = nailRadarRankList();
         if (!list.length) {
           body.innerHTML = "";
           if (wrap) {
@@ -12662,6 +12672,7 @@
 
       function startNailRadarLive() {
         stopNailRadarLive();
+        nailRadarLiveTick = 0;
         nailRadarLiveTimer = setInterval(() => {
           const popover = document.getElementById("nailRadarPopover");
           if (!popover || popover.hidden) {
@@ -12670,9 +12681,57 @@
           }
           // 页面退到后台时不白跑请求。
           if (document.visibilityState === "hidden") return;
+          nailRadarLiveTick += 1;
+          // 每 30s 批量补拉一次名单 ticker：钉子页的刷价只覆盖钉子币，
+          // 不补的话非钉子币的 24h/名次从打开那刻起就是死数字。
+          if (nailRadarLiveTick % NAIL_RADAR_TICKER_EVERY_TICKS === 0) {
+            void refreshNailRadarTickers();
+          }
           updateNailRadarLiveCells();
           void paintNailRadarKlines();
-        }, 10000);
+        }, NAIL_RADAR_LIVE_TICK_MS);
+      }
+
+      /** 雷达名单（与 renderNailRadarTable 同一套切法）。 */
+      function nailRadarRankList() {
+        const maxRank = Math.max(
+          Number(CONFIG.WATCH_POOL_RANK) || 30,
+          100,
+        );
+        return ranking().slice(0, maxRank);
+      }
+
+      /**
+       * 补拉雷达名单 ticker 后：名次/成员变了才重渲整表（K 线跟着重画），
+       * 纯数字变化交给 10s 节拍的 updateNailRadarLiveCells 更新单元格。
+       */
+      async function refreshNailRadarTickers() {
+        const popover = document.getElementById("nailRadarPopover");
+        if (!popover || popover.hidden) return;
+        if (document.visibilityState === "hidden" || nailRadarTickerBusy) {
+          return;
+        }
+        const before = nailRadarRankList();
+        if (!before.length) return;
+        nailRadarTickerBusy = true;
+        try {
+          await fetchBinanceTickersForSymbols(before);
+        } catch (error) {
+          console.warn("radar ticker refresh failed", error);
+          return;
+        } finally {
+          nailRadarTickerBusy = false;
+        }
+        const stillOpen =
+          popover &&
+          !popover.hidden &&
+          document.visibilityState !== "hidden";
+        if (!stillOpen) return;
+        const after = nailRadarRankList();
+        if (after.join(",") !== before.join(",")) {
+          renderNailRadarTable();
+          void paintNailRadarKlines();
+        }
       }
 
       /** 不重渲整表，只刷新 24h / 窗涨两列数字（K 线由 paintNailRadarKlines 负责）。 */
@@ -17102,6 +17161,62 @@
         const fail = lastError || new Error("行情请求失败");
         if (!fail.userMessage) fail.userMessage = fail.message;
         throw fail;
+      }
+
+      /**
+       * 批量拉一批 symbol 的 24h ticker（币安 symbols 参数，单请求）。
+       * 只增量覆盖 marketMap 已有条目对应的价格，供雷达等名单场景补新鲜度；
+       * 名单本身来自 ranking()，条目已在活跃宇宙内，无需再过白名单。
+       */
+      async function fetchBinanceTickersForSymbols(symbols) {
+        const keys = Array.from(
+          new Set(
+            (Array.isArray(symbols) ? symbols : [])
+              .map((item) => String(item || "").trim().toUpperCase())
+              .filter(Boolean),
+          ),
+        ).slice(0, NAIL_RADAR_TICKER_MAX_SYMBOLS);
+        if (!keys.length) return 0;
+        const query = `symbols=${encodeURIComponent(JSON.stringify(keys))}`;
+        const endpoints = [
+          `https://data-api.binance.vision/api/v3/ticker/24hr?${query}`,
+          `https://api.binance.com/api/v3/ticker/24hr?${query}`,
+        ];
+        let lastError = null;
+        for (const url of endpoints) {
+          try {
+            const response = await fetch(url, { cache: "no-store" });
+            if (!response.ok) {
+              lastError = await errorFromHttpResponse(response, "币安行情");
+              continue;
+            }
+            const data = await response.json();
+            if (!Array.isArray(data)) {
+              lastError = new Error("币安行情返回异常（非列表）");
+              lastError.kind = "bad_response";
+              lastError.userMessage = lastError.message;
+              continue;
+            }
+            data.forEach((ticker) => {
+              const symbol = String(ticker.symbol || "").toUpperCase();
+              const price = Number(ticker.lastPrice);
+              const change = Number(ticker.priceChangePercent);
+              if (
+                symbol &&
+                Number.isFinite(price) &&
+                price > 0 &&
+                Number.isFinite(change)
+              ) {
+                marketMap[symbol] = { price, change24h: change };
+              }
+            });
+            return data.length;
+          } catch (error) {
+            if (error && error.kind) lastError = error;
+            else lastError = classifyFetchNetworkError(error, "币安行情");
+          }
+        }
+        throw lastError || new Error("行情请求失败");
       }
 
       async function refreshSingleKlineCard(card) {
@@ -23684,6 +23799,52 @@
         }, NAIL_NOTICE_AUTO_REFRESH_MS);
       }
 
+      /**
+       * 轻提醒轮询单拍：拉一次通知 + 一次日志，只更分栏角标和置顶栏摘要条，
+       * 不重渲正文（通知正文有自己的 10s 轮询，日志走 skipBodyRender）。
+       */
+      async function pollNailRemindersOnce() {
+        if (
+          nailReminderPollBusy ||
+          !isNailDrawerOpen() ||
+          document.visibilityState === "hidden"
+        ) {
+          return;
+        }
+        nailReminderPollBusy = true;
+        try {
+          // 通知分栏开着时 10s 轮询已覆盖通知数据，这里跳过避免双拉。
+          if (nailSegment !== "notice") {
+            await refreshNailGreenNotices({ force: true });
+          }
+          await pollAutoPinBadgeOnce();
+        } catch (error) {
+          console.warn("nail reminder poll failed", error);
+        } finally {
+          nailReminderPollBusy = false;
+        }
+      }
+
+      function stopNailReminderPoll() {
+        if (nailReminderPollTimer) {
+          window.clearInterval(nailReminderPollTimer);
+          nailReminderPollTimer = null;
+        }
+      }
+
+      function startNailReminderPoll() {
+        if (
+          !isNailDrawerOpen() ||
+          document.visibilityState === "hidden" ||
+          nailReminderPollTimer
+        ) {
+          return;
+        }
+        nailReminderPollTimer = window.setInterval(() => {
+          void pollNailRemindersOnce();
+        }, NAIL_REMINDER_POLL_MS);
+      }
+
       async function setNailNoticeDeltaFilter(mode) {
         nailNoticeDeltaFilter =
           mode === "up" || mode === "down" ? mode : "all";
@@ -25129,6 +25290,8 @@
             applyNailSegmentUi();
             syncNailSegBadges();
           }
+          // 轻提醒轮询与自动刷新开关解耦：进了钉子页就常驻。
+          startNailReminderPoll();
           if (entering || opts.forceRefresh) {
             void openNailDrawerWithBrowse();
           } else {
@@ -25143,6 +25306,7 @@
         } else if (leaving) {
           abortNailKlines();
           stopNailAutoRefresh();
+          stopNailReminderPoll();
           clearNailFocusSelection();
           setNailSelectMode(false);
           setNailSettingsOpen(false);
@@ -26979,10 +27143,7 @@
         void refreshNailTopPrices();
         nailAutoRefreshTimer = window.setInterval(() => {
           nailAutoRefreshTick += 1;
-          // 每 5 分钟顺带刷一次自动盯红点（页面挂着不动也能亮起来）。
-          if (nailAutoRefreshTick % AUTO_PIN_BADGE_POLL_TICKS === 0) {
-            void pollAutoPinBadgeOnce();
-          }
+          // 自动盯红点 / 通知摘要由独立的轻提醒轮询负责，不再挂在刷价节拍上。
           if (
             NAIL_AUTO_REFRESH_ALL_EVERY > 0 &&
             nailAutoRefreshTick % NAIL_AUTO_REFRESH_ALL_EVERY === 0
@@ -29679,12 +29840,15 @@
         if (document.visibilityState === "hidden") {
           stopNailAutoRefresh();
           stopNailNoticeAutoRefresh();
+          stopNailReminderPoll();
           markEggChromeSeenFromDom();
           return;
         }
         if (document.visibilityState === "visible") {
           startNailAutoRefresh();
           startNailNoticeAutoRefresh();
+          startNailReminderPoll();
+          void pollNailRemindersOnce();
           refreshNotifyFloat({ silent: true });
           maybeRefreshDataOnFocus();
           scheduleBreakHighTick();
