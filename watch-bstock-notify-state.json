@@ -20,19 +20,35 @@
     "ARMBUSDT",
     "LITEBUSDT",
     "SHAZBUSDT",
-    "STXBUSDT",
     "DRAMBUSDT",
-    "PENGBUSDT",
-    "USDEBUSDT",
     "MRVLBUSDT",
+    "STXBUSDT",
+    "PENGBUSDT",
     "SKHYBUSDT",
-    "SMCIBUSDT",
+    "USDEBUSDT",
     "COHRBUSDT",
-    "ASTSBUSDT",
-    "HIMSBUSDT"
+    "SMCIBUSDT",
+    "HIMSBUSDT",
+    "CRDOBUSDT"
   ],
   "risingZoneSnapSeeded": true,
   "autoPinEvents": [
+    {
+      "at": 1794433500422,
+      "symbols": [
+        "KORUBUSDT"
+      ],
+      "source": "auto-cloud",
+      "kind": "catch-up"
+    },
+    {
+      "at": 1794433500422,
+      "symbols": [
+        "ASTSBUSDT"
+      ],
+      "source": "zone-drop",
+      "kind": "zone-drop"
+    },
     {
       "at": 1794433201017,
       "symbols": [
@@ -343,25 +359,9 @@
       ],
       "source": "auto-cloud",
       "kind": "catch-up"
-    },
-    {
-      "at": 1794426600492,
-      "symbols": [
-        "RKLBBUSDT"
-      ],
-      "source": "zone-drop",
-      "kind": "zone-drop"
-    },
-    {
-      "at": 1794426300729,
-      "symbols": [
-        "KORUBUSDT"
-      ],
-      "source": "auto-cloud",
-      "kind": "catch-up"
     }
   ],
-  "updatedAt": 1794433240832,
+  "updatedAt": 1794433516254,
   "dropAlerts": {},
   "lastPinPrices": {
     "USDEBUSDT": 6.53,
