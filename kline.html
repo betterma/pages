@@ -2443,11 +2443,17 @@
         overscroll-behavior: contain;
       }
       .nail-auto-pin-row {
+        /* 「更早」一行 = 表头（时间/类型/币）+ 可选的迷你 K 线条。 */
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 9px 12px;
+        border-bottom: 0.5px solid var(--separator);
+      }
+      .nail-auto-pin-row-head {
         display: flex;
         align-items: baseline;
         gap: 10px;
-        padding: 9px 12px;
-        border-bottom: 0.5px solid var(--separator);
       }
       .nail-auto-pin-row:last-child {
         border-bottom: none;
@@ -2476,6 +2482,18 @@
       .nail-auto-pin-symbol:hover {
         text-decoration: underline;
         background: transparent;
+      }
+      /* 「更早」行内的迷你 K 线：一条一行，多个币并排等分宽度。 */
+      .nail-auto-pin-charts {
+        display: flex;
+        gap: 6px;
+        min-width: 0;
+      }
+      .nail-auto-pin-charts .nail-auto-pin-kline {
+        flex: 1 1 0;
+        min-width: 0;
+        width: auto;
+        height: 62px;
       }
       .nail-auto-pin-empty {
         padding: 18px 12px;
@@ -12464,22 +12482,45 @@
         }
         if (older.length) {
           parts.push(
-            `<div class="nail-auto-pin-section">更早</div>`,
+            `<div class="nail-auto-pin-section">更早 · ${older.length} 条</div>`,
             older
               .map((entry) => {
-                const names = (entry.symbols || [])
-                  .map((symbol) => {
-                    const key = String(symbol || "")
-                      .trim()
-                      .toUpperCase();
-                    if (!key) return "";
-                    const label = key.replace(/USDT$/i, "");
-                    return `<button type="button" class="nail-auto-pin-symbol" data-nail-auto-symbol="${escapeHtml(key)}">${escapeHtml(label)}</button>`;
-                  })
-                  .filter(Boolean)
-                  .join("");
-                return `<div class="nail-auto-pin-row"><time class="nail-auto-pin-time">${escapeHtml(formatActionLogTime(entry.at))}</time><div class="nail-auto-pin-symbols"><span>${escapeHtml(actionLogKindLabel(entry.kind))}</span>${names}</div></div>`;
+                const names = [];
+                const charts = [];
+                const seenHere = new Set();
+                (entry.symbols || []).forEach((symbol) => {
+                  const key = String(symbol || "")
+                    .trim()
+                    .toUpperCase();
+                  if (!key || seenHere.has(key)) return;
+                  seenHere.add(key);
+                  const label = key.replace(/USDT$/i, "");
+                  names.push(
+                    `<button type="button" class="nail-auto-pin-symbol" data-nail-auto-symbol="${escapeHtml(key)}">${escapeHtml(label)}</button>`,
+                  );
+                  // 同一币只画一张图：K 线是当前快照，重复画出来一模一样。
+                  // seen 里已包含「近 8 小时」卡片画过的币，这里自然去重。
+                  if (seen.has(key)) return;
+                  seen.add(key);
+                  charts.push(
+                    `<canvas class="nail-auto-pin-kline is-loading" data-kline="${escapeHtml(key)}" data-autopin-chart="${escapeHtml(key)}"></canvas>`,
+                  );
+                });
+                if (!names.length) return "";
+                const chartsHtml = charts.length
+                  ? `<div class="nail-auto-pin-charts">${charts.join("")}</div>`
+                  : "";
+                return [
+                  `<div class="nail-auto-pin-row">`,
+                  `<div class="nail-auto-pin-row-head">`,
+                  `<time class="nail-auto-pin-time">${escapeHtml(formatActionLogTime(entry.at))}</time>`,
+                  `<div class="nail-auto-pin-symbols"><span>${escapeHtml(actionLogKindLabel(entry.kind))}</span>${names.join("")}</div>`,
+                  `</div>`,
+                  chartsHtml,
+                  `</div>`,
+                ].join("");
               })
+              .filter(Boolean)
               .join(""),
           );
         }
