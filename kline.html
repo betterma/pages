@@ -9725,6 +9725,8 @@
       // 近 8 小时的币全部出卡片 + K 线；500 只是极端保护，
       // 防止日志异常时一次画上千张 K 线把币安限速打满，正常永远碰不到。
       const AUTO_PIN_RECENT_MAX_CARDS = 500;
+      /** 自动盯列表只回看近 3 天的记录。 */
+      const AUTO_PIN_LOOKBACK_MS = 3 * 24 * 60 * 60 * 1000;
       /** 入口红点只看近 24h，避免陈年记录一直亮着。 */
       const AUTO_PIN_BADGE_MS = 24 * 60 * 60 * 1000;
       /**
@@ -12398,9 +12400,12 @@
         if (!list) return;
         // 作废上一轮未画完的请求。
         nailAutoPinPaintToken += 1;
-        // 不设条数上限：日志本身只有 10000 条硬顶，「更早」按币去重后
-        // 卡片数 = 不重复币数，规模可控。
-        const entries = nailAutoPinEntries();
+        // 只看近 3 天：更早的陈年记录参考意义不大，且去重后卡片数随日志
+        // 膨胀（全量约 350 张），3 天窗口规模可控。
+        const lookbackCutoff = Date.now() - AUTO_PIN_LOOKBACK_MS;
+        const entries = nailAutoPinEntries().filter(
+          (entry) => (Number(entry.at) || 0) >= lookbackCutoff,
+        );
         if (!entries.length) {
           list.innerHTML = '<div class="nail-auto-pin-empty">暂无自动盯记录</div>';
           return;
@@ -12479,7 +12484,7 @@
           });
           if (olderCards.length) {
             parts.push(
-              `<div class="nail-auto-pin-section">更早 · ${olderCards.length} 个币</div>`,
+              `<div class="nail-auto-pin-section">更早（近 3 天）· ${olderCards.length} 个币</div>`,
               `<div class="nail-auto-pin-grid">${olderCards
                 .map((row) =>
                   buildNailAutoPinCardHtml(row.symbol, row.at, row.count),
