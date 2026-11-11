@@ -2442,48 +2442,7 @@
         overflow: auto;
         overscroll-behavior: contain;
       }
-      .nail-auto-pin-row {
-        /* 「更早」一行 = 表头（时间/类型/币）+ 可选的迷你 K 线条。 */
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        padding: 9px 12px;
-        border-bottom: 0.5px solid var(--separator);
-      }
-      .nail-auto-pin-row-head {
-        display: flex;
-        align-items: baseline;
-        gap: 10px;
-      }
-      .nail-auto-pin-row:last-child {
-        border-bottom: none;
-      }
-      .nail-auto-pin-time {
-        flex: 0 0 auto;
-        color: var(--secondary);
-        font-size: 10px;
-        font-variant-numeric: tabular-nums;
-      }
-      .nail-auto-pin-symbols {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px 8px;
-        min-width: 0;
-      }
-      .nail-auto-pin-symbol {
-        border: none;
-        background: transparent;
-        color: var(--accent);
-        padding: 0;
-        font-size: 12px;
-        font-weight: 650;
-        cursor: pointer;
-      }
-      .nail-auto-pin-symbol:hover {
-        text-decoration: underline;
-        background: transparent;
-      }
-      /* 重复盯过多次的币：只在最新那行显示，次数标在名字后。 */
+      /* 重复盯过多次的币：只在最新那张卡显示，次数标在名字后。 */
       .nail-auto-pin-repeat {
         margin-left: 3px;
         color: var(--secondary);
@@ -2491,18 +2450,6 @@
         font-style: normal;
         font-weight: 650;
         font-variant-numeric: tabular-nums;
-      }
-      /* 「更早」行内的迷你 K 线：一条一行，多个币并排等分宽度。 */
-      .nail-auto-pin-charts {
-        display: flex;
-        gap: 6px;
-        min-width: 0;
-      }
-      .nail-auto-pin-charts .nail-auto-pin-kline {
-        flex: 1 1 0;
-        min-width: 0;
-        width: auto;
-        height: 62px;
       }
       .nail-auto-pin-empty {
         padding: 18px 12px;
@@ -12406,11 +12353,16 @@
         return item.pinned ? "pinned" : "nailed";
       }
 
-      function buildNailAutoPinCardHtml(symbol, at) {
+      function buildNailAutoPinCardHtml(symbol, at, repeatCount) {
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
-        const label = escapeHtml(key.replace(/USDT$/i, ""));
+        const repeatN = Number(repeatCount) || 0;
+        const repeat =
+          repeatN > 1
+            ? `<i class="nail-auto-pin-repeat">×${repeatN}</i>`
+            : "";
+        const label = escapeHtml(key.replace(/USDT$/i, "")) + repeat;
         const pin = pinItemBySymbol(key);
         const pinPrice =
           pin && Number(pin.pinPrice) > 0 ? Number(pin.pinPrice) : 0;
@@ -12490,9 +12442,9 @@
           }
         }
         if (older.length) {
-          // 「更早」按币去重：同一个币只在它最近一次出现的那一行显示（K 线是当前
-          // 快照，重复出现画出来一模一样），更早的重复行整行丢掉；
-          // 重复次数用 ×N 标在币名后面，不丢信息。
+          // 「更早」按币去重：同一个币只保留最近一次出现（K 线是当前快照，
+          // 重复出现画出来一模一样）；卡片与「近 8 小时」完全同一套渲染，
+          // 样式尺寸一致；重复次数用 ×N 标在币名后面，不丢信息。
           const olderStat = new Map();
           older.forEach((entry) => {
             const at = Number(entry.at) || 0;
@@ -12507,50 +12459,29 @@
               olderStat.set(key, stat);
             });
           });
-          const rendered = new Set(seen);
-          const olderRows = [];
+          const olderCards = [];
           older.forEach((entry) => {
             const at = Number(entry.at) || 0;
-            const names = [];
-            const charts = [];
             const seenHere = new Set();
             (entry.symbols || []).forEach((symbol) => {
               const key = String(symbol || "").trim().toUpperCase();
               if (!key || seenHere.has(key)) return;
               seenHere.add(key);
               const stat = olderStat.get(key);
-              // 只保留最近一次出现：更新的行已经画过，或本次不是最新时间点。
-              if (!stat || rendered.has(key) || at !== stat.latestAt) return;
-              rendered.add(key);
-              const label = key.replace(/USDT$/i, "");
-              const repeat =
-                stat.count > 1
-                  ? `<i class="nail-auto-pin-repeat">×${stat.count}</i>`
-                  : "";
-              names.push(
-                `<button type="button" class="nail-auto-pin-symbol" data-nail-auto-symbol="${escapeHtml(key)}">${escapeHtml(label)}${repeat}</button>`,
-              );
-              charts.push(
-                `<canvas class="nail-auto-pin-kline is-loading" data-kline="${escapeHtml(key)}" data-autopin-chart="${escapeHtml(key)}"></canvas>`,
-              );
+              // 只保留最近一次出现：8 小时内已画过，或本次不是最新时间点。
+              if (!stat || seen.has(key) || at !== stat.latestAt) return;
+              seen.add(key);
+              olderCards.push({ symbol: key, at, count: stat.count });
             });
-            if (!names.length) return;
-            olderRows.push(
-              [
-                `<div class="nail-auto-pin-row">`,
-                `<div class="nail-auto-pin-row-head">`,
-                `<time class="nail-auto-pin-time">${escapeHtml(formatActionLogTime(entry.at))}</time>`,
-                `<div class="nail-auto-pin-symbols"><span>${escapeHtml(actionLogKindLabel(entry.kind))}</span>${names.join("")}</div>`,
-                `</div>`,
-                `<div class="nail-auto-pin-charts">${charts.join("")}</div>`,
-                `</div>`,
-              ].join(""),
-            );
           });
-          if (olderRows.length) {
+          if (olderCards.length) {
             parts.push(
-              `<div class="nail-auto-pin-section">更早 · ${olderRows.length} 条</div>`,
-              olderRows.join(""),
+              `<div class="nail-auto-pin-section">更早 · ${olderCards.length} 个币</div>`,
+              `<div class="nail-auto-pin-grid">${olderCards
+                .map((row) =>
+                  buildNailAutoPinCardHtml(row.symbol, row.at, row.count),
+                )
+                .join("")}</div>`,
             );
           }
         }
