@@ -2673,6 +2673,26 @@
       .nail-radar-updated.is-stale {
         color: var(--warn);
       }
+      /* 「全部K线」开关：默认关闭（只画置顶），点亮后整表都画迷你 K 线。 */
+      .nail-radar-toggle {
+        flex: 0 0 auto;
+        border: 0.5px solid var(--separator);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1;
+        padding: 4px 8px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .nail-radar-toggle.is-active,
+      .nail-radar-toggle[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 16%, transparent);
+        color: var(--accent);
+      }
       .nail-radar-refresh {
         flex: 0 0 auto;
         border: none;
@@ -7996,6 +8016,15 @@
               <span id="nailRadarUpdated" class="nail-radar-updated"></span>
               <button
                 type="button"
+                id="nailRadarAllKlineBtn"
+                class="nail-radar-toggle"
+                aria-pressed="false"
+                title="当前：只画置顶币，点一下全部币都画"
+              >
+                全部K线
+              </button>
+              <button
+                type="button"
                 id="nailRadarRefreshBtn"
                 class="nail-radar-refresh"
               >
@@ -9719,7 +9748,9 @@
       const AUTO_PIN_SEEN_KEY = "kline-nail-autopin-seen-v1";
       /** 近 2 个 4h 窗口（8 小时）内的自动盯，展开成带 K 线的卡片。 */
       const AUTO_PIN_RECENT_MS = 8 * 60 * 60 * 1000;
-      const AUTO_PIN_RECENT_MAX_CARDS = 20;
+      // 近 8 小时的币全部出卡片 + K 线（不再默认截断 20 张）；
+      // 120 只是极端保护，防止日志异常时一次画几百张 K 线把币安限速打满。
+      const AUTO_PIN_RECENT_MAX_CARDS = 120;
       /** 入口红点只看近 24h，避免陈年记录一直亮着。 */
       const AUTO_PIN_BADGE_MS = 24 * 60 * 60 * 1000;
       /**
@@ -9736,6 +9767,15 @@
       );
       /** 币安 symbols 参数单次最多 100 个。 */
       const NAIL_RADAR_TICKER_MAX_SYMBOLS = 100;
+      /** 雷达「全部K线」开关：默认关（只画钉子置顶币），状态存本地。 */
+      const NAIL_RADAR_ALL_KLINE_KEY = "kline-radar-all-kline-v1";
+      let nailRadarAllKlineOn = false;
+      try {
+        nailRadarAllKlineOn =
+          localStorage.getItem(NAIL_RADAR_ALL_KLINE_KEY) === "1";
+      } catch (_) {
+        nailRadarAllKlineOn = false;
+      }
       let nailAutoPinPaintToken = 0;
       /** 冲榜雷达迷你 K 线的绘制令牌：重渲/关闭即作废。 */
       let nailRadarPaintToken = 0;
@@ -12508,8 +12548,9 @@
             canvas.classList.remove("is-loading");
           }
         };
-        // 上限 20 张卡，并发 5 大约 4 批画完；再高意义不大，交易所也会限速。
-        const concurrency = 5;
+        // 卡片数不设软上限后按张数放大并发：少量用 5，超过 24 张提到 8，
+        // 单批权重仍可控（K 线接口 weight=2），且命中 90s 缓存后基本不再发请求。
+        const concurrency = canvases.length > 24 ? 8 : 5;
         let cursor = 0;
         const workers = Array.from(
           { length: Math.min(concurrency, canvases.length) },
@@ -12598,7 +12639,8 @@
           if (empty) empty.hidden = true;
         }
         const pool = watchPool instanceof Set ? watchPool : new Set();
-        // 置顶区的币（钉子页「顶」状态）才画迷你 K 线。
+        // 默认只给置顶区的币（钉子页「顶」状态）画迷你 K 线；
+        // 打开「全部K线」开关后整表都画。
         const radarPinnedSet = new Set(
           (Array.isArray(nailItems) ? nailItems : [])
             .filter((item) => item && item.pinned && item.symbol)
@@ -12638,9 +12680,10 @@
             ]
               .filter(Boolean)
               .join(" ");
-            const klineHtml = radarPinnedSet.has(
-              String(symbol).trim().toUpperCase(),
-            )
+            const showKline =
+              nailRadarAllKlineOn ||
+              radarPinnedSet.has(String(symbol).trim().toUpperCase());
+            const klineHtml = showKline
               ? `<canvas class="nail-radar-kline is-loading" data-kline="${escapeHtml(symbol)}" data-radar-chart="${escapeHtml(symbol)}"></canvas>`
               : "";
             return `<tr class="${rowClass}"><td>${rank}</td><td><button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${winCls}">${escapeHtml(formatPercent(win))}</td><td>${rankHtml}</td></tr>`;
@@ -12691,8 +12734,8 @@
             canvas.classList.remove("is-loading");
           }
         };
-        // 置顶币通常只有几个，并发 4 足够；交易所也会限速。
-        const concurrency = 4;
+        // 「全部K线」打开时整表 100 张，并发提到 8；否则置顶币只有几个，4 足够。
+        const concurrency = canvases.length > 16 ? 8 : 4;
         let cursor = 0;
         const workers = Array.from(
           { length: Math.min(concurrency, canvases.length) },
@@ -12733,7 +12776,14 @@
           }
           updateNailRadarLiveCells();
           syncNailRadarUpdatedUi();
-          void paintNailRadarKlines();
+          // 只画置顶时图很少，跟着 10s 节拍长；开「全部K线」后上百张，
+          // 改为跟 30s 补价节拍一起重画，避免每 10s 画一遍全表。
+          if (
+            !nailRadarAllKlineOn ||
+            nailRadarLiveTick % NAIL_RADAR_TICKER_EVERY_TICKS === 0
+          ) {
+            void paintNailRadarKlines();
+          }
         }, NAIL_RADAR_LIVE_TICK_MS);
       }
 
@@ -12796,6 +12846,38 @@
         el.classList.toggle("is-stale", stale);
       }
 
+      /** 「全部K线」开关的视觉状态。 */
+      function syncNailRadarAllKlineUi() {
+        const btn = document.getElementById("nailRadarAllKlineBtn");
+        if (!btn) return;
+        btn.setAttribute(
+          "aria-pressed",
+          nailRadarAllKlineOn ? "true" : "false",
+        );
+        btn.classList.toggle("is-active", nailRadarAllKlineOn);
+        btn.title = nailRadarAllKlineOn
+          ? "当前：全部币都画 K 线，点一下只看置顶"
+          : "当前：只画置顶币，点一下全部币都画";
+      }
+
+      /** 切换「全部K线」：落盘后立刻重渲表格并补图（关掉时旧图随之清空）。 */
+      function setNailRadarAllKline(on) {
+        const next = !!on;
+        if (next === nailRadarAllKlineOn) return;
+        nailRadarAllKlineOn = next;
+        try {
+          localStorage.setItem(
+            NAIL_RADAR_ALL_KLINE_KEY,
+            next ? "1" : "0",
+          );
+        } catch (_) {
+          /* ignore */
+        }
+        syncNailRadarAllKlineUi();
+        renderNailRadarTable();
+        void paintNailRadarKlines();
+      }
+
       /** 不重渲整表，只刷新 24h / 窗涨两列数字（K 线由 paintNailRadarKlines 负责）。 */
       function updateNailRadarLiveCells() {
         const body = document.getElementById("nailRadarBody");
@@ -12849,6 +12931,7 @@
         }
         if (next) {
           layoutNailHeadSheet(popover);
+          syncNailRadarAllKlineUi();
           renderNailRadarTable();
           syncNailRadarUpdatedUi();
           // 打开即补拉一次名单 ticker，保证第一眼看到的就是新数据；
@@ -30549,6 +30632,15 @@
           void setNailRadarPopoverOpen(
             !nailRadarPopover || nailRadarPopover.hidden,
           );
+        });
+      }
+      const nailRadarAllKlineBtn = document.getElementById(
+        "nailRadarAllKlineBtn",
+      );
+      if (nailRadarAllKlineBtn) {
+        syncNailRadarAllKlineUi();
+        nailRadarAllKlineBtn.addEventListener("click", () => {
+          setNailRadarAllKline(!nailRadarAllKlineOn);
         });
       }
       const nailRadarRefreshBtn = document.getElementById(
