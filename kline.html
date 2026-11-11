@@ -9722,9 +9722,9 @@
       const AUTO_PIN_SEEN_KEY = "kline-nail-autopin-seen-v1";
       /** 近 2 个 4h 窗口（8 小时）内的自动盯，展开成带 K 线的卡片。 */
       const AUTO_PIN_RECENT_MS = 8 * 60 * 60 * 1000;
-      // 近 8 小时的币全部出卡片 + K 线（不再默认截断 20 张）；
-      // 120 只是极端保护，防止日志异常时一次画几百张 K 线把币安限速打满。
-      const AUTO_PIN_RECENT_MAX_CARDS = 120;
+      // 近 8 小时的币全部出卡片 + K 线；500 只是极端保护，
+      // 防止日志异常时一次画上千张 K 线把币安限速打满，正常永远碰不到。
+      const AUTO_PIN_RECENT_MAX_CARDS = 500;
       /** 入口红点只看近 24h，避免陈年记录一直亮着。 */
       const AUTO_PIN_BADGE_MS = 24 * 60 * 60 * 1000;
       /**
@@ -9751,6 +9751,7 @@
         nailRadarAllKlineOn = false;
       }
       let nailAutoPinPaintToken = 0;
+      let nailAutoPinChartObserver = null;
       /** 冲榜雷达迷你 K 线的绘制令牌：重渲/关闭即作废。 */
       let nailRadarPaintToken = 0;
       /** 雷达浮窗开着时的实时刷新定时器：让当前窗口的 K 线肉眼可见地生长。 */
@@ -12397,7 +12398,9 @@
         if (!list) return;
         // 作废上一轮未画完的请求。
         nailAutoPinPaintToken += 1;
-        const entries = nailAutoPinEntries().slice(0, 80);
+        // 不设条数上限：日志本身只有 10000 条硬顶，「更早」按币去重后
+        // 卡片数 = 不重复币数，规模可控。
+        const entries = nailAutoPinEntries();
         if (!entries.length) {
           list.innerHTML = '<div class="nail-auto-pin-empty">暂无自动盯记录</div>';
           return;
@@ -12502,6 +12505,10 @@
         ];
         if (!canvases.length) return;
         const token = ++nailAutoPinPaintToken;
+        if (nailAutoPinChartObserver) {
+          nailAutoPinChartObserver.disconnect();
+          nailAutoPinChartObserver = null;
+        }
         const paintOne = async (canvas) => {
           if (token !== nailAutoPinPaintToken) return;
           const symbol = String(canvas.getAttribute("data-autopin-chart") || "")
@@ -12550,8 +12557,30 @@
             canvas.classList.remove("is-loading");
           }
         };
-        // 卡片数不设软上限后按张数放大并发：少量用 5，超过 24 张提到 8，
-        // 单批权重仍可控（K 线接口 weight=2），且命中 90s 缓存后基本不再发请求。
+        // 卡片多（去掉条数上限后可能几百张）时懒画：只画视口内及下方
+        // 一屏的卡片，滚到再画，避免一次几百张图把线程和币安限速打满。
+        if (
+          typeof IntersectionObserver === "function" &&
+          canvases.length > 40
+        ) {
+          const io = new IntersectionObserver(
+            (observed) => {
+              observed.forEach((entry) => {
+                if (!entry.isIntersecting) return;
+                const canvas = entry.target;
+                io.unobserve(canvas);
+                if (token !== nailAutoPinPaintToken) return;
+                void paintOne(canvas);
+              });
+            },
+            { root: list, rootMargin: "240px 0px" },
+          );
+          canvases.forEach((canvas) => io.observe(canvas));
+          nailAutoPinChartObserver = io;
+          return;
+        }
+        // 卡片少时全量并发：K 线接口 weight=2，
+        // 命中 90s 缓存后基本不再发请求。
         const concurrency = canvases.length > 24 ? 8 : 5;
         let cursor = 0;
         const workers = Array.from(
@@ -12595,6 +12624,10 @@
           void paintNailAutoPinCharts();
         } else {
           nailAutoPinPaintToken += 1;
+          if (nailAutoPinChartObserver) {
+            nailAutoPinChartObserver.disconnect();
+            nailAutoPinChartObserver = null;
+          }
           popover.style.top = "";
         }
       }
