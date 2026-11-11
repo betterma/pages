@@ -21256,7 +21256,7 @@
           ctx.restore();
         });
 
-        // 现价角标：右上角淡色小字，不抢眼。默认关闭，调用方传 priceLabel: true 才画；
+        // 现价角标：左上角淡色小字，不抢眼。默认关闭，调用方传 priceLabel: true 才画；
         // 画布太窄时自动跳过。优先用实时 ticker，回落到最后可见柱收盘。
         const wantPriceLabel = !!(options && options.priceLabel === true);
         if (wantPriceLabel && width >= 96) {
@@ -21281,15 +21281,11 @@
             ctx.save();
             ctx.font =
               '10px -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif';
-            ctx.textAlign = "right";
+            ctx.textAlign = "left";
             ctx.textBaseline = "top";
             ctx.globalAlpha = 0.85;
             ctx.fillStyle = labelColor || "rgba(150, 158, 168, 1)";
-            ctx.fillText(
-              formatPinPrice(livePrice),
-              width - pad.right - 1,
-              pad.top + 1,
-            );
+            ctx.fillText(formatPinPrice(livePrice), pad.left + 1, pad.top + 1);
             ctx.restore();
           }
         }
