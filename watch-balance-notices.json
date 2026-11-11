@@ -3,6 +3,25 @@
   "readAt": 1794399962534,
   "items": [
     {
+      "id": "ACTUSDT:1794398400000:1794400500601",
+      "symbol": "ACTUSDT",
+      "label": "ACT",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1794400500601,
+      "firstSeenAt": 1794297600614,
+      "openTime": 1794398400000,
+      "pinPrice": 0.01005,
+      "pinnedAt": 1794287100566,
+      "alertPrice": 0.01039,
+      "notifyPrice": 0.00945,
+      "noteAt": 1794327758801,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1794400500601
+    },
+    {
       "id": "AGPUBUSDT:1794398400000:1794400500601",
       "symbol": "AGPUBUSDT",
       "label": "AGPUB",
@@ -19,7 +38,7 @@
       "noteAt": 1794327758832,
       "interval": "4h",
       "windowUp": true,
-      "batchAt": 1794398400702
+      "batchAt": 1794400500601
     },
     {
       "id": "DRAMBUSDT:1794398400000:1794400500601",
@@ -38,7 +57,7 @@
       "noteAt": 1794390301028,
       "interval": "4h",
       "windowUp": true,
-      "batchAt": 1794398400702
+      "batchAt": 1794400500601
     },
     {
       "id": "SYRUPUSDT:1794398400000:1794400500601",
@@ -1453,25 +1472,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1794398700653
-    },
-    {
-      "id": "ACTUSDT:1794398400000:1794398700653",
-      "symbol": "ACTUSDT",
-      "label": "ACT",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1794398700653,
-      "firstSeenAt": 1794297600614,
-      "openTime": 1794398400000,
-      "pinPrice": 0.01005,
-      "pinnedAt": 1794287100566,
-      "alertPrice": 0.01039,
-      "notifyPrice": 0.00933,
-      "noteAt": 1794327758801,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1794396601072
     },
     {
       "id": "INJUSDT:1794398400000:1794398700653",
@@ -3628,6 +3628,15 @@
   ],
   "batches": [
     {
+      "at": 1794400500601,
+      "count": 3,
+      "symbols": [
+        "ACTUSDT",
+        "AGPUBUSDT",
+        "DRAMBUSDT"
+      ]
+    },
+    {
       "at": 1794400200656,
       "count": 1,
       "symbols": [
@@ -3725,11 +3734,9 @@
     },
     {
       "at": 1794398400702,
-      "count": 6,
+      "count": 4,
       "symbols": [
-        "AGPUBUSDT",
         "CYBERUSDT",
-        "DRAMBUSDT",
         "INITUSDT",
         "SNXUSDT",
         "牛来USDT"
@@ -3791,9 +3798,8 @@
     },
     {
       "at": 1794396601072,
-      "count": 17,
+      "count": 16,
       "symbols": [
-        "ACTUSDT",
         "ALICEUSDT",
         "AMATBUSDT",
         "AVAXUSDT",
