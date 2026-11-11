@@ -3,248 +3,269 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>交易系统 · Pages</title>
   <style>
     :root {
       color-scheme: dark;
-      --void: #03060e;
-      --panel: rgba(11, 21, 40, 0.72);
-      --panel-hi: rgba(18, 34, 60, 0.9);
-      --line: rgba(125, 190, 255, 0.16);
-      --line-hi: rgba(92, 225, 255, 0.58);
-      --ink: #e9f3ff;
-      --muted: #88a0bf;
-      --cyan: #5ce1ff;
-      --violet: #a08cff;
+      --bg: #080f17;
+      --panel: #101c29;
+      --panel-hi: #162637;
+      --line: rgba(150, 184, 212, 0.18);
+      --line-2: rgba(160, 198, 228, 0.38);
+      --ink: #eaf2fa;
+      --muted: #8ea6bb;
+      --blue: #6fb6e8;
+      --orange: #ff8b3d;
+      --go: #8fe3ab;
       --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Consolas, "Liberation Mono", monospace;
       --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
       min-height: 100vh;
       color: var(--ink);
       font-family: var(--sans);
-      background-color: var(--void);
+      background-color: var(--bg);
       background-image:
-        radial-gradient(ellipse 70% 48% at 14% -4%, rgba(91, 110, 255, 0.22), transparent 62%),
-        radial-gradient(ellipse 60% 46% at 88% 4%, rgba(0, 200, 255, 0.15), transparent 62%),
-        radial-gradient(ellipse 90% 42% at 50% 102%, rgba(123, 80, 255, 0.16), transparent 66%),
-        linear-gradient(180deg, #03060e 0%, #061024 55%, #03070f 100%);
+        linear-gradient(rgba(120, 165, 200, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(120, 165, 200, 0.05) 1px, transparent 1px),
+        linear-gradient(180deg, #0c1722 0%, #080f17 52%, #0b1622 100%);
+      background-size: 44px 44px, 44px 44px, 100% 100%;
       background-attachment: fixed;
-      overflow-x: hidden;
       position: relative;
+      overflow-x: hidden;
     }
-
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
-      background-image:
-        radial-gradient(circle, rgba(200, 230, 255, 0.55) 1px, transparent 1.4px),
-        radial-gradient(circle, rgba(150, 190, 255, 0.32) 1px, transparent 1.4px);
-      background-size: 113px 113px, 167px 167px;
-      background-position: 0 0, 37px 59px;
-      opacity: 0.5;
-      -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.45) 70%, transparent 100%);
-      mask-image: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0.45) 70%, transparent 100%);
+    .hazard {
+      position: fixed; top: 0; left: 0; right: 0; height: 4px; z-index: 5;
+      background: repeating-linear-gradient(115deg, var(--orange) 0 13px, #16232f 13px 26px);
+      opacity: 0.8;
     }
-
-    body::after {
-      content: "";
-      position: fixed;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
-      background-image:
-        linear-gradient(rgba(90, 160, 255, 0.05) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(90, 160, 255, 0.05) 1px, transparent 1px);
-      background-size: 64px 64px;
-      -webkit-mask-image: radial-gradient(ellipse 80% 62% at 50% 38%, #000 0%, transparent 82%);
-      mask-image: radial-gradient(ellipse 80% 62% at 50% 38%, #000 0%, transparent 82%);
+    .earth {
+      position: fixed; left: 50%; bottom: -1230px; width: 2200px; height: 1450px;
+      transform: translateX(-50%); border-radius: 50%;
+      border-top: 1px solid rgba(111, 182, 232, 0.4);
+      background: radial-gradient(ellipse 65% 24% at 50% 0%, rgba(111, 182, 232, 0.15), transparent 72%);
+      z-index: 0; pointer-events: none;
     }
-
-    .cosmos { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-    .orbit { position: absolute; border: 1px solid rgba(120, 190, 255, 0.1); border-radius: 50%; }
-    .orbit::before {
-      content: "";
-      position: absolute;
-      top: 11%; left: 12%;
-      width: 5px; height: 5px;
-      border-radius: 50%;
-      background: var(--cyan);
-      box-shadow: 0 0 14px var(--cyan);
+    .frame { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+    .frame i { position: absolute; width: 16px; height: 16px; border: 0 solid rgba(160, 198, 228, 0.32); }
+    .frame i:nth-child(1) { top: 18px; left: 18px; border-top-width: 1px; border-left-width: 1px; }
+    .frame i:nth-child(2) { top: 18px; right: 18px; border-top-width: 1px; border-right-width: 1px; }
+    .frame i:nth-child(3) { bottom: 18px; left: 18px; border-bottom-width: 1px; border-left-width: 1px; }
+    .frame i:nth-child(4) { bottom: 18px; right: 18px; border-bottom-width: 1px; border-right-width: 1px; }
+    .frame-tag {
+      position: absolute; right: 22px; bottom: 22px;
+      font: 10px/1 var(--mono); letter-spacing: 0.18em;
+      color: rgba(142, 166, 187, 0.5);
     }
-    .orbit-a { width: 760px; height: 760px; top: -430px; right: -250px; animation: spin 60s linear infinite; }
-    .orbit-b {
-      width: 520px; height: 520px; bottom: -330px; left: -180px;
-      border-color: rgba(160, 140, 255, 0.12);
-      animation: spin 45s linear infinite reverse;
-    }
-    .orbit-b::before { background: var(--violet); box-shadow: 0 0 14px var(--violet); }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .shell { position: relative; z-index: 1; max-width: 1000px; margin: 0 auto; padding: 40px 20px 64px; }
-
+    .shell { position: relative; z-index: 1; max-width: 1020px; margin: 0 auto; padding: 44px 22px 68px; }
     .topbar {
       display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
-      gap: 12px 20px;
-      padding-bottom: 14px; margin-bottom: 38px;
+      gap: 10px 18px; padding: 0 0 14px; margin-bottom: 36px;
       border-bottom: 1px solid var(--line);
-      font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em;
-      color: var(--muted); text-transform: uppercase;
+      font: 11px/1.4 var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--muted);
     }
     .sys { color: var(--ink); }
-    .sys .sep { color: var(--cyan); padding: 0 6px; }
-    .topbar-right { display: flex; align-items: center; gap: 14px; }
-    .status { display: inline-flex; align-items: center; gap: 8px; color: var(--cyan); }
-    .dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: var(--cyan); box-shadow: 0 0 12px var(--cyan);
-      animation: pulse 2.6s ease-in-out infinite;
+    .sys b { color: var(--orange); font-weight: 700; }
+    .sys .sep { color: rgba(142, 166, 187, 0.45); padding: 0 5px; }
+    .topbar-right { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; }
+    .status { display: inline-flex; align-items: center; gap: 7px; color: var(--go); }
+    .go-dot {
+      width: 7px; height: 7px; background: var(--go);
+      box-shadow: 0 0 0 2px rgba(143, 227, 171, 0.16);
+      animation: blink 3s steps(1, end) infinite;
     }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+    @keyframes blink { 0%, 78% { opacity: 1; } 79%, 100% { opacity: 0.35; } }
+    .clock { color: var(--blue); font-variant-numeric: tabular-nums; }
+    .build { border: 1px solid var(--line); padding: 4px 8px; }
     .return {
-      color: var(--muted); text-decoration: none; letter-spacing: 0.08em;
-      border: 1px solid var(--line); border-radius: 6px;
-      padding: 6px 11px; background: rgba(8, 16, 30, 0.6);
-      transition: color 0.2s, border-color 0.2s, background 0.2s;
+      color: var(--muted); text-decoration: none; letter-spacing: 0.06em;
+      border: 1px solid var(--line-2); padding: 5px 9px;
+      transition: color 0.18s, border-color 0.18s, background 0.18s;
     }
-    .return:hover { color: var(--cyan); border-color: var(--line-hi); background: rgba(92, 225, 255, 0.08); }
+    .return:hover { color: var(--orange); border-color: var(--orange); background: rgba(255, 139, 61, 0.08); }
 
-    .hero { margin-bottom: 38px; }
+    .hero { margin-bottom: 40px; }
     .kicker {
-      font-family: var(--mono); font-size: 11px; letter-spacing: 0.3em;
-      color: var(--cyan); text-transform: uppercase; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 9px;
+      font: 11px/1.4 var(--mono); letter-spacing: 0.24em;
+      color: var(--blue); text-transform: uppercase; margin-bottom: 14px;
     }
+    .kicker i { width: 16px; height: 3px; background: var(--orange); }
     h1 {
-      font-size: clamp(2.3rem, 6vw, 3.7rem); font-weight: 600;
-      letter-spacing: -0.025em; line-height: 1.08; margin-bottom: 14px;
+      font-size: clamp(2.2rem, 6vw, 3.6rem); font-weight: 700;
+      letter-spacing: 0.02em; line-height: 1.1; margin-bottom: 14px;
     }
-    h1 em {
-      font-style: normal;
-      background: linear-gradient(90deg, var(--cyan), var(--violet));
-      -webkit-background-clip: text; background-clip: text; color: transparent;
+    h1 span { color: var(--blue); }
+    h1 sup {
+      display: inline-block; vertical-align: top; margin-left: 12px;
+      font: 600 11px/1 var(--mono); letter-spacing: 0.14em;
+      color: #08121c; background: var(--orange); padding: 6px 8px;
     }
-    .lede { max-width: 44rem; color: var(--muted); font-size: 0.94rem; line-height: 1.75; }
+    .lede { max-width: 44rem; color: var(--muted); font-size: 0.94rem; line-height: 1.8; }
     .telemetry { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
     .telemetry span {
-      font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
-      color: var(--muted); border: 1px solid var(--line); border-radius: 4px;
-      padding: 5px 9px; background: rgba(8, 16, 30, 0.55);
+      font: 10px/1.4 var(--mono); letter-spacing: 0.13em; color: var(--muted);
+      border: 1px solid var(--line); border-left: 2px solid var(--line-2);
+      padding: 6px 10px; background: rgba(14, 26, 38, 0.7);
+    }
+    .telemetry b { color: var(--blue); font-weight: 600; margin-right: 6px; }
+    .traj { position: relative; margin-top: 26px; }
+    .traj svg { display: block; width: 100%; aspect-ratio: 10 / 1; height: auto; }
+    .ruler {
+      height: 7px; border-top: 1px solid var(--line-2);
+      background: repeating-linear-gradient(90deg, rgba(160, 198, 228, 0.32) 0 1px, transparent 1px 24px);
+    }
+    .traj-tag {
+      position: absolute; right: 0; top: -16px;
+      font: 9px/1 var(--mono); letter-spacing: 0.16em; color: rgba(142, 166, 187, 0.6);
     }
 
     .section { margin-bottom: 30px; }
-    .section-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
-    .idx {
-      font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
-      color: var(--cyan); border: 1px solid var(--line-hi);
-      border-radius: 4px; padding: 3px 7px;
-    }
+    .section-head { display: flex; align-items: center; gap: 11px; margin-bottom: 14px; }
+    .idx { width: 9px; height: 9px; background: var(--orange); flex: 0 0 auto; }
     .section-head h2 {
-      font-family: var(--mono); font-size: 12px; font-weight: 500;
-      letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink);
+      font: 600 12px/1.4 var(--mono); letter-spacing: 0.2em;
+      text-transform: uppercase; color: var(--ink);
     }
-    .section-head .sub { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-    .section-head .rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
-    .section-head .count { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+    .section-head .sub { font: 11px/1.4 var(--mono); color: var(--muted); }
+    .section-head .rule {
+      flex: 1; height: 1px;
+      background: repeating-linear-gradient(90deg, var(--line-2) 0 4px, transparent 4px 9px);
+    }
+    .section-head .count { font: 10px/1.4 var(--mono); letter-spacing: 0.12em; color: var(--muted); }
 
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(214px, 1fr)); gap: 11px; }
+    .grid.compact { grid-template-columns: repeat(auto-fill, minmax(174px, 1fr)); }
     .card {
-      position: relative; overflow: hidden;
-      display: flex; flex-direction: column; gap: 8px;
-      min-height: 132px; padding: 18px 18px 16px;
+      position: relative; display: flex; flex-direction: column; gap: 7px;
+      min-height: 134px; padding: 17px 17px 20px; overflow: hidden;
       text-decoration: none; color: var(--ink);
-      background: linear-gradient(160deg, var(--panel-hi), var(--panel));
-      border: 1px solid var(--line); border-radius: 10px;
-      transition: transform 0.2s ease, border-color 0.2s, box-shadow 0.2s;
+      background: linear-gradient(180deg, var(--panel-hi), var(--panel));
+      border: 1px solid var(--line);
+      transition: border-color 0.18s, background 0.18s, transform 0.18s;
     }
+    .card.compact { min-height: 108px; padding: 14px 15px 18px; }
     .card::before {
-      content: ""; position: absolute; inset: 0; pointer-events: none;
-      background: radial-gradient(320px circle at 100% 0%, rgba(92, 225, 255, 0.11), transparent 62%);
+      content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+      background: var(--orange); opacity: 0.75; transition: width 0.18s, opacity 0.18s;
     }
     .card::after {
-      content: ""; position: absolute; top: 0; left: 12px; right: 12px; height: 1px;
-      background: linear-gradient(90deg, transparent, var(--line-hi), transparent); opacity: 0.55;
+      content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 6px;
+      background: repeating-linear-gradient(90deg, rgba(160, 198, 228, 0.34) 0 1px, transparent 1px 11px);
+      opacity: 0.7;
     }
-    .edge {
-      position: absolute; left: 0; top: 16px; bottom: 16px; width: 2px;
-      background: linear-gradient(180deg, var(--cyan), transparent); opacity: 0.75;
+    .card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .num { font: 10px/1.4 var(--mono); letter-spacing: 0.15em; color: var(--blue); }
+    .go {
+      font: 9px/1 var(--mono); letter-spacing: 0.1em; color: var(--go);
+      display: inline-flex; align-items: center; gap: 4px;
     }
-    .num { font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; color: var(--cyan); }
-    .label { font-size: 1.05rem; font-weight: 600; letter-spacing: 0.01em; }
-    .hint { font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.5; }
-    .arrow { position: absolute; right: 15px; top: 15px; font-family: var(--mono); font-size: 13px; color: var(--muted); transition: transform 0.2s, color 0.2s; }
+    .go::before { content: ""; width: 5px; height: 5px; background: var(--go); }
+    .label { font-size: 1.06rem; font-weight: 650; letter-spacing: 0.01em; }
+    .hint { font: 11px/1.5 var(--mono); color: var(--muted); }
+    .arrow {
+      position: absolute; right: 15px; bottom: 17px;
+      font: 13px/1 var(--mono); color: var(--muted);
+      transition: color 0.18s, transform 0.18s;
+    }
     .card:hover, .card:focus-visible {
-      transform: translateY(-3px); border-color: var(--line-hi);
-      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(92, 225, 255, 0.08);
+      border-color: var(--orange); transform: translateY(-2px);
+      background: linear-gradient(180deg, #1a2c3f, var(--panel));
     }
-    .card:hover .arrow, .card:focus-visible .arrow { color: var(--cyan); transform: translate(2px, -2px); }
+    .card:hover::before, .card:focus-visible::before { width: 5px; opacity: 1; }
+    .card:hover .arrow, .card:focus-visible .arrow { color: var(--orange); transform: translate(2px, -2px); }
 
     .footer {
       display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 20px;
-      margin-top: 38px; padding-top: 16px; border-top: 1px solid var(--line);
-      font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; color: var(--muted);
+      margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line);
+      font: 10px/1.5 var(--mono); letter-spacing: 0.12em; color: var(--muted);
     }
 
     @media (max-width: 640px) {
-      .shell { padding: 26px 14px 48px; }
-      .topbar { margin-bottom: 28px; letter-spacing: 0.1em; }
-      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-      .card { min-height: 108px; padding: 14px; }
-      .hint { display: none; }
-      .section-head .sub { display: none; }
-      h1 { font-size: 2.1rem; }
+      .shell { padding: 30px 15px 52px; }
+      .topbar { margin-bottom: 28px; letter-spacing: 0.08em; }
+      .grid, .grid.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+      .card { min-height: 108px; padding: 13px 13px 17px; }
+      .card.compact { min-height: 100px; }
+      .hint, .section-head .sub, .traj-tag, .frame-tag { display: none; }
+      h1 { font-size: 2rem; }
+      h1 sup { font-size: 10px; padding: 5px 6px; margin-left: 8px; }
     }
-
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation: none !important; transition: none !important; }
     }
   </style>
 </head>
 <body>
-  <div class="cosmos" aria-hidden="true">
-    <span class="orbit orbit-a"></span>
-    <span class="orbit orbit-b"></span>
+  <div class="hazard" aria-hidden="true"></div>
+  <div class="earth" aria-hidden="true"></div>
+  <div class="frame" aria-hidden="true">
+    <i></i><i></i><i></i><i></i>
+    <span class="frame-tag">LEO / 408 KM &middot; PG-02</span>
   </div>
+
   <div class="shell">
     <div class="topbar">
-      <div class="sys">PAGES <span class="sep">/</span> TRADING CONSOLE</div>
+      <div class="sys"><b>PG-02</b> <span class="sep">//</span> FLIGHT OPERATIONS <span class="sep">/</span> 交易舱</div>
       <div class="topbar-right">
-        <span class="status"><i class="dot"></i>SYSTEM ONLINE</span>
+        <span class="status"><i class="go-dot"></i> ALL SYSTEMS GO</span>
+        <span class="clock" id="utcClock">--:--:-- UTC</span>
         <a class="return" href="https://betterma.github.io/">← 蚂蚱导航</a>
       </div>
     </div>
 
     <header class="hero">
-      <div class="kicker">SECTOR 01 · OPERATIONS DECK</div>
-      <h1>Pages <em>交易台</em></h1>
+      <div class="kicker"><i></i> MISSION 01 &middot; OPERATIONS DECK / 作业甲板</div>
+      <h1>Pages <span>交易台</span><sup>SEQ 06</sup></h1>
       <p class="lede">Binance 盯盘、OKX 自选，以及 Solana / Robinhood 发现流程的统一入口。</p>
       <div class="telemetry">
-        <span>NODES 06</span><span>UPLINK ACTIVE</span><span>MODE LIVE</span>
+        <span><b>PAYLOADS</b> 06</span>
+        <span><b>ORBIT</b> LEO</span>
+        <span><b>UPLINK</b> NOMINAL</span>
+        <span><b>MODE</b> LIVE</span>
+      </div>
+      <div class="traj" aria-hidden="true">
+        <span class="traj-tag">ASCENT PROFILE / T+00:00 &rarr; T+08:00</span>
+        <svg viewBox="0 0 960 96" preserveAspectRatio="none" role="presentation">
+          <defs>
+            <linearGradient id="trajGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#6fb6e8" stop-opacity="0.1"></stop>
+              <stop offset="0.55" stop-color="#6fb6e8" stop-opacity="0.65"></stop>
+              <stop offset="1" stop-color="#ff8b3d" stop-opacity="0.95"></stop>
+            </linearGradient>
+          </defs>
+          <path d="M0 88 C 240 88 300 74 460 48 C 640 20 760 14 960 8" fill="none" stroke="url(#trajGrad)" stroke-width="1.6" vector-effect="non-scaling-stroke"></path>
+          <path d="M0 88 C 240 88 300 74 460 48 C 640 20 760 14 960 8" fill="none" stroke="rgba(142,166,187,0.25)" stroke-width="1" stroke-dasharray="2 7" transform="translate(0,7)" vector-effect="non-scaling-stroke"></path>
+          <line x1="0" y1="95" x2="960" y2="95" stroke="rgba(160,198,228,0.28)" stroke-width="1" vector-effect="non-scaling-stroke"></line>
+          <circle cx="460" cy="48" r="4" fill="#ff8b3d"></circle>
+          <circle cx="460" cy="48" r="9" fill="none" stroke="rgba(255,139,61,0.45)" stroke-width="1" vector-effect="non-scaling-stroke"></circle>
+        </svg>
+        <div class="ruler"></div>
       </div>
     </header>
 
     <section class="section">
       <div class="section-head">
-        <span class="idx">01</span>
+        <span class="idx"></span>
         <h2>Binance</h2>
         <span class="sub">观察池 · 冲榜</span>
         <span class="rule"></span>
-        <span class="count">02</span>
+        <span class="count">02 MODULES</span>
       </div>
       <div class="grid">
         <a class="card" href="./kline.html">
-          <span class="edge"></span><span class="num">01 / KLINE</span>
+          <span class="card-top"><span class="num">PL-01 / KLINE</span><span class="go">GO</span></span>
           <span class="label">币安观察</span>
           <span class="hint">K 线 · 盯一下 · 持仓</span>
           <span class="arrow">↗</span>
         </a>
         <a class="card" href="./watch.html">
-          <span class="edge"></span><span class="num">02 / RADAR</span>
+          <span class="card-top"><span class="num">PL-02 / RADAR</span><span class="go">GO</span></span>
           <span class="label">冲榜雷达</span>
           <span class="hint">涨幅对比与收藏</span>
           <span class="arrow">↗</span>
@@ -254,15 +275,15 @@
 
     <section class="section">
       <div class="section-head">
-        <span class="idx">02</span>
+        <span class="idx"></span>
         <h2>OKX</h2>
         <span class="sub">链上自选</span>
         <span class="rule"></span>
-        <span class="count">01</span>
+        <span class="count">01 MODULE</span>
       </div>
       <div class="grid">
         <a class="card" href="./okx/kline.html">
-          <span class="edge"></span><span class="num">03 / OKX</span>
+          <span class="card-top"><span class="num">PL-03 / OKX</span><span class="go">GO</span></span>
           <span class="label">OKX 自选 K 线</span>
           <span class="hint">链上代币价格跟踪</span>
           <span class="arrow">↗</span>
@@ -272,21 +293,21 @@
 
     <section class="section">
       <div class="section-head">
-        <span class="idx">03</span>
+        <span class="idx"></span>
         <h2>Discovery</h2>
         <span class="sub">发现流程</span>
         <span class="rule"></span>
-        <span class="count">02</span>
+        <span class="count">02 MODULES</span>
       </div>
       <div class="grid">
         <a class="card" href="./solana/">
-          <span class="edge"></span><span class="num">04 / SOL</span>
+          <span class="card-top"><span class="num">PL-04 / SOL</span><span class="go">GO</span></span>
           <span class="label">Solana 发现</span>
           <span class="hint">旧三步 · Birdeye · To Watch</span>
           <span class="arrow">↗</span>
         </a>
         <a class="card" href="./eth-index.html">
-          <span class="edge"></span><span class="num">05 / RH</span>
+          <span class="card-top"><span class="num">PL-05 / RH</span><span class="go">GO</span></span>
           <span class="label">Robinhood 发现</span>
           <span class="hint">旧三步 · DexScreener · 4663</span>
           <span class="arrow">↗</span>
@@ -296,15 +317,15 @@
 
     <section class="section">
       <div class="section-head">
-        <span class="idx">04</span>
+        <span class="idx"></span>
         <h2>Utilities</h2>
         <span class="sub">工具</span>
         <span class="rule"></span>
-        <span class="count">01</span>
+        <span class="count">01 MODULE</span>
       </div>
       <div class="grid">
         <a class="card" href="./keys-guide.html">
-          <span class="edge"></span><span class="num">06 / KEYS</span>
+          <span class="card-top"><span class="num">PL-06 / KEYS</span><span class="go">GO</span></span>
           <span class="label">密钥续期</span>
           <span class="hint">PAT · Birdeye · PushPlus · OBS</span>
           <span class="arrow">↗</span>
@@ -313,9 +334,21 @@
     </section>
 
     <div class="footer">
-      <span>PAGES / STATIC CONSOLE · 2026</span>
+      <span>PG-02 / FLIGHT OPERATIONS &middot; 2026</span>
       <span>云函数路径与 JSON 状态文件保持原位，勿随意挪动</span>
     </div>
   </div>
+
+  <script>
+    // 任务时钟：显示 UTC，纯展示、无网络请求。
+    (function () {
+      var el = document.getElementById("utcClock");
+      function tick() {
+        if (el) el.textContent = new Date().toISOString().slice(11, 19) + " UTC";
+      }
+      tick();
+      setInterval(tick, 1000);
+    })();
+  </script>
 </body>
 </html>
