@@ -255,6 +255,38 @@
         opacity: 0.45;
         cursor: wait;
       }
+      /* 窄屏时「同步池」只留图标，给整页重载让位 */
+      .app-chrome .chrome-btn-icon {
+        display: none;
+      }
+      .app-chrome .chrome-divider {
+        flex: 0 0 auto;
+        width: 1px;
+        height: 18px;
+        margin: 0 2px;
+        background: var(--ios-separator);
+      }
+      /* 整页重载：弱化描边图标，与两个数据刷新按钮拉开层级，降低误触 */
+      .app-chrome .chrome-btn.is-reload {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        color: var(--ios-secondary);
+        background: transparent;
+        border: 1px solid var(--ios-separator);
+      }
+      .app-chrome .chrome-btn.is-reload svg {
+        width: 16px;
+        height: 16px;
+      }
+      .app-chrome .chrome-btn.is-reload:hover {
+        color: var(--ios-blue);
+        border-color: var(--ios-blue);
+        background: var(--ios-fill);
+      }
       .page-header {
         display: flex;
         align-items: center;
@@ -752,6 +784,14 @@
         padding: 7px 13px;
         box-shadow: var(--ios-control-shadow);
       }
+      html[data-ui-style="ios"] .app-chrome .chrome-btn.is-reload {
+        min-height: 30px;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border-radius: 999px;
+        box-shadow: none;
+      }
       html[data-ui-style="ios"] .app-chrome .mode-switch {
         border-radius: 999px;
         padding: 3px;
@@ -825,6 +865,24 @@
         }
         html[data-ui-style="ios"] .page-header h1 {
           font-size: 18px;
+        }
+        .app-chrome-right {
+          gap: 4px;
+        }
+        .app-chrome .range-select {
+          max-width: 88px;
+        }
+        .app-chrome .chrome-divider {
+          margin: 0 1px;
+        }
+        #syncPoolBtn .chrome-btn-label {
+          display: none;
+        }
+        #syncPoolBtn .chrome-btn-icon {
+          display: inline;
+        }
+        #syncPoolBtn {
+          padding: 6px 8px;
         }
       }
       .mode-progress {
@@ -7743,7 +7801,21 @@
           class="chrome-btn is-secondary"
           title="重同步：强制拉观察池快照（GitHub 热库）+ GitHub 状态"
         >
-          同步池
+          <span class="chrome-btn-label">同步池</span>
+          <span class="chrome-btn-icon" aria-hidden="true">⇄</span>
+        </button>
+        <span class="chrome-divider" aria-hidden="true"></span>
+        <button
+          id="reloadPageBtn"
+          type="button"
+          class="chrome-btn is-secondary is-reload"
+          title="整页重载：等同浏览器刷新并绕过缓存，重新加载最新代码（会重置当前分栏与浮层）"
+          aria-label="整页重载"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+            <path d="M20 4v5h-5" />
+          </svg>
         </button>
       </div>
     </div>
@@ -29893,6 +29965,46 @@
         syncPoolBtn.addEventListener("click", () => {
           closeCardActions();
           refreshAll({ reason: "sync-pool", mode: "full", forceObs: true });
+        });
+      }
+
+      /** 有 GitHub 写任务在途时，整页重载会中断读-改-写，先拦一下。 */
+      function hasPendingWrites() {
+        return [
+          typeof nailSaving !== "undefined" && nailSaving,
+          typeof nailNoteEditorSaving !== "undefined" && nailNoteEditorSaving,
+          typeof momNotesSaving !== "undefined" && momNotesSaving,
+          typeof notesRankPrefsSaving !== "undefined" && notesRankPrefsSaving,
+          typeof breakHighSaving !== "undefined" && breakHighSaving,
+          typeof actionLogSaving !== "undefined" && actionLogSaving,
+          typeof priceAlertSaving !== "undefined" && priceAlertSaving,
+          typeof cardEggSaving !== "undefined" && cardEggSaving,
+          typeof favoriteSaving !== "undefined" && favoriteSaving,
+          typeof blacklistSaving !== "undefined" && blacklistSaving,
+          typeof pinSaving !== "undefined" && pinSaving,
+          typeof positionSaving !== "undefined" && positionSaving,
+          typeof homePrefSaving !== "undefined" && homePrefSaving,
+          typeof watchPoolRankSaving !== "undefined" && watchPoolRankSaving,
+        ].some(Boolean);
+      }
+
+      const reloadPageBtn = document.getElementById("reloadPageBtn");
+      if (reloadPageBtn) {
+        reloadPageBtn.addEventListener("click", () => {
+          if (hasPendingWrites()) {
+            showToast("正在保存到 GitHub，稍后再重载");
+            return;
+          }
+          closeCardActions();
+          try {
+            const url = new URL(window.location.href);
+            // 只加一个 cache-buster，保留 ?view=notes 等业务参数；
+            // 用 replace 而非 href=，避免连点几次后浏览器后退卡在反复刷新。
+            url.searchParams.set("_r", String(Date.now()));
+            window.location.replace(url.toString());
+          } catch (_) {
+            window.location.reload();
+          }
         });
       }
       document.addEventListener("click", (event) => {
