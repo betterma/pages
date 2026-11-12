@@ -1,49 +1,52 @@
 {
-  "updatedAt": 1794492060407,
-  "lastRunAt": 1794492000610,
-  "ok": true,
-  "error": null,
-  "durationMs": 59797,
-  "autoPins": 111,
+  "updatedAt": 1794492660248,
+  "lastRunAt": 1794492600580,
+  "ok": false,
+  "error": "nail-green×1:notices:GitHub PUT watch-nail-green-notices.json failed: 409 {\"message\":\"is at c0b111eb11f90464daaf0ad5cb4aa15d5c85ed3e but expected c83346364cabff70c9a1f9acbafb994a76274807\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":",
+  "durationMs": 59668,
+  "autoPins": 108,
   "balance": {
     "skipped": false,
     "reason": null,
-    "autoPins": 111,
-    "due": 83,
-    "checked": 83,
-    "hits": 22,
-    "sent": 0,
-    "wecomDue": 0,
-    "wecomQueued": 0,
+    "autoPins": 108,
+    "due": 90,
+    "checked": 90,
+    "hits": 26,
+    "sent": 3,
+    "wecomDue": 3,
+    "wecomQueued": 3,
     "wecomDeferred": 0,
-    "skippedWecomWindow": 22,
+    "skippedWecomWindow": 23,
     "checkMax": 0,
     "sendMax": 0,
     "checkCursor": 0,
     "cooldownMs": 1800000,
-    "cooldownSkipped": 28,
+    "cooldownSkipped": 18,
     "errorCount": 0,
     "errors": []
   },
   "nailGreen": {
     "skipped": false,
     "reason": null,
-    "nails": 133,
-    "pending": 84,
-    "checked": 84,
-    "hits": 1,
+    "nails": 130,
+    "pending": 82,
+    "checked": 82,
+    "hits": 9,
     "sent": 0,
     "checkMax": 0,
     "checkCursor": 0,
-    "bucketSkipped": 49,
-    "errorCount": 0,
-    "errors": []
+    "bucketSkipped": 48,
+    "errorCount": 1,
+    "errors": [
+      "notices:GitHub PUT watch-nail-green-notices.json failed: 409 {\"message\":\"is at c0b111eb11f90464daaf0ad5cb4aa15d5c85ed3e but expected c83346364cabff70c9a1f9acbafb994a76274807\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":"
+    ]
   },
   "staleNailPrune": {
     "skipped": false,
-    "reason": "none-stale",
+    "reason": null,
     "checked": 12,
-    "candidate": 67,
-    "removed": 0
-  }
+    "candidate": 84,
+    "removed": 3
+  },
+  "degraded": true
 }
