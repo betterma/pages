@@ -177,6 +177,9 @@ const CONFIG = {
   PRICE_ALERT_SEND_GAP_MS: Number(
     process.env.PRICE_ALERT_SEND_GAP_MS || 60 * 1000,
   ),
+  // 仅页面提醒：默认关闭企微/微信推送，只落盘 hitAt 给网页用。
+  // 想恢复推送：云函数环境变量 PRICE_ALERTS_PUSH=true。
+  PRICE_ALERTS_PUSH: String(process.env.PRICE_ALERTS_PUSH || '').toLowerCase() === 'true',
   WECOM_WEBHOOK_PINS: WEBHOOKS.pinsUrl,
   WECOM_WEBHOOK_POSITIONS: WEBHOOKS.positionsUrl,
   DROP_THRESHOLD: Number(process.env.DROP_THRESHOLD || 0.05),
@@ -1116,6 +1119,9 @@ function priceAlertHit(alert, price) {
   return price >= alert.target;
 }
 
+/** 只看页面提醒时，命中记录保留多久（与网页通知 24h 窗口一致）。 */
+const PRICE_ALERT_PAGE_RETAIN_MS = 24 * 60 * 60 * 1000;
+
 /**
  * @param {number} now
  * @param {string} [alertsPath]
@@ -1152,8 +1158,15 @@ async function processPriceAlerts(now, alertsPath, options) {
     }
     if (!alert.hitAt) continue;
 
-    // bStock 等：只记触发，不发企微/微信，也不走 sentCount 推送配额。
-    if (!pushEnabled) continue;
+    // bStock / 仅页面提醒：只记触发，不发企微/微信，也不走 sentCount 推送配额。
+    if (!pushEnabled) {
+      // 网页只展示近 24h 命中；更早的自动归档，避免提醒长期占位、挡住重新设置。
+      if (now - alert.hitAt > PRICE_ALERT_PAGE_RETAIN_MS) {
+        alert.active = false;
+        changed = true;
+      }
+      continue;
+    }
 
     if (alert.sentCount >= CONFIG.PRICE_ALERT_SEND_MAX) {
       alert.active = false;
@@ -1616,7 +1629,10 @@ async function main(event, context) {
   let priceAlertStats = { sent: 0, hit: 0, checked: 0 };
   let bstockPriceAlertStats = { sent: 0, hit: 0, checked: 0 };
   try {
-    priceAlertStats = await processPriceAlerts(now, CONFIG.PRICE_ALERTS_PATH);
+    // 现货价格提醒：默认「仅页面提醒」——只写 hitAt 供网页通知，不推企微/微信。
+    priceAlertStats = await processPriceAlerts(now, CONFIG.PRICE_ALERTS_PATH, {
+      push: CONFIG.PRICE_ALERTS_PUSH,
+    });
     if (priceAlertStats.sent || priceAlertStats.hit) {
       console.log('price alerts', JSON.stringify(priceAlertStats));
     }

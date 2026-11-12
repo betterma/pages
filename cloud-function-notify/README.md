@@ -121,6 +121,7 @@
 | `AUTO_PIN_WECOM` | 否 | 默认 `0` |
 | `PUSHPLUS_TOKEN` | 否* | 仅当 `AUTO_PIN_PUSHPLUS=1` |
 | `BALANCE_ALERT` | 否 | 默认 `1` |
+| `PRICE_ALERTS_PUSH` | 否 | 默认 `false`：价格提醒**仅页面提醒**（只写 `hitAt` 给网页，不推企微/微信）。设为 `true` 才恢复企微/PushPlus 连推 |
 | `NOTES_RANK_SNAP_ENABLED` | 否 | 默认 `1` |
 | `BINANCE_API_KEY` / `BINANCE_API_SECRET` | 持有/卖出 | 现货 Key（可读账户；真下单还需交易权限）。支持 HMAC 或 Ed25519 PEM |
 

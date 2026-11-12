@@ -21666,6 +21666,8 @@
           Number(localStorage.getItem(PRICE_ALERT_READ_KEY)) || 0;
       } catch (_) {}
       let priceAlertsLoadedAt = 0;
+      // 仅页面提醒：记录已提示过的 hitAt，新一轮命中弹一次 toast（首轮加载不弹）。
+      let priceAlertHitSeen = null;
       const KLINE_ZOOM_ICON_SVG =
         '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M2 2h4v1.5H3.5V6H2V2zm8 0h4v4h-1.5V3.5H10V2zM2 10h1.5v2.5H6V14H2v-4zm8 2.5H13.5V10H15v4h-4v-1.5z"/></svg>';
 
@@ -21880,9 +21882,12 @@
           }
         }
         if (hint) {
-          hint.textContent = fromCrosshair
-            ? "取十字线当前价，可手动微调"
-            : "默认按现价，可手动微调；命中后进通知分栏";
+          hint.textContent =
+            existing && Number(existing.hitAt) > 0
+              ? "上次已命中，改个目标即可重新提醒"
+              : fromCrosshair
+                ? "取十字线当前价，可手动微调"
+                : "默认按现价，可手动微调；命中后进通知分栏";
         }
         if (clearBtn) clearBtn.hidden = !existing;
         panel.hidden = false;
@@ -21966,6 +21971,31 @@
         syncNailNoticeEntryUi();
       }
 
+      /** 仅页面提醒：到价命中弹一条提示条，首轮加载不弹，避免刷屏。 */
+      function announcePriceAlertHits() {
+        const seen = priceAlertHitSeen;
+        const nextSeen = new Map();
+        const fresh = [];
+        (priceAlertItems || []).forEach((item) => {
+          if (!item || !item.id) return;
+          const at = Number(item.hitAt) || 0;
+          nextSeen.set(item.id, at);
+          if (!at || !seen) return;
+          if (at > (Number(seen.get(item.id)) || 0)) fresh.push(item);
+        });
+        priceAlertHitSeen = nextSeen;
+        if (!fresh.length) return;
+        const lines = fresh.slice(0, 3).map((item) => {
+          const key = String(item.symbol || "")
+            .toUpperCase()
+            .replace(/USDT$/i, "");
+          const dir = item.direction === "below" ? "跌破" : "涨到";
+          return `${key} ${dir} ${formatPinPrice(Number(item.target) || 0)}`;
+        });
+        const more = fresh.length > 3 ? ` 等 ${fresh.length} 个` : "";
+        showToast(`到价提醒：${lines.join("；")}${more}`, { duration: 6000 });
+      }
+
       /** 全局角标跟随提醒轮询更新，30s 节流，避免每 10s 多打一次 GitHub。 */
       async function refreshSharedPriceAlerts(force) {
         const now = Date.now();
@@ -21976,6 +22006,7 @@
         } catch (_) {
           return;
         }
+        announcePriceAlertHits();
         syncNailNoticeEntryUi();
         if (nailNoticeMode === "open") renderNailNoticeList();
         if (isKlineZoomOpen() && klineZoomSymbol) {
