@@ -2878,6 +2878,59 @@
         font-size: 12px;
         text-align: center;
       }
+      /* 操作列：取消置顶 / 关注（写持仓新增关注）两个小胶囊按钮。 */
+      .nail-radar-table th:nth-child(7),
+      .nail-radar-table td:nth-child(7) {
+        text-align: right;
+        padding-left: 4px;
+        padding-right: 4px;
+      }
+      .nail-radar-act {
+        display: inline-block;
+        border: 0.5px solid var(--separator);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--secondary);
+        font-size: 10.5px;
+        font-weight: 600;
+        line-height: 1;
+        padding: 4px 7px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .nail-radar-act + .nail-radar-act {
+        margin-left: 4px;
+      }
+      .nail-radar-act:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .nail-radar-act.is-danger:hover {
+        border-color: #c04545;
+        color: #c04545;
+      }
+      .nail-radar-act.is-on {
+        border-color: transparent;
+        color: var(--secondary);
+        cursor: default;
+        opacity: 0.7;
+      }
+      /* 前 100 之后的置顶补位：分组条 + 与主榜区分的淡底。 */
+      .nail-radar-table tr.is-radar-sep td {
+        background: color-mix(in srgb, var(--label, #808090) 8%, transparent);
+        color: var(--secondary);
+        font-size: 10.5px;
+        font-weight: 650;
+        padding: 5px 8px;
+        border-bottom: 0.5px solid var(--separator);
+      }
+      .nail-radar-table tr.is-radar-extra td {
+        background: color-mix(in srgb, var(--warn, #b07030) 5%, transparent);
+      }
+      .nail-radar-table tr.is-radar-extra td:nth-child(1) {
+        color: var(--warn, #b07030);
+        font-weight: 700;
+      }
       .nail-hold-popover {
         position: fixed;
         left: 10px;
@@ -8201,6 +8254,7 @@
                     <th>K线</th>
                     <th>窗涨</th>
                     <th>名次</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody id="nailRadarBody"></tbody>
@@ -12868,6 +12922,36 @@
         };
       }
 
+      /** 置顶币集合（钉子页「顶」状态）：雷达 K 线与补位行共用。 */
+      function radarPinnedSymbols() {
+        return (Array.isArray(nailItems) ? nailItems : [])
+          .filter((item) => item && item.pinned && item.symbol)
+          .map((item) => String(item.symbol).trim().toUpperCase())
+          .filter(Boolean);
+      }
+
+      /** 置顶但没进前 100 的币：表尾补位展示，排名取全量榜真实名次。 */
+      function nailRadarPinnedExtras() {
+        const top = nailRadarRankList();
+        const topSet = new Set(top);
+        return radarPinnedSymbols().filter((symbol) => !topSet.has(symbol));
+      }
+
+      /** 雷达整表名单（前 100 + 置顶补位），供补拉前后对比成员变化。 */
+      function nailRadarAllSymbols() {
+        return [...nailRadarRankList(), ...nailRadarPinnedExtras()];
+      }
+
+      /** 持仓「新增关注」名单（大写）：用于雷达操作列的已关注态。 */
+      function holdingsWatchSymbols() {
+        const symbols = nailHoldingsState && nailHoldingsState.symbols;
+        return new Set(
+          (Array.isArray(symbols) ? symbols : [])
+            .map((item) => String(item || "").trim().toUpperCase())
+            .filter(Boolean),
+        );
+      }
+
       function renderNailRadarTable() {
         const body = document.getElementById("nailRadarBody");
         const wrap = document.getElementById("nailRadarTableWrap");
@@ -12895,54 +12979,87 @@
         const pool = watchPool instanceof Set ? watchPool : new Set();
         // 默认只给置顶区的币（钉子页「顶」状态）画迷你 K 线；
         // 打开「全部K线」开关后整表都画。
-        const radarPinnedSet = new Set(
-          (Array.isArray(nailItems) ? nailItems : [])
-            .filter((item) => item && item.pinned && item.symbol)
-            .map((item) => String(item.symbol).trim().toUpperCase()),
-        );
-        body.innerHTML = list
-          .map((symbol, index) => {
-            const rank = index + 1;
-            const label = String(symbol || "").replace(/USDT$/i, "");
-            const change24h = Number(marketMap[symbol] && marketMap[symbol].change24h);
-            const win = windowPriceChange(symbol, interval);
-            const rankMeta = nailRadarRankDelta(symbol, interval);
-            const winCls =
-              Number.isFinite(win) && win > 0
-                ? "nail-radar-up"
-                : Number.isFinite(win) && win < 0
-                  ? "nail-radar-down"
-                  : "";
-            const chCls =
-              Number.isFinite(change24h) && change24h > 0
-                ? "nail-radar-up"
-                : Number.isFinite(change24h) && change24h < 0
-                  ? "nail-radar-down"
-                  : "";
-            let rankHtml = `#${rank}`;
-            if (rankMeta && Number.isFinite(rankMeta.improvement)) {
-              const imp = rankMeta.improvement;
-              if (imp > 0) {
-                rankHtml = `<span class="nail-radar-up">+${imp}</span> <span>#${rank}</span>`;
-              } else if (imp < 0) {
-                rankHtml = `<span class="nail-radar-down">${imp}</span> <span>#${rank}</span>`;
-              }
+        const radarPinnedSet = new Set(radarPinnedSymbols());
+        const holdingsWatched = holdingsWatchSymbols();
+        const buildRow = (symbol, rank, options) => {
+          const opts = options || {};
+          const label = String(symbol || "").replace(/USDT$/i, "");
+          const change24h = Number(marketMap[symbol] && marketMap[symbol].change24h);
+          const win = windowPriceChange(symbol, interval);
+          const rankMeta = nailRadarRankDelta(symbol, interval);
+          const winCls =
+            Number.isFinite(win) && win > 0
+              ? "nail-radar-up"
+              : Number.isFinite(win) && win < 0
+                ? "nail-radar-down"
+                : "";
+          const chCls =
+            Number.isFinite(change24h) && change24h > 0
+              ? "nail-radar-up"
+              : Number.isFinite(change24h) && change24h < 0
+                ? "nail-radar-down"
+                : "";
+          let rankHtml = rank ? `#${rank}` : "—";
+          if (rankMeta && Number.isFinite(rankMeta.improvement)) {
+            const imp = rankMeta.improvement;
+            if (imp > 0) {
+              rankHtml = `<span class="nail-radar-up">+${imp}</span> <span>#${rank || rankMeta.currentRank}</span>`;
+            } else if (imp < 0) {
+              rankHtml = `<span class="nail-radar-down">${imp}</span> <span>#${rank || rankMeta.currentRank}</span>`;
             }
-            const rowClass = [
-              pool.has(symbol) ? "is-pool" : "",
-              rank <= 20 ? "is-top20" : "",
-            ]
-              .filter(Boolean)
-              .join(" ");
-            const showKline =
-              nailRadarAllKlineOn ||
-              radarPinnedSet.has(String(symbol).trim().toUpperCase());
-            const klineHtml = showKline
-              ? `<canvas class="nail-radar-kline is-loading" data-kline="${escapeHtml(symbol)}" data-radar-chart="${escapeHtml(symbol)}"></canvas>`
-              : "";
-            return `<tr class="${rowClass}"><td>${rank}</td><td><button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${winCls}">${escapeHtml(formatPercent(win))}</td><td>${rankHtml}</td></tr>`;
-          })
-          .join("");
+          }
+          const rowClass = [
+            pool.has(symbol) ? "is-pool" : "",
+            rank && rank <= 20 ? "is-top20" : "",
+            opts.extra ? "is-radar-extra" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          const showKline =
+            nailRadarAllKlineOn ||
+            radarPinnedSet.has(String(symbol).trim().toUpperCase());
+          const klineHtml = showKline
+            ? `<canvas class="nail-radar-kline is-loading" data-kline="${escapeHtml(symbol)}" data-radar-chart="${escapeHtml(symbol)}"></canvas>`
+            : "";
+          const isPinned = radarPinnedSet.has(
+            String(symbol).trim().toUpperCase(),
+          );
+          const unpinHtml = isPinned
+            ? `<button type="button" class="nail-radar-act is-danger" data-radar-unpin="${escapeHtml(symbol)}" title="取消置顶该币">取消置顶</button>`
+            : "";
+          const watchHtml = holdingsWatched.has(
+            String(symbol).trim().toUpperCase(),
+          )
+            ? `<span class="nail-radar-act is-on" title="已在持仓关注列表">已关注</span>`
+            : `<button type="button" class="nail-radar-act" data-radar-watch="${escapeHtml(symbol)}" title="加入持仓的新增关注">关注</button>`;
+          return `<tr class="${rowClass}"><td>${rank || "—"}</td><td><button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${winCls}">${escapeHtml(formatPercent(win))}</td><td>${rankHtml}</td><td>${unpinHtml}${watchHtml}</td></tr>`;
+        };
+        const rows = list.map((symbol, index) =>
+          buildRow(symbol, index + 1),
+        );
+        // 置顶但不在前 100 的币：分组条之后补位展示，名次用全量榜真实排名。
+        const extras = nailRadarPinnedExtras();
+        if (extras.length) {
+          const fullRanking = ranking();
+          const rankOf = (symbol) => {
+            const idx = fullRanking.indexOf(symbol);
+            return idx >= 0 ? idx + 1 : 0;
+          };
+          extras
+            .slice()
+            .sort((a, b) => rankOf(a) - rankOf(b))
+            .forEach((symbol) => {
+              rows.push(
+                buildRow(symbol, rankOf(symbol) || 0, { extra: true }),
+              );
+            });
+          rows.splice(
+            list.length,
+            0,
+            `<tr class="is-radar-sep"><td colspan="7">置顶 · 前 100 之外（${extras.length}）</td></tr>`,
+          );
+        }
+        body.innerHTML = rows.join("");
       }
 
       /** 给雷达里置顶币的迷你 K 线补图；弹层关闭或重渲时自动作废。 */
@@ -13060,11 +13177,15 @@
         if (document.visibilityState === "hidden" || nailRadarTickerBusy) {
           return;
         }
-        const before = nailRadarRankList();
+        const before = nailRadarAllSymbols();
         if (!before.length) return;
         nailRadarTickerBusy = true;
         try {
-          await fetchBinanceTickersForSymbols(before);
+          // 币安 symbols 参数上限 100：置顶补位币排最前，保证不被截掉。
+          await fetchBinanceTickersForSymbols([
+            ...nailRadarPinnedExtras(),
+            ...nailRadarRankList(),
+          ]);
           nailRadarTickerAt = Date.now();
           syncNailRadarUpdatedUi();
         } catch (error) {
@@ -13078,7 +13199,7 @@
           !popover.hidden &&
           document.visibilityState !== "hidden";
         if (!stillOpen) return;
-        const after = nailRadarRankList();
+        const after = nailRadarAllSymbols();
         if (after.join(",") !== before.join(",")) {
           renderNailRadarTable();
           void paintNailRadarKlines();
@@ -13130,6 +13251,27 @@
         syncNailRadarAllKlineUi();
         renderNailRadarTable();
         void paintNailRadarKlines();
+      }
+
+      /** 雷达操作列：取消置顶（复用钉子页置顶状态写盘），完成后重渲雷达表。 */
+      async function handleNailRadarUnpin(rawSymbol) {
+        const key = String(rawSymbol || "").trim().toUpperCase();
+        if (!key) return;
+        await setNailPinnedState(key, false);
+        const popover = document.getElementById("nailRadarPopover");
+        if (!popover || popover.hidden) return;
+        renderNailRadarTable();
+        void paintNailRadarKlines();
+      }
+
+      /** 雷达操作列：加入持仓「新增关注」（写 watch-holdings，等云扫描回填余额）。 */
+      async function handleNailRadarWatch(rawSymbol) {
+        const key = String(rawSymbol || "").trim().toUpperCase();
+        if (!key) return;
+        await addNailHoldingSymbol(key);
+        const popover = document.getElementById("nailRadarPopover");
+        if (!popover || popover.hidden) return;
+        renderNailRadarTable();
       }
 
       /** 不重渲整表，只刷新 24h / 窗涨两列数字（K 线由 paintNailRadarKlines 负责）。 */
@@ -31263,6 +31405,20 @@
       }
       if (nailRadarBody) {
         nailRadarBody.addEventListener("click", (event) => {
+          const unpinBtn = event.target.closest("[data-radar-unpin]");
+          if (unpinBtn) {
+            void handleNailRadarUnpin(
+              unpinBtn.getAttribute("data-radar-unpin"),
+            );
+            return;
+          }
+          const watchBtn = event.target.closest("[data-radar-watch]");
+          if (watchBtn) {
+            void handleNailRadarWatch(
+              watchBtn.getAttribute("data-radar-watch"),
+            );
+            return;
+          }
           const button = event.target.closest("[data-nail-radar-symbol]");
           if (!button) return;
           void setNailRadarPopoverOpen(false);
