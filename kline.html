@@ -8017,6 +8017,28 @@
               <button
                 type="button"
                 class="nail-notice-entry"
+                id="nailReloadBtn"
+                title="整页重载：等同浏览器刷新并绕过缓存（重新加载最新代码，会重置当前分栏与浮层）"
+                aria-label="整页重载"
+              >
+                <svg
+                  class="nail-notice-bell"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+                  <path d="M20 4v5h-5" />
+                </svg>
+                重载
+              </button>
+              <button
+                type="button"
+                class="nail-notice-entry"
                 id="nailSimHoldBtn"
                 aria-expanded="false"
                 aria-controls="simHoldFloat"
@@ -29988,25 +30010,28 @@
         ].some(Boolean);
       }
 
-      const reloadPageBtn = document.getElementById("reloadPageBtn");
-      if (reloadPageBtn) {
-        reloadPageBtn.addEventListener("click", () => {
-          if (hasPendingWrites()) {
-            showToast("正在保存到 GitHub，稍后再重载");
-            return;
-          }
-          closeCardActions();
-          try {
-            const url = new URL(window.location.href);
-            // 只加一个 cache-buster，保留 ?view=notes 等业务参数；
-            // 用 replace 而非 href=，避免连点几次后浏览器后退卡在反复刷新。
-            url.searchParams.set("_r", String(Date.now()));
-            window.location.replace(url.toString());
-          } catch (_) {
-            window.location.reload();
-          }
-        });
+      /** 整页重载：顶栏与钉子头部的按钮共用，绕过缓存但保留 ?view=notes。 */
+      function reloadWholePage() {
+        if (hasPendingWrites()) {
+          showToast("正在保存到 GitHub，稍后再重载");
+          return;
+        }
+        closeCardActions();
+        try {
+          const url = new URL(window.location.href);
+          // 只加一个 cache-buster，保留 ?view=notes 等业务参数；
+          // 用 replace 而非 href=，避免连点几次后浏览器后退卡在反复刷新。
+          url.searchParams.set("_r", String(Date.now()));
+          window.location.replace(url.toString());
+        } catch (_) {
+          window.location.reload();
+        }
       }
+
+      ["reloadPageBtn", "nailReloadBtn"].forEach((id) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.addEventListener("click", reloadWholePage);
+      });
       document.addEventListener("click", (event) => {
         const open = document.querySelector("details.friend-links[open]");
         if (!open) return;
