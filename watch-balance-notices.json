@@ -3,6 +3,26 @@
   "readAt": 1794462986716,
   "items": [
     {
+      "id": "AMDBUSDT:1794456000000:1794464100833",
+      "symbol": "AMDBUSDT",
+      "label": "AMDB",
+      "kinds": [
+        "天平",
+        "直拉"
+      ],
+      "at": 1794464100833,
+      "firstSeenAt": 1793983200419,
+      "openTime": 1794456000000,
+      "pinPrice": 524.39,
+      "pinnedAt": 1794359400867,
+      "alertPrice": 552.79,
+      "notifyPrice": 564.61,
+      "noteAt": 1794412800775,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1794464100833
+    },
+    {
       "id": "HOLOUSDT:1794456000000:1794464100833",
       "symbol": "HOLOUSDT",
       "label": "HOLO",
@@ -19,7 +39,26 @@
       "noteAt": 1794412800775,
       "interval": "4h",
       "windowUp": true,
-      "batchAt": 1794461400617
+      "batchAt": 1794464100833
+    },
+    {
+      "id": "SXTUSDT:1794456000000:1794464100833",
+      "symbol": "SXTUSDT",
+      "label": "SXT",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1794464100833,
+      "firstSeenAt": 1794326402971,
+      "openTime": 1794456000000,
+      "pinPrice": 0.00921,
+      "pinnedAt": 1794322500681,
+      "alertPrice": 0.00916,
+      "notifyPrice": 0.00963,
+      "noteAt": 1794327758820,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1794464100833
     },
     {
       "id": "QNTBUSDT:1794456000000:1794464100833",
@@ -58,25 +97,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1794456300632
-    },
-    {
-      "id": "SXTUSDT:1794456000000:1794464100833",
-      "symbol": "SXTUSDT",
-      "label": "SXT",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1794464100833,
-      "firstSeenAt": 1794326402971,
-      "openTime": 1794456000000,
-      "pinPrice": 0.00921,
-      "pinnedAt": 1794322500681,
-      "alertPrice": 0.00916,
-      "notifyPrice": 0.00963,
-      "noteAt": 1794327758820,
-      "interval": "4h",
-      "windowUp": true,
-      "batchAt": 1794462300678
     },
     {
       "id": "ESPUSDT:1794456000000:1794463801062",
@@ -250,26 +270,6 @@
       "interval": "4h",
       "windowUp": true,
       "batchAt": 1794463801062
-    },
-    {
-      "id": "AMDBUSDT:1794456000000:1794463801062",
-      "symbol": "AMDBUSDT",
-      "label": "AMDB",
-      "kinds": [
-        "天平",
-        "直拉"
-      ],
-      "at": 1794463801062,
-      "firstSeenAt": 1793983200419,
-      "openTime": 1794456000000,
-      "pinPrice": 524.39,
-      "pinnedAt": 1794359400867,
-      "alertPrice": 552.79,
-      "notifyPrice": 563.69,
-      "noteAt": 1794412800775,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1794456000991
     },
     {
       "id": "AVGOBUSDT:1794456000000:1794463801062",
@@ -2955,6 +2955,15 @@
   ],
   "batches": [
     {
+      "at": 1794464100833,
+      "count": 3,
+      "symbols": [
+        "AMDBUSDT",
+        "HOLOUSDT",
+        "SXTUSDT"
+      ]
+    },
+    {
       "at": 1794463801062,
       "count": 9,
       "symbols": [
@@ -3008,13 +3017,6 @@
       ]
     },
     {
-      "at": 1794462300678,
-      "count": 1,
-      "symbols": [
-        "SXTUSDT"
-      ]
-    },
-    {
       "at": 1794462000822,
       "count": 1,
       "symbols": [
@@ -3030,10 +3032,9 @@
     },
     {
       "at": 1794461400617,
-      "count": 2,
+      "count": 1,
       "symbols": [
-        "BOTBUSDT",
-        "HOLOUSDT"
+        "BOTBUSDT"
       ]
     },
     {
@@ -3162,10 +3163,9 @@
     },
     {
       "at": 1794456000991,
-      "count": 8,
+      "count": 7,
       "symbols": [
         "AAOIBUSDT",
-        "AMDBUSDT",
         "LITEBUSDT",
         "MUBUSDT",
         "ORCLBUSDT",
