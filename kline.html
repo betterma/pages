@@ -7110,6 +7110,91 @@
         cursor: pointer;
         flex: 0 0 auto;
       }
+      .kline-zoom-head-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex: 0 0 auto;
+      }
+      .kline-zoom-head .kline-zoom-alert-btn {
+        border: 1px solid var(--accent, #3370ff);
+        background: transparent;
+        color: var(--accent, #3370ff);
+        font-size: 12px;
+      }
+      .kline-zoom-alert-line {
+        position: absolute;
+        height: 0;
+        border-top: 1px dashed var(--warn, #b07030);
+        pointer-events: none;
+        z-index: 2;
+      }
+      .kline-zoom-alert-line[hidden] { display: none; }
+      .kline-zoom-alert-line-label {
+        position: absolute;
+        left: 4px;
+        top: -19px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: var(--elevated, #fff);
+        color: var(--warn, #b07030);
+        font: 11px/1.5 var(--mono, monospace);
+        white-space: nowrap;
+      }
+      .kline-zoom-alert-panel {
+        flex: 0 0 auto;
+        margin: 0 6px 8px;
+        padding: 10px 12px;
+        border: 0.5px solid var(--accent, #3370ff);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--accent, #3370ff) 8%, var(--elevated, #fff));
+      }
+      .kline-zoom-alert-panel[hidden] { display: none; }
+      .kline-zoom-alert-summary {
+        display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      }
+      .kline-zoom-alert-summary strong { font-size: 13px; }
+      .kline-zoom-alert-summary p { margin: 2px 0 0; font-size: 11px; color: var(--secondary); }
+      .kline-zoom-alert-edit {
+        display: flex; align-items: center; gap: 8px; margin-top: 9px; flex-wrap: wrap;
+      }
+      .kline-zoom-alert-edit label { font-size: 12px; color: var(--secondary); }
+      .kline-zoom-alert-edit input {
+        flex: 1 1 110px; min-width: 90px; padding: 6px 8px; font-size: 13px;
+        border: 0.5px solid var(--separator); border-radius: 7px;
+        background: var(--elevated, #fff); color: var(--label);
+      }
+      .kline-zoom-alert-edit button,
+      .kline-zoom-alert-summary button {
+        padding: 6px 12px; font-size: 12px; border-radius: 7px;
+        background: var(--accent, #3370ff); color: #fff; border: none; cursor: pointer;
+      }
+      .kline-zoom-alert-edit button.is-ghost,
+      .kline-zoom-alert-summary button {
+        background: transparent; color: var(--accent, #3370ff);
+        border: 0.5px solid var(--accent, #3370ff);
+      }
+      .nail-price-alert-section { margin-bottom: 14px; }
+      .nail-price-alert-head {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 12px; color: var(--secondary); margin: 0 0 8px;
+      }
+      .nail-price-alert-list { display: flex; flex-direction: column; gap: 8px; }
+      .nail-price-alert-card {
+        border: 0.5px solid var(--warn, #b07030); border-radius: 10px;
+        padding: 10px 12px; background: var(--elevated, #fff);
+      }
+      .nail-price-alert-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+      .nail-price-alert-stamps { display: flex; align-items: center; gap: 6px; }
+      .nail-price-alert-meta {
+        display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px;
+        margin-top: 6px; font-size: 12px; color: var(--secondary);
+      }
+      .nail-price-alert-meta b { color: var(--warn, #b07030); font-weight: 650; }
+      .nail-price-alert-clear {
+        margin-left: auto; border: none; background: transparent;
+        color: var(--secondary); font-size: 11px; cursor: pointer; text-decoration: underline;
+      }
       .kline-zoom-chart {
         position: relative;
         min-height: 0;
@@ -9138,10 +9223,23 @@
             <h2 id="klineZoomTitle">K 线</h2>
             <p id="klineZoomMeta">按住滑动查看价格</p>
           </div>
-          <button type="button" id="klineZoomClose">关闭</button>
+          <div class="kline-zoom-head-actions">
+            <button
+              type="button"
+              id="klineZoomAlertBtn"
+              class="kline-zoom-alert-btn"
+              title="用十字线当前价设一个到价提醒，命中后进通知分栏"
+            >
+              设提醒
+            </button>
+            <button type="button" id="klineZoomClose">关闭</button>
+          </div>
         </div>
         <div class="kline-zoom-chart kline-zoom-main-chart" id="klineZoomChart">
           <canvas id="klineZoomCanvas"></canvas>
+          <div class="kline-zoom-alert-line" id="klineZoomAlertLine" hidden>
+            <span class="kline-zoom-alert-line-label"></span>
+          </div>
           <div class="kline-crosshair" id="klineZoomCrosshair" hidden>
             <div class="kline-crosshair-v"></div>
             <div class="kline-crosshair-h"></div>
@@ -9152,6 +9250,28 @@
           </div>
         </div>
         <p class="kline-zoom-hint">手指按住并游走，十字线显示该点价格与时间</p>
+        <div id="klineZoomAlertPanel" class="kline-zoom-alert-panel" hidden>
+          <div class="kline-zoom-alert-summary">
+            <div>
+              <strong id="klineZoomAlertTitle">设置价格提醒</strong>
+              <p id="klineZoomAlertHint">默认取十字线当前价，可手动微调</p>
+            </div>
+            <button type="button" id="klineZoomAlertClear" hidden>取消提醒</button>
+          </div>
+          <div class="kline-zoom-alert-edit">
+            <label for="klineZoomAlertPrice">目标价</label>
+            <input
+              type="number"
+              step="any"
+              min="0"
+              id="klineZoomAlertPrice"
+              inputmode="decimal"
+              placeholder="到价提醒"
+            />
+            <button type="button" id="klineZoomAlertSave">确认</button>
+            <button type="button" id="klineZoomAlertDismiss" class="is-ghost">关闭</button>
+          </div>
+        </div>
         <section class="kline-zoom-long" aria-label="周月 K 线">
           <div class="kline-zoom-long-head">
             <h3>长周期走势</h3>
@@ -21492,6 +21612,8 @@
         const candle = meta.candles[idx];
         const snapX = meta.pad.left + meta.slot * idx + meta.slot / 2;
         const price = meta.max - ((y - meta.pad.top) / meta.chartH) * meta.range;
+        // 抬手后仍保留最后一次十字线价格，供「设提醒」取快照价。
+        klineZoomCrosshairPrice = price;
         const displayX = (snapX / scaleX);
         const displayY = y / scaleY;
 
@@ -21536,6 +21658,14 @@
       let klineZoomSymbol = null;
       let klineZoomBound = false;
       let klineZoomLongRange = "week";
+      let klineZoomCrosshairPrice = NaN;
+      const PRICE_ALERT_READ_KEY = "kline-price-alert-read-v1";
+      let priceAlertReadAt = 0;
+      try {
+        priceAlertReadAt =
+          Number(localStorage.getItem(PRICE_ALERT_READ_KEY)) || 0;
+      } catch (_) {}
+      let priceAlertsLoadedAt = 0;
       const KLINE_ZOOM_ICON_SVG =
         '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M2 2h4v1.5H3.5V6H2V2zm8 0h4v4h-1.5V3.5H10V2zM2 10h1.5v2.5H6V14H2v-4zm8 2.5H13.5V10H15v4h-4v-1.5z"/></svg>';
 
@@ -21550,6 +21680,9 @@
         if (gate) gate.hidden = true;
         hideKlineCrosshair(canvas);
         klineZoomSymbol = null;
+        klineZoomCrosshairPrice = NaN;
+        const panel = document.getElementById("klineZoomAlertPanel");
+        if (panel) panel.hidden = true;
         document.body.classList.remove("is-kline-zoom");
         syncBodyScrollLock();
       }
@@ -21608,6 +21741,7 @@
           notesMarksForSymbol(symbol),
         );
         hideKlineCrosshair(canvas);
+        paintKlineZoomAlertLine(symbol);
         const current = marketMap[symbol]?.price;
         const change = marketMap[symbol]?.change24h;
         if (metaEl) {
@@ -21676,6 +21810,203 @@
         marketCapEl.title = "跳转到 Binance 查看市值";
       }
 
+      /** 放大层：把当前生效的到价提醒画成目标价虚线，不改 drawKline。 */
+      function paintKlineZoomAlertLine(symbol) {
+        const line = document.getElementById("klineZoomAlertLine");
+        const canvas = document.getElementById("klineZoomCanvas");
+        const wrap = document.getElementById("klineZoomChart");
+        if (!line || !canvas || !wrap) return;
+        const alert = activePriceAlertForSymbol(symbol);
+        const meta = canvas.__klineMeta;
+        const target = Number(alert && alert.target);
+        if (
+          !alert ||
+          !(target > 0) ||
+          !meta ||
+          !(meta.range > 0) ||
+          !(meta.height > 0)
+        ) {
+          line.hidden = true;
+          return;
+        }
+        const rect = canvas.getBoundingClientRect();
+        const prect = wrap.getBoundingClientRect();
+        if (!(rect.height > 0)) {
+          line.hidden = true;
+          return;
+        }
+        const yInternal =
+          meta.pad.top + ((meta.max - target) / meta.range) * meta.chartH;
+        const yDisplay = yInternal * (rect.height / meta.height);
+        line.style.top = `${Math.round(rect.top - prect.top + yDisplay)}px`;
+        line.style.left = `${Math.round(rect.left - prect.left)}px`;
+        line.style.width = `${Math.round(rect.width)}px`;
+        const label = line.querySelector(".kline-zoom-alert-line-label");
+        if (label) label.textContent = `目标 ${formatPinPrice(target)}`;
+        line.hidden = false;
+      }
+
+      function openKlineZoomAlertPanel() {
+        const panel = document.getElementById("klineZoomAlertPanel");
+        const input = document.getElementById("klineZoomAlertPrice");
+        const title = document.getElementById("klineZoomAlertTitle");
+        const hint = document.getElementById("klineZoomAlertHint");
+        const clearBtn = document.getElementById("klineZoomAlertClear");
+        if (!panel || !klineZoomSymbol) return;
+        const key = klineZoomSymbol;
+        const existing = activePriceAlertForSymbol(key);
+        const spot = Number(marketMap[key] && marketMap[key].price);
+        const fromCrosshair =
+          Number.isFinite(klineZoomCrosshairPrice) &&
+          klineZoomCrosshairPrice > 0;
+        const suggested = fromCrosshair
+          ? klineZoomCrosshairPrice
+          : Number.isFinite(spot) && spot > 0
+            ? spot
+            : NaN;
+        const target = existing ? Number(existing.target) : suggested;
+        if (input) {
+          input.value =
+            Number.isFinite(target) && target > 0 ? String(target) : "";
+        }
+        if (title) {
+          if (Number.isFinite(target) && Number.isFinite(spot) && spot > 0) {
+            const dir = target > spot ? "涨到" : "跌破";
+            title.textContent = existing
+              ? `已设：${dir} ${formatPinPrice(target)} 提醒`
+              : `${dir} ${formatPinPrice(target)} 提醒我`;
+          } else {
+            title.textContent = "设置价格提醒";
+          }
+        }
+        if (hint) {
+          hint.textContent = fromCrosshair
+            ? "取十字线当前价，可手动微调"
+            : "默认按现价，可手动微调；命中后进通知分栏";
+        }
+        if (clearBtn) clearBtn.hidden = !existing;
+        panel.hidden = false;
+      }
+
+      async function saveKlineZoomAlert() {
+        const key = klineZoomSymbol;
+        const input = document.getElementById("klineZoomAlertPrice");
+        if (!key || !input) return;
+        const target = Number(String(input.value || "").trim());
+        if (!Number.isFinite(target) || target <= 0) {
+          showToast("目标价无效");
+          return;
+        }
+        const spot = Number(marketMap[key] && marketMap[key].price);
+        const label = key.replace(/USDT$/i, "");
+        const dir =
+          Number.isFinite(spot) && spot > 0 && target > spot ? "涨到" : "跌破";
+        try {
+          await persistPriceAlerts(
+            (list) =>
+              WatchFavorites.upsertPriceAlert(list, key, target, "", spot),
+            `Price alert ${key} ${target}`,
+          );
+          showToast(`${label} 提醒已设：${dir} ${formatPinPrice(target)}`);
+          const panel = document.getElementById("klineZoomAlertPanel");
+          if (panel) panel.hidden = true;
+          paintKlineZoomAlertLine(key);
+          syncNailNoticeEntryUi();
+        } catch (error) {
+          console.warn("set price alert failed", error);
+          showToast(error && error.message ? error.message : "设置提醒失败");
+        }
+      }
+
+      async function clearKlineZoomAlert() {
+        const key = klineZoomSymbol;
+        if (!key) return;
+        const ok = await clearPriceAlertForSymbol(key);
+        if (!ok) return;
+        const panel = document.getElementById("klineZoomAlertPanel");
+        if (panel) panel.hidden = true;
+        paintKlineZoomAlertLine(key);
+        if (nailNoticeMode === "open") renderNailNoticeList();
+        syncNailNoticeEntryUi();
+      }
+
+      /** 近 24h 已命中的到价提醒；云函数只写 hitAt，页面不新增状态文件。 */
+      function priceAlertNoticeItems() {
+        const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+        return (priceAlertItems || [])
+          .filter(
+            (item) =>
+              item && Number(item.hitAt) > 0 && Number(item.hitAt) >= cutoff,
+          )
+          .sort((a, b) => Number(b.hitAt) - Number(a.hitAt));
+      }
+
+      function priceAlertUnreadCount() {
+        const read = Number(priceAlertReadAt) || 0;
+        return priceAlertNoticeItems().filter(
+          (item) => Number(item.hitAt) > read,
+        ).length;
+      }
+
+      function markPriceAlertsRead() {
+        const latest = priceAlertNoticeItems().reduce(
+          (max, item) => Math.max(max, Number(item.hitAt) || 0),
+          0,
+        );
+        const next = Math.max(
+          Date.now(),
+          latest,
+          Number(priceAlertReadAt) || 0,
+        );
+        if (next <= (Number(priceAlertReadAt) || 0)) return;
+        priceAlertReadAt = next;
+        try {
+          localStorage.setItem(PRICE_ALERT_READ_KEY, String(next));
+        } catch (_) {}
+        syncNailNoticeEntryUi();
+      }
+
+      /** 全局角标跟随提醒轮询更新，30s 节流，避免每 10s 多打一次 GitHub。 */
+      async function refreshSharedPriceAlerts(force) {
+        const now = Date.now();
+        if (!force && now - priceAlertsLoadedAt < 30 * 1000) return;
+        priceAlertsLoadedAt = now;
+        try {
+          await loadSharedPriceAlerts();
+        } catch (_) {
+          return;
+        }
+        syncNailNoticeEntryUi();
+        if (nailNoticeMode === "open") renderNailNoticeList();
+        if (isKlineZoomOpen() && klineZoomSymbol) {
+          paintKlineZoomAlertLine(klineZoomSymbol);
+        }
+      }
+
+      function buildPriceAlertNoticeHtml(item) {
+        const key = String(item.symbol || "").toUpperCase();
+        const symbol = escapeHtml(item.symbol);
+        const label = escapeHtml(key.replace(/USDT$/i, ""));
+        const target = Number(item.target) || 0;
+        const dir = item.direction === "below" ? "跌破" : "涨到";
+        const at = Number(item.hitAt) || 0;
+        const isNew = at > (Number(priceAlertReadAt) || 0);
+        const spot = Number(marketMap[key] && marketMap[key].price);
+        return [
+          `<article class="nail-price-alert-card" data-price-alert-id="${escapeHtml(item.id || "")}">`,
+          `<div class="nail-price-alert-top">`,
+          `<button type="button" class="nail-notice-name" data-price-alert-jump="${symbol}">${label}</button>`,
+          `<span class="nail-price-alert-stamps">${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(at))}</span></span>`,
+          `</div>`,
+          `<div class="nail-price-alert-meta">`,
+          `<span><b>${dir}</b> ${escapeHtml(formatPinPrice(target))}</span>`,
+          `<span>现价 ${Number.isFinite(spot) && spot > 0 ? escapeHtml(formatPinPrice(spot)) : "—"}</span>`,
+          `<button type="button" class="nail-price-alert-clear" data-price-alert-clear="${symbol}">取消提醒</button>`,
+          `</div>`,
+          `</article>`,
+        ].join("");
+      }
+
       function setKlineZoomLongRange(range) {
         klineZoomLongRange = range === "month" ? "month" : "week";
         document.querySelectorAll("[data-kline-zoom-range]").forEach((button) => {
@@ -21697,6 +22028,10 @@
         const metaEl = document.getElementById("klineZoomMeta");
         if (!gate) return;
         klineZoomSymbol = key;
+        // 换币时清掉上一张图的十字线快照，避免把别的价格带进设提醒面板。
+        klineZoomCrosshairPrice = NaN;
+        const alertPanel = document.getElementById("klineZoomAlertPanel");
+        if (alertPanel) alertPanel.hidden = true;
         if (title) title.textContent = key.replace(/USDT$/i, "");
         if (metaEl) metaEl.textContent = "加载 K 线…";
         gate.hidden = false;
@@ -23334,23 +23669,28 @@
       document.body.dataset.activeView = activeView;
 
       function nailGreenUnreadCount() {
+        let count;
         if (typeof WatchFavorites.countUnreadBalanceNotices === "function") {
-          return WatchFavorites.countUnreadBalanceNotices(
+          count = WatchFavorites.countUnreadBalanceNotices(
             nailGreenNotices,
             nailGreenNoticesReadAt,
           );
+        } else {
+          const read = Number(nailGreenNoticesReadAt) || 0;
+          count = (nailGreenNotices || []).filter(
+            (item) => Number(item.at) > read,
+          ).length;
         }
-        const read = Number(nailGreenNoticesReadAt) || 0;
-        return (nailGreenNotices || []).filter(
-          (item) => Number(item.at) > read,
-        ).length;
+        // 到价提醒与天平/直拉共用一个角标，命中由云函数写 hitAt。
+        return count + priceAlertUnreadCount();
       }
 
       function syncNailNoticeEntryUi() {
         const entry = document.getElementById("nailNoticeEntry");
         const meta = document.getElementById("nailNoticeEntryMeta");
         const unread = nailGreenUnreadCount();
-        const total = (nailGreenNotices || []).length;
+        const total =
+          (nailGreenNotices || []).length + priceAlertNoticeItems().length;
         if (entry) entry.classList.toggle("has-unread", unread > 0);
         if (meta) {
           if (!total) meta.textContent = "";
@@ -23364,6 +23704,8 @@
 
       async function refreshNailGreenNotices(options) {
         const opts = options || {};
+        // 价格提醒的 hitAt 由云函数写入，跟着通知轮询一起刷新角标（内部 30s 节流）。
+        void refreshSharedPriceAlerts(!!opts.force);
         // 通知页：天平/直拉命中列表（近 24h）。
         if (
           !WatchFavorites ||
@@ -23508,21 +23850,38 @@
         const metaEl = document.getElementById("nailNoticeMeta");
         if (!listEl) return;
         const items = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
+        const alerts = priceAlertNoticeItems();
         const grouped = groupNailNoticesByBatch(items);
         if (metaEl) {
-          metaEl.textContent = items.length
-            ? `近 24h · ${items.length} 条 · ${grouped.batches.length} 个企微批次 · 最新在上`
-            : "近 24h 暂无天平/直拉命中";
+          const bits = [];
+          if (items.length) {
+            bits.push(
+              `${items.length} 条命中 · ${grouped.batches.length} 个企微批次`,
+            );
+          }
+          if (alerts.length) bits.push(`${alerts.length} 条价格提醒`);
+          metaEl.textContent = bits.length
+            ? `近 24h · ${bits.join(" · ")} · 最新在上`
+            : "近 24h 暂无命中与价格提醒";
         }
         listEl.classList.toggle("is-selecting", nailNoticeSelectMode);
-        if (!items.length) {
+        if (!items.length && !alerts.length) {
           if (focusActionScope === "notice") setFocusActionSymbol(null);
           listEl.innerHTML =
-            '<div class="nail-notice-empty">暂无天平/直拉命中</div>';
+            '<div class="nail-notice-empty">暂无命中与价格提醒</div>';
           syncNailNoticeSelectUi();
           return;
         }
         const parts = [];
+        if (alerts.length) {
+          parts.push(
+            `<section class="nail-price-alert-section" data-price-alert-section>`,
+            `<h4 class="nail-price-alert-head">价格提醒<span class="nail-notice-batch-count">${alerts.length}个</span></h4>`,
+            `<div class="nail-price-alert-list">`,
+            alerts.map((item) => buildPriceAlertNoticeHtml(item)).join(""),
+            `</div></section>`,
+          );
+        }
         grouped.batches.forEach((batch) => {
           parts.push(
             `<section class="nail-notice-batch" data-notice-batch-at="${batch.at}">`,
@@ -23559,6 +23918,36 @@
           check.addEventListener("click", (event) => {
             event.stopPropagation();
             toggleNoticeSelectSymbol(check.getAttribute("data-notice-select"));
+          });
+        });
+        listEl.querySelectorAll("[data-price-alert-jump]").forEach((btn) => {
+          btn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const key = String(
+              btn.getAttribute("data-price-alert-jump") || "",
+            )
+              .trim()
+              .toUpperCase();
+            if (!key) return;
+            closeNailNoticeDrawer();
+            void openKlineZoom(key);
+          });
+        });
+        listEl.querySelectorAll("[data-price-alert-clear]").forEach((btn) => {
+          btn.addEventListener("click", async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const key = String(
+              btn.getAttribute("data-price-alert-clear") || "",
+            )
+              .trim()
+              .toUpperCase();
+            if (!key) return;
+            const ok = await clearPriceAlertForSymbol(key);
+            if (!ok) return;
+            renderNailNoticeList();
+            syncNailNoticeEntryUi();
           });
         });
         if (focusActionScope === "notice") {
@@ -24017,10 +24406,12 @@
         const total = (nailGreenNotices || []).length;
         if (metaEl && total) {
           const tag = describeNailNoticeFilter();
+          const paCount = priceAlertNoticeItems().length;
+          const paBit = paCount ? ` · ${paCount} 条价格提醒` : "";
           metaEl.textContent =
             mode === "all" && !patternOn
-              ? `近 24h · ${total} 条 · 最新在上`
-              : `近 24h · 显示 ${visible}/${total} · ${tag}`;
+              ? `近 24h · ${total} 条${paBit} · 最新在上`
+              : `近 24h · 显示 ${visible}/${total}${paBit} · ${tag}`;
         }
       }
 
@@ -25069,12 +25460,16 @@
         syncNailNoticeBalanceUi();
         syncNailNoticeStraightUi();
         // 先开抽屉（用内存名单立刻出画面），再后台强刷，避免点击半秒停顿。
-        if ((nailGreenNotices || []).length) {
+        if (
+          (nailGreenNotices || []).length ||
+          priceAlertNoticeItems().length
+        ) {
           renderNailNoticeList();
         }
         setNailNoticeDrawerMode("open");
         if (!opts.skipMarkRead) {
           void markNailNoticesRead();
+          markPriceAlertsRead();
         }
         void reloadNailNoticeList({ force: true, forceRender: true }).catch(
           (error) => {
@@ -31553,6 +31948,42 @@
       const klineZoomClose = document.getElementById("klineZoomClose");
       if (klineZoomClose) {
         klineZoomClose.addEventListener("click", () => closeKlineZoom());
+      }
+      const klineZoomAlertBtn = document.getElementById("klineZoomAlertBtn");
+      if (klineZoomAlertBtn) {
+        klineZoomAlertBtn.addEventListener("click", openKlineZoomAlertPanel);
+      }
+      const klineZoomAlertSave = document.getElementById("klineZoomAlertSave");
+      if (klineZoomAlertSave) {
+        klineZoomAlertSave.addEventListener("click", () => {
+          void saveKlineZoomAlert();
+        });
+      }
+      const klineZoomAlertDismiss = document.getElementById(
+        "klineZoomAlertDismiss",
+      );
+      if (klineZoomAlertDismiss) {
+        klineZoomAlertDismiss.addEventListener("click", () => {
+          const panel = document.getElementById("klineZoomAlertPanel");
+          if (panel) panel.hidden = true;
+        });
+      }
+      const klineZoomAlertClear = document.getElementById("klineZoomAlertClear");
+      if (klineZoomAlertClear) {
+        klineZoomAlertClear.addEventListener("click", () => {
+          void clearKlineZoomAlert();
+        });
+      }
+      const klineZoomAlertPrice = document.getElementById(
+        "klineZoomAlertPrice",
+      );
+      if (klineZoomAlertPrice) {
+        klineZoomAlertPrice.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void saveKlineZoomAlert();
+          }
+        });
       }
       const noticeReviewClose = document.getElementById("noticeReviewClose");
       if (noticeReviewClose) {
