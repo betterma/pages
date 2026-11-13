@@ -13140,14 +13140,14 @@
         }
       }
 
-      /** 最新固定的排最前；再点一次即取消。云端做原子 toggle，失败则本地降级。 */
+      /** 再点一次即取消固定；名单只追加，显示顺序由真实名次决定。云端原子 toggle，失败则本地降级。 */
       async function toggleRadarFixed(rawSymbol) {
         const key = String(rawSymbol || "").trim().toUpperCase();
         if (!key) return;
         const current = getRadarFixedSymbols();
         const wasFixed = current.includes(key);
         const next = current.filter((item) => item !== key);
-        if (!wasFixed) next.unshift(key);
+        if (!wasFixed) next.push(key);
         // 乐观更新，点了立刻见效
         setLocalRadarFixed(next, Date.now());
         if (
@@ -13165,7 +13165,7 @@
               const list = state.radarFixedSymbols.slice();
               const idx = list.indexOf(key);
               if (idx >= 0) list.splice(idx, 1);
-              else list.unshift(key);
+              else list.push(key);
               return {
                 ...state,
                 radarFixedSymbols: list,
@@ -13312,9 +13312,17 @@
           const idx = fullRanking.indexOf(symbol);
           return idx >= 0 ? idx + 1 : 0;
         };
-        const fixed = getRadarFixedSymbols();
+        // 固定行永远在最前，但行内按真实名次升序（名次小的在上）；
+        // 不在榜上的（rank=0）排最后，同状态按币名兜底保证顺序稳定。
+        const fixed = getRadarFixedSymbols()
+          .slice()
+          .sort((a, b) => {
+            const ra = rankOf(a) || Number.MAX_SAFE_INTEGER;
+            const rb = rankOf(b) || Number.MAX_SAFE_INTEGER;
+            return ra - rb || a.localeCompare(b);
+          });
         const fixedSet = new Set(fixed);
-        // 固定行永远在最前，但排名列取全量榜的真实名次，不是 1。
+        // 排名列取全量榜的真实名次，不是 1。
         const rows = fixed.map((symbol) =>
           buildRow(symbol, rankOf(symbol) || 0, { fixed: true }),
         );
