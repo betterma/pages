@@ -2975,6 +2975,20 @@
         font-size: 14px;
         font-weight: 750;
         color: #1c1c1e;
+        display: flex;
+        align-items: baseline;
+        min-width: 0;
+      }
+      .nail-hold-updated {
+        margin-left: 8px;
+        font-size: 11px;
+        font-weight: 400;
+        color: rgba(28, 28, 30, 0.55);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .nail-hold-updated.is-stale {
+        color: var(--warn, #b07030);
       }
       .nail-hold-toolbar-title .notify-time {
         margin-left: 6px;
@@ -8263,7 +8277,9 @@
           </div>
           <div class="nail-hold-popover" id="nailHoldPopover" hidden>
             <div class="nail-hold-toolbar">
-              <div class="nail-hold-toolbar-title">持有</div>
+              <div class="nail-hold-toolbar-title">
+                持有<span class="nail-hold-updated" id="nailHoldUpdated"></span>
+              </div>
               <div class="nail-hold-toolbar-actions">
                 <button
                   type="button"
@@ -8281,9 +8297,7 @@
                 </button>
               </div>
             </div>
-            <p class="nail-hold-hint" id="nailHoldHint">
-              有余额可卖可买；无币仅买。默认模拟；设置里开实盘后才真下单。
-            </p>
+            <p class="nail-hold-hint" id="nailHoldHint">上次同步 —</p>
             <div class="nail-hold-settings-panel" id="nailHoldSettingsPanel" hidden>
               <div class="nail-hold-live-row">
                 <div class="nail-hold-live-item">
@@ -13382,6 +13396,44 @@
         balances: {},
         lastError: null,
       };
+      /** 余额由云函数约 5 分钟同步一次，超过 10 分钟就标「偏旧」。 */
+      const NAIL_HOLD_STALE_MS = 10 * 60 * 1000;
+      let nailHoldLiveTimer = 0;
+
+      /** 头部时间戳始终可见，不依赖下方提示条，避免长文案把时间挤没。 */
+      function syncNailHoldUpdatedUi() {
+        const el = document.getElementById("nailHoldUpdated");
+        if (!el) return;
+        const at = Number(nailHoldingsState && nailHoldingsState.updatedAt) || 0;
+        if (!(at > 0)) {
+          el.textContent = "尚未同步";
+          el.classList.remove("is-stale");
+          return;
+        }
+        const stale = Date.now() - at > NAIL_HOLD_STALE_MS;
+        el.textContent = `更新 ${formatClock(at)}${stale ? " · 偏旧" : ""}`;
+        el.classList.toggle("is-stale", stale);
+      }
+
+      function stopNailHoldLive() {
+        if (nailHoldLiveTimer) {
+          clearInterval(nailHoldLiveTimer);
+          nailHoldLiveTimer = 0;
+        }
+      }
+
+      /** 浮窗开着时每 10s 只刷时间戳文字，不重渲列表、不发请求。 */
+      function startNailHoldLive() {
+        stopNailHoldLive();
+        nailHoldLiveTimer = setInterval(() => {
+          const pop = document.getElementById("nailHoldPopover");
+          if (!pop || pop.hidden) {
+            stopNailHoldLive();
+            return;
+          }
+          syncNailHoldUpdatedUi();
+        }, 10 * 1000);
+      }
       let nailSellTasksState = { updatedAt: 0, live: false, tasks: [] };
       let nailBuyTasksState = { updatedAt: 0, live: false, tasks: [] };
       let simHoldingsState =
@@ -14161,6 +14213,7 @@
         const list = document.getElementById("nailHoldList");
         const hint = document.getElementById("nailHoldHint");
         if (!list) return;
+        syncNailHoldUpdatedUi();
         const uiSaved = captureNailHoldUiState(list);
         let symbols = Array.isArray(nailHoldingsState.symbols)
           ? nailHoldingsState.symbols.slice()
@@ -14195,8 +14248,8 @@
             errLabel = err;
           }
           hint.textContent = errLabel
-            ? `余额未同步：${errLabel} · ${when}`
-            : `余额约 5 分钟同步。有币可卖可买；无币仅买。上次同步 ${when}`;
+            ? `上次同步 ${when} · 未同步：${errLabel}`
+            : `上次同步 ${when}`;
         }
         if (!symbols.length) {
           list.innerHTML =
@@ -15362,9 +15415,12 @@
         }
         if (next) {
           layoutNailHoldPopover();
+          syncNailHoldUpdatedUi();
+          startNailHoldLive();
           await reloadNailHoldings({ silent: true });
           layoutNailHoldPopover();
         } else {
+          stopNailHoldLive();
           popover.style.top = "";
         }
       }
