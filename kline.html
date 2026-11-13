@@ -2630,6 +2630,9 @@
         .nail-auto-pin-grid .nail-auto-pin-kline {
           height: 74px;
         }
+        .nail-price-alert-list { gap: 6px; }
+        .nail-price-alert-card { padding: 5px 7px; }
+        .nail-price-alert-meta { gap: 6px; font-size: 10.5px; }
       }
       .nail-auto-pin-more {
         padding: 2px 12px 10px;
@@ -7241,26 +7244,57 @@
         background: transparent; color: var(--accent, #3370ff);
         border: 0.5px solid var(--accent, #3370ff);
       }
-      .nail-price-alert-section { margin-bottom: 14px; }
+      .nail-price-alert-section {
+        /* 通知列表是 2 列 grid，整块必须跨满，否则卡片被挤在半列里反复换行。 */
+        grid-column: 1 / -1;
+        margin-bottom: 10px;
+      }
       .nail-price-alert-head {
         display: flex; align-items: center; gap: 8px;
-        font-size: 12px; color: var(--secondary); margin: 0 0 8px;
+        font-size: 12px; color: var(--secondary); margin: 0 0 6px;
       }
-      .nail-price-alert-list { display: flex; flex-direction: column; gap: 8px; }
+      .nail-price-alert-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+      }
       .nail-price-alert-card {
+        min-width: 0;
         border: 0.5px solid var(--warn, #b07030); border-radius: 10px;
-        padding: 10px 12px; background: var(--elevated, #fff);
+        padding: 6px 8px; background: var(--elevated, #fff);
       }
-      .nail-price-alert-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-      .nail-price-alert-stamps { display: flex; align-items: center; gap: 6px; }
+      /* 只有一条时占满整行，避免右侧留半列空白。 */
+      .nail-price-alert-card:only-child { grid-column: 1 / -1; }
+      .nail-price-alert-top {
+        display: flex; align-items: center; gap: 6px; min-width: 0;
+      }
+      .nail-price-alert-top .nail-notice-name {
+        flex: 0 1 auto; min-width: 0; overflow: hidden;
+        text-overflow: ellipsis; white-space: nowrap;
+      }
+      .nail-price-alert-stamps {
+        display: flex; align-items: center; gap: 4px;
+        margin-left: auto; flex: 0 0 auto; white-space: nowrap;
+      }
+      .nail-price-alert-stamps .nail-notice-time { font-size: 10.5px; }
       .nail-price-alert-meta {
-        display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px;
-        margin-top: 6px; font-size: 12px; color: var(--secondary);
+        display: flex; align-items: center; gap: 8px;
+        margin-top: 3px; font-size: 11px; color: var(--secondary);
+        white-space: nowrap; overflow: hidden;
+      }
+      .nail-price-alert-meta span {
+        overflow: hidden; text-overflow: ellipsis;
       }
       .nail-price-alert-meta b { color: var(--warn, #b07030); font-weight: 650; }
       .nail-price-alert-clear {
-        margin-left: auto; border: none; background: transparent;
-        color: var(--secondary); font-size: 11px; cursor: pointer; text-decoration: underline;
+        flex: 0 0 auto; width: 18px; height: 18px; line-height: 15px;
+        margin-left: 0; padding: 0; text-align: center;
+        border: 0.5px solid var(--separator); border-radius: 50%;
+        background: transparent; color: var(--secondary);
+        font-size: 13px; cursor: pointer; text-decoration: none;
+      }
+      .nail-price-alert-clear:hover {
+        color: var(--warn, #b07030); border-color: var(--warn, #b07030);
       }
       .kline-zoom-chart {
         position: relative;
@@ -22387,11 +22421,11 @@
           `<div class="nail-price-alert-top">`,
           `<button type="button" class="nail-notice-name" data-price-alert-jump="${symbol}">${label}</button>`,
           `<span class="nail-price-alert-stamps">${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(at))}</span></span>`,
+          `<button type="button" class="nail-price-alert-clear" data-price-alert-clear="${symbol}" title="取消提醒" aria-label="取消提醒">×</button>`,
           `</div>`,
           `<div class="nail-price-alert-meta">`,
           `<span><b>${dir}</b> ${escapeHtml(formatPinPrice(target))}</span>`,
           `<span>现价 ${Number.isFinite(spot) && spot > 0 ? escapeHtml(formatPinPrice(spot)) : "—"}</span>`,
-          `<button type="button" class="nail-price-alert-clear" data-price-alert-clear="${symbol}">取消提醒</button>`,
           `</div>`,
           `</article>`,
         ].join("");
