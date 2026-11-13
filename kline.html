@@ -18709,7 +18709,7 @@
           priceAlertItems = state.alerts || [];
         } catch (error) {
           console.warn("load price alerts failed", error);
-          priceAlertItems = [];
+          // 拉取失败时保留上一份数据：避免通知列表闪空、签名抖动引发无谓重渲。
         }
         return priceAlertItems;
       }
@@ -22088,6 +22088,16 @@
           .sort((a, b) => Number(b.hitAt) - Number(a.hitAt));
       }
 
+      /** 只有会影响通知卡片的字段才进签名；变了才值得重渲整表。 */
+      function priceAlertNoticeSignature() {
+        return priceAlertNoticeItems()
+          .map(
+            (item) =>
+              `${item.id || item.symbol}:${Number(item.hitAt) || 0}:${Number(item.target) || 0}:${item.direction === "below" ? "b" : "a"}`,
+          )
+          .join("|");
+      }
+
       function priceAlertUnreadCount() {
         const read = Number(priceAlertReadAt) || 0;
         return priceAlertNoticeItems().filter(
@@ -22143,14 +22153,18 @@
         const now = Date.now();
         if (!force && now - priceAlertsLoadedAt < 30 * 1000) return;
         priceAlertsLoadedAt = now;
+        const beforeSig = priceAlertNoticeSignature();
         try {
           await loadSharedPriceAlerts();
         } catch (_) {
           return;
         }
+        const changed = priceAlertNoticeSignature() !== beforeSig;
         announcePriceAlertHits();
         syncNailNoticeEntryUi();
-        if (nailNoticeMode === "open") renderNailNoticeList();
+        // 只有价格提醒卡片真的变了才重渲整表；否则只更角标，避免 30s 把
+        // 通知分栏打回页顶、并把所有迷你 K 线清空重画。
+        if (changed && nailNoticeMode === "open") renderNailNoticeList();
         if (isKlineZoomOpen() && klineZoomSymbol) {
           paintKlineZoomAlertLine(klineZoomSymbol);
         }
@@ -24018,10 +24032,80 @@
         return { batches, unbatched };
       }
 
+      /** 切走通知分栏时记住滚动位置，等下次重渲恢复。 */
+      let nailNoticePendingScrollTop = null;
+
+      /**
+       * 重渲前抓滚动锚点：视口里最靠上的那张卡片 + 它距容器顶部的偏移。
+       * 用锚点而不是纯 scrollTop，避免刷新时卡片增删导致位置错位。
+       */
+      function captureNailNoticeScroll(listEl) {
+        if (!listEl) return null;
+        const scrollTop = listEl.scrollTop;
+        const fromPending =
+          !(scrollTop > 0) && nailNoticePendingScrollTop != null;
+        const restoreTop = scrollTop > 0
+          ? scrollTop
+          : fromPending
+            ? nailNoticePendingScrollTop
+            : 0;
+        if (!(restoreTop > 0)) return null;
+        // 从 hidden 恢复时 DOM 还停在顶部，按可见卡片算锚点会错位，直接还原数值。
+        if (fromPending) return { scrollTop: restoreTop, anchor: null };
+        const base = listEl.getBoundingClientRect().top;
+        const nodes = listEl.querySelectorAll(
+          "[data-notice-id], [data-price-alert-id]",
+        );
+        let anchor = null;
+        for (let i = 0; i < nodes.length; i += 1) {
+          const node = nodes[i];
+          const rect = node.getBoundingClientRect();
+          if (rect.height <= 0 || rect.bottom <= base + 4) continue;
+          const raw = node.getAttribute("data-notice-id");
+          const key = raw
+            ? `n:${raw}`
+            : `p:${node.getAttribute("data-price-alert-id") || ""}`;
+          if (key === "p:") continue;
+          anchor = { key, delta: rect.top - base };
+          break;
+        }
+        return { scrollTop: restoreTop, anchor };
+      }
+
+      /** 重渲后同步恢复滚动：读 rect 会强制布局，不必等 rAF，也避免异步竞态。 */
+      function restoreNailNoticeScroll(listEl, snap) {
+        if (!listEl || !snap) return;
+        let next = snap.scrollTop;
+        if (snap.anchor) {
+          const isPrice = snap.anchor.key.charAt(0) === "p";
+          const attr = isPrice ? "data-price-alert-id" : "data-notice-id";
+          const wanted = snap.anchor.key.slice(2);
+          let node = null;
+          const candidates = listEl.querySelectorAll(`[${attr}]`);
+          for (let i = 0; i < candidates.length; i += 1) {
+            if (candidates[i].getAttribute(attr) === wanted) {
+              node = candidates[i];
+              break;
+            }
+          }
+          if (node) {
+            const rect = node.getBoundingClientRect();
+            if (rect.height > 0) {
+              const base = listEl.getBoundingClientRect().top;
+              next = listEl.scrollTop + (rect.top - base) - snap.anchor.delta;
+            }
+          }
+        }
+        listEl.scrollTop = Math.max(0, next);
+        nailNoticePendingScrollTop = null;
+        updateNailNoticeScrollPct({ flash: false });
+      }
+
       function renderNailNoticeList() {
         const listEl = document.getElementById("nailNoticeList");
         const metaEl = document.getElementById("nailNoticeMeta");
         if (!listEl) return;
+        const scrollSnap = captureNailNoticeScroll(listEl);
         const items = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
         const alerts = priceAlertNoticeItems();
         const grouped = groupNailNoticesByBatch(items);
@@ -24043,6 +24127,7 @@
           listEl.innerHTML =
             '<div class="nail-notice-empty">暂无命中与价格提醒</div>';
           syncNailNoticeSelectUi();
+          restoreNailNoticeScroll(listEl, scrollSnap);
           return;
         }
         const parts = [];
@@ -24135,6 +24220,7 @@
         applyNailNoticeDeltaFilter();
         syncNailNoticeSelectUi();
         void paintNailNoticeCharts();
+        restoreNailNoticeScroll(listEl, scrollSnap);
       }
 
       function syncNailNoticeSelectUi() {
@@ -24600,7 +24686,6 @@
       async function reloadNailNoticeList(options) {
         const opts = options || {};
         const listEl = document.getElementById("nailNoticeList");
-        const scrollTop = listEl ? listEl.scrollTop : 0;
         const prevSig = nailNoticeListSignature(nailGreenNotices);
         const hadCards = !!(
           listEl && listEl.querySelector(".nail-notice-card")
@@ -24610,9 +24695,9 @@
         const loaded = await refreshNailGreenNotices({ force: manual });
         const nextSig = nailNoticeListSignature(nailGreenNotices);
         if (opts.forceRender || manual || prevSig !== nextSig || !hadCards) {
+          // 滚动位置由 renderNailNoticeList 内部的锚点机制统一保存/恢复。
           renderNailNoticeList();
           requestAnimationFrame(() => {
-            if (listEl) listEl.scrollTop = scrollTop;
             updateNailNoticeScrollPct({ flash: false });
           });
         } else {
@@ -26268,6 +26353,12 @@
       }
 
       function applyNailSegmentUi() {
+        // 切走通知分栏前记住滚动位置：panel.hidden 触发 display:none 会把
+        // scrollTop 清零，交给下次 renderNailNoticeList 的锚点机制恢复。
+        const noticeList = document.getElementById("nailNoticeList");
+        if (noticeList && noticeList.scrollTop > 0) {
+          nailNoticePendingScrollTop = noticeList.scrollTop;
+        }
         document.querySelectorAll("[data-nail-seg]").forEach((btn) => {
           const on = btn.getAttribute("data-nail-seg") === nailSegment;
           btn.classList.toggle("is-active", on);
