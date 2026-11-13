@@ -9478,7 +9478,7 @@
     </div>
 
     <script src="./github-token-vault.js"></script>
-    <script src="./watch-favorites.js"></script>
+    <script src="./watch-favorites.js?v=20261113a"></script>
     <script src="./kline-mode.js"></script>
     <script>
       "use strict";
@@ -9988,6 +9988,39 @@
         ]),
       };
       const AUTO_PIN_SEEN_KEY = "kline-nail-autopin-seen-v1";
+      /**
+       * 跨端已读基线：价格提醒 / 自动盯的已读时刻同步到 watch-ui-read-state.json。
+       * 状态变量与合并入队函数放在这里（自动盯角标初始化时就会用到），
+       * 其余同步逻辑定义在价格提醒模块旁边。
+       */
+      const UI_READ_STATE_PATH =
+        (typeof WatchFavorites !== "undefined" &&
+          WatchFavorites.UI_READ_STATE_PATH) ||
+        "watch-ui-read-state.json";
+      const UI_READ_STATE_DEBOUNCE_MS = 300;
+      const UI_READ_STATE_POLL_MS = 30 * 1000;
+      let uiReadStateLoadedAt = 0;
+      let uiReadStateBusy = false;
+      let uiReadStateTimer = 0;
+      let uiReadStatePending = {};
+
+      /** 合并短时间内的多个「标记已读」动作，避免打开分栏时并发写三次。 */
+      function queueSharedUiReadState(patch) {
+        if (!patch || typeof patch !== "object") return;
+        ["priceAlertReadAt", "autoPinSeenAt"].forEach((key) => {
+          const value = Number(patch[key]) || 0;
+          if (value > (Number(uiReadStatePending[key]) || 0)) {
+            uiReadStatePending[key] = value;
+          }
+        });
+        if (uiReadStateTimer) clearTimeout(uiReadStateTimer);
+        uiReadStateTimer = setTimeout(() => {
+          const next = uiReadStatePending;
+          uiReadStatePending = {};
+          uiReadStateTimer = 0;
+          void persistSharedUiReadState(next);
+        }, UI_READ_STATE_DEBOUNCE_MS);
+      }
       /** 近 2 个 4h 窗口（8 小时）内的自动盯，展开成带 K 线的卡片。 */
       const AUTO_PIN_RECENT_MS = 8 * 60 * 60 * 1000;
       // 近 8 小时的币全部出卡片 + K 线；500 只是极端保护，
@@ -12555,6 +12588,7 @@
         } catch (_) {
           /* ignore */
         }
+        queueSharedUiReadState({ autoPinSeenAt: n });
       }
 
       /** 给定时间窗内最新一条自动盯的时间戳；没有则 0。 */
@@ -22120,7 +22154,120 @@
         try {
           localStorage.setItem(PRICE_ALERT_READ_KEY, String(next));
         } catch (_) {}
+        queueSharedUiReadState({ priceAlertReadAt: next });
         syncNailNoticeEntryUi();
+      }
+
+      /** 本地已读基线（含内存态），作为云端读取失败时的兜底。 */
+      function readLocalUiReadState() {
+        let price = 0;
+        let auto = 0;
+        try {
+          price = Number(localStorage.getItem(PRICE_ALERT_READ_KEY)) || 0;
+          auto = Number(localStorage.getItem(AUTO_PIN_SEEN_KEY)) || 0;
+        } catch (_) {}
+        return {
+          priceAlertReadAt: Math.max(price, Number(priceAlertReadAt) || 0),
+          autoPinSeenAt: auto,
+        };
+      }
+
+      function writeLocalUiReadState(state) {
+        priceAlertReadAt = Math.max(
+          Number(priceAlertReadAt) || 0,
+          Number(state.priceAlertReadAt) || 0,
+        );
+        try {
+          localStorage.setItem(PRICE_ALERT_READ_KEY, String(priceAlertReadAt));
+          localStorage.setItem(
+            AUTO_PIN_SEEN_KEY,
+            String(Number(state.autoPinSeenAt) || 0),
+          );
+        } catch (_) {}
+      }
+
+      /** 云端与本地取最大值收敛；本地更新时补推，绝不让旧值覆盖新值。 */
+      function applySharedUiReadState(cloud) {
+        const local = readLocalUiReadState();
+        const base = cloud || {};
+        const next = {
+          priceAlertReadAt: Math.max(
+            Number(base.priceAlertReadAt) || 0,
+            local.priceAlertReadAt,
+          ),
+          autoPinSeenAt: Math.max(
+            Number(base.autoPinSeenAt) || 0,
+            local.autoPinSeenAt,
+          ),
+        };
+        const changed =
+          next.priceAlertReadAt > local.priceAlertReadAt ||
+          next.autoPinSeenAt > local.autoPinSeenAt;
+        writeLocalUiReadState(next);
+        if (
+          next.priceAlertReadAt > (Number(base.priceAlertReadAt) || 0) ||
+          next.autoPinSeenAt > (Number(base.autoPinSeenAt) || 0)
+        ) {
+          queueSharedUiReadState(next);
+        }
+        if (changed) {
+          syncNailNoticeEntryUi();
+          syncNailAutoPinBadge();
+        }
+      }
+
+      /** 30s 节流轮询云端基线；打开分栏时传 force 立刻同步一次。 */
+      async function syncSharedUiReadState(force) {
+        const now = Date.now();
+        if (uiReadStateBusy) return;
+        if (!force && now - uiReadStateLoadedAt < UI_READ_STATE_POLL_MS) {
+          return;
+        }
+        if (
+          !WatchFavorites ||
+          typeof WatchFavorites.loadUiReadState !== "function"
+        ) {
+          return;
+        }
+        uiReadStateBusy = true;
+        uiReadStateLoadedAt = now;
+        try {
+          const result = await WatchFavorites.loadUiReadState({
+            repo: CONFIG.GITHUB_REPO,
+            path: UI_READ_STATE_PATH,
+          });
+          if (result && result.source !== "none") {
+            applySharedUiReadState(result.state);
+          }
+        } catch (error) {
+          console.warn("sync shared ui read state failed", error);
+        } finally {
+          uiReadStateBusy = false;
+        }
+      }
+
+      let uiReadStateWriteBlockedUntil = 0;
+      async function persistSharedUiReadState(patch) {
+        if (Date.now() < uiReadStateWriteBlockedUntil) return;
+        if (
+          !WatchFavorites ||
+          typeof WatchFavorites.patchUiReadState !== "function"
+        ) {
+          return;
+        }
+        try {
+          const result = await WatchFavorites.patchUiReadState({
+            repo: CONFIG.GITHUB_REPO,
+            path: UI_READ_STATE_PATH,
+            patch,
+          });
+          if (result && result.state) applySharedUiReadState(result.state);
+        } catch (error) {
+          // 没配 PAT / 网络失败：本地 localStorage 依旧生效，静默降级；
+          // 冷却 5 分钟，避免只读设备每轮轮询都重试写、刷屏。
+          uiReadStateWriteBlockedUntil = Date.now() + 5 * 60 * 1000;
+          console.warn("persist shared ui read state failed", error);
+        }
       }
 
       /** 仅页面提醒：到价命中弹一条提示条，首轮加载不弹，避免刷屏。 */
@@ -23893,6 +24040,8 @@
         const opts = options || {};
         // 价格提醒的 hitAt 由云函数写入，跟着通知轮询一起刷新角标（内部 30s 节流）。
         void refreshSharedPriceAlerts(!!opts.force);
+        // 跨端已读基线：轮询里走 30s 节流兜底，打开分栏时另做一次强制同步。
+        void syncSharedUiReadState(false);
         // 通知页：天平/直拉命中列表（近 24h）。
         if (
           !WatchFavorites ||
@@ -26444,6 +26593,10 @@
         const token = ++nailSegSwitchToken;
         nailSegment = next;
         applyNailSegmentUi();
+        // 进通知/自动盯分栏时立刻拉一次云端已读基线，保证角标与另一台设备一致。
+        if (next === "notice" || next === "autopin") {
+          void syncSharedUiReadState(true);
+        }
         // 四个面互斥：进哪个，其余三个的浮层状态全部收起。
         if (next !== "autopin") await setNailAutoPinPopoverOpen(false);
         if (next !== "radar") await setNailRadarPopoverOpen(false);

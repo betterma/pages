@@ -54,6 +54,12 @@
   /** 模拟单向手续费（与 trade-sim 一致）。 */
   const SIM_FEE_RATE = 0.001;
   const PRICE_ALERTS_PATH = "watch-price-alerts.json";
+  /**
+   * 跨端「已读基线」独立文件：只有网页读写，云函数不碰。
+   * 不能塞进 watch-balance-notices.json —— 云函数每次命中会重建该对象，
+   * 只保留 readAt，额外字段会被抹掉。
+   */
+  const UI_READ_STATE_PATH = "watch-ui-read-state.json";
   const LEGACY_DATA_PATH = "watch-data.json";
   const PIN_TTL_MS = 12 * 60 * 60 * 1000;
   // 暂时关闭盯一下过期；改 true 可恢复 12h TTL。
@@ -4433,6 +4439,93 @@
     return { alerts: [], alertsUpdatedAt: null, source: "empty" };
   }
 
+  function normalizeUiReadState(raw) {
+    const data = raw && typeof raw === "object" ? raw : {};
+    const num = (v) => (Number(v) > 0 ? Number(v) : 0);
+    return {
+      priceAlertReadAt: num(data.priceAlertReadAt),
+      autoPinSeenAt: num(data.autoPinSeenAt),
+      updatedAt: num(data.updatedAt),
+    };
+  }
+
+  /**
+   * 读跨端已读基线。优先 Contents API（与写入同通道、无 CDN 缓存）；
+   * 没配 PAT 的设备回落到 raw 匿名读，至少能看到别的设备的已读结果。
+   */
+  async function loadUiReadState(options) {
+    const opts = options || {};
+    const repo = opts.repo || DEFAULT_REPO;
+    const path = opts.path || UI_READ_STATE_PATH;
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: opts.token,
+      });
+      return { state: normalizeUiReadState(current.data), source: "api" };
+    } catch (error) {
+      // 没配 PAT 时 fetchJsonFile 会抛错，属预期降级，不打日志避免每轮刷屏。
+      if (error && !/GithubTokenVault/i.test(String(error.message || ""))) {
+        console.warn("load ui read state via API failed, trying raw", error);
+      }
+    }
+    try {
+      const url = `https://raw.githubusercontent.com/${repo}/main/${path}?t=${Date.now()}`;
+      const response = await fetch(url, { cache: "no-store" });
+      if (response.status === 404) {
+        return { state: normalizeUiReadState(null), source: "empty" };
+      }
+      if (!response.ok) throw new Error(`raw ${response.status}`);
+      const data = await response.json();
+      return { state: normalizeUiReadState(data), source: "raw" };
+    } catch (error) {
+      console.warn("load ui read state via raw failed", error);
+      return { state: normalizeUiReadState(null), source: "none" };
+    }
+  }
+
+  /** 写跨端已读基线：字段只增不减（Math.max），幂等且多端并发可收敛。 */
+  async function patchUiReadState(options) {
+    const opts = options || {};
+    const repo = opts.repo || DEFAULT_REPO;
+    const path = opts.path || UI_READ_STATE_PATH;
+    const maxAttempts = opts.maxAttempts || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: opts.token,
+        });
+        const base = normalizeUiReadState(current.data);
+        const wanted = normalizeUiReadState(opts.patch);
+        const state = {
+          priceAlertReadAt: Math.max(
+            base.priceAlertReadAt,
+            wanted.priceAlertReadAt,
+          ),
+          autoPinSeenAt: Math.max(base.autoPinSeenAt, wanted.autoPinSeenAt),
+          updatedAt: Date.now(),
+        };
+        await writeJsonFile({
+          repo,
+          path,
+          token: opts.token,
+          data: state,
+          sha: current.sha,
+          message: opts.message || "Sync notice read state across devices",
+        });
+        return { state, source: "api" };
+      } catch (error) {
+        lastError = error;
+        if (!error || error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存跨端已读基线失败");
+  }
+
   async function patchPriceAlerts(options) {
     const repo = (options && options.repo) || DEFAULT_REPO;
     const path = (options && options.path) || PRICE_ALERTS_PATH;
@@ -4667,6 +4760,10 @@
     removePriceAlert,
     loadPriceAlertsRaw,
     patchPriceAlerts,
+    UI_READ_STATE_PATH,
+    normalizeUiReadState,
+    loadUiReadState,
+    patchUiReadState,
     actionLogIdentityKey,
     updateActionLogEntryPrice,
     hydrateWatchSnap,
