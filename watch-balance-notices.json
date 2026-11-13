@@ -3,6 +3,44 @@
   "readAt": 1794592569061,
   "items": [
     {
+      "id": "BERAUSDT:1794600000000:1794602400445",
+      "symbol": "BERAUSDT",
+      "label": "BERA",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1794602400445,
+      "firstSeenAt": 1794558600372,
+      "openTime": 1794600000000,
+      "pinPrice": 0.1035,
+      "pinnedAt": 1794555600598,
+      "alertPrice": 0.1062,
+      "notifyPrice": 0.1098,
+      "noteAt": 1794592563453,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1794602400445
+    },
+    {
+      "id": "ORCAUSDT:1794600000000:1794602400445",
+      "symbol": "ORCAUSDT",
+      "label": "ORCA",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1794602400445,
+      "firstSeenAt": 1794600600403,
+      "openTime": 1794600000000,
+      "pinPrice": 1.276,
+      "pinnedAt": 1794555600598,
+      "alertPrice": 1.246,
+      "notifyPrice": 1.249,
+      "noteAt": 1794592563485,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1794602400445
+    },
+    {
       "id": "ADBEBUSDT:1794600000000:1794602400445",
       "symbol": "ADBEBUSDT",
       "label": "ADBEB",
@@ -133,25 +171,6 @@
       "noteAt": 1794592563479,
       "interval": "4h",
       "windowUp": false,
-      "batchAt": 1794600600403
-    },
-    {
-      "id": "ORCAUSDT:1794600000000:1794602400445",
-      "symbol": "ORCAUSDT",
-      "label": "ORCA",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1794602400445,
-      "firstSeenAt": 1794600600403,
-      "openTime": 1794600000000,
-      "pinPrice": 1.276,
-      "pinnedAt": 1794555600598,
-      "alertPrice": 1.246,
-      "notifyPrice": 1.249,
-      "noteAt": 1794592563485,
-      "interval": "4h",
-      "windowUp": true,
       "batchAt": 1794600600403
     },
     {
@@ -664,25 +683,6 @@
       "alertPrice": 0.0934,
       "notifyPrice": 0.0939,
       "noteAt": 1794593100607,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1794600300589
-    },
-    {
-      "id": "BERAUSDT:1794600000000:1794602100994",
-      "symbol": "BERAUSDT",
-      "label": "BERA",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1794602100994,
-      "firstSeenAt": 1794558600372,
-      "openTime": 1794600000000,
-      "pinPrice": 0.1035,
-      "pinnedAt": 1794555600598,
-      "alertPrice": 0.1062,
-      "notifyPrice": 0.109,
-      "noteAt": 1794592563453,
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1794600300589
@@ -3794,6 +3794,14 @@
   ],
   "batches": [
     {
+      "at": 1794602400445,
+      "count": 2,
+      "symbols": [
+        "BERAUSDT",
+        "ORCAUSDT"
+      ]
+    },
+    {
       "at": 1794602100994,
       "count": 20,
       "symbols": [
@@ -3877,7 +3885,7 @@
     },
     {
       "at": 1794600600403,
-      "count": 17,
+      "count": 16,
       "symbols": [
         "ADBEBUSDT",
         "ARKMUSDT",
@@ -3890,7 +3898,6 @@
         "ICPUSDT",
         "MARSCOINUSDT",
         "MINAUSDT",
-        "ORCAUSDT",
         "PUMPUSDT",
         "RENDERUSDT",
         "TIAUSDT",
@@ -3900,13 +3907,12 @@
     },
     {
       "at": 1794600300589,
-      "count": 21,
+      "count": 20,
       "symbols": [
         "ALLOUSDT",
         "ARUSDT",
         "BANANAUSDT",
         "BELUSDT",
-        "BERAUSDT",
         "BOMEUSDT",
         "DOGSUSDT",
         "EGLDUSDT",
