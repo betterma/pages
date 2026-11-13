@@ -9554,7 +9554,7 @@
     </div>
 
     <script src="./github-token-vault.js"></script>
-    <script src="./watch-favorites.js?v=20261113a"></script>
+    <script src="./watch-favorites.js?v=20261113b"></script>
     <script src="./kline-mode.js"></script>
     <script>
       "use strict";
@@ -13033,50 +13033,157 @@
       }
 
       /** 置顶币集合（钉子页「顶」状态）：雷达 K 线与补位行共用。 */
-      /** 雷达表内「固定首位」名单，与钉子页置顶（nailItems.pinned）互不影响。 */
-      const NAIL_RADAR_FIXED_KEY = "kline-radar-fixed-v1";
+      /**
+       * 雷达「固定首位」名单跨设备共享，写进 watch-ui-read-state.json。
+       * 本地 localStorage 只作离线缓存并带时间戳，用来解决离线改动与云端旧值的冲突。
+       */
+      const NAIL_RADAR_FIXED_KEY = "kline-radar-fixed-v2";
+      let radarFixedState = { symbols: [], at: 0 };
+      let radarFixedSyncing = false;
 
-      function getRadarFixedSymbols() {
-        let raw = [];
-        try {
-          const parsed = JSON.parse(
-            localStorage.getItem(NAIL_RADAR_FIXED_KEY) || "[]",
-          );
-          if (Array.isArray(parsed)) raw = parsed;
-        } catch (_) {
-          raw = [];
+      function normalizeRadarFixedSymbols(list) {
+        if (
+          typeof WatchFavorites !== "undefined" &&
+          WatchFavorites &&
+          typeof WatchFavorites.normalizeUiReadSymbols === "function"
+        ) {
+          return WatchFavorites.normalizeUiReadSymbols(list);
         }
         return [
           ...new Set(
-            raw
+            (Array.isArray(list) ? list : [])
               .map((item) => String(item || "").trim().toUpperCase())
               .filter(Boolean),
           ),
-        ];
+        ].slice(0, 50);
       }
 
-      function setRadarFixedSymbols(list) {
+      function loadLocalRadarFixed() {
+        let raw = null;
+        try {
+          raw = JSON.parse(
+            localStorage.getItem(NAIL_RADAR_FIXED_KEY) || "null",
+          );
+        } catch (_) {
+          raw = null;
+        }
+        if (!raw) {
+          // 兼容早期纯数组缓存
+          try {
+            const old = JSON.parse(
+              localStorage.getItem("kline-radar-fixed-v1") || "null",
+            );
+            if (Array.isArray(old) && old.length) {
+              raw = { symbols: old, at: Date.now() };
+            }
+          } catch (_) {
+            /* ignore */
+          }
+        }
+        if (Array.isArray(raw)) raw = { symbols: raw, at: 0 };
+        return {
+          symbols: normalizeRadarFixedSymbols(raw && raw.symbols),
+          at: Number(raw && raw.at) > 0 ? Number(raw.at) : 0,
+        };
+      }
+      radarFixedState = loadLocalRadarFixed();
+
+      function getRadarFixedSymbols() {
+        return radarFixedState.symbols.slice();
+      }
+
+      /** 写本地缓存并立刻重渲；at 为这份名单的时间戳。 */
+      function setLocalRadarFixed(symbols, at) {
+        radarFixedState = {
+          symbols: normalizeRadarFixedSymbols(symbols),
+          at: Number(at) > 0 ? Number(at) : Date.now(),
+        };
         try {
           localStorage.setItem(
             NAIL_RADAR_FIXED_KEY,
-            JSON.stringify(list),
+            JSON.stringify(radarFixedState),
           );
         } catch (_) {
           /* ignore */
         }
+        const radarPopover = document.getElementById("nailRadarPopover");
+        if (radarPopover && !radarPopover.hidden) {
+          renderNailRadarTable();
+          void paintNailRadarKlines();
+        }
       }
 
-      /** 最新固定的排最前；再点一次即取消固定。 */
-      function toggleRadarFixed(rawSymbol) {
+      /** 离线改过、云端较旧时补推整表；只在本地时间戳确实更新时生效。 */
+      async function patchSharedRadarFixedSet(symbols, at) {
+        if (radarFixedSyncing) return;
+        if (
+          !WatchFavorites ||
+          typeof WatchFavorites.patchUiReadState !== "function"
+        ) {
+          return;
+        }
+        radarFixedSyncing = true;
+        try {
+          await WatchFavorites.patchUiReadState({
+            repo: CONFIG.GITHUB_REPO,
+            path: UI_READ_STATE_PATH,
+            message: "Sync radar fixed symbols across devices",
+            mutate: (state) =>
+              (Number(state.radarFixedAt) || 0) >= at
+                ? state
+                : { ...state, radarFixedSymbols: symbols, radarFixedAt: at },
+          });
+        } catch (error) {
+          console.warn("radar fixed backfill failed", error);
+        } finally {
+          radarFixedSyncing = false;
+        }
+      }
+
+      /** 最新固定的排最前；再点一次即取消。云端做原子 toggle，失败则本地降级。 */
+      async function toggleRadarFixed(rawSymbol) {
         const key = String(rawSymbol || "").trim().toUpperCase();
         if (!key) return;
         const current = getRadarFixedSymbols();
         const wasFixed = current.includes(key);
         const next = current.filter((item) => item !== key);
         if (!wasFixed) next.unshift(key);
-        setRadarFixedSymbols(next);
-        renderNailRadarTable();
-        void paintNailRadarKlines();
+        // 乐观更新，点了立刻见效
+        setLocalRadarFixed(next, Date.now());
+        if (
+          !WatchFavorites ||
+          typeof WatchFavorites.patchUiReadState !== "function"
+        ) {
+          return;
+        }
+        try {
+          const result = await WatchFavorites.patchUiReadState({
+            repo: CONFIG.GITHUB_REPO,
+            path: UI_READ_STATE_PATH,
+            message: `Radar fixed toggle ${key}`,
+            mutate: (state) => {
+              const list = state.radarFixedSymbols.slice();
+              const idx = list.indexOf(key);
+              if (idx >= 0) list.splice(idx, 1);
+              else list.unshift(key);
+              return {
+                ...state,
+                radarFixedSymbols: list,
+                radarFixedAt: Date.now(),
+              };
+            },
+          });
+          // 云端为权威：并发时用它的结果收敛，避免两端名单分叉。
+          if (result && result.state) {
+            setLocalRadarFixed(
+              result.state.radarFixedSymbols,
+              result.state.radarFixedAt,
+            );
+          }
+        } catch (error) {
+          // 没配 PAT / 网络失败：本地缓存带较新时间戳，联网后自动补推。
+          console.warn("radar fixed sync failed", error);
+        }
       }
 
       function radarPinnedSymbols() {
@@ -22397,6 +22504,14 @@
           syncNailNoticeEntryUi();
           syncNailAutoPinBadge();
         }
+        // 雷达固定名单：按时间戳取较新的一份；本地更新说明离线改过，补推整表。
+        const cloudFixedAt = Number(base.radarFixedAt) || 0;
+        const localFixedAt = Number(radarFixedState.at) || 0;
+        if (cloudFixedAt > localFixedAt) {
+          setLocalRadarFixed(base.radarFixedSymbols, cloudFixedAt);
+        } else if (localFixedAt > cloudFixedAt) {
+          void patchSharedRadarFixedSet(getRadarFixedSymbols(), localFixedAt);
+        }
       }
 
       /** 30s 节流轮询云端基线；打开分栏时传 force 立刻同步一次。 */
@@ -26776,8 +26891,9 @@
         const token = ++nailSegSwitchToken;
         nailSegment = next;
         applyNailSegmentUi();
-        // 进通知/自动盯分栏时立刻拉一次云端已读基线，保证角标与另一台设备一致。
-        if (next === "notice" || next === "autopin") {
+        // 进通知/自动盯/雷达分栏时立刻拉一次云端状态，保证角标与固定名单
+        // 和另一台设备一致（雷达固定名单也在这份共享文件里）。
+        if (next === "notice" || next === "autopin" || next === "radar") {
           void syncSharedUiReadState(true);
         }
         // 四个面互斥：进哪个，其余三个的浮层状态全部收起。
@@ -31834,7 +31950,7 @@
         nailRadarBody.addEventListener("click", (event) => {
           const fixBtn = event.target.closest("[data-radar-fixed-toggle]");
           if (fixBtn) {
-            toggleRadarFixed(
+            void toggleRadarFixed(
               fixBtn.getAttribute("data-radar-fixed-toggle"),
             );
             return;

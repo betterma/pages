@@ -4439,12 +4439,24 @@
     return { alerts: [], alertsUpdatedAt: null, source: "empty" };
   }
 
+  function normalizeUiReadSymbols(raw) {
+    return [
+      ...new Set(
+        (Array.isArray(raw) ? raw : [])
+          .map((item) => String(item || "").trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    ].slice(0, 50);
+  }
+
   function normalizeUiReadState(raw) {
     const data = raw && typeof raw === "object" ? raw : {};
     const num = (v) => (Number(v) > 0 ? Number(v) : 0);
     return {
       priceAlertReadAt: num(data.priceAlertReadAt),
       autoPinSeenAt: num(data.autoPinSeenAt),
+      radarFixedSymbols: normalizeUiReadSymbols(data.radarFixedSymbols),
+      radarFixedAt: num(data.radarFixedAt),
       updatedAt: num(data.updatedAt),
     };
   }
@@ -4501,14 +4513,33 @@
         });
         const base = normalizeUiReadState(current.data);
         const wanted = normalizeUiReadState(opts.patch);
-        const state = {
+        let state = {
           priceAlertReadAt: Math.max(
             base.priceAlertReadAt,
             wanted.priceAlertReadAt,
           ),
           autoPinSeenAt: Math.max(base.autoPinSeenAt, wanted.autoPinSeenAt),
+          radarFixedSymbols: base.radarFixedSymbols.slice(),
+          radarFixedAt: base.radarFixedAt,
           updatedAt: Date.now(),
         };
+        // 数组类状态（雷达固定名单）由回调基于云端最新值原子改写，
+        // 避免多端各自拿旧数组整表覆盖、互相清掉对方的修改。
+        if (typeof opts.mutate === "function") {
+          const result = opts.mutate(state) || state;
+          state = {
+            ...state,
+            ...result,
+            radarFixedSymbols:
+              result.radarFixedSymbols === undefined
+                ? state.radarFixedSymbols
+                : normalizeUiReadSymbols(result.radarFixedSymbols),
+            radarFixedAt:
+              Number(result.radarFixedAt) > 0
+                ? Number(result.radarFixedAt)
+                : state.radarFixedAt,
+          };
+        }
         await writeJsonFile({
           repo,
           path,
@@ -4762,6 +4793,7 @@
     patchPriceAlerts,
     UI_READ_STATE_PATH,
     normalizeUiReadState,
+    normalizeUiReadSymbols,
     loadUiReadState,
     patchUiReadState,
     actionLogIdentityKey,
