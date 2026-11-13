@@ -2918,6 +2918,34 @@
         cursor: default;
         opacity: 0.7;
       }
+      .nail-radar-act.is-fixed {
+        border-color: var(--accent, #2f8f6e);
+        color: var(--accent, #2f8f6e);
+      }
+      .nail-radar-fixed-tag {
+        display: inline-block;
+        margin-right: 4px;
+        padding: 1px 4px;
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 16%, transparent);
+        color: var(--accent, #2f8f6e);
+        font-size: 10px;
+        font-weight: 650;
+        vertical-align: 1px;
+      }
+      /* 固定到首行：淡绿底 + 加粗真实名次，和普通第 1 名区分开。 */
+      .nail-radar-table tr.is-radar-fixed td {
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 9%, transparent);
+        border-bottom-color: color-mix(
+          in srgb,
+          var(--accent, #2f8f6e) 28%,
+          transparent
+        );
+      }
+      .nail-radar-table tr.is-radar-fixed td:nth-child(1) {
+        color: var(--accent, #2f8f6e);
+        font-weight: 700;
+      }
       /* 前 100 之后的置顶补位：分组条 + 与主榜区分的淡底。 */
       .nail-radar-table tr.is-radar-sep td {
         background: color-mix(in srgb, var(--label, #808090) 8%, transparent);
@@ -13005,6 +13033,52 @@
       }
 
       /** 置顶币集合（钉子页「顶」状态）：雷达 K 线与补位行共用。 */
+      /** 雷达表内「固定首位」名单，与钉子页置顶（nailItems.pinned）互不影响。 */
+      const NAIL_RADAR_FIXED_KEY = "kline-radar-fixed-v1";
+
+      function getRadarFixedSymbols() {
+        let raw = [];
+        try {
+          const parsed = JSON.parse(
+            localStorage.getItem(NAIL_RADAR_FIXED_KEY) || "[]",
+          );
+          if (Array.isArray(parsed)) raw = parsed;
+        } catch (_) {
+          raw = [];
+        }
+        return [
+          ...new Set(
+            raw
+              .map((item) => String(item || "").trim().toUpperCase())
+              .filter(Boolean),
+          ),
+        ];
+      }
+
+      function setRadarFixedSymbols(list) {
+        try {
+          localStorage.setItem(
+            NAIL_RADAR_FIXED_KEY,
+            JSON.stringify(list),
+          );
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
+      /** 最新固定的排最前；再点一次即取消固定。 */
+      function toggleRadarFixed(rawSymbol) {
+        const key = String(rawSymbol || "").trim().toUpperCase();
+        if (!key) return;
+        const current = getRadarFixedSymbols();
+        const wasFixed = current.includes(key);
+        const next = current.filter((item) => item !== key);
+        if (!wasFixed) next.unshift(key);
+        setRadarFixedSymbols(next);
+        renderNailRadarTable();
+        void paintNailRadarKlines();
+      }
+
       function radarPinnedSymbols() {
         return (Array.isArray(nailItems) ? nailItems : [])
           .filter((item) => item && item.pinned && item.symbol)
@@ -13019,9 +13093,13 @@
         return radarPinnedSymbols().filter((symbol) => !topSet.has(symbol));
       }
 
-      /** 雷达整表名单（前 100 + 置顶补位），供补拉前后对比成员变化。 */
+      /** 雷达整表名单（固定行 + 前 100 + 置顶补位），供补拉前后对比成员变化。 */
       function nailRadarAllSymbols() {
-        return [...nailRadarRankList(), ...nailRadarPinnedExtras()];
+        return [
+          ...getRadarFixedSymbols(),
+          ...nailRadarRankList(),
+          ...nailRadarPinnedExtras(),
+        ];
       }
 
       /** 持仓「新增关注」名单（大写）：用于雷达操作列的已关注态。 */
@@ -13094,11 +13172,13 @@
             pool.has(symbol) ? "is-pool" : "",
             rank && rank <= 20 ? "is-top20" : "",
             opts.extra ? "is-radar-extra" : "",
+            opts.fixed ? "is-radar-fixed" : "",
           ]
             .filter(Boolean)
             .join(" ");
           const showKline =
             nailRadarAllKlineOn ||
+            opts.fixed ||
             radarPinnedSet.has(String(symbol).trim().toUpperCase());
           const klineHtml = showKline
             ? `<canvas class="nail-radar-kline is-loading" data-kline="${escapeHtml(symbol)}" data-radar-chart="${escapeHtml(symbol)}"></canvas>`
@@ -13109,24 +13189,41 @@
           const unpinHtml = isPinned
             ? `<button type="button" class="nail-radar-act is-danger" data-radar-unpin="${escapeHtml(symbol)}" title="取消置顶该币">取消置顶</button>`
             : "";
+          const fixedTag = opts.fixed
+            ? '<span class="nail-radar-fixed-tag" title="已固定到表格首位">钉</span>'
+            : "";
+          const fixHtml = `<button type="button" class="nail-radar-act${opts.fixed ? " is-fixed" : ""}" data-radar-fixed-toggle="${escapeHtml(symbol)}" title="${opts.fixed ? "取消固定，回到原排名位置" : "固定到表格首位（仍显示真实排名）"}">${opts.fixed ? "取消固定" : "固定"}</button>`;
           const watchHtml = holdingsWatched.has(
             String(symbol).trim().toUpperCase(),
           )
             ? `<span class="nail-radar-act is-on" title="已在持仓关注列表">已关注</span>`
             : `<button type="button" class="nail-radar-act" data-radar-watch="${escapeHtml(symbol)}" title="加入持仓的新增关注">关注</button>`;
-          return `<tr class="${rowClass}"><td>${rank || "—"}</td><td><button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${winCls}">${escapeHtml(formatPercent(win))}</td><td>${rankHtml}</td><td>${unpinHtml}${watchHtml}</td></tr>`;
+          return `<tr class="${rowClass}"><td>${rank || "—"}</td><td>${fixedTag}<button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${winCls}">${escapeHtml(formatPercent(win))}</td><td>${rankHtml}</td><td>${fixHtml}${unpinHtml}${watchHtml}</td></tr>`;
         };
-        const rows = list.map((symbol, index) =>
-          buildRow(symbol, index + 1),
+        const fullRanking = ranking();
+        const rankOf = (symbol) => {
+          const idx = fullRanking.indexOf(symbol);
+          return idx >= 0 ? idx + 1 : 0;
+        };
+        const fixed = getRadarFixedSymbols();
+        const fixedSet = new Set(fixed);
+        // 固定行永远在最前，但排名列取全量榜的真实名次，不是 1。
+        const rows = fixed.map((symbol) =>
+          buildRow(symbol, rankOf(symbol) || 0, { fixed: true }),
         );
-        // 置顶但不在前 100 的币：分组条之后补位展示，名次用全量榜真实排名。
-        const extras = nailRadarPinnedExtras();
+        // 主榜要保留原名次：剔除固定行后不能用新的 index+1，否则后面全错位。
+        list.forEach((symbol, index) => {
+          if (fixedSet.has(symbol)) return;
+          rows.push(buildRow(symbol, index + 1));
+        });
+        // 榜外的钉子页置顶币：分组条之后补位，已经固定的不重复出现。
+        const extras = nailRadarPinnedExtras().filter(
+          (symbol) => !fixedSet.has(symbol),
+        );
         if (extras.length) {
-          const fullRanking = ranking();
-          const rankOf = (symbol) => {
-            const idx = fullRanking.indexOf(symbol);
-            return idx >= 0 ? idx + 1 : 0;
-          };
+          rows.push(
+            `<tr class="is-radar-sep"><td colspan="7">置顶 · 前 100 之外（${extras.length}）</td></tr>`,
+          );
           extras
             .slice()
             .sort((a, b) => rankOf(a) - rankOf(b))
@@ -13135,11 +13232,6 @@
                 buildRow(symbol, rankOf(symbol) || 0, { extra: true }),
               );
             });
-          rows.splice(
-            list.length,
-            0,
-            `<tr class="is-radar-sep"><td colspan="7">置顶 · 前 100 之外（${extras.length}）</td></tr>`,
-          );
         }
         body.innerHTML = rows.join("");
       }
@@ -13263,8 +13355,9 @@
         if (!before.length) return;
         nailRadarTickerBusy = true;
         try {
-          // 币安 symbols 参数上限 100：置顶补位币排最前，保证不被截掉。
+          // 币安 symbols 参数上限 100：固定行与置顶补位币排最前，保证不被截掉。
           await fetchBinanceTickersForSymbols([
+            ...getRadarFixedSymbols(),
             ...nailRadarPinnedExtras(),
             ...nailRadarRankList(),
           ]);
@@ -31739,6 +31832,13 @@
       }
       if (nailRadarBody) {
         nailRadarBody.addEventListener("click", (event) => {
+          const fixBtn = event.target.closest("[data-radar-fixed-toggle]");
+          if (fixBtn) {
+            toggleRadarFixed(
+              fixBtn.getAttribute("data-radar-fixed-toggle"),
+            );
+            return;
+          }
           const unpinBtn = event.target.closest("[data-radar-unpin]");
           if (unpinBtn) {
             void handleNailRadarUnpin(
