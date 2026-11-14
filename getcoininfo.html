@@ -768,11 +768,21 @@
                             throw new Error('未收录');
                         }
                         const errText = await response.text();
-                        // 凭据/额度类错误（确凿耗尽）→ 永久标记该 key 并切换，不中断批次
+                        let quotaMsg = errText;
+                        try {
+                            const errJson = JSON.parse(errText);
+                            if (errJson && errJson.success === false && errJson.message) {
+                                quotaMsg = String(errJson.message);
+                            }
+                        } catch (_) { /* 非 JSON 错误体，按纯文本处理 */ }
+                        // 凭据/额度类错误（确凿耗尽）→ 永久标记该 key 并切换，不中断批次。
+                        // 实测额度耗尽是 HTTP 400 + {success:false, message:
+                        // "Compute units usage limit exceeded"}，旧正则认不出、400 也不在
+                        // 凭据类状态码里，会被当普通错误直接抛出而不轮换。
                         const isQuota = [401, 402, 403].includes(response.status) ||
-                            /quota|monthly limit|credits exhausted/i.test(errText);
+                            /quota|limit|exceed|compute units|credits|usage/i.test(quotaMsg);
                         if (isQuota) {
-                            lastQuotaError = new Error(`API key ${activeKeyIndex + 1} 额度/凭据不可用`);
+                            lastQuotaError = new Error(`API key ${activeKeyIndex + 1} 额度/凭据不可用：${quotaMsg.slice(0, 80)}`);
                             console.log(`🔄 ${lastQuotaError.message}，切换到下一个 key 继续`);
                             exhaustedKeys.add(activeKeyIndex); // 下次循环自动 switchToNextKey
                             rateLimitStreak = 0;

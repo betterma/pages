@@ -484,11 +484,28 @@
             throw new Error("未收录");
           }
           const errText = await response.text();
+          let quotaMsg = errText;
+          try {
+            const errJson = JSON.parse(errText);
+            if (errJson && errJson.success === false && errJson.message) {
+              quotaMsg = String(errJson.message);
+            }
+          } catch (_) {
+            /* 非 JSON 错误体，按纯文本处理 */
+          }
+          // 额度耗尽实测会以 HTTP 400 + {success:false, message:
+          // "Compute units usage limit exceeded"} 返回；400 不在凭据类状态码里，
+          // 旧正则也认不出这段文案，会被当普通 HTTP 错误抛出而不轮换 key。
           const isQuota =
             [401, 402, 403].includes(response.status) ||
-            /quota|monthly limit|credits exhausted/i.test(errText);
+            /quota|limit|exceed|compute units|credits|usage/i.test(quotaMsg);
           if (isQuota) {
-            lastQuotaError = new Error(`API key ${activeKeyIndex + 1} 额度不可用`);
+            lastQuotaError = new Error(
+              `API key ${activeKeyIndex + 1} 额度不可用：${quotaMsg.slice(0, 80)}`,
+            );
+            appendLog(
+              `key ${activeKeyIndex + 1} 额度耗尽（HTTP ${response.status}），换下一个 key`,
+            );
             exhaustedKeys.add(activeKeyIndex);
             rateLimitStreak = 0;
             continue;
