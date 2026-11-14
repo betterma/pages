@@ -273,6 +273,8 @@
     let cancelRequested = false;
     let activeKeyIndex = 0;
     const exhaustedKeys = new Set();
+    /** 本批是否因所有 key 额度耗尽而停批：为 true 时禁止覆盖写盘。 */
+    let birdeyeQuotaExhausted = false;
 
     function githubToken() {
       if (!window.GithubTokenVault) {
@@ -495,6 +497,26 @@
         }
 
         const json = await response.json();
+        // Birdeye 额度耗尽可能以 HTTP 200 + {success:false} 返回（如
+        // "Compute units usage limit exceeded"）。不检查会把它当成成功、
+        // 字段全 undefined，既不会轮换 key，还会让后续的空结果覆盖写盘。
+        if (json && json.success === false) {
+          const msg = String(json.message || "").trim();
+          const isQuota =
+            /quota|limit|exceed|compute units|credits|usage/i.test(msg);
+          if (isQuota) {
+            lastQuotaError = new Error(
+              `API key ${activeKeyIndex + 1} 额度不可用：${msg || "未知原因"}`,
+            );
+            appendLog(
+              `key ${activeKeyIndex + 1} 额度耗尽（${msg || "CU 上限"}），换下一个 key`,
+            );
+            exhaustedKeys.add(activeKeyIndex);
+            rateLimitStreak = 0;
+            continue;
+          }
+          throw new Error(msg || "Birdeye 返回 success:false");
+        }
         const data = json.data || {};
         return {
           address,
@@ -528,6 +550,7 @@
         } catch (error) {
           if (error.code === "CANCELLED") throw error;
           if (error.code === "BIRDEYE_STOP_BATCH") {
+            birdeyeQuotaExhausted = true;
             appendLog(`停批：${error.message}`);
             for (let j = i; j < addresses.length; j += 1) {
               results.push({
@@ -586,6 +609,7 @@
       cancelRequested = false;
       activeKeyIndex = 0;
       exhaustedKeys.clear();
+      birdeyeQuotaExhausted = false;
       runBtn.disabled = true;
       cancelBtn.disabled = false;
       logEl.textContent = "";
@@ -654,6 +678,17 @@
           summaryEl.appendChild(pill(`达标 ${qualified.length}`));
           if (discarded) summaryEl.appendChild(pill(`丢弃 ${discarded}`, "warn"));
           if (fail) summaryEl.appendChild(pill(`失败 ${fail}`, "err"));
+
+          // 所有 key 额度耗尽而停批时不写盘：否则空结果会把 toWatch 覆盖成
+          // items:[]，并让 OKX 自选也跟着无新增。
+          if (birdeyeQuotaExhausted) {
+            setStep("watch", "error", "额度耗尽，已跳过写盘");
+            const stop = new Error(
+              "Birdeye 额度耗尽已停批；未写盘，保留原有 toWatch / toAll / OKX 自选",
+            );
+            stop.code = "BIRDEYE_STOP_BATCH";
+            throw stop;
+          }
 
           // ----- toWatch 整表覆盖 -----
           setStep("watch", "active", "整表覆盖 toWatch.json");

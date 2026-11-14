@@ -782,6 +782,21 @@
                     }
 
                     const json = await response.json();
+                    // HTTP 200 + {success:false} 也是额度耗尽（如
+                    // "Compute units usage limit exceeded"），必须触发轮换，
+                    // 否则空 data 会被当成「查询成功」显示成一行空值。
+                    if (json && json.success === false) {
+                        const msg = String(json.message || '').trim();
+                        const isQuota = /quota|limit|exceed|compute units|credits|usage/i.test(msg);
+                        if (isQuota) {
+                            lastQuotaError = new Error(`API key ${activeKeyIndex + 1} 额度不可用：${msg || '未知原因'}`);
+                            console.log(`🔄 ${lastQuotaError.message}，切换到下一个 key 继续`);
+                            exhaustedKeys.add(activeKeyIndex);
+                            rateLimitStreak = 0;
+                            continue;
+                        }
+                        throw new Error(msg || 'Birdeye 返回 success:false');
+                    }
                     const data = json.data || {};
 
                     // 提取所需字段
