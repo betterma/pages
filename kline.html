@@ -3352,6 +3352,25 @@
       .nail-hold-more {
         position: relative;
         flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      /* 行顶部常驻入口：有仓/无仓都能一键去币安 App，不必展开卖出面板。 */
+      .nail-hold-app-btn {
+        border: 0.5px solid color-mix(in srgb, var(--accent, #2f8f6e) 45%, transparent);
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 12%, #fff);
+        color: var(--accent, #2f8f6e);
+        font-size: 11px;
+        font-weight: 650;
+        line-height: 1;
+        padding: 6px 9px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .nail-hold-app-btn:hover {
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 22%, #fff);
       }
       .nail-hold-more-btn {
         width: 30px;
@@ -14011,8 +14030,8 @@
         const isPhone = /Android|iPhone|iPad|iPod/i.test(ua);
         showToast(
           isPhone
-            ? `已打开币安行情 · 已复制 ${searchToken}，请搜索后手动市价卖出`
-            : `已打开币安网页 · ${hint}`,
+            ? `已打开币安 App · 已复制 ${searchToken}`
+            : "已打开币安现货页",
           { duration: 3200 },
         );
       }
@@ -14735,6 +14754,7 @@
                   <span class="nail-hold-px-caption">当前价格 · USDT</span>
                 </div>
                 <div class="nail-hold-more">
+                  <button type="button" class="nail-hold-app-btn" data-sell-instant="${escapeHtml(symbol)}" title="前往币安 App / 现货页；手机尽量唤起 App">前往APP</button>
                   <button type="button" class="nail-hold-more-btn" data-hold-more-toggle aria-label="更多">···</button>
                   <div class="nail-hold-more-menu" hidden>
                     <button type="button" class="is-danger" data-hold-remove="${escapeHtml(symbol)}">移除关注</button>
@@ -14833,14 +14853,6 @@
                   </div>
                   <div class="nail-hold-panel-actions">
                     <button type="button" data-hold-cancel-panel="${escapeHtml(symbol)}">取消</button>
-                    <button
-                      type="button"
-                      class="is-instant"
-                      data-sell-instant="${escapeHtml(symbol)}"
-                      title="打开币安现货页；手机有 App 时尽量唤起，需在 App 内手动市价卖出"
-                    >
-                      即刻卖出
-                    </button>
                     <button type="button" class="primary" data-sell-arm="${escapeHtml(symbol)}">创建卖出任务</button>
                   </div>
                 </div>
