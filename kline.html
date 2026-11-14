@@ -3256,6 +3256,19 @@
       .nail-hold-row.is-collapsed .nail-hold-px-caption {
         display: none;
       }
+      /* 折叠态只留异常状态提醒：普通「无持仓 / 持有中」看摘要有无即可判断。
+         资金行（USDT）例外保留「账户资金」标签，它是唯一标识资金行的信息。 */
+      .nail-hold-row.is-collapsed .nail-hold-status-chip:not(.is-err):not(.is-frozen):not(.is-dust) {
+        display: none;
+      }
+      #nailHoldList .nail-hold-row.is-collapsed[data-hold-symbol^="USDT"] .nail-hold-status-chip.is-held {
+        display: inline-block;
+      }
+      /* 展开态交易对说明冗余（余额区已有单位），不显示可避免出现「J...」。
+         限定 #nailHoldList，模拟盘的交易对文案不受影响。 */
+      #nailHoldList .nail-hold-row:not(.is-collapsed) .nail-hold-pair {
+        display: none;
+      }
       /* 折叠态把宽度让给币名/摘要，价格块不必占 7.5em。 */
       .nail-hold-row.is-collapsed .nail-hold-px-block {
         min-width: 5.5em;
@@ -3617,6 +3630,9 @@
       .nail-hold-stop-note {
         font-size: 11px;
         color: rgba(28, 28, 30, 0.5);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .nail-hold-entry {
         display: grid;
