@@ -3295,11 +3295,6 @@
       .nail-hold-toggle-btn:hover {
         background: rgba(0, 0, 0, 0.05);
       }
-      .nail-hold-app-placeholder {
-        display: inline-block;
-        width: 58px;
-        flex: 0 0 auto;
-      }
       .nail-hold-row:not(.is-collapsed) .nail-hold-toggle-btn {
         transform: rotate(180deg);
       }
@@ -3361,11 +3356,13 @@
         align-items: center;
         gap: 8px;
         min-width: 0;
+        overflow: hidden;
       }
       .nail-hold-sym {
         border: none;
         background: transparent;
         padding: 0;
+        flex: 0 0 auto;
         font-weight: 750;
         font-size: 17px;
         line-height: 1.2;
@@ -3380,6 +3377,9 @@
       .nail-hold-pair {
         font-size: 12px;
         color: rgba(28, 28, 30, 0.5);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .nail-hold-status-chip {
         font-size: 11px;
@@ -3389,6 +3389,7 @@
         border-radius: 999px;
         background: rgba(0, 0, 0, 0.05);
         white-space: nowrap;
+        flex: 0 0 auto;
       }
       .nail-hold-status-chip.is-held {
         color: #1a6b52;
@@ -3423,6 +3424,7 @@
         margin-top: 2px;
         font-size: 11px;
         color: rgba(28, 28, 30, 0.45);
+        white-space: nowrap;
       }
       .nail-hold-more {
         position: relative;
@@ -14713,7 +14715,6 @@
                 </div>
                 <div class="nail-hold-more">
                   <button type="button" class="nail-hold-toggle-btn" data-hold-toggle="${escapeHtml(symbol)}" aria-expanded="false" title="展开详情">▾</button>
-                  <span class="nail-hold-app-placeholder" aria-hidden="true"></span>
                   <button type="button" class="nail-hold-more-btn" data-hold-more-toggle aria-label="更多">···</button>
                   <div class="nail-hold-more-menu" hidden>
                     <button type="button" class="is-danger" data-hold-remove="${escapeHtml(symbol)}">移除关注</button>
