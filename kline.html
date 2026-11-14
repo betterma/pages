@@ -3204,7 +3204,7 @@
         max-height: none;
         padding: 4px 10px 14px;
         display: grid;
-        gap: 12px;
+        gap: 8px;
         align-content: start;
       }
       .nail-hold-empty {
@@ -3250,12 +3250,25 @@
       .nail-hold-row.is-collapsed > .nail-hold-row-top {
         padding-bottom: 0;
         border-bottom: none;
+        gap: 8px;
       }
-      .nail-hold-row.is-collapsed .nail-hold-pair {
+      .nail-hold-row.is-collapsed .nail-hold-pair,
+      .nail-hold-row.is-collapsed .nail-hold-px-caption {
         display: none;
+      }
+      /* 折叠态把宽度让给币名/摘要，价格块不必占 7.5em。 */
+      .nail-hold-row.is-collapsed .nail-hold-px-block {
+        min-width: 5.5em;
+      }
+      .nail-hold-row.is-collapsed .nail-hold-px {
+        font-size: 15px;
       }
       .nail-hold-summary {
         display: none;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
         font-size: 11px;
         color: rgba(28, 28, 30, 0.55);
         font-variant-numeric: tabular-nums;
@@ -3263,19 +3276,28 @@
       .nail-hold-row.is-collapsed .nail-hold-summary {
         display: block;
       }
+      /* 展开箭头做成轻量 chevron，和右侧 ··· 灰方块区分开。 */
       .nail-hold-toggle-btn {
         width: 30px;
         height: 30px;
         border: none;
         border-radius: 8px;
-        background: rgba(0, 0, 0, 0.05);
-        color: #1c1c1e;
+        background: transparent;
+        color: rgba(28, 28, 30, 0.5);
         font-size: 14px;
         line-height: 1;
         cursor: pointer;
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        flex: 0 0 auto;
+      }
+      .nail-hold-toggle-btn:hover {
+        background: rgba(0, 0, 0, 0.05);
+      }
+      .nail-hold-app-placeholder {
+        display: inline-block;
+        width: 58px;
         flex: 0 0 auto;
       }
       .nail-hold-row:not(.is-collapsed) .nail-hold-toggle-btn {
@@ -3407,7 +3429,7 @@
         flex: 0 0 auto;
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 4px;
       }
       /* 行顶部常驻入口：有仓/无仓都能一键去币安 App，不必展开卖出面板。 */
       .nail-hold-app-btn {
@@ -3415,10 +3437,10 @@
         border-radius: 999px;
         background: color-mix(in srgb, var(--accent, #2f8f6e) 12%, #fff);
         color: var(--accent, #2f8f6e);
-        font-size: 11px;
+        font-size: 10.5px;
         font-weight: 650;
         line-height: 1;
-        padding: 6px 9px;
+        padding: 5px 7px;
         cursor: pointer;
         white-space: nowrap;
       }
@@ -14691,6 +14713,7 @@
                 </div>
                 <div class="nail-hold-more">
                   <button type="button" class="nail-hold-toggle-btn" data-hold-toggle="${escapeHtml(symbol)}" aria-expanded="false" title="展开详情">▾</button>
+                  <span class="nail-hold-app-placeholder" aria-hidden="true"></span>
                   <button type="button" class="nail-hold-more-btn" data-hold-more-toggle aria-label="更多">···</button>
                   <div class="nail-hold-more-menu" hidden>
                     <button type="button" class="is-danger" data-hold-remove="${escapeHtml(symbol)}">移除关注</button>
@@ -14874,7 +14897,7 @@
                     ${statusChip}
                   </div>
                   <div class="nail-hold-pair">${escapeHtml(asset)} / USDT · 现货</div>
-                  <div class="nail-hold-summary">可用 ${escapeHtml(free)} ${escapeHtml(asset)} · 估值 ${escapeHtml(totalText)} USDT</div>
+                  ${canSell ? `<div class="nail-hold-summary">可用 ${escapeHtml(free)} ${escapeHtml(asset)} · 估值 ${escapeHtml(totalText)} USDT</div>` : ""}
                 </div>
                 <div class="nail-hold-px-block">
                   <span class="nail-hold-px">${escapeHtml(pxText)}</span>
