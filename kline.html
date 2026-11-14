@@ -3228,6 +3228,51 @@
       .nail-hold-row.is-error {
         border-color: color-mix(in srgb, #c0392b 28%, transparent);
       }
+      /* P0 默认折叠成一行摘要：详情 DOM 全部保留，只用 CSS 隐藏，
+         行内 data-sell-min / data-hold-entry 等查询仍可用。 */
+      .nail-hold-row.is-collapsed {
+        padding-top: 10px;
+        padding-bottom: 10px;
+      }
+      .nail-hold-row.is-collapsed > .nail-hold-sec,
+      .nail-hold-row.is-collapsed > .nail-hold-ops,
+      .nail-hold-row.is-collapsed > .nail-hold-panel {
+        display: none;
+      }
+      .nail-hold-row.is-collapsed > .nail-hold-row-top {
+        padding-bottom: 0;
+        border-bottom: none;
+      }
+      .nail-hold-row.is-collapsed .nail-hold-pair {
+        display: none;
+      }
+      .nail-hold-summary {
+        display: none;
+        font-size: 11px;
+        color: rgba(28, 28, 30, 0.55);
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-hold-row.is-collapsed .nail-hold-summary {
+        display: block;
+      }
+      .nail-hold-toggle-btn {
+        width: 30px;
+        height: 30px;
+        border: none;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.05);
+        color: #1c1c1e;
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+      }
+      .nail-hold-row:not(.is-collapsed) .nail-hold-toggle-btn {
+        transform: rotate(180deg);
+      }
       .nail-hold-sec {
         padding: 12px 0;
       }
@@ -14230,6 +14275,87 @@
         return 10;
       }
 
+      /** P0：默认折叠成一行摘要，手风琴一次只展开一个，展开的币刷新后保持。 */
+      const NAIL_HOLD_EXPANDED_KEY = "kline-hold-expanded-v1";
+
+      function getNailHoldExpanded() {
+        try {
+          return String(localStorage.getItem(NAIL_HOLD_EXPANDED_KEY) || "")
+            .trim()
+            .toUpperCase();
+        } catch (_) {
+          return "";
+        }
+      }
+
+      function setNailHoldExpanded(symbol) {
+        try {
+          localStorage.setItem(
+            NAIL_HOLD_EXPANDED_KEY,
+            String(symbol || "").trim().toUpperCase(),
+          );
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
+      function nailHoldRowBySymbol(symbol) {
+        const key = String(symbol || "").trim().toUpperCase();
+        if (!key) return null;
+        const rows = document.querySelectorAll(
+          "#nailHoldList .nail-hold-row[data-hold-symbol]",
+        );
+        for (const row of rows) {
+          if (
+            String(row.getAttribute("data-hold-symbol") || "").toUpperCase() ===
+            key
+          ) {
+            return row;
+          }
+        }
+        return null;
+      }
+
+      function applyNailHoldCollapsedState(root) {
+        const scope = root || document.getElementById("nailHoldList");
+        if (!scope) return;
+        const expanded = getNailHoldExpanded();
+        scope
+          .querySelectorAll(".nail-hold-row[data-hold-symbol]")
+          .forEach((row) => {
+            const sym = String(
+              row.getAttribute("data-hold-symbol") || "",
+            ).toUpperCase();
+            const on = !!expanded && sym === expanded;
+            row.classList.toggle("is-collapsed", !on);
+            const btn = row.querySelector("[data-hold-toggle]");
+            if (btn) {
+              btn.setAttribute("aria-expanded", on ? "true" : "false");
+              btn.title = on ? "收起详情" : "展开详情";
+            }
+          });
+      }
+
+      function toggleNailHoldExpanded(rawSymbol) {
+        const key = String(rawSymbol || "").trim().toUpperCase();
+        if (!key) return;
+        const current = getNailHoldExpanded();
+        const next = current === key ? "" : key;
+        setNailHoldExpanded(next);
+        if (!next) {
+          // 收起时连买卖面板一起关掉，避免下次展开时面板突然冒出来。
+          const row = nailHoldRowBySymbol(key);
+          if (row) closeNailHoldPanels(row);
+        }
+        applyNailHoldCollapsedState(document.getElementById("nailHoldList"));
+        if (next) {
+          const row = nailHoldRowBySymbol(next);
+          if (row && typeof row.scrollIntoView === "function") {
+            row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          }
+        }
+      }
+
       function captureNailHoldUiState(listEl) {
         const map = Object.create(null);
         if (!listEl) return map;
@@ -14559,12 +14685,14 @@
                     <span class="nail-hold-status-chip is-held">账户资金</span>
                   </div>
                   <div class="nail-hold-pair">资金资产 · 用于限价买入</div>
+                  <div class="nail-hold-summary">可用 ${escapeHtml(freeText)} USDT</div>
                 </div>
                 <div class="nail-hold-px-block">
                   <span class="nail-hold-px">${escapeHtml(formatHoldingsUsdt(totalQty))}</span>
                   <span class="nail-hold-px-caption">总余额 · USDT</span>
                 </div>
                 <div class="nail-hold-more">
+                  <button type="button" class="nail-hold-toggle-btn" data-hold-toggle="${escapeHtml(symbol)}" aria-expanded="false" title="展开详情">▾</button>
                   <button type="button" class="nail-hold-more-btn" data-hold-more-toggle aria-label="更多">···</button>
                   <div class="nail-hold-more-menu" hidden>
                     <button type="button" class="is-danger" data-hold-remove="${escapeHtml(symbol)}">移除关注</button>
@@ -14748,12 +14876,14 @@
                     ${statusChip}
                   </div>
                   <div class="nail-hold-pair">${escapeHtml(asset)} / USDT · 现货</div>
+                  <div class="nail-hold-summary">可用 ${escapeHtml(free)} ${escapeHtml(asset)} · 估值 ${escapeHtml(totalText)} USDT</div>
                 </div>
                 <div class="nail-hold-px-block">
                   <span class="nail-hold-px">${escapeHtml(pxText)}</span>
                   <span class="nail-hold-px-caption">当前价格 · USDT</span>
                 </div>
                 <div class="nail-hold-more">
+                  <button type="button" class="nail-hold-toggle-btn" data-hold-toggle="${escapeHtml(symbol)}" aria-expanded="false" title="展开详情">▾</button>
                   <button type="button" class="nail-hold-app-btn" data-sell-instant="${escapeHtml(symbol)}" title="前往币安 App / 现货页；手机尽量唤起 App">前往APP</button>
                   <button type="button" class="nail-hold-more-btn" data-hold-more-toggle aria-label="更多">···</button>
                   <div class="nail-hold-more-menu" hidden>
@@ -14899,6 +15029,7 @@
             })
             .join("");
         restoreNailHoldUiState(list, uiSaved);
+        applyNailHoldCollapsedState(list);
         syncNailHoldLiveSwitches();
       }
 
@@ -32049,6 +32180,13 @@
           }
         });
         nailHoldList.addEventListener("click", (event) => {
+          const toggleBtn = event.target.closest("[data-hold-toggle]");
+          if (toggleBtn) {
+            toggleNailHoldExpanded(
+              toggleBtn.getAttribute("data-hold-toggle"),
+            );
+            return;
+          }
           const moreToggle = event.target.closest("[data-hold-more-toggle]");
           if (moreToggle) {
             const wrap = moreToggle.closest(".nail-hold-more");
@@ -32166,6 +32304,15 @@
               if (buyArmBtn.isConnected) buyArmBtn.disabled = false;
             });
             return;
+          }
+          // 点行顶部空白处也能展开/收起；点到任何按钮都交给上面的分支。
+          const rowTop = event.target.closest(".nail-hold-row-top");
+          if (rowTop && !event.target.closest("button")) {
+            const row = rowTop.closest(".nail-hold-row[data-hold-symbol]");
+            if (row) {
+              toggleNailHoldExpanded(row.getAttribute("data-hold-symbol"));
+              return;
+            }
           }
           if (!event.target.closest(".nail-hold-more")) {
             closeNailHoldMoreMenus(nailHoldList);
