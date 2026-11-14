@@ -13266,13 +13266,12 @@
           .filter(Boolean);
       }
 
-      /** 前 100 之外仍需展示的币：钉子页置顶币 + 雷达标记币（不进主榜排序）。 */
+      /** 置顶但没进前 100 的币：表尾补位展示，排名取全量榜真实名次。
+       *  标记只是外观状态，不改变表格构成；这里的名单只看钉子页「顶」。 */
       function nailRadarPinnedExtras() {
         const top = nailRadarRankList();
         const topSet = new Set(top);
-        return [
-          ...new Set([...radarPinnedSymbols(), ...getRadarFixedSymbols()]),
-        ].filter((symbol) => !topSet.has(symbol));
+        return radarPinnedSymbols().filter((symbol) => !topSet.has(symbol));
       }
 
       /** 雷达整表名单（标记币 + 前 100 + 榜外补位），供补拉前后对比成员变化。 */
@@ -13396,11 +13395,11 @@
         const rows = list.map((symbol, index) =>
           buildRow(symbol, index + 1),
         );
-        // 榜外的钉子页置顶币与标记币：分组条之后补位，名次取全量榜真实排名。
+        // 榜外的钉子页置顶币：分组条之后补位，名次取全量榜真实排名。
         const extras = nailRadarPinnedExtras();
         if (extras.length) {
           rows.push(
-            `<tr class="is-radar-sep"><td colspan="7">榜单外 · 已置顶 / 已标记（${extras.length}）</td></tr>`,
+            `<tr class="is-radar-sep"><td colspan="7">榜单外 · 已置顶（${extras.length}）</td></tr>`,
           );
           extras
             .slice()
