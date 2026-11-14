@@ -3,6 +3,25 @@
   "readAt": 1794662440702,
   "items": [
     {
+      "id": "NEARUSDT:1794657600000:1794663000389",
+      "symbol": "NEARUSDT",
+      "label": "NEAR",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1794663000389,
+      "firstSeenAt": 1794586200608,
+      "openTime": 1794657600000,
+      "pinPrice": 3.56,
+      "pinnedAt": 1794576600792,
+      "alertPrice": 3.503,
+      "notifyPrice": 3.341,
+      "noteAt": 1794592563486,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1794663000389
+    },
+    {
       "id": "ACTUSDT:1794657600000:1794663000389",
       "symbol": "ACTUSDT",
       "label": "ACT",
@@ -19,7 +38,7 @@
       "noteAt": 1794592563475,
       "interval": "4h",
       "windowUp": true,
-      "batchAt": 1794660900977
+      "batchAt": 1794663000389
     },
     {
       "id": "AIUSDT:1794657600000:1794663000389",
@@ -38,7 +57,26 @@
       "noteAt": 1794587400576,
       "interval": "4h",
       "windowUp": true,
-      "batchAt": 1794660900977
+      "batchAt": 1794663000389
+    },
+    {
+      "id": "NIGHTUSDT:1794657600000:1794663000389",
+      "symbol": "NIGHTUSDT",
+      "label": "NIGHT",
+      "kinds": [
+        "直拉"
+      ],
+      "at": 1794663000389,
+      "firstSeenAt": 1794067200646,
+      "openTime": 1794657600000,
+      "pinPrice": 0.0459,
+      "pinnedAt": 1794642000780,
+      "alertPrice": 0.04594,
+      "notifyPrice": 0.04896,
+      "noteAt": 1794642000780,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1794663000389
     },
     {
       "id": "AXTIBUSDT:1794657600000:1794663000389",
@@ -134,25 +172,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1794657000568
-    },
-    {
-      "id": "NIGHTUSDT:1794657600000:1794663000389",
-      "symbol": "NIGHTUSDT",
-      "label": "NIGHT",
-      "kinds": [
-        "直拉"
-      ],
-      "at": 1794663000389,
-      "firstSeenAt": 1794067200646,
-      "openTime": 1794657600000,
-      "pinPrice": 0.0459,
-      "pinnedAt": 1794642000780,
-      "alertPrice": 0.04594,
-      "notifyPrice": 0.04896,
-      "noteAt": 1794642000780,
-      "interval": "4h",
-      "windowUp": true,
-      "batchAt": 1794660900977
     },
     {
       "id": "QKCUSDT:1794657600000:1794663000389",
@@ -1157,25 +1176,6 @@
       "alertPrice": 0.00709,
       "notifyPrice": 0.00746,
       "noteAt": 1794596700847,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1794659400570
-    },
-    {
-      "id": "NEARUSDT:1794657600000:1794661500755",
-      "symbol": "NEARUSDT",
-      "label": "NEAR",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1794661500755,
-      "firstSeenAt": 1794586200608,
-      "openTime": 1794657600000,
-      "pinPrice": 3.56,
-      "pinnedAt": 1794576600792,
-      "alertPrice": 3.503,
-      "notifyPrice": 3.307,
-      "noteAt": 1794592563486,
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1794659400570
@@ -3749,6 +3749,16 @@
   ],
   "batches": [
     {
+      "at": 1794663000389,
+      "count": 4,
+      "symbols": [
+        "ACTUSDT",
+        "AIUSDT",
+        "NEARUSDT",
+        "NIGHTUSDT"
+      ]
+    },
+    {
       "at": 1794662700764,
       "count": 1,
       "symbols": [
@@ -3806,12 +3816,9 @@
     },
     {
       "at": 1794660900977,
-      "count": 5,
+      "count": 2,
       "symbols": [
-        "ACTUSDT",
-        "AIUSDT",
         "METUSDT",
-        "NIGHTUSDT",
         "WENBUSDT"
       ]
     },
@@ -3840,7 +3847,7 @@
     },
     {
       "at": 1794659400570,
-      "count": 19,
+      "count": 18,
       "symbols": [
         "ALLOUSDT",
         "AMZNBUSDT",
@@ -3853,7 +3860,6 @@
         "JUPUSDT",
         "KATUSDT",
         "MITOUSDT",
-        "NEARUSDT",
         "PLUMEUSDT",
         "RENDERUSDT",
         "SENTUSDT",
