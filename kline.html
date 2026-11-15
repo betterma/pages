@@ -2970,6 +2970,82 @@
       .nail-radar-table tr.is-radar-fixed .nail-radar-symbol {
         color: var(--accent, #2f8f6e);
       }
+      /* 左右滚动时冻结左侧列（类似 el-table 的 fixed）。冻结必须从最左连续：
+         # / 币 / 24h 三列；宽屏再连 K线 一起冻结。窄屏不冻结 K线——
+         那列 182px，会把可滚区域挤没。left 偏移由 JS 按表头实际列宽算出。 */
+      .nail-radar-table th {
+        z-index: 3; /* 普通表头要压住冻结的数据单元格 */
+      }
+      .nail-radar-table tr:not(.is-radar-sep) td:nth-child(-n + 3),
+      .nail-radar-table th:nth-child(-n + 3) {
+        position: sticky;
+        background: var(--elevated, var(--grouped));
+        z-index: 2;
+      }
+      .nail-radar-table th:nth-child(-n + 3) {
+        z-index: 4; /* 表头与冻结列的交叉格置顶 */
+      }
+      .nail-radar-table th:nth-child(1),
+      .nail-radar-table tr:not(.is-radar-sep) td:nth-child(1) {
+        left: var(--radar-sticky-1, 0px);
+      }
+      .nail-radar-table th:nth-child(2),
+      .nail-radar-table tr:not(.is-radar-sep) td:nth-child(2) {
+        left: var(--radar-sticky-2, 26px);
+      }
+      .nail-radar-table th:nth-child(3),
+      .nail-radar-table tr:not(.is-radar-sep) td:nth-child(3) {
+        left: var(--radar-sticky-3, 92px);
+      }
+      /* 行状态色要同步到冻结列，且必须不透明，否则横滚时下层内容会透出来。 */
+      .nail-radar-table tr.is-pool td:nth-child(-n + 3) {
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 8%, var(--elevated, #fff));
+      }
+      .nail-radar-table tr.is-radar-extra td:nth-child(-n + 3) {
+        background: color-mix(in srgb, var(--warn, #b07030) 5%, var(--elevated, #fff));
+      }
+      .nail-radar-table tr.is-radar-fixed td:nth-child(-n + 3) {
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 18%, var(--elevated, #fff));
+      }
+      .nail-radar-table tr.is-radar-fixed:hover td:nth-child(-n + 3) {
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 24%, var(--elevated, #fff));
+      }
+      .nail-radar-table th:nth-child(3),
+      .nail-radar-table tr:not(.is-radar-sep) td:nth-child(3) {
+        box-shadow: inset -1px 0 0 var(--separator);
+      }
+      @media (min-width: 768px) {
+        .nail-radar-table tr:not(.is-radar-sep) td:nth-child(4),
+        .nail-radar-table th:nth-child(4) {
+          position: sticky;
+          left: var(--radar-sticky-4, 150px);
+          background: var(--elevated, var(--grouped));
+          z-index: 2;
+        }
+        .nail-radar-table th:nth-child(4) {
+          z-index: 4;
+        }
+        .nail-radar-table tr.is-pool td:nth-child(4) {
+          background: color-mix(in srgb, var(--accent, #2f8f6e) 8%, var(--elevated, #fff));
+        }
+        .nail-radar-table tr.is-radar-extra td:nth-child(4) {
+          background: color-mix(in srgb, var(--warn, #b07030) 5%, var(--elevated, #fff));
+        }
+        .nail-radar-table tr.is-radar-fixed td:nth-child(4) {
+          background: color-mix(in srgb, var(--accent, #2f8f6e) 18%, var(--elevated, #fff));
+        }
+        .nail-radar-table tr.is-radar-fixed:hover td:nth-child(4) {
+          background: color-mix(in srgb, var(--accent, #2f8f6e) 24%, var(--elevated, #fff));
+        }
+        .nail-radar-table th:nth-child(3),
+        .nail-radar-table tr:not(.is-radar-sep) td:nth-child(3) {
+          box-shadow: none;
+        }
+        .nail-radar-table th:nth-child(4),
+        .nail-radar-table tr:not(.is-radar-sep) td:nth-child(4) {
+          box-shadow: inset -1px 0 0 var(--separator);
+        }
+      }
       .nail-hold-popover {
         position: fixed;
         left: 10px;
@@ -13351,6 +13427,31 @@
         );
       }
 
+      /** 冻结列的 left 偏移按表头实际列宽累加，避免自适应列宽对不齐。 */
+      function syncNailRadarStickyColumns() {
+        const table = document.querySelector(
+          "#nailRadarTableWrap .nail-radar-table",
+        );
+        if (!table || !table.offsetParent) return; // 浮窗隐藏时量到的宽度是 0
+        const heads = table.querySelectorAll("thead th");
+        if (heads.length < 4) return;
+        let offset = 0;
+        for (let i = 0; i < 4; i += 1) {
+          table.style.setProperty(`--radar-sticky-${i + 1}`, `${offset}px`);
+          offset += heads[i].getBoundingClientRect().width;
+        }
+      }
+      let nailRadarStickyResizeTimer = null;
+      window.addEventListener("resize", () => {
+        if (nailRadarStickyResizeTimer) {
+          clearTimeout(nailRadarStickyResizeTimer);
+        }
+        nailRadarStickyResizeTimer = setTimeout(
+          syncNailRadarStickyColumns,
+          120,
+        );
+      });
+
       function renderNailRadarTable() {
         const body = document.getElementById("nailRadarBody");
         const wrap = document.getElementById("nailRadarTableWrap");
@@ -13495,6 +13596,7 @@
             });
         }
         body.innerHTML = rows.join("");
+        syncNailRadarStickyColumns();
       }
 
       /** 给雷达里置顶币的迷你 K 线补图；弹层关闭或重渲时自动作废。 */
