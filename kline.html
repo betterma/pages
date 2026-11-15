@@ -8419,6 +8419,15 @@
               </button>
               <button
                 type="button"
+                id="nailRadarGroupBtn"
+                class="nail-radar-toggle"
+                aria-pressed="false"
+                title="当前：标记行留在原排名；点一下把标记行归集到列表顶部"
+              >
+                归集
+              </button>
+              <button
+                type="button"
                 id="nailRadarRefreshBtn"
                 class="nail-radar-refresh"
               >
@@ -10240,6 +10249,15 @@
           localStorage.getItem(NAIL_RADAR_ALL_KLINE_KEY) === "1";
       } catch (_) {
         nailRadarAllKlineOn = false;
+      }
+      /** 雷达「归集」开关：默认关（标记行留在原名次），状态存本机。 */
+      const NAIL_RADAR_GROUP_KEY = "kline-radar-group-v1";
+      let nailRadarGroupOn = false;
+      try {
+        nailRadarGroupOn =
+          localStorage.getItem(NAIL_RADAR_GROUP_KEY) === "1";
+      } catch (_) {
+        nailRadarGroupOn = false;
       }
       let nailAutoPinPaintToken = 0;
       let nailAutoPinChartObserver = null;
@@ -13431,12 +13449,38 @@
           const idx = fullRanking.indexOf(symbol);
           return idx >= 0 ? idx + 1 : 0;
         };
-        // 主榜严格按 1、2、3… 原名次排；标记行只加高亮，不移位、不改变顺序。
-        const rows = list.map((symbol, index) =>
-          buildRow(symbol, index + 1),
+        const rows = [];
+        // 「归集」打开：所有标记行提到顶部，按真实名次升序，排名列仍显示真实名次；
+        // 掉出前 100 的标记币也一并归集，名次显示「—」。
+        const grouped = nailRadarGroupOn
+          ? getRadarFixedSymbols()
+              .slice()
+              .sort((a, b) => {
+                const ra = rankOf(a) || Number.MAX_SAFE_INTEGER;
+                const rb = rankOf(b) || Number.MAX_SAFE_INTEGER;
+                return ra - rb || a.localeCompare(b);
+              })
+          : [];
+        const groupedSet = new Set(grouped);
+        if (grouped.length) {
+          rows.push(
+            `<tr class="is-radar-sep"><td colspan="7">已标记 · 归集（${grouped.length}）</td></tr>`,
+          );
+          grouped.forEach((symbol) => {
+            rows.push(buildRow(symbol, rankOf(symbol) || 0));
+          });
+        }
+        // 归集关闭时标记行留在原位高亮；打开时主榜跳过已归集的行，
+        // 其余行仍用原 index+1，不重新编号、不改变顺序。
+        list.forEach((symbol, index) => {
+          if (groupedSet.has(symbol)) return;
+          rows.push(buildRow(symbol, index + 1));
+        });
+        // 榜外的钉子页置顶币：分组条之后补位，名次取全量榜真实排名；
+        // 已归集的标记币不重复出现。
+        const extras = nailRadarPinnedExtras().filter(
+          (symbol) => !groupedSet.has(symbol),
         );
-        // 榜外的钉子页置顶币：分组条之后补位，名次取全量榜真实排名。
-        const extras = nailRadarPinnedExtras();
         if (extras.length) {
           rows.push(
             `<tr class="is-radar-sep"><td colspan="7">榜单外 · 已置顶（${extras.length}）</td></tr>`,
@@ -13641,6 +13685,32 @@
           /* ignore */
         }
         syncNailRadarAllKlineUi();
+        renderNailRadarTable();
+        void paintNailRadarKlines();
+      }
+
+      /** 「归集」开关的视觉状态。 */
+      function syncNailRadarGroupUi() {
+        const btn = document.getElementById("nailRadarGroupBtn");
+        if (!btn) return;
+        btn.setAttribute("aria-pressed", nailRadarGroupOn ? "true" : "false");
+        btn.classList.toggle("is-active", nailRadarGroupOn);
+        btn.title = nailRadarGroupOn
+          ? "当前：标记行已归集到顶部（仍显示真实名次），点一下恢复按名次排"
+          : "当前：标记行留在原排名；点一下把标记行归集到列表顶部";
+      }
+
+      /** 切换「归集」：只改变表格顺序，标记名单与排名数字都不变。 */
+      function setNailRadarGroup(on) {
+        const next = !!on;
+        if (next === nailRadarGroupOn) return;
+        nailRadarGroupOn = next;
+        try {
+          localStorage.setItem(NAIL_RADAR_GROUP_KEY, next ? "1" : "0");
+        } catch (_) {
+          /* ignore */
+        }
+        syncNailRadarGroupUi();
         renderNailRadarTable();
         void paintNailRadarKlines();
       }
@@ -32114,6 +32184,13 @@
         syncNailRadarAllKlineUi();
         nailRadarAllKlineBtn.addEventListener("click", () => {
           setNailRadarAllKline(!nailRadarAllKlineOn);
+        });
+      }
+      const nailRadarGroupBtn = document.getElementById("nailRadarGroupBtn");
+      if (nailRadarGroupBtn) {
+        syncNailRadarGroupUi();
+        nailRadarGroupBtn.addEventListener("click", () => {
+          setNailRadarGroup(!nailRadarGroupOn);
         });
       }
       const nailRadarRefreshBtn = document.getElementById(
