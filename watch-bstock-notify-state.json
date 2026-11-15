@@ -1,38 +1,64 @@
 {
   "risingZoneSnap": [
     "KORUBUSDT",
-    "INTWBUSDT",
     "SOXLBUSDT",
     "MVLLBUSDT",
-    "SNXXBUSDT",
     "CYPHBUSDT",
-    "MUUBUSDT",
-    "IRENBUSDT",
+    "SNXXBUSDT",
+    "INTWBUSDT",
     "BMNRBUSDT",
     "NBISBUSDT",
-    "CRWVBUSDT",
-    "NVDABUSDT",
-    "AXTIBUSDT",
     "SKUUBUSDT",
+    "IRENBUSDT",
+    "MUUBUSDT",
+    "NVDABUSDT",
+    "CRWVBUSDT",
+    "AXTIBUSDT",
     "SPCXBUSDT",
-    "FWDIBUSDT",
-    "AAOIBUSDT",
-    "MRVLBUSDT",
-    "LITEBUSDT",
-    "BBBUSDT",
-    "INTCBUSDT",
-    "SNDKBUSDT",
-    "USDEBUSDT",
-    "COHRBUSDT",
-    "EWYBUSDT",
-    "TQQQBUSDT",
-    "GLWBUSDT",
     "CRCLBUSDT",
+    "FWDIBUSDT",
+    "LITEBUSDT",
+    "MRVLBUSDT",
+    "SNDKBUSDT",
+    "INTCBUSDT",
+    "AAOIBUSDT",
+    "CRDOBUSDT",
+    "SKHYBUSDT",
+    "TQQQBUSDT",
+    "CBRSBUSDT",
+    "EWYBUSDT",
+    "COHRBUSDT",
     "SECZBUSDT",
-    "CRDOBUSDT"
+    "COINBUSDT"
   ],
   "risingZoneSnapSeeded": true,
   "autoPinEvents": [
+    {
+      "at": 1794780300729,
+      "symbols": [
+        "COINBUSDT"
+      ],
+      "source": "auto-cloud",
+      "kind": "new"
+    },
+    {
+      "at": 1794780300729,
+      "symbols": [
+        "KORUBUSDT"
+      ],
+      "source": "auto-cloud",
+      "kind": "catch-up"
+    },
+    {
+      "at": 1794780300729,
+      "symbols": [
+        "BBBUSDT",
+        "USDEBUSDT",
+        "GLWBUSDT"
+      ],
+      "source": "zone-drop",
+      "kind": "zone-drop"
+    },
     {
       "at": 1794780000967,
       "symbols": [
@@ -342,34 +368,9 @@
       ],
       "source": "zone-drop",
       "kind": "zone-drop"
-    },
-    {
-      "at": 1794774900386,
-      "symbols": [
-        "BMNRBUSDT"
-      ],
-      "source": "auto-cloud",
-      "kind": "new"
-    },
-    {
-      "at": 1794774900386,
-      "symbols": [
-        "KORUBUSDT"
-      ],
-      "source": "auto-cloud",
-      "kind": "catch-up"
-    },
-    {
-      "at": 1794774900386,
-      "symbols": [
-        "SECZBUSDT",
-        "CBRSBUSDT"
-      ],
-      "source": "zone-drop",
-      "kind": "zone-drop"
     }
   ],
-  "updatedAt": 1794780046138,
+  "updatedAt": 1794780319709,
   "dropAlerts": {},
   "lastPinPrices": {
     "USDEBUSDT": 5,
