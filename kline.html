@@ -2777,9 +2777,14 @@
       /* 列序：币(1) K线(2) 24h(3) 窗涨(4) 名次(5) 操作(6)；序号已并入币名列。 */
       .nail-radar-table th:nth-child(1),
       .nail-radar-table td:nth-child(1) {
-        /* 币名列：名次小字 + 币名两行，尽量压窄给 K 线留位置。 */
-        padding-left: 6px;
-        padding-right: 4px;
+        /* 币名列压到约原来的 2/3：去掉星标后再收窄宽度与内边距，
+           省出的横向空间留给 K 线和后面的数值列。 */
+        width: 52px;
+        min-width: 52px;
+        max-width: 52px;
+        padding-left: 4px;
+        padding-right: 2px;
+        overflow: hidden;
       }
       .nail-radar-rank-mini {
         display: block;
@@ -2792,10 +2797,8 @@
       .nail-radar-sym-line {
         display: inline-flex;
         align-items: center;
-        gap: 4px;
-      }
-      .nail-radar-sym-line > .nail-radar-fixed-tag {
-        margin-right: 0; /* 间距交给 flex gap，避免叠加多占 4px */
+        max-width: 100%;
+        overflow: hidden;
       }
       .nail-radar-table th:nth-child(4),
       .nail-radar-table td:nth-child(4),
@@ -2876,9 +2879,13 @@
         background: transparent;
         color: var(--accent);
         padding: 0;
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 700;
         cursor: pointer;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .nail-radar-symbol:hover {
         text-decoration: underline;
@@ -2937,17 +2944,6 @@
       .nail-radar-act.is-fixed {
         border-color: var(--accent, #2f8f6e);
         color: var(--accent, #2f8f6e);
-      }
-      .nail-radar-fixed-tag {
-        display: inline-block;
-        margin-right: 4px;
-        padding: 1px 4px;
-        border-radius: 4px;
-        background: color-mix(in srgb, var(--accent, #2f8f6e) 16%, transparent);
-        color: var(--accent, #2f8f6e);
-        font-size: 10px;
-        font-weight: 650;
-        vertical-align: 1px;
       }
       /* 前 100 之后的置顶补位：分组条 + 与主榜区分的淡底。 */
       .nail-radar-table tr.is-radar-sep td {
@@ -3008,7 +3004,7 @@
       }
       .nail-radar-table th:nth-child(2),
       .nail-radar-table tr:not(.is-radar-sep) td:nth-child(2) {
-        left: var(--radar-sticky-2, 78px);
+        left: var(--radar-sticky-2, 52px);
       }
       /* 行状态色要同步到冻结列，且必须不透明，否则横滚时下层内容会透出来。 */
       .nail-radar-table tr.is-pool td:nth-child(-n + 2) {
@@ -13518,16 +13514,13 @@
           const unpinHtml = isPinned
             ? `<button type="button" class="nail-radar-act is-danger" data-radar-unpin="${escapeHtml(symbol)}" title="取消置顶该币">取消置顶</button>`
             : "";
-          const markTag = isMarked
-            ? '<span class="nail-radar-fixed-tag" title="已加背景色">★</span>'
-            : "";
           const markHtml = `<button type="button" class="nail-radar-act${isMarked ? " is-fixed" : ""}" data-radar-fixed-toggle="${escapeHtml(symbol)}" title="${isMarked ? "取消这一行的背景色" : "给这一行加背景色，仍按原排名显示"}">${isMarked ? "取消背景" : "背景色"}</button>`;
           const watchHtml = holdingsWatched.has(
             String(symbol).trim().toUpperCase(),
           )
             ? `<span class="nail-radar-act is-on" title="已在持仓关注列表">已关注</span>`
             : `<button type="button" class="nail-radar-act" data-radar-watch="${escapeHtml(symbol)}" title="加入持仓关注列表">持仓关注</button>`;
-          return `<tr class="${rowClass}"><td><span class="nail-radar-rank-mini">${rank ? `#${rank}` : "—"}</span><span class="nail-radar-sym-line">${markTag}<button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></span></td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td class="${winCls}">${escapeHtml(formatPercent(win))}</td><td>${rankHtml}</td><td>${markHtml}${unpinHtml}${watchHtml}</td></tr>`;
+          return `<tr class="${rowClass}"><td><span class="nail-radar-rank-mini">${rank ? `#${rank}` : "—"}</span><span class="nail-radar-sym-line"><button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></span></td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td class="${winCls}">${escapeHtml(formatPercent(win))}</td><td>${rankHtml}</td><td>${markHtml}${unpinHtml}${watchHtml}</td></tr>`;
         };
         const fullRanking = ranking();
         const rankOf = (symbol) => {
