@@ -2782,7 +2782,7 @@
         padding-right: 3px;
         color: var(--secondary);
       }
-      /* 列序：#(1) 币(2) 24h(3) K线(4) 窗涨(5) 名次(6)；数字列右对齐，K线列固定宽。 */
+      /* 列序：#(1) 币(2) K线(3) 24h(4) 窗涨(5) 名次(6) 操作(7)；K线列固定宽、常驻可见。 */
       .nail-radar-table th:nth-child(5),
       .nail-radar-table td:nth-child(5),
       .nail-radar-table th:nth-child(6),
@@ -2793,15 +2793,16 @@
       }
       .nail-radar-table th:nth-child(3),
       .nail-radar-table td:nth-child(3) {
-        /* 24h 涨幅：小字号 + 窄内边距，尽量不挤占 K 线列的可视宽度。 */
-        text-align: right;
-        font-size: 10.5px;
+        /* K 线：固定宽，作为前三列之一冻结。 */
+        width: 182px;
         padding-left: 4px;
         padding-right: 4px;
       }
       .nail-radar-table th:nth-child(4),
       .nail-radar-table td:nth-child(4) {
-        width: 182px;
+        /* 24h 涨幅：小字号 + 窄内边距。 */
+        text-align: right;
+        font-size: 10.5px;
         padding-left: 4px;
         padding-right: 4px;
       }
@@ -2970,9 +2971,9 @@
       .nail-radar-table tr.is-radar-fixed .nail-radar-symbol {
         color: var(--accent, #2f8f6e);
       }
-      /* 左右滚动时冻结左侧列（类似 el-table 的 fixed）。冻结必须从最左连续：
-         # / 币 / 24h 三列；宽屏再连 K线 一起冻结。窄屏不冻结 K线——
-         那列 182px，会把可滚区域挤没。left 偏移由 JS 按表头实际列宽算出。 */
+      /* 左右滚动时冻结前三列（类似 el-table 的 fixed）：# / 币 / K线。
+         这三列常驻可见，其余数值与操作列横滑查看。left 偏移由 JS 按表头
+         实际列宽算出；K线列较宽，窄屏可滚区域会相应变窄。 */
       .nail-radar-table th {
         z-index: 3; /* 普通表头要压住冻结的数据单元格 */
       }
@@ -3013,38 +3014,6 @@
       .nail-radar-table th:nth-child(3),
       .nail-radar-table tr:not(.is-radar-sep) td:nth-child(3) {
         box-shadow: inset -1px 0 0 var(--separator);
-      }
-      @media (min-width: 768px) {
-        .nail-radar-table tr:not(.is-radar-sep) td:nth-child(4),
-        .nail-radar-table th:nth-child(4) {
-          position: sticky;
-          left: var(--radar-sticky-4, 150px);
-          background: var(--elevated, var(--grouped));
-          z-index: 2;
-        }
-        .nail-radar-table th:nth-child(4) {
-          z-index: 4;
-        }
-        .nail-radar-table tr.is-pool td:nth-child(4) {
-          background: color-mix(in srgb, var(--accent, #2f8f6e) 8%, var(--elevated, #fff));
-        }
-        .nail-radar-table tr.is-radar-extra td:nth-child(4) {
-          background: color-mix(in srgb, var(--warn, #b07030) 5%, var(--elevated, #fff));
-        }
-        .nail-radar-table tr.is-radar-fixed td:nth-child(4) {
-          background: color-mix(in srgb, var(--accent, #2f8f6e) 18%, var(--elevated, #fff));
-        }
-        .nail-radar-table tr.is-radar-fixed:hover td:nth-child(4) {
-          background: color-mix(in srgb, var(--accent, #2f8f6e) 24%, var(--elevated, #fff));
-        }
-        .nail-radar-table th:nth-child(3),
-        .nail-radar-table tr:not(.is-radar-sep) td:nth-child(3) {
-          box-shadow: none;
-        }
-        .nail-radar-table th:nth-child(4),
-        .nail-radar-table tr:not(.is-radar-sep) td:nth-child(4) {
-          box-shadow: inset -1px 0 0 var(--separator);
-        }
       }
       .nail-hold-popover {
         position: fixed;
@@ -8498,7 +8467,7 @@
                 id="nailRadarGroupBtn"
                 class="nail-radar-toggle"
                 aria-pressed="false"
-                title="当前：标记行留在原排名；点一下把标记行归集到列表顶部"
+                title="当前：背景色行留在原排名；点一下把它们归集到列表顶部"
               >
                 归集
               </button>
@@ -8523,8 +8492,8 @@
                   <tr>
                     <th>#</th>
                     <th>币</th>
-                    <th>24h</th>
                     <th>K线</th>
+                    <th>24h</th>
                     <th>窗涨</th>
                     <th>名次</th>
                     <th>操作</th>
@@ -13434,9 +13403,9 @@
         );
         if (!table || !table.offsetParent) return; // 浮窗隐藏时量到的宽度是 0
         const heads = table.querySelectorAll("thead th");
-        if (heads.length < 4) return;
+        if (heads.length < 3) return;
         let offset = 0;
-        for (let i = 0; i < 4; i += 1) {
+        for (let i = 0; i < 3; i += 1) {
           table.style.setProperty(`--radar-sticky-${i + 1}`, `${offset}px`);
           offset += heads[i].getBoundingClientRect().width;
         }
@@ -13535,15 +13504,15 @@
             ? `<button type="button" class="nail-radar-act is-danger" data-radar-unpin="${escapeHtml(symbol)}" title="取消置顶该币">取消置顶</button>`
             : "";
           const markTag = isMarked
-            ? '<span class="nail-radar-fixed-tag" title="已标记">★</span>'
+            ? '<span class="nail-radar-fixed-tag" title="已加背景色">★</span>'
             : "";
-          const markHtml = `<button type="button" class="nail-radar-act${isMarked ? " is-fixed" : ""}" data-radar-fixed-toggle="${escapeHtml(symbol)}" title="${isMarked ? "取消标记" : "标记这一行，仍按原排名显示"}">${isMarked ? "取消标记" : "标记"}</button>`;
+          const markHtml = `<button type="button" class="nail-radar-act${isMarked ? " is-fixed" : ""}" data-radar-fixed-toggle="${escapeHtml(symbol)}" title="${isMarked ? "取消这一行的背景色" : "给这一行加背景色，仍按原排名显示"}">${isMarked ? "取消背景" : "背景色"}</button>`;
           const watchHtml = holdingsWatched.has(
             String(symbol).trim().toUpperCase(),
           )
             ? `<span class="nail-radar-act is-on" title="已在持仓关注列表">已关注</span>`
-            : `<button type="button" class="nail-radar-act" data-radar-watch="${escapeHtml(symbol)}" title="加入持仓的新增关注">关注</button>`;
-          return `<tr class="${rowClass}"><td>${rank || "—"}</td><td>${markTag}<button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${winCls}">${escapeHtml(formatPercent(win))}</td><td>${rankHtml}</td><td>${markHtml}${unpinHtml}${watchHtml}</td></tr>`;
+            : `<button type="button" class="nail-radar-act" data-radar-watch="${escapeHtml(symbol)}" title="加入持仓关注列表">持仓关注</button>`;
+          return `<tr class="${rowClass}"><td>${rank || "—"}</td><td>${markTag}<button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td class="${winCls}">${escapeHtml(formatPercent(win))}</td><td>${rankHtml}</td><td>${markHtml}${unpinHtml}${watchHtml}</td></tr>`;
         };
         const fullRanking = ranking();
         const rankOf = (symbol) => {
@@ -13565,7 +13534,7 @@
         const groupedSet = new Set(grouped);
         if (grouped.length) {
           rows.push(
-            `<tr class="is-radar-sep"><td colspan="7">已标记 · 归集（${grouped.length}）</td></tr>`,
+            `<tr class="is-radar-sep"><td colspan="7">已加背景 · 归集（${grouped.length}）</td></tr>`,
           );
           grouped.forEach((symbol) => {
             rows.push(buildRow(symbol, rankOf(symbol) || 0));
@@ -13798,8 +13767,8 @@
         btn.setAttribute("aria-pressed", nailRadarGroupOn ? "true" : "false");
         btn.classList.toggle("is-active", nailRadarGroupOn);
         btn.title = nailRadarGroupOn
-          ? "当前：标记行已归集到顶部（仍显示真实名次），点一下恢复按名次排"
-          : "当前：标记行留在原排名；点一下把标记行归集到列表顶部";
+          ? "当前：背景色行已归集到顶部（仍显示真实名次），点一下恢复按名次排"
+          : "当前：背景色行留在原排名；点一下把它们归集到列表顶部";
       }
 
       /** 切换「归集」：只改变表格顺序，标记名单与排名数字都不变。 */
@@ -13870,8 +13839,8 @@
               Number.isFinite(value) && value < 0,
             );
           };
-          syncCell(cells[2], change24h);
-          syncCell(cells[4], win);
+          syncCell(cells[3], change24h); // 24h 现在是第 4 列
+          syncCell(cells[4], win); // 窗涨仍是第 5 列
         });
       }
 
