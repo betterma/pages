@@ -27262,11 +27262,14 @@
         syncNailSegBadges();
       }
 
-      /** 左右滑切分栏：越过两端就回行情，保留原来的滑出手感。 */
+      /** 左右滑切分栏：越过两端回行情；雷达分栏例外，左滑越界不再退出。 */
       function nailSwipeSegment(dir) {
         const idx = NAIL_SEGMENTS.indexOf(nailSegment);
         const next = idx + (dir > 0 ? 1 : -1);
         if (next < 0 || next >= NAIL_SEGMENTS.length) {
+          // 雷达是最后一栏，左滑越界原先会关掉抽屉回行情。该分栏以表格
+          // 横滑看列为主，很容易误触，这里不再消费手势、也不关闭抽屉。
+          if (nailSegment === "radar") return false;
           setNailDrawerOpen(false);
           return true;
         }
