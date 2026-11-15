@@ -2774,32 +2774,46 @@
         font-size: 11px;
         font-weight: 650;
       }
+      /* 列序：币(1) K线(2) 24h(3) 窗涨(4) 名次(5) 操作(6)；序号已并入币名列。 */
       .nail-radar-table th:nth-child(1),
       .nail-radar-table td:nth-child(1) {
-        /* 序号只到 3 位数，压到极限给 K 线列腾地方。 */
-        width: 1.4em;
-        padding-left: 3px;
-        padding-right: 3px;
-        color: var(--secondary);
+        /* 币名列：名次小字 + 币名两行，尽量压窄给 K 线留位置。 */
+        padding-left: 6px;
+        padding-right: 4px;
       }
-      /* 列序：#(1) 币(2) K线(3) 24h(4) 窗涨(5) 名次(6) 操作(7)；K线列固定宽、常驻可见。 */
+      .nail-radar-rank-mini {
+        display: block;
+        font-size: 9.5px;
+        line-height: 1.25;
+        color: var(--secondary);
+        opacity: 0.85;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-radar-sym-line {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .nail-radar-sym-line > .nail-radar-fixed-tag {
+        margin-right: 0; /* 间距交给 flex gap，避免叠加多占 4px */
+      }
+      .nail-radar-table th:nth-child(4),
+      .nail-radar-table td:nth-child(4),
       .nail-radar-table th:nth-child(5),
-      .nail-radar-table td:nth-child(5),
-      .nail-radar-table th:nth-child(6),
-      .nail-radar-table td:nth-child(6) {
+      .nail-radar-table td:nth-child(5) {
         text-align: right;
+        padding-left: 4px;
+        padding-right: 4px;
+      }
+      .nail-radar-table th:nth-child(2),
+      .nail-radar-table td:nth-child(2) {
+        /* K 线：固定宽，作为前两列之一冻结。 */
+        width: 182px;
         padding-left: 4px;
         padding-right: 4px;
       }
       .nail-radar-table th:nth-child(3),
       .nail-radar-table td:nth-child(3) {
-        /* K 线：固定宽，作为前三列之一冻结。 */
-        width: 182px;
-        padding-left: 4px;
-        padding-right: 4px;
-      }
-      .nail-radar-table th:nth-child(4),
-      .nail-radar-table td:nth-child(4) {
         /* 24h 涨幅：小字号 + 窄内边距。 */
         text-align: right;
         font-size: 10.5px;
@@ -2852,9 +2866,10 @@
       .nail-radar-table tr.is-pool {
         background: color-mix(in srgb, var(--accent, #2f8f6e) 8%, transparent);
       }
-      .nail-radar-table tr.is-top20 td:nth-child(1) {
+      .nail-radar-table tr.is-top20 .nail-radar-rank-mini {
         color: var(--warn, #b07030);
         font-weight: 700;
+        opacity: 1;
       }
       .nail-radar-symbol {
         border: none;
@@ -2883,8 +2898,8 @@
         text-align: center;
       }
       /* 操作列：取消置顶 / 关注（写持仓新增关注）两个小胶囊按钮。 */
-      .nail-radar-table th:nth-child(7),
-      .nail-radar-table td:nth-child(7) {
+      .nail-radar-table th:nth-child(6),
+      .nail-radar-table td:nth-child(6) {
         text-align: right;
         padding-left: 4px;
         padding-right: 4px;
@@ -2946,9 +2961,10 @@
       .nail-radar-table tr.is-radar-extra td {
         background: color-mix(in srgb, var(--warn, #b07030) 5%, transparent);
       }
-      .nail-radar-table tr.is-radar-extra td:nth-child(1) {
+      .nail-radar-table tr.is-radar-extra .nail-radar-rank-mini {
         color: var(--warn, #b07030);
         font-weight: 700;
+        opacity: 1;
       }
       /* 标记行：底色更明显 + 左侧强调条，留在原排名位置也能一眼扫到。
          放在 extra 规则之后，确保「既是标记又是榜外补位」时仍显示标记色。 */
@@ -2971,19 +2987,19 @@
       .nail-radar-table tr.is-radar-fixed .nail-radar-symbol {
         color: var(--accent, #2f8f6e);
       }
-      /* 左右滚动时冻结前三列（类似 el-table 的 fixed）：# / 币 / K线。
-         这三列常驻可见，其余数值与操作列横滑查看。left 偏移由 JS 按表头
-         实际列宽算出；K线列较宽，窄屏可滚区域会相应变窄。 */
+      /* 左右滚动时冻结前两列（类似 el-table 的 fixed）：币 / K线。
+         序号已并入币名列，冻结区少一列、右侧多露出约 23px；K线尺寸不变、
+         常驻可见。left 偏移由 JS 按表头实际列宽算出。 */
       .nail-radar-table th {
         z-index: 3; /* 普通表头要压住冻结的数据单元格 */
       }
-      .nail-radar-table tr:not(.is-radar-sep) td:nth-child(-n + 3),
-      .nail-radar-table th:nth-child(-n + 3) {
+      .nail-radar-table tr:not(.is-radar-sep) td:nth-child(-n + 2),
+      .nail-radar-table th:nth-child(-n + 2) {
         position: sticky;
         background: var(--elevated, var(--grouped));
         z-index: 2;
       }
-      .nail-radar-table th:nth-child(-n + 3) {
+      .nail-radar-table th:nth-child(-n + 2) {
         z-index: 4; /* 表头与冻结列的交叉格置顶 */
       }
       .nail-radar-table th:nth-child(1),
@@ -2992,27 +3008,27 @@
       }
       .nail-radar-table th:nth-child(2),
       .nail-radar-table tr:not(.is-radar-sep) td:nth-child(2) {
-        left: var(--radar-sticky-2, 26px);
-      }
-      .nail-radar-table th:nth-child(3),
-      .nail-radar-table tr:not(.is-radar-sep) td:nth-child(3) {
-        left: var(--radar-sticky-3, 92px);
+        left: var(--radar-sticky-2, 78px);
       }
       /* 行状态色要同步到冻结列，且必须不透明，否则横滚时下层内容会透出来。 */
-      .nail-radar-table tr.is-pool td:nth-child(-n + 3) {
+      .nail-radar-table tr.is-pool td:nth-child(-n + 2) {
         background: color-mix(in srgb, var(--accent, #2f8f6e) 8%, var(--elevated, #fff));
       }
-      .nail-radar-table tr.is-radar-extra td:nth-child(-n + 3) {
+      .nail-radar-table tr.is-radar-extra td:nth-child(-n + 2) {
         background: color-mix(in srgb, var(--warn, #b07030) 5%, var(--elevated, #fff));
       }
-      .nail-radar-table tr.is-radar-fixed td:nth-child(-n + 3) {
+      .nail-radar-table tr.is-radar-fixed td:nth-child(-n + 2) {
         background: color-mix(in srgb, var(--accent, #2f8f6e) 18%, var(--elevated, #fff));
       }
-      .nail-radar-table tr.is-radar-fixed:hover td:nth-child(-n + 3) {
+      .nail-radar-table tr.is-radar-fixed:hover td:nth-child(-n + 2) {
         background: color-mix(in srgb, var(--accent, #2f8f6e) 24%, var(--elevated, #fff));
       }
-      .nail-radar-table th:nth-child(3),
-      .nail-radar-table tr:not(.is-radar-sep) td:nth-child(3) {
+      .nail-radar-table tr.is-radar-fixed .nail-radar-rank-mini {
+        color: var(--accent, #2f8f6e);
+        opacity: 1;
+      }
+      .nail-radar-table th:nth-child(2),
+      .nail-radar-table tr:not(.is-radar-sep) td:nth-child(2) {
         box-shadow: inset -1px 0 0 var(--separator);
       }
       .nail-hold-popover {
@@ -8490,7 +8506,6 @@
               <table class="nail-radar-table">
                 <thead>
                   <tr>
-                    <th>#</th>
                     <th>币</th>
                     <th>K线</th>
                     <th>24h</th>
@@ -13403,9 +13418,9 @@
         );
         if (!table || !table.offsetParent) return; // 浮窗隐藏时量到的宽度是 0
         const heads = table.querySelectorAll("thead th");
-        if (heads.length < 3) return;
+        if (heads.length < 2) return;
         let offset = 0;
-        for (let i = 0; i < 3; i += 1) {
+        for (let i = 0; i < 2; i += 1) {
           table.style.setProperty(`--radar-sticky-${i + 1}`, `${offset}px`);
           offset += heads[i].getBoundingClientRect().width;
         }
@@ -13512,7 +13527,7 @@
           )
             ? `<span class="nail-radar-act is-on" title="已在持仓关注列表">已关注</span>`
             : `<button type="button" class="nail-radar-act" data-radar-watch="${escapeHtml(symbol)}" title="加入持仓关注列表">持仓关注</button>`;
-          return `<tr class="${rowClass}"><td>${rank || "—"}</td><td>${markTag}<button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td class="${winCls}">${escapeHtml(formatPercent(win))}</td><td>${rankHtml}</td><td>${markHtml}${unpinHtml}${watchHtml}</td></tr>`;
+          return `<tr class="${rowClass}"><td><span class="nail-radar-rank-mini">${rank ? `#${rank}` : "—"}</span><span class="nail-radar-sym-line">${markTag}<button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></span></td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td class="${winCls}">${escapeHtml(formatPercent(win))}</td><td>${rankHtml}</td><td>${markHtml}${unpinHtml}${watchHtml}</td></tr>`;
         };
         const fullRanking = ranking();
         const rankOf = (symbol) => {
@@ -13534,7 +13549,7 @@
         const groupedSet = new Set(grouped);
         if (grouped.length) {
           rows.push(
-            `<tr class="is-radar-sep"><td colspan="7">已加背景 · 归集（${grouped.length}）</td></tr>`,
+            `<tr class="is-radar-sep"><td colspan="6">已加背景 · 归集（${grouped.length}）</td></tr>`,
           );
           grouped.forEach((symbol) => {
             rows.push(buildRow(symbol, rankOf(symbol) || 0));
@@ -13553,7 +13568,7 @@
         );
         if (extras.length) {
           rows.push(
-            `<tr class="is-radar-sep"><td colspan="7">榜单外 · 已置顶（${extras.length}）</td></tr>`,
+            `<tr class="is-radar-sep"><td colspan="6">榜单外 · 已置顶（${extras.length}）</td></tr>`,
           );
           extras
             .slice()
@@ -13839,8 +13854,8 @@
               Number.isFinite(value) && value < 0,
             );
           };
-          syncCell(cells[3], change24h); // 24h 现在是第 4 列
-          syncCell(cells[4], win); // 窗涨仍是第 5 列
+          syncCell(cells[2], change24h); // 24h 现在是第 3 列
+          syncCell(cells[3], win); // 窗涨现在是第 4 列
         });
       }
 
