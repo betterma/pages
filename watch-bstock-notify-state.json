@@ -12,27 +12,37 @@
     "CRMBUSDT",
     "SPCXBUSDT",
     "MSFTBUSDT",
-    "APPBUSDT",
     "GMEBUSDT",
+    "APPBUSDT",
     "PYPLBUSDT",
     "TMFBUSDT",
-    "GOOGLBUSDT",
     "BRKBBUSDT",
+    "GOOGLBUSDT",
     "ZMBUSDT",
     "JPMBUSDT",
-    "AAPLBUSDT",
     "PDDBUSDT",
-    "USDEBUSDT",
-    "CYPHBUSDT",
+    "AAPLBUSDT",
     "AMZNBUSDT",
-    "RDDTBUSDT",
+    "FLNCBUSDT",
     "BMNRBUSDT",
-    "AMCBUSDT",
     "TQQQBUSDT",
-    "SPYBUSDT"
+    "IBMBUSDT",
+    "RDDTBUSDT",
+    "SPYBUSDT",
+    "ASTSBUSDT"
   ],
   "risingZoneSnapSeeded": true,
   "autoPinEvents": [
+    {
+      "at": 1794826200628,
+      "symbols": [
+        "USDEBUSDT",
+        "CYPHBUSDT",
+        "AMCBUSDT"
+      ],
+      "source": "zone-drop",
+      "kind": "zone-drop"
+    },
     {
       "at": 1794825900825,
       "symbols": [
@@ -379,17 +389,9 @@
       ],
       "source": "auto-cloud",
       "kind": "catch-up"
-    },
-    {
-      "at": 1794816600582,
-      "symbols": [
-        "GPROBUSDT"
-      ],
-      "source": "zone-drop",
-      "kind": "zone-drop"
     }
   ],
-  "updatedAt": 1794825936709,
+  "updatedAt": 1794826215275,
   "dropAlerts": {},
   "lastPinPrices": {
     "USDEBUSDT": 5.14,
