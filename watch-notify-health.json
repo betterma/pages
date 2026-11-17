@@ -1,49 +1,52 @@
 {
-  "updatedAt": 1794920457021,
-  "lastRunAt": 1794920400560,
-  "ok": true,
-  "error": null,
-  "durationMs": 56461,
-  "autoPins": 179,
+  "updatedAt": 1794920773890,
+  "lastRunAt": 1794920700584,
+  "ok": false,
+  "error": "nail-green×1:notices:GitHub PUT watch-nail-green-notices.json failed: 409 {\"message\":\"is at 390a3dcb0f504375459955a4b65d71e0c3dc39e8 but expected 3f0451d773dfd864a80b7e9f2c6ee6e28611d98a\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":",
+  "durationMs": 73306,
+  "autoPins": 180,
   "balance": {
     "skipped": false,
     "reason": null,
-    "autoPins": 179,
-    "due": 93,
-    "checked": 93,
-    "hits": 32,
-    "sent": 2,
-    "wecomDue": 2,
-    "wecomQueued": 2,
+    "autoPins": 180,
+    "due": 118,
+    "checked": 118,
+    "hits": 58,
+    "sent": 31,
+    "wecomDue": 31,
+    "wecomQueued": 31,
     "wecomDeferred": 0,
-    "skippedWecomWindow": 30,
+    "skippedWecomWindow": 27,
     "checkMax": 0,
     "sendMax": 0,
     "checkCursor": 0,
     "cooldownMs": 1800000,
-    "cooldownSkipped": 86,
+    "cooldownSkipped": 62,
     "errorCount": 0,
     "errors": []
   },
   "nailGreen": {
     "skipped": false,
     "reason": null,
-    "nails": 201,
+    "nails": 202,
     "pending": 44,
     "checked": 44,
     "hits": 1,
     "sent": 0,
     "checkMax": 0,
     "checkCursor": 0,
-    "bucketSkipped": 157,
-    "errorCount": 0,
-    "errors": []
+    "bucketSkipped": 158,
+    "errorCount": 1,
+    "errors": [
+      "notices:GitHub PUT watch-nail-green-notices.json failed: 409 {\"message\":\"is at 390a3dcb0f504375459955a4b65d71e0c3dc39e8 but expected 3f0451d773dfd864a80b7e9f2c6ee6e28611d98a\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":"
+    ]
   },
   "staleNailPrune": {
     "skipped": false,
     "reason": "none-stale",
     "checked": 12,
-    "candidate": 95,
+    "candidate": 96,
     "removed": 0
-  }
+  },
+  "degraded": true
 }
