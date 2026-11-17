@@ -32,6 +32,10 @@
   /** 天平 / 直拉通知页列表（云函数命中写入）。 */
   const BALANCE_NOTICES_PATH = "watch-balance-notices.json";
   const BALANCE_NOTICES_TTL_MS = 24 * 60 * 60 * 1000;
+  /** 俯瞰类自动盯（云函数分类；网页置顶摘要条消费）。 */
+  const OVERLOOK_PATH = "watch-overlook.json";
+  const OVERLOOK_TTL_MS = 24 * 60 * 60 * 1000;
+  const OVERLOOK_STRONG_PCT = 5;
   const NAIL_DAILY_RESET_PATH = "watch-nail-daily-reset.json";
   const NAIL_DAILY_RESET_PROMPT_MS = 2 * 60 * 60 * 1000;
   const NOTES_RANK_SNAPS_PATH = "watch-notes-rank-snaps.json";
@@ -1896,6 +1900,144 @@
       }
     }
     throw lastError || new Error("保存天平/直拉通知失败");
+  }
+
+  function emptyOverlookState() {
+    return { updatedAt: 0, items: [] };
+  }
+
+  function normalizeOverlookItem(item) {
+    if (!item || typeof item !== "object") return null;
+    const symbol = String(item.symbol || "")
+      .trim()
+      .toUpperCase();
+    const pinnedAt = Number(item.pinnedAt) || 0;
+    const pinPrice = Number(item.pinPrice);
+    if (!symbol || !(pinnedAt > 0)) return null;
+    if (!Number.isFinite(pinPrice) || !(pinPrice > 0)) return null;
+    const overPct = Number(item.overPct);
+    const tier =
+      item.tier === "strong" || item.tier === "weak"
+        ? item.tier
+        : Number.isFinite(overPct) && overPct >= OVERLOOK_STRONG_PCT
+          ? "strong"
+          : "weak";
+    return {
+      symbol,
+      class: "overlook",
+      tier,
+      pinnedAt,
+      pinPrice,
+      priorHigh: Number(item.priorHigh) || 0,
+      overPct: Number.isFinite(overPct) ? overPct : 0,
+      openVsPriorPct: Number(item.openVsPriorPct),
+      pinVsOpenPct: Number(item.pinVsOpenPct),
+      detectedAt: Number(item.detectedAt) || pinnedAt,
+    };
+  }
+
+  function normalizeOverlookState(raw) {
+    const empty = emptyOverlookState();
+    if (!raw || typeof raw !== "object") return empty;
+    const cutoff = Date.now() - OVERLOOK_TTL_MS;
+    const items = (Array.isArray(raw.items) ? raw.items : [])
+      .map(normalizeOverlookItem)
+      .filter(Boolean)
+      .filter((row) => (Number(row.detectedAt) || 0) >= cutoff)
+      .sort((a, b) => (b.detectedAt || 0) - (a.detectedAt || 0));
+    return {
+      updatedAt: Number(raw.updatedAt) || 0,
+      items,
+    };
+  }
+
+  function countUnreadOverlook(items, seenAt, opts) {
+    const read = Number(seenAt) || 0;
+    const strongOnly = !!(opts && opts.strongOnly);
+    return (Array.isArray(items) ? items : []).filter((row) => {
+      if (!row) return false;
+      if (strongOnly && row.tier !== "strong") return false;
+      return (Number(row.detectedAt) || 0) > read;
+    }).length;
+  }
+
+  async function loadOverlookRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || OVERLOOK_PATH;
+    const force = !!(options && options.force);
+    const pack = (data, sha, source, commitSha) => ({
+      state: normalizeOverlookState(data),
+      sha: sha || null,
+      source,
+      commitSha: commitSha || null,
+    });
+    if (force) {
+      try {
+        const commitSha = await getMainCommitSha({
+          repo,
+          token: options && options.token,
+        });
+        try {
+          const current = await fetchJsonFile({
+            repo,
+            path,
+            token: options && options.token,
+            ref: commitSha,
+          });
+          if (current.data) {
+            return pack(current.data, current.sha, "api-commit", commitSha);
+          }
+        } catch (error) {
+          console.warn(
+            "loadOverlook force api-commit failed, trying raw",
+            error,
+          );
+        }
+        const response = await fetchRawJsonByCommit({
+          repo,
+          path,
+          commitSha,
+        });
+        if (response.ok) {
+          return pack(await response.json(), null, "raw-commit", commitSha);
+        }
+      } catch (error) {
+        console.warn("loadOverlook force path failed", error);
+      }
+    }
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      if (current.data) {
+        return pack(current.data, current.sha, "api");
+      }
+    } catch (error) {
+      console.warn("loadOverlook via API failed, trying raw", error);
+    }
+    try {
+      const commitSha = await getMainCommitSha({
+        repo,
+        token: options && options.token,
+      });
+      const response = await fetchRawJsonByCommit({
+        repo,
+        path,
+        commitSha,
+      });
+      if (response.ok) {
+        return pack(await response.json(), null, "raw-commit", commitSha);
+      }
+    } catch (error) {
+      console.warn("loadOverlook via commit-raw failed", error);
+    }
+    return {
+      state: emptyOverlookState(),
+      sha: null,
+      source: "empty",
+    };
   }
 
   async function patchNailGreenNotices(options) {
@@ -4455,6 +4597,7 @@
     return {
       priceAlertReadAt: num(data.priceAlertReadAt),
       autoPinSeenAt: num(data.autoPinSeenAt),
+      overlookSeenAt: num(data.overlookSeenAt),
       radarFixedSymbols: normalizeUiReadSymbols(data.radarFixedSymbols),
       radarFixedAt: num(data.radarFixedAt),
       updatedAt: num(data.updatedAt),
@@ -4519,6 +4662,10 @@
             wanted.priceAlertReadAt,
           ),
           autoPinSeenAt: Math.max(base.autoPinSeenAt, wanted.autoPinSeenAt),
+          overlookSeenAt: Math.max(
+            base.overlookSeenAt,
+            wanted.overlookSeenAt,
+          ),
           radarFixedSymbols: base.radarFixedSymbols.slice(),
           radarFixedAt: base.radarFixedAt,
           updatedAt: Date.now(),
@@ -4739,6 +4886,14 @@
     countUnreadBalanceNotices,
     loadBalanceNoticesRaw,
     patchBalanceNotices,
+    OVERLOOK_PATH,
+    OVERLOOK_TTL_MS,
+    OVERLOOK_STRONG_PCT,
+    emptyOverlookState,
+    normalizeOverlookState,
+    normalizeOverlookItem,
+    countUnreadOverlook,
+    loadOverlookRaw,
     NAIL_DAILY_RESET_PATH,
     NAIL_DAILY_RESET_PROMPT_MS,
     normalizeNailDailyReset,

@@ -57,6 +57,19 @@ try {
   );
 }
 
+let runOverlookDetect = async () => ({
+  skipped: true,
+  reason: 'module-missing',
+});
+try {
+  runOverlookDetect = require('./overlook-pin').runOverlookDetect;
+} catch (error) {
+  console.warn(
+    'overlook-pin module missing — 请整包上传 cloud-function-notify',
+    error && error.message ? error.message : error,
+  );
+}
+
 let pruneStaleAutoPinNails = async () => ({
   skipped: true,
   reason: 'module-missing',
@@ -1696,6 +1709,29 @@ async function main(event, context) {
     console.warn('auto-pin failed', error.message || error);
   }
 
+  // 俯瞰类：只写 watch-overlook.json 供网页置顶摘要条；不推企微。
+  let overlookDetect = { skipped: true, reason: 'not-run' };
+  try {
+    overlookDetect = await runOverlookDetect({
+      pins,
+      newcomers: autoPinned,
+      now,
+      loadJson,
+      saveJson,
+    });
+    console.log('overlook-detect', JSON.stringify(overlookDetect));
+  } catch (error) {
+    console.warn(
+      'overlook-detect failed',
+      error && error.message ? error.message : error,
+    );
+    overlookDetect = {
+      skipped: true,
+      reason: 'error',
+      error: error && error.message ? error.message : String(error),
+    };
+  }
+
   // bStock 独立自动盯：与现货同表现（钉子/记一笔/日志），独立 JSON；不发企微/微信；不跑破点高。
   let bstockAutoPinned = [];
   let bstockAutoDropped = [];
@@ -2550,6 +2586,7 @@ async function main(event, context) {
       buyTasks,
       nailGreenAlert,
       balanceAlert,
+      overlookDetect,
       staleNailPrune: staleNailPruneSummary,
       bstockAutoPinned,
       bstockAutoDropped,
@@ -2580,6 +2617,7 @@ async function main(event, context) {
     buyTasks,
     nailGreenAlert,
     balanceAlert,
+    overlookDetect,
     staleNailPrune: staleNailPruneSummary,
     bstockAutoPinned,
     bstockAutoDropped,
