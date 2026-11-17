@@ -2,7 +2,7 @@
 
 /**
  * 天平 / 直拉（自动盯）：
- * - 天平：盯后曾影线跌破 pinPrice（low），现价 > 跌破 K 最低收盘
+ * - 天平：盯后曾影线跌破 pinPrice（low），现价 > 跌破 K 最低收盘，且现价 >= 盯价
  * - 直拉：盯后实体从未跌破 pin（min(open,close)；下影不算），现价 > 盯价
  * 可同时命中 → 一条「天平·直拉」。
  * 网页 notices：形态命中即落盘（不要求当前 4h 窗上涨）。
@@ -430,7 +430,8 @@ function pinLiveContext(candles, pin, livePrice) {
 }
 
 /**
- * 天平：盯后影线跌破 + 现价收回高于跌破 K 最低收盘（不要求当前窗上涨）。
+ * 天平：盯后影线跌破 + 现价收回高于跌破 K 最低收盘 + 现价站回盯价之上（>=）。
+ * 盯价是历史价位，与当前 4h K 开盘无关，故仍不要求当前窗上涨。
  */
 function evaluateBalance(candles, pin, livePrice) {
   const ctx = pinLiveContext(candles, pin, livePrice);
@@ -449,6 +450,9 @@ function evaluateBalance(candles, pin, livePrice) {
     return null;
   }
   if (!(ctx.px > minDipClose)) return null;
+  // 现价还必须站回盯价之上（含等于），过滤「收回了但仍在盯价下方晃」的弱信号。
+  // 盯价是历史价位，与当前 4h K 开盘无关，不违背「不要求当前窗上涨」。
+  if (!(ctx.px >= ctx.line)) return null;
   return {
     livePrice: ctx.px,
     minDipClose,
