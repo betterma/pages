@@ -10300,7 +10300,8 @@
         (typeof WatchFavorites !== "undefined" &&
           WatchFavorites.UI_READ_STATE_PATH) ||
         "watch-ui-read-state.json";
-      const UI_READ_STATE_DEBOUNCE_MS = 300;
+      /** 已读戳合并窗口：略拉长，少打连续 PUT，降低 409；本机 localStorage 仍即时生效。 */
+      const UI_READ_STATE_DEBOUNCE_MS = 1500;
       const UI_READ_STATE_POLL_MS = 30 * 1000;
       let uiReadStateLoadedAt = 0;
       let uiReadStateBusy = false;

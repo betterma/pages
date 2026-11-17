@@ -4604,6 +4604,23 @@
     };
   }
 
+  /** 业务字段是否一致（忽略 updatedAt）；用于跳过无意义 PUT，少撞 409。 */
+  function uiReadStateEqual(a, b) {
+    const left = normalizeUiReadState(a);
+    const right = normalizeUiReadState(b);
+    if (left.priceAlertReadAt !== right.priceAlertReadAt) return false;
+    if (left.autoPinSeenAt !== right.autoPinSeenAt) return false;
+    if (left.overlookSeenAt !== right.overlookSeenAt) return false;
+    if (left.radarFixedAt !== right.radarFixedAt) return false;
+    const ls = left.radarFixedSymbols;
+    const rs = right.radarFixedSymbols;
+    if (ls.length !== rs.length) return false;
+    for (let i = 0; i < ls.length; i += 1) {
+      if (ls[i] !== rs[i]) return false;
+    }
+    return true;
+  }
+
   /**
    * 读跨端已读基线。优先 Contents API（与写入同通道、无 CDN 缓存）；
    * 没配 PAT 的设备回落到 raw 匿名读，至少能看到别的设备的已读结果。
@@ -4668,7 +4685,7 @@
           ),
           radarFixedSymbols: base.radarFixedSymbols.slice(),
           radarFixedAt: base.radarFixedAt,
-          updatedAt: Date.now(),
+          updatedAt: base.updatedAt,
         };
         // 数组类状态（雷达固定名单）由回调基于云端最新值原子改写，
         // 避免多端各自拿旧数组整表覆盖、互相清掉对方的修改。
@@ -4687,6 +4704,12 @@
                 : state.radarFixedAt,
           };
         }
+        // 合并 / mutate 后与云端一致：不 PUT，避免空写撞 409。
+        // 本机已读早已写进 localStorage，跨端也无需再推相同值。
+        if (uiReadStateEqual(state, base)) {
+          return { state: base, source: "unchanged" };
+        }
+        state.updatedAt = Date.now();
         await writeJsonFile({
           repo,
           path,
@@ -4949,6 +4972,7 @@
     UI_READ_STATE_PATH,
     normalizeUiReadState,
     normalizeUiReadSymbols,
+    uiReadStateEqual,
     loadUiReadState,
     patchUiReadState,
     actionLogIdentityKey,
