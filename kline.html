@@ -6302,7 +6302,10 @@
           filter: none;
         }
       }
-      .kline-card.is-jump-target {
+      .kline-card.is-jump-target,
+      .nail-auto-pin-card.is-jump-target,
+      .nail-kcard.is-jump-target,
+      .nail-notice-card.is-jump-target {
         outline: 2px solid transparent;
         outline-offset: 2px;
         animation: kline-jump-flash 2.8s ease-in-out 1;
@@ -27710,6 +27713,20 @@
         });
         const digest = document.getElementById("nailDigestBar");
         if (digest) {
+          const flashJumpTargetCard = (card) => {
+            if (!card) return;
+            if (typeof card.scrollIntoView === "function") {
+              card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            }
+            card.classList.remove("is-jump-target");
+            void card.offsetWidth;
+            card.classList.add("is-jump-target");
+            if (card._jumpFlashTimer) window.clearTimeout(card._jumpFlashTimer);
+            card._jumpFlashTimer = window.setTimeout(() => {
+              card.classList.remove("is-jump-target");
+              card._jumpFlashTimer = null;
+            }, 2900);
+          };
           const jumpOverlookSymbol = (symbol) => {
             const key = String(symbol || "")
               .trim()
@@ -27717,12 +27734,24 @@
             if (!key) return;
             digest.dataset.digestSymbol = key;
             void setNailSegment("autopin").then(() => {
-              const card = document.querySelector(
-                `#nailAutoPinList .nail-auto-pin-card[data-autopin-card="${key}"]`,
-              );
-              if (card && typeof card.scrollIntoView === "function") {
-                card.scrollIntoView({ block: "nearest", behavior: "smooth" });
-              }
+              const find = () =>
+                document.querySelector(
+                  `#nailAutoPinList .nail-auto-pin-card[data-autopin-card="${key}"]`,
+                );
+              const run = () => {
+                const card = find();
+                if (card) {
+                  flashJumpTargetCard(card);
+                  return;
+                }
+                // 列表可能刚异步重绘，稍后再找一次。
+                window.setTimeout(() => {
+                  flashJumpTargetCard(find());
+                }, 350);
+              };
+              window.requestAnimationFrame(() => {
+                window.requestAnimationFrame(run);
+              });
             });
           };
           const go = () => {
