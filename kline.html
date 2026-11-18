@@ -2547,6 +2547,30 @@
         border-radius: 9px;
         background: color-mix(in srgb, var(--label, #808080) 5%, transparent);
       }
+      .nail-auto-pin-card.is-overlook {
+        border-color: color-mix(
+          in srgb,
+          var(--warn, #b07030) 55%,
+          var(--separator)
+        );
+        background: color-mix(
+          in srgb,
+          var(--warn, #b07030) 14%,
+          transparent
+        );
+        box-shadow: 0 0 0 1px
+          color-mix(in srgb, var(--warn, #b07030) 16%, transparent);
+        cursor: pointer;
+      }
+      .nail-auto-pin-card.is-overlook.is-focus {
+        box-shadow:
+          0 0 0 2px color-mix(in srgb, var(--warn, #b07030) 55%, transparent),
+          0 0 0 1px color-mix(in srgb, var(--warn, #b07030) 16%, transparent);
+      }
+      .nail-auto-pin-section.is-overlook {
+        color: color-mix(in srgb, var(--warn, #b07030) 72%, var(--label));
+        font-weight: 700;
+      }
       .nail-auto-pin-card-head {
         display: flex;
         align-items: baseline;
@@ -2573,6 +2597,13 @@
         flex-shrink: 0;
         color: var(--secondary);
         font-size: 10px;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-auto-pin-overpct {
+        flex-shrink: 0;
+        color: color-mix(in srgb, var(--warn, #b07030) 80%, var(--label));
+        font-size: 11px;
+        font-weight: 700;
         font-variant-numeric: tabular-nums;
       }
       /* 卡头置顶按钮：沿用钉子卡的「↑ / 顶」语言，尺寸压到 20px 塞进两列卡头。 */
@@ -6063,10 +6094,20 @@
         z-index: 140;
         width: min(420px, calc(100vw - 16px));
       }
+      .card-focus-bar.is-overlook-scope {
+        z-index: 145;
+        width: min(420px, calc(100vw - 16px));
+      }
       .card-focus-bar.is-notice-scope [data-focus-action]:not([data-focus-action="refresh"]):not([data-focus-action="nail"]):not([data-focus-action="review"]) {
         display: none;
       }
+      .card-focus-bar.is-overlook-scope [data-focus-action]:not([data-focus-action="refresh"]):not([data-focus-action="nail"]):not([data-focus-action="remove-overlook"]) {
+        display: none;
+      }
       .card-focus-bar:not(.is-notice-scope) [data-focus-action="review"] {
+        display: none;
+      }
+      .card-focus-bar:not(.is-overlook-scope) [data-focus-action="remove-overlook"] {
         display: none;
       }
       .card-focus-bar.is-nail-scope [data-focus-action="nail"],
@@ -9548,6 +9589,13 @@
       >
         回顾
       </button>
+      <button
+        type="button"
+        data-focus-action="remove-overlook"
+        title="从自动盯俯瞰置顶区移出"
+      >
+        移出
+      </button>
       <button type="button" data-focus-action="nail-note">便签</button>
       <button type="button" data-focus-action="nail-calc">计算</button>
       <button type="button" class="is-primary" data-focus-action="more">
@@ -10374,6 +10422,10 @@
       let overlookItems = [];
       let overlookSeenAt = 0;
       let overlookLoading = false;
+      /** 点摘要条后：未读俯瞰在自动盯列表顶部单独成区（可看 K 线）。 */
+      let nailAutoPinOverlookFocus = false;
+      /** 本轮从俯瞰置顶区手动移出的币（不改云端已读，只影响本机置顶区）。 */
+      const nailAutoPinOverlookHidden = new Set();
       /**
        * 跨端已读基线：价格提醒 / 自动盯的已读时刻同步到 watch-ui-read-state.json。
        * 状态变量与合并入队函数放在这里（自动盯角标初始化时就会用到），
@@ -13056,14 +13108,19 @@
         return item.pinned ? "pinned" : "nailed";
       }
 
-      function buildNailAutoPinCardHtml(symbol, at, repeatCount) {
+      function buildNailAutoPinCardHtml(symbol, at, repeatCount, opts) {
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
+        const overlook = !!(opts && opts.overlook);
         const repeatN = Number(repeatCount) || 0;
         const repeat =
           repeatN > 1
             ? `<i class="nail-auto-pin-repeat">×${repeatN}</i>`
+            : "";
+        const overPctText =
+          overlook && Number.isFinite(Number(opts && opts.overPct))
+            ? `<span class="nail-auto-pin-overpct">${escapeHtml(formatOverlookPct(opts.overPct))}</span>`
             : "";
         const label = escapeHtml(key.replace(/USDT$/i, "")) + repeat;
         const pin = pinItemBySymbol(key);
@@ -13075,14 +13132,17 @@
             ? escapeHtml(formatPinPrice(price))
             : "—";
         const pinState = nailAutoPinPinState(key);
-        const pinBtn =
-          pinState === "pinned"
+        // 俯瞰置顶区改走底部操作栏「置顶」，卡头不再塞 ↑。
+        const pinBtn = overlook
+          ? ""
+          : pinState === "pinned"
             ? `<button type="button" class="nail-auto-pin-pin is-on" data-autopin-pin-btn="${escapeHtml(key)}" disabled title="已在钉子置顶">顶</button>`
             : `<button type="button" class="nail-auto-pin-pin" data-autopin-pin-btn="${escapeHtml(key)}" title="${pinState === "nailed" ? "置顶排第一" : "置顶到钉子页"}">↑</button>`;
         return [
-          `<article class="nail-auto-pin-card" data-autopin-card="${escapeHtml(key)}">`,
+          `<article class="nail-auto-pin-card${overlook ? " is-overlook" : ""}" data-autopin-card="${escapeHtml(key)}"${overlook ? ` data-autopin-overlook="1"` : ""}>`,
           `<div class="nail-auto-pin-card-head">`,
           `<button type="button" class="nail-auto-pin-card-name" data-nail-auto-symbol="${escapeHtml(key)}">${label}</button>`,
+          overPctText,
           pinBtn,
           `<span class="nail-auto-pin-card-time">${escapeHtml(formatActionLogTime(at))}</span>`,
           `</div>`,
@@ -13106,12 +13166,39 @@
         const entries = nailAutoPinEntries().filter(
           (entry) => (Number(entry.at) || 0) >= lookbackCutoff,
         );
-        if (!entries.length) {
+        // 点摘要条后：未读俯瞰置顶成区（按 detectedAt 新→旧），背景区分。
+        const overlookFocusRows = nailAutoPinOverlookFocus
+          ? unreadOverlookItems()
+              .map((row) => {
+                const symbol = String((row && row.symbol) || "")
+                  .trim()
+                  .toUpperCase();
+                if (!symbol || nailAutoPinOverlookHidden.has(symbol)) {
+                  return null;
+                }
+                const at =
+                  Number(row.detectedAt) ||
+                  Number(row.pinnedAt) ||
+                  0;
+                return {
+                  symbol,
+                  at,
+                  overPct: Number(row.overPct),
+                  tier: row.tier === "strong" ? "strong" : "weak",
+                };
+              })
+              .filter(Boolean)
+              .sort((a, b) => (b.at || 0) - (a.at || 0))
+          : [];
+        const overlookFocusSet = new Set(
+          overlookFocusRows.map((row) => row.symbol),
+        );
+        if (!entries.length && !overlookFocusRows.length) {
           list.innerHTML = '<div class="nail-auto-pin-empty">暂无自动盯记录</div>';
           return;
         }
         const cutoff = Date.now() - AUTO_PIN_RECENT_MS;
-        const seen = new Set();
+        const seen = new Set(overlookFocusSet);
         const cards = [];
         const overflow = [];
         const older = [];
@@ -13134,6 +13221,19 @@
           });
         });
         const parts = [];
+        if (overlookFocusRows.length) {
+          parts.push(
+            `<div class="nail-auto-pin-section is-overlook" id="nailAutoPinOverlookSection">俯瞰 · ${overlookFocusRows.length} 个</div>`,
+            `<div class="nail-auto-pin-grid is-overlook">${overlookFocusRows
+              .map((row) =>
+                buildNailAutoPinCardHtml(row.symbol, row.at, 0, {
+                  overlook: true,
+                  overPct: row.overPct,
+                }),
+              )
+              .join("")}</div>`,
+          );
+        }
         if (cards.length) {
           parts.push(
             `<div class="nail-auto-pin-section">近 8 小时 · ${cards.length} 个币</div>`,
@@ -13199,6 +13299,57 @@
           return;
         }
         list.innerHTML = parts.join("");
+      }
+
+      async function refreshNailAutoPinChart(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return false;
+        const canvas = document.querySelector(
+          `#nailAutoPinList canvas[data-autopin-chart="${key}"]`,
+        );
+        if (!canvas) return false;
+        const card = canvas.closest(".nail-auto-pin-card");
+        canvas.classList.add("is-loading");
+        try {
+          const candles = await fetchKlines(key, chartInterval());
+          if (!Array.isArray(candles) || !candles.length) return false;
+          const pin = pinItemBySymbol(key);
+          const pinPrice =
+            pin && Number(pin.pinPrice) > 0 ? Number(pin.pinPrice) : 0;
+          const ticker = Number(marketMap[key] && marketMap[key].price);
+          const lastClose = Number(candles[candles.length - 1].close);
+          const live =
+            Number.isFinite(ticker) && ticker > 0 ? ticker : lastClose;
+          const liveEl = card
+            ? card.querySelector("[data-autopin-live]")
+            : null;
+          if (liveEl && Number.isFinite(live) && live > 0) {
+            liveEl.textContent = formatPinPrice(live);
+            liveEl.classList.toggle("is-up", pinPrice > 0 && live > pinPrice);
+            liveEl.classList.toggle(
+              "is-down",
+              pinPrice > 0 && live < pinPrice,
+            );
+          }
+          drawKline(
+            canvas,
+            candles,
+            pinPrice > 0 ? pinPrice : null,
+            pin && Number(pin.pinnedAt) > 0 ? pin.pinnedAt : null,
+            [],
+            null,
+            null,
+            { symbol: key, pinSplitGreen: true, pinSplitGreenUpOnly: true },
+          );
+          return true;
+        } catch (error) {
+          console.warn("auto-pin refresh failed", key, error);
+          throw error;
+        } finally {
+          canvas.classList.remove("is-loading");
+        }
       }
 
       /** 给「近 8 小时」卡片补 K 线与实时价；弹层关闭或重渲时自动作废。 */
@@ -24027,7 +24178,7 @@
         const scope = key ? focusActionScope || "main" : null;
         document
           .querySelectorAll(
-            ".kline-card.is-focus, .nail-kcard.is-focus, .nail-notice-card.is-focus",
+            ".kline-card.is-focus, .nail-kcard.is-focus, .nail-notice-card.is-focus, .nail-auto-pin-card.is-focus",
           )
           .forEach((card) => {
             card.classList.remove("is-focus");
@@ -24048,15 +24199,22 @@
                 card.classList.add("is-focus");
               }
             });
+        } else if (key && scope === "overlook") {
+          document
+            .querySelectorAll(
+              `#nailAutoPinList .nail-auto-pin-card.is-overlook[data-autopin-card="${key}"]`,
+            )
+            .forEach((card) => card.classList.add("is-focus"));
         }
         const bar = document.getElementById("cardFocusBar");
         const labelEl = document.getElementById("cardFocusLabel");
         if (!bar) return;
         bar.classList.toggle("is-nail-scope", scope === "nail");
         bar.classList.toggle("is-notice-scope", scope === "notice");
+        bar.classList.toggle("is-overlook-scope", scope === "overlook");
         const nailBtn = bar.querySelector('[data-focus-action="nail"]');
         if (nailBtn) {
-          if (scope === "notice") {
+          if (scope === "notice" || scope === "overlook") {
             nailBtn.textContent = "置顶";
             nailBtn.title = "置顶到钉子页";
           } else {
@@ -24069,7 +24227,8 @@
           pinSelectMode ||
           nailNoticeSelectMode ||
           (scope === "nail" && !isNailDrawerOpen()) ||
-          (scope === "notice" && nailNoticeMode !== "open")
+          (scope === "notice" && nailNoticeMode !== "open") ||
+          (scope === "overlook" && nailSegment !== "autopin")
         ) {
           bar.hidden = true;
           document.body.classList.remove("has-card-focus");
@@ -24113,7 +24272,9 @@
           .toUpperCase();
         focusActionSymbol = key || null;
         focusActionScope = key
-          ? scope === "nail" || scope === "notice"
+          ? scope === "nail" ||
+            scope === "notice" ||
+            scope === "overlook"
             ? scope
             : "main"
           : null;
@@ -24126,7 +24287,11 @@
           .toUpperCase();
         if (!key) return;
         const nextScope =
-          scope === "nail" || scope === "notice" ? scope : "main";
+          scope === "nail" ||
+          scope === "notice" ||
+          scope === "overlook"
+            ? scope
+            : "main";
         if (focusActionSymbol === key && focusActionScope === nextScope) {
           setFocusActionSymbol(null);
         } else {
@@ -24150,6 +24315,13 @@
             )].find(
               (card) =>
                 String(card.dataset.noticeSymbol || "").toUpperCase() === key,
+            ) || null
+          );
+        }
+        if (focusActionScope === "overlook") {
+          return (
+            document.querySelector(
+              `#nailAutoPinList .nail-auto-pin-card.is-overlook[data-autopin-card="${key}"]`,
             ) || null
           );
         }
@@ -24226,7 +24398,10 @@
           return;
         }
         if (action === "nail") {
-          if (focusActionScope === "notice") {
+          if (
+            focusActionScope === "notice" ||
+            focusActionScope === "overlook"
+          ) {
             setFocusBarBusy(true, activeBtn, "置顶中");
             try {
               await pinNoticeSymbolsToNails([symbol], {
@@ -24253,6 +24428,19 @@
           }
           return;
         }
+        if (action === "remove-overlook") {
+          if (focusActionScope !== "overlook") return;
+          const key = String(symbol || "")
+            .trim()
+            .toUpperCase();
+          if (!key) return;
+          nailAutoPinOverlookHidden.add(key);
+          setFocusActionSymbol(null);
+          renderNailAutoPinList();
+          void paintNailAutoPinCharts();
+          showToast(`${key.replace(/USDT$/i, "")} 已移出俯瞰置顶`);
+          return;
+        }
         if (action === "refresh") {
           setFocusBarBusy(true, activeBtn, "刷新中");
           try {
@@ -24266,6 +24454,12 @@
               const ok = await refreshNailNoticeChart(symbol);
               if (!ok) {
                 showToast("通知列表找不到这张 K 线");
+                return;
+              }
+            } else if (focusActionScope === "overlook") {
+              const ok = await refreshNailAutoPinChart(symbol);
+              if (!ok) {
+                showToast("俯瞰列表找不到这张 K 线");
                 return;
               }
             } else {
@@ -27451,6 +27645,16 @@
           /* ignore */
         }
         queueSharedUiReadState({ overlookSeenAt: next });
+        // 关摘要后收起自动盯里的俯瞰置顶区。
+        if (nailAutoPinOverlookFocus) {
+          nailAutoPinOverlookFocus = false;
+          nailAutoPinOverlookHidden.clear();
+          if (focusActionScope === "overlook") setFocusActionSymbol(null);
+          if (nailSegment === "autopin") {
+            renderNailAutoPinList();
+            void paintNailAutoPinCharts();
+          }
+        }
         syncNailDigest();
       }
 
@@ -27666,7 +27870,10 @@
           void syncSharedUiReadState(true);
         }
         // 四个面互斥：进哪个，其余三个的浮层状态全部收起。
-        if (next !== "autopin") await setNailAutoPinPopoverOpen(false);
+        if (next !== "autopin") {
+          await setNailAutoPinPopoverOpen(false);
+          if (focusActionScope === "overlook") setFocusActionSymbol(null);
+        }
         if (next !== "radar") await setNailRadarPopoverOpen(false);
         if (next !== "notice") closeNailNoticeDrawer();
         // 多选针对的是钉子列表；离开置顶分栏就退出，否则批量条会悬在别的分栏底部。
@@ -27727,38 +27934,53 @@
               card._jumpFlashTimer = null;
             }, 2900);
           };
-          const jumpOverlookSymbol = (symbol) => {
-            const key = String(symbol || "")
+          const openOverlookAutoPinFocus = (focusSymbol) => {
+            const key = String(focusSymbol || "")
               .trim()
               .toUpperCase();
-            if (!key) return;
-            digest.dataset.digestSymbol = key;
+            nailAutoPinOverlookFocus = true;
+            // 新一轮点进摘要：清掉上一轮「移出」隐藏，重新展示全部未读。
+            nailAutoPinOverlookHidden.clear();
+            if (key) digest.dataset.digestSymbol = key;
             void setNailSegment("autopin").then(() => {
-              const find = () =>
-                document.querySelector(
-                  `#nailAutoPinList .nail-auto-pin-card[data-autopin-card="${key}"]`,
+              // 已在自动盯时 setNailSegment 仍会重开并重渲；再补一帧确保俯瞰区已挂上。
+              if (nailSegment === "autopin") {
+                renderNailAutoPinList();
+                void paintNailAutoPinCharts();
+              }
+              const find = () => {
+                if (key) {
+                  return document.querySelector(
+                    `#nailAutoPinList .nail-auto-pin-card[data-autopin-card="${key}"]`,
+                  );
+                }
+                return document.querySelector(
+                  "#nailAutoPinOverlookSection, #nailAutoPinList .nail-auto-pin-card.is-overlook",
                 );
+              };
               const run = () => {
                 const card = find();
                 if (card) {
                   flashJumpTargetCard(card);
                   return;
                 }
-                // 列表可能刚异步重绘，稍后再找一次。
                 window.setTimeout(() => {
                   flashJumpTargetCard(find());
-                }, 350);
+                }, 400);
               };
               window.requestAnimationFrame(() => {
                 window.requestAnimationFrame(run);
               });
             });
           };
+          const jumpOverlookSymbol = (symbol) => {
+            openOverlookAutoPinFocus(symbol);
+          };
           const go = () => {
             const mode = String(digest.dataset.digestMode || "");
-            // 点正文空白/「去看」：看当前主币；不标已读（关闭用 ×）。
+            // 点正文空白/「去看」：俯瞰整类置顶到自动盯顶部（可看 K 线）；不标已读。
             if (mode === "overlook") {
-              jumpOverlookSymbol(digest.dataset.digestSymbol);
+              openOverlookAutoPinFocus(digest.dataset.digestSymbol);
               return;
             }
             if (mode === "pullback") {
@@ -32759,6 +32981,27 @@
           const pinBtn = event.target.closest("[data-autopin-pin-btn]");
           if (pinBtn) {
             void pinAutoPinSymbol(pinBtn);
+            return;
+          }
+          const overlookCard = event.target.closest(
+            ".nail-auto-pin-card.is-overlook[data-autopin-card]",
+          );
+          if (overlookCard) {
+            // 俯瞰区点 K 线/卡片：展开操作栏（置顶/刷新/移出）。
+            // 点币名仍可去钉子抽屉。
+            const nameBtn = event.target.closest("[data-nail-auto-symbol]");
+            if (nameBtn) {
+              void setNailAutoPinPopoverOpen(false);
+              openNailDrawerAtSymbol(
+                nameBtn.getAttribute("data-nail-auto-symbol"),
+              );
+              return;
+            }
+            event.preventDefault();
+            toggleFocusActionSymbol(
+              overlookCard.getAttribute("data-autopin-card"),
+              "overlook",
+            );
             return;
           }
           const button = event.target.closest("[data-nail-auto-symbol]");
