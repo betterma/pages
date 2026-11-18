@@ -4755,7 +4755,7 @@
         box-shadow: none;
         padding-bottom: 0;
       }
-      /* 置顶分栏顶部摘要条：俯瞰优先，其次普通新通知；点一下直达。 */
+      /* 钉子页摘要条（分栏外）：俯瞰优先；点正文去看，点 × 才标已读关闭。 */
       .nail-digest {
         display: flex;
         flex: 0 0 auto;
@@ -4776,6 +4776,23 @@
         font-size: 12px;
         cursor: pointer;
         flex: 0 0 auto;
+      }
+      .nail-digest-dismiss {
+        flex: 0 0 auto;
+        margin: 0;
+        padding: 0 4px;
+        border: 0;
+        background: transparent;
+        color: var(--secondary);
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+        border-radius: 4px;
+      }
+      .nail-digest-dismiss:hover,
+      .nail-digest-dismiss:focus-visible {
+        color: var(--label);
+        background: color-mix(in srgb, var(--label) 8%, transparent);
       }
       .nail-digest.is-overlook {
         border-color: color-mix(
@@ -8903,25 +8920,34 @@
             雷达
           </button>
         </div>
+        <div
+          class="nail-digest"
+          id="nailDigestBar"
+          role="button"
+          tabindex="0"
+          hidden
+        >
+          <div class="nail-digest-copy">
+            <strong id="nailDigestText">新通知 0</strong>
+            <span class="nail-digest-sub" id="nailDigestSub" hidden></span>
+          </div>
+          <span class="nail-digest-go" id="nailDigestGo">查看 →</span>
+          <button
+            type="button"
+            class="nail-digest-dismiss"
+            id="nailDigestDismiss"
+            title="关闭摘要（标已读）"
+            aria-label="关闭摘要"
+          >
+            ×
+          </button>
+        </div>
         <div class="nail-seg-host" id="nailSegHost">
           <div
             class="nail-seg-panel"
             id="nailSegPinnedPanel"
             data-nail-seg-panel="pinned"
           >
-            <div
-              class="nail-digest"
-              id="nailDigestBar"
-              role="button"
-              tabindex="0"
-              hidden
-            >
-              <div class="nail-digest-copy">
-                <strong id="nailDigestText">新通知 0</strong>
-                <span class="nail-digest-sub" id="nailDigestSub" hidden></span>
-              </div>
-              <span class="nail-digest-go" id="nailDigestGo">查看 →</span>
-            </div>
             <div class="nail-pin-toolbar" id="nailPinToolbar">
               <button type="button" id="nailAddBtn" title="钉一个新币种">
                 新增
@@ -27648,11 +27674,11 @@
         if (digest) {
           const go = () => {
             const mode = String(digest.dataset.digestMode || "");
+            // 点正文：去看目标；不标已读、不关摘要（关闭用右侧 ×）。
             if (mode === "overlook") {
               const symbol = String(digest.dataset.digestSymbol || "")
                 .trim()
                 .toUpperCase();
-              markOverlookSeen();
               void setNailSegment("autopin").then(() => {
                 if (!symbol) return;
                 const card = document.querySelector(
@@ -27671,11 +27697,28 @@
               void openNailNoticeDrawer({
                 pullbackFilter: true,
                 jumpSymbol: symbol,
+                skipMarkRead: true,
               });
               return;
             }
             void setNailSegment("notice");
           };
+          const dismiss = document.getElementById("nailDigestDismiss");
+          if (dismiss) {
+            dismiss.addEventListener("click", (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const mode = String(digest.dataset.digestMode || "");
+              if (mode === "overlook") {
+                markOverlookSeen();
+              } else if (mode === "pullback" || mode === "notice") {
+                void markNailNoticesRead();
+                syncNailDigest();
+              } else {
+                syncNailDigest();
+              }
+            });
+          }
           digest.addEventListener("click", go);
           digest.addEventListener("keydown", (event) => {
             if (event.key === "Enter" || event.key === " ") {
