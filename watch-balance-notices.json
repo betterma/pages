@@ -3,6 +3,63 @@
   "readAt": 1794945270632,
   "items": [
     {
+      "id": "BREVUSDT:1794960000000:1794961500981",
+      "symbol": "BREVUSDT",
+      "label": "BREV",
+      "kinds": [
+        "直拉"
+      ],
+      "at": 1794961500981,
+      "firstSeenAt": 1794931200605,
+      "openTime": 1794960000000,
+      "pinPrice": 0.0671,
+      "pinnedAt": 1794919800527,
+      "alertPrice": 0.1126,
+      "notifyPrice": 0.1125,
+      "noteAt": 1794931200605,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1794961500981
+    },
+    {
+      "id": "GLMRUSDT:1794960000000:1794961500981",
+      "symbol": "GLMRUSDT",
+      "label": "GLMR",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1794961500981,
+      "firstSeenAt": 1794758400570,
+      "openTime": 1794960000000,
+      "pinPrice": 0.006875,
+      "pinnedAt": 1794930900590,
+      "alertPrice": 0.007021,
+      "notifyPrice": 0.007106,
+      "noteAt": 1794931200605,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1794961500981
+    },
+    {
+      "id": "GPSUSDT:1794960000000:1794961500981",
+      "symbol": "GPSUSDT",
+      "label": "GPS",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1794961500981,
+      "firstSeenAt": 1794240000709,
+      "openTime": 1794960000000,
+      "pinPrice": 0.00843,
+      "pinnedAt": 1794873900662,
+      "alertPrice": 0.00829,
+      "notifyPrice": 0.00861,
+      "noteAt": 1794931200605,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1794961500981
+    },
+    {
       "id": "0GUSDT:1794960000000:1794961500981",
       "symbol": "0GUSDT",
       "label": "0G",
@@ -79,25 +136,6 @@
       "batchAt": 1794959700418
     },
     {
-      "id": "BREVUSDT:1794960000000:1794961500981",
-      "symbol": "BREVUSDT",
-      "label": "BREV",
-      "kinds": [
-        "直拉"
-      ],
-      "at": 1794961500981,
-      "firstSeenAt": 1794931200605,
-      "openTime": 1794960000000,
-      "pinPrice": 0.0671,
-      "pinnedAt": 1794919800527,
-      "alertPrice": 0.1126,
-      "notifyPrice": 0.1125,
-      "noteAt": 1794931200605,
-      "interval": "4h",
-      "windowUp": true,
-      "batchAt": 1794959700418
-    },
-    {
       "id": "CHIPUSDT:1794960000000:1794961500981",
       "symbol": "CHIPUSDT",
       "label": "CHIP",
@@ -133,44 +171,6 @@
       "noteAt": 1794934500438,
       "interval": "4h",
       "windowUp": false,
-      "batchAt": 1794959700418
-    },
-    {
-      "id": "GLMRUSDT:1794960000000:1794961500981",
-      "symbol": "GLMRUSDT",
-      "label": "GLMR",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1794961500981,
-      "firstSeenAt": 1794758400570,
-      "openTime": 1794960000000,
-      "pinPrice": 0.006875,
-      "pinnedAt": 1794930900590,
-      "alertPrice": 0.007021,
-      "notifyPrice": 0.007106,
-      "noteAt": 1794931200605,
-      "interval": "4h",
-      "windowUp": true,
-      "batchAt": 1794959700418
-    },
-    {
-      "id": "GPSUSDT:1794960000000:1794961500981",
-      "symbol": "GPSUSDT",
-      "label": "GPS",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1794961500981,
-      "firstSeenAt": 1794240000709,
-      "openTime": 1794960000000,
-      "pinPrice": 0.00843,
-      "pinnedAt": 1794873900662,
-      "alertPrice": 0.00829,
-      "notifyPrice": 0.00861,
-      "noteAt": 1794931200605,
-      "interval": "4h",
-      "windowUp": true,
       "batchAt": 1794959700418
     },
     {
@@ -4350,6 +4350,15 @@
   ],
   "batches": [
     {
+      "at": 1794961500981,
+      "count": 3,
+      "symbols": [
+        "BREVUSDT",
+        "GLMRUSDT",
+        "GPSUSDT"
+      ]
+    },
+    {
       "at": 1794961201315,
       "count": 4,
       "symbols": [
@@ -4421,20 +4430,17 @@
     },
     {
       "at": 1794959700418,
-      "count": 19,
+      "count": 16,
       "symbols": [
         "0GUSDT",
         "AEVOUSDT",
         "AGLDUSDT",
         "AIUSDT",
         "BOTBUSDT",
-        "BREVUSDT",
         "CHIPUSDT",
         "CYPHBUSDT",
         "DGBUSDT",
         "DOGSUSDT",
-        "GLMRUSDT",
-        "GPSUSDT",
         "HUMAUSDT",
         "METUSDT",
         "RPLUSDT",
