@@ -1,38 +1,56 @@
 {
   "risingZoneSnap": [
     "CRWDBUSDT",
-    "KORUBUSDT",
     "GMEBUSDT",
     "AMDBUSDT",
-    "AGPUBUSDT",
-    "BOTBUSDT",
+    "KORUBUSDT",
     "ALABBUSDT",
-    "AMZNBUSDT",
+    "AGPUBUSDT",
     "SECZBUSDT",
-    "AVGOBUSDT",
     "INTWBUSDT",
-    "SMCIBUSDT",
-    "BSPBUSDT",
+    "BOTBUSDT",
+    "AVGOBUSDT",
+    "AMZNBUSDT",
     "BBBUSDT",
     "WDCBUSDT",
-    "STXBUSDT",
+    "BSPBUSDT",
+    "SMCIBUSDT",
     "SOXLBUSDT",
-    "CRDOBUSDT",
-    "MDBBUSDT",
-    "ARMBUSDT",
-    "SHAZBUSDT",
-    "SPCXBUSDT",
-    "KSTRBUSDT",
-    "TQQQBUSDT",
     "COHRBUSDT",
+    "STXBUSDT",
+    "ARMBUSDT",
+    "CRDOBUSDT",
+    "SPCXBUSDT",
     "MUUBUSDT",
     "ASMLBUSDT",
-    "NBISBUSDT",
-    "WENBUSDT",
-    "DRAMBUSDT"
+    "TQQQBUSDT",
+    "KSTRBUSDT",
+    "MDBBUSDT",
+    "BEBUSDT",
+    "EWYBUSDT",
+    "DRAMBUSDT",
+    "HOODBUSDT"
   ],
   "risingZoneSnapSeeded": true,
   "autoPinEvents": [
+    {
+      "at": 1795023900736,
+      "symbols": [
+        "KORUBUSDT"
+      ],
+      "source": "auto-cloud",
+      "kind": "catch-up"
+    },
+    {
+      "at": 1795023900736,
+      "symbols": [
+        "SHAZBUSDT",
+        "NBISBUSDT",
+        "WENBUSDT"
+      ],
+      "source": "zone-drop",
+      "kind": "zone-drop"
+    },
     {
       "at": 1795023600862,
       "symbols": [
@@ -365,27 +383,9 @@
       ],
       "source": "auto-cloud",
       "kind": "new"
-    },
-    {
-      "at": 1795018500474,
-      "symbols": [
-        "KORUBUSDT"
-      ],
-      "source": "auto-cloud",
-      "kind": "catch-up"
-    },
-    {
-      "at": 1795018500474,
-      "symbols": [
-        "SOXLBUSDT",
-        "AMCBUSDT",
-        "SKUUBUSDT"
-      ],
-      "source": "zone-drop",
-      "kind": "zone-drop"
     }
   ],
-  "updatedAt": 1795023640876,
+  "updatedAt": 1795023917342,
   "dropAlerts": {},
   "lastPinPrices": {
     "USDEBUSDT": 4.3,
