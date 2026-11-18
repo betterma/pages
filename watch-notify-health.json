@@ -1,16 +1,16 @@
 {
-  "updatedAt": 1794981659416,
-  "lastRunAt": 1794981600581,
-  "ok": true,
-  "error": null,
-  "durationMs": 58835,
-  "autoPins": 49,
+  "updatedAt": 1794981956256,
+  "lastRunAt": 1794981900492,
+  "ok": false,
+  "error": "nail-green×1:notices:GitHub PUT watch-nail-green-notices.json failed: 409 {\"message\":\"is at 8cb8aad8457fb0bc825a092a750639dca7b9b211 but expected 23f22ad6e10ea3770214af0e0b4ba2671044f4c7\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":",
+  "durationMs": 55764,
+  "autoPins": 53,
   "balance": {
     "skipped": false,
     "reason": null,
-    "autoPins": 49,
-    "due": 49,
-    "checked": 49,
+    "autoPins": 53,
+    "due": 53,
+    "checked": 53,
     "hits": 0,
     "sent": 0,
     "wecomDue": 0,
@@ -28,22 +28,25 @@
   "nailGreen": {
     "skipped": false,
     "reason": null,
-    "nails": 50,
+    "nails": 54,
     "pending": 8,
     "checked": 8,
-    "hits": 4,
+    "hits": 3,
     "sent": 0,
     "checkMax": 0,
     "checkCursor": 0,
-    "bucketSkipped": 42,
-    "errorCount": 0,
-    "errors": []
+    "bucketSkipped": 46,
+    "errorCount": 1,
+    "errors": [
+      "notices:GitHub PUT watch-nail-green-notices.json failed: 409 {\"message\":\"is at 8cb8aad8457fb0bc825a092a750639dca7b9b211 but expected 23f22ad6e10ea3770214af0e0b4ba2671044f4c7\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":"
+    ]
   },
   "staleNailPrune": {
     "skipped": false,
     "reason": "none-stale",
     "checked": 12,
-    "candidate": 45,
+    "candidate": 49,
     "removed": 0
-  }
+  },
+  "degraded": true
 }
