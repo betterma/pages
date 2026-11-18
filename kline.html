@@ -13648,6 +13648,7 @@
         const button = document.getElementById("nailAutoPinBtn");
         if (!popover) return;
         const next = !!open;
+        const wasOpen = !popover.hidden;
         if (next) {
           await setNailRadarPopoverOpen(false);
           await setNailHoldPopoverOpen(false);
@@ -13659,6 +13660,8 @@
         }
         if (next) {
           layoutNailHeadSheet(popover);
+          // 已经打开时再点进自动盯（例如俯瞰摘要跳转）：只校正布局，不整页重载。
+          if (wasOpen) return;
           // 日志要请求后端，先给整区 loading，避免旧内容让人误以为是最新的。
           const listEl = document.getElementById("nailAutoPinList");
           if (listEl) {
@@ -28378,14 +28381,39 @@
             const key = String(focusSymbol || "")
               .trim()
               .toUpperCase();
+            const prevFocusKeys = new Set(
+              visibleOverlookFocusRows().map((row) =>
+                String((row && row.symbol) || "")
+                  .trim()
+                  .toUpperCase(),
+              ),
+            );
+            const hadOverlookSection = !!document.getElementById(
+              "nailAutoPinOverlookSection",
+            );
             mergeOverlookFocusFromUnread();
+            const nextFocusKeys = new Set(
+              visibleOverlookFocusRows().map((row) =>
+                String((row && row.symbol) || "")
+                  .trim()
+                  .toUpperCase(),
+              ),
+            );
+            let focusChanged =
+              !hadOverlookSection && nextFocusKeys.size > 0
+                ? true
+                : nextFocusKeys.size !== prevFocusKeys.size;
+            if (!focusChanged) {
+              nextFocusKeys.forEach((sym) => {
+                if (!prevFocusKeys.has(sym)) focusChanged = true;
+              });
+            }
             const overlookBar = document.getElementById("nailDigestOverlook");
             if (key && overlookBar) overlookBar.dataset.digestSymbol = key;
-            void setNailSegment("autopin").then(() => {
-              if (nailSegment === "autopin") {
-                renderNailAutoPinList();
-                void paintNailAutoPinCharts();
-              }
+            const popover = document.getElementById("nailAutoPinPopover");
+            const alreadyOpen =
+              nailSegment === "autopin" && popover && !popover.hidden;
+            const jumpToTarget = () => {
               const find = () => {
                 if (key) {
                   return document.querySelector(
@@ -28409,6 +28437,28 @@
               window.requestAnimationFrame(() => {
                 window.requestAnimationFrame(run);
               });
+            };
+            // 已在自动盯且内容齐：只跳锚点；俯瞰快照有新增才局部重渲，不整页加载。
+            if (alreadyOpen) {
+              if (focusChanged) {
+                renderNailAutoPinList();
+                void paintNailAutoPinCharts();
+              }
+              jumpToTarget();
+              return;
+            }
+            void setNailSegment("autopin").then(() => {
+              // 打开流程里 setNailAutoPinPopoverOpen 已 render/paint；
+              // 这里若俯瞰区还没挂上（竞态），再补一帧渲染。
+              if (
+                nailSegment === "autopin" &&
+                nextFocusKeys.size &&
+                !document.getElementById("nailAutoPinOverlookSection")
+              ) {
+                renderNailAutoPinList();
+                void paintNailAutoPinCharts();
+              }
+              jumpToTarget();
             });
           };
           const goDigest = (bar) => {
