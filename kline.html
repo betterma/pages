@@ -3284,6 +3284,78 @@
         font-weight: 700;
         color: rgba(28, 28, 30, 0.72);
       }
+      .nail-hold-list-head-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .nail-hold-select-btn {
+        border: none;
+        background: rgba(0, 0, 0, 0.05);
+        color: rgba(28, 28, 30, 0.72);
+        height: 28px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .nail-hold-select-btn.is-on,
+      .nail-hold-select-btn[aria-pressed="true"] {
+        color: var(--accent, #2f8f6e);
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 16%, transparent);
+      }
+      .nail-hold-batch-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px 10px;
+        border-top: 1px solid rgba(0, 0, 0, 0.06);
+        background: rgba(255, 255, 255, 0.92);
+        flex: 0 0 auto;
+      }
+      .nail-hold-batch-bar[hidden] {
+        display: none !important;
+      }
+      .nail-hold-batch-count {
+        margin-right: auto;
+        font-size: 12px;
+        font-weight: 700;
+        color: rgba(28, 28, 30, 0.72);
+      }
+      .nail-hold-batch-bar button {
+        border: none;
+        background: rgba(0, 0, 0, 0.05);
+        color: rgba(28, 28, 30, 0.78);
+        height: 30px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .nail-hold-batch-bar button.is-danger {
+        color: #fff;
+        background: #c45c5c;
+      }
+      .nail-hold-batch-bar button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .nail-hold-check {
+        flex: 0 0 auto;
+        width: 18px;
+        height: 18px;
+        margin: 0 2px 0 0;
+        accent-color: var(--accent, #2f8f6e);
+      }
+      .nail-hold-row.is-selected {
+        border-color: color-mix(in srgb, var(--accent, #2f8f6e) 42%, transparent);
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 8%, #fff);
+      }
+      .nail-hold-popover.is-select-mode .nail-hold-more {
+        display: none;
+      }
       .nail-hold-list {
         flex: 1 1 auto;
         min-height: 0;
@@ -8731,12 +8803,36 @@
             </div>
             <div class="nail-hold-list-head">
               <span>币列表</span>
-              <button type="button" class="nail-hold-refresh" id="nailHoldRefreshBtn" title="拉取余额、现价与买卖任务">
-                <span class="nail-hold-refresh-spin" hidden aria-hidden="true"></span>
-                <span class="nail-hold-refresh-label">刷新</span>
-              </button>
+              <div class="nail-hold-list-head-actions">
+                <button
+                  type="button"
+                  class="nail-hold-select-btn"
+                  id="nailHoldSelectBtn"
+                  aria-pressed="false"
+                  title="多选后批量移除关注"
+                >
+                  多选
+                </button>
+                <button type="button" class="nail-hold-refresh" id="nailHoldRefreshBtn" title="拉取余额、现价与买卖任务">
+                  <span class="nail-hold-refresh-spin" hidden aria-hidden="true"></span>
+                  <span class="nail-hold-refresh-label">刷新</span>
+                </button>
+              </div>
             </div>
             <div class="nail-hold-list" id="nailHoldList"></div>
+            <div class="nail-hold-batch-bar" id="nailHoldBatchBar" hidden>
+              <span class="nail-hold-batch-count" id="nailHoldBatchCount">已选 0</span>
+              <button type="button" id="nailHoldBatchSelectAllBtn">全选</button>
+              <button type="button" id="nailHoldBatchClearBtn">清空</button>
+              <button
+                type="button"
+                class="is-danger"
+                id="nailHoldBatchRemoveBtn"
+                title="批量移除关注（并清买卖任务）"
+              >
+                移除关注
+              </button>
+            </div>
           </div>
           <div class="nail-hold-popover" id="simHoldFloat" hidden>
             <div class="nail-hold-toolbar">
@@ -14170,6 +14266,8 @@
         }
       }
 
+      let nailHoldSelectMode = false;
+      const selectedHoldSymbols = new Set();
       let nailHoldingsState = {
         updatedAt: 0,
         symbols: [],
@@ -14179,6 +14277,79 @@
       /** 余额由云函数约 5 分钟同步一次，超过 10 分钟就标「偏旧」。 */
       const NAIL_HOLD_STALE_MS = 10 * 60 * 1000;
       let nailHoldLiveTimer = 0;
+
+      function isHoldWatchSelectable(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return false;
+        const asset = holdingsBaseAsset(key);
+        return asset !== "USDT";
+      }
+
+      function syncNailHoldSelectUi() {
+        const popover = document.getElementById("nailHoldPopover");
+        const btn = document.getElementById("nailHoldSelectBtn");
+        const bar = document.getElementById("nailHoldBatchBar");
+        const countEl = document.getElementById("nailHoldBatchCount");
+        const removeBtn = document.getElementById("nailHoldBatchRemoveBtn");
+        const on = !!nailHoldSelectMode;
+        if (popover) popover.classList.toggle("is-select-mode", on);
+        if (btn) {
+          btn.classList.toggle("is-on", on);
+          btn.setAttribute("aria-pressed", on ? "true" : "false");
+          btn.textContent = on ? "多选·开" : "多选";
+        }
+        if (bar) bar.hidden = !on;
+        if (countEl) countEl.textContent = `已选 ${selectedHoldSymbols.size}`;
+        if (removeBtn) removeBtn.disabled = !selectedHoldSymbols.size;
+        document
+          .querySelectorAll("#nailHoldList .nail-hold-row[data-hold-symbol]")
+          .forEach((row) => {
+            const key = String(row.getAttribute("data-hold-symbol") || "")
+              .trim()
+              .toUpperCase();
+            const selectable = isHoldWatchSelectable(key);
+            const check = row.querySelector(".nail-hold-check");
+            if (check) {
+              check.hidden = !on || !selectable;
+              check.checked = on && selectable && selectedHoldSymbols.has(key);
+            }
+            row.classList.toggle(
+              "is-selected",
+              on && selectable && selectedHoldSymbols.has(key),
+            );
+          });
+      }
+
+      function setNailHoldSelectMode(on) {
+        nailHoldSelectMode = !!on;
+        if (!nailHoldSelectMode) selectedHoldSymbols.clear();
+        syncNailHoldSelectUi();
+      }
+
+      function toggleHoldSymbolSelected(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!isHoldWatchSelectable(key)) return;
+        if (selectedHoldSymbols.has(key)) selectedHoldSymbols.delete(key);
+        else selectedHoldSymbols.add(key);
+        syncNailHoldSelectUi();
+      }
+
+      function selectAllHoldWatchSymbols() {
+        const rows = document.querySelectorAll(
+          "#nailHoldList .nail-hold-row[data-hold-symbol]",
+        );
+        rows.forEach((row) => {
+          const key = String(row.getAttribute("data-hold-symbol") || "")
+            .trim()
+            .toUpperCase();
+          if (isHoldWatchSelectable(key)) selectedHoldSymbols.add(key);
+        });
+        syncNailHoldSelectUi();
+      }
 
       /** 头部时间戳始终可见，不依赖下方提示条，避免长文案把时间挤没。 */
       function syncNailHoldUpdatedUi() {
@@ -15117,6 +15288,7 @@
             KLINE_MODE === "bstock"
               ? '<div class="nail-hold-empty">暂无 bStock 持仓 · 点设置加入关注后等云函数回填</div>'
               : '<div class="nail-hold-empty">暂无关注币 · 点设置加入，等云函数回填余额</div>';
+          setNailHoldSelectMode(false);
           syncNailHoldLiveSwitches();
           return;
         }
@@ -15339,13 +15511,18 @@
                 "nail-hold-row",
                 isDust ? "is-dust" : "",
                 hasTaskError ? "is-error" : "",
+                nailHoldSelectMode && selectedHoldSymbols.has(String(symbol).toUpperCase())
+                  ? "is-selected"
+                  : "",
               ]
                 .filter(Boolean)
                 .join(" ");
+              const checkHtml = `<input type="checkbox" class="nail-hold-check" data-hold-select="${escapeHtml(symbol)}" ${nailHoldSelectMode ? "" : "hidden"} ${selectedHoldSymbols.has(String(symbol).toUpperCase()) ? "checked" : ""} aria-label="选择 ${escapeHtml(asset)}" />`;
               return `<div class="${rowClass}" data-hold-symbol="${escapeHtml(symbol)}" data-hold-free="${escapeHtml(String(freeNum))}" data-hold-usdt="${escapeHtml(String(usdtFreeNum))}" data-hold-px="${escapeHtml(String(Number.isFinite(px) ? px : ""))}">
               <div class="nail-hold-row-top">
                 <div class="nail-hold-identity">
                   <div class="nail-hold-sym-wrap">
+                  ${checkHtml}
                   <button type="button" class="nail-hold-sym" data-hold-jump="${escapeHtml(symbol)}" title="跳到钉子 K 线">${escapeHtml(asset)}</button>
                     ${statusChip}
                   </div>
@@ -15505,6 +15682,15 @@
         restoreNailHoldUiState(list, uiSaved);
         applyNailHoldCollapsedState(list);
         syncNailHoldLiveSwitches();
+        const alive = new Set(
+          sortedSymbols
+            .map((s) => String(s || "").trim().toUpperCase())
+            .filter((s) => isHoldWatchSelectable(s)),
+        );
+        [...selectedHoldSymbols].forEach((key) => {
+          if (!alive.has(key)) selectedHoldSymbols.delete(key);
+        });
+        syncNailHoldSelectUi();
       }
 
       function setNailHoldPanelLoading(panel, loading, label) {
@@ -16279,6 +16465,7 @@
           await reloadNailHoldings({ silent: true });
           layoutNailHoldPopover();
         } else {
+          setNailHoldSelectMode(false);
           stopNailHoldLive();
           popover.style.top = "";
         }
@@ -16318,51 +16505,105 @@
         }
       }
 
-      async function removeNailHoldingSymbol(rawSymbol) {
-        const symbol = String(rawSymbol || "")
-          .trim()
-          .toUpperCase();
-        if (!symbol) return;
-        const label = holdingsBaseAsset(symbol) || symbol;
-        if (!window.confirm(`移除关注 ${label}？相关买卖任务也会清除。`)) {
-          return;
+      let nailHoldRemoveBusy = false;
+
+      async function removeNailHoldingSymbols(rawSymbols, options) {
+        const opts = options || {};
+        // 多选 UI 排除 USDT；单行「移除关注」仍可去掉 USDT 条目（与旧行为一致）
+        const keys = [
+          ...new Set(
+            (Array.isArray(rawSymbols) ? rawSymbols : [rawSymbols])
+              .map((s) => String(s || "").trim().toUpperCase())
+              .filter(Boolean),
+          ),
+        ];
+        if (!keys.length) return false;
+        if (nailHoldRemoveBusy) {
+          showToast("正在移除…");
+          return false;
         }
-        showToast("移除中…");
+        const labels = keys.map((s) => holdingsBaseAsset(s) || s);
+        const confirmText =
+          keys.length === 1
+            ? `移除关注 ${labels[0]}？相关买卖任务也会清除。`
+            : `移除关注 ${keys.length} 个（${labels.slice(0, 4).join("、")}${labels.length > 4 ? "…" : ""}）？相关买卖任务也会清除。`;
+        if (opts.confirm !== false && !window.confirm(confirmText)) {
+          return false;
+        }
+        nailHoldRemoveBusy = true;
+        const removeBtn = document.getElementById("nailHoldBatchRemoveBtn");
+        if (removeBtn) removeBtn.disabled = true;
+        showToast(keys.length === 1 ? "移除中…" : `移除 ${keys.length} 个…`);
+        const drop = new Set(keys);
         try {
           const result = await WatchFavorites.patchHoldings({
             repo: CONFIG.GITHUB_REPO,
-            message: `Remove holdings watch ${symbol}`,
+            message:
+              keys.length === 1
+                ? `Remove holdings watch ${keys[0]}`
+                : `Remove holdings watch x${keys.length}`,
             mutate: (state) => {
-              const asset = holdingsBaseAsset(symbol);
               const symbols = (state.symbols || []).filter(
-                (item) => String(item).toUpperCase() !== symbol,
+                (item) => !drop.has(String(item).toUpperCase()),
               );
               const balances = { ...(state.balances || {}) };
-              delete balances[asset];
               const entryPrices = { ...(state.entryPrices || {}) };
-              delete entryPrices[symbol];
               const stopCancel = { ...(state.stopCancel || {}) };
-              delete stopCancel[symbol];
+              keys.forEach((symbol) => {
+                const asset = holdingsBaseAsset(symbol);
+                // 账户 USDT 余额由云同步，不随「移除关注」清掉
+                if (asset && asset !== "USDT") delete balances[asset];
+                delete entryPrices[symbol];
+                delete stopCancel[symbol];
+              });
               return { ...state, symbols, balances, entryPrices, stopCancel };
             },
           });
           nailHoldingsState = result.state || nailHoldingsState;
-          await clearNailSellTask(symbol, {
-            confirm: false,
-            silent: true,
-            skipRender: true,
-          });
-          await clearNailBuyTask(symbol, {
-            confirm: false,
-            silent: true,
-            skipRender: true,
-          });
+          for (const symbol of keys) {
+            await clearNailSellTask(symbol, {
+              confirm: false,
+              silent: true,
+              skipRender: true,
+            });
+            await clearNailBuyTask(symbol, {
+              confirm: false,
+              silent: true,
+              skipRender: true,
+            });
+            selectedHoldSymbols.delete(symbol);
+          }
           renderNailHoldList();
-          showToast(`已移除 ${label}`);
+          showToast(
+            keys.length === 1
+              ? `已移除 ${labels[0]}`
+              : `已移除关注 ${keys.length} 个`,
+          );
+          return true;
         } catch (error) {
-          console.warn("removeNailHoldingSymbol failed", error);
+          console.warn("removeNailHoldingSymbols failed", error);
           showToast("移除失败");
+          syncNailHoldSelectUi();
+          return false;
+        } finally {
+          nailHoldRemoveBusy = false;
         }
+      }
+
+      async function removeNailHoldingSymbol(rawSymbol) {
+        return removeNailHoldingSymbols([rawSymbol]);
+      }
+
+      async function removeSelectedHoldWatchSymbols() {
+        const keys = [...selectedHoldSymbols].filter((s) =>
+          isHoldWatchSelectable(s),
+        );
+        if (!keys.length) {
+          showToast("先勾选要移除的币");
+          return;
+        }
+        const ok = await removeNailHoldingSymbols(keys);
+        if (ok) setNailHoldSelectMode(false);
       }
 
       function syncSimFloatVisibleUi() {
@@ -33138,6 +33379,28 @@
           }
         });
         nailHoldList.addEventListener("click", (event) => {
+          const selectCheck = event.target.closest("[data-hold-select]");
+          if (selectCheck) {
+            event.preventDefault();
+            toggleHoldSymbolSelected(
+              selectCheck.getAttribute("data-hold-select"),
+            );
+            return;
+          }
+          if (nailHoldSelectMode) {
+            const toggleInSelect = event.target.closest("[data-hold-toggle]");
+            if (toggleInSelect) {
+              toggleNailHoldExpanded(
+                toggleInSelect.getAttribute("data-hold-toggle"),
+              );
+              return;
+            }
+            const row = event.target.closest(".nail-hold-row[data-hold-symbol]");
+            if (row) {
+              toggleHoldSymbolSelected(row.getAttribute("data-hold-symbol"));
+              return;
+            }
+          }
           const toggleBtn = event.target.closest("[data-hold-toggle]");
           if (toggleBtn) {
             toggleNailHoldExpanded(
@@ -33307,6 +33570,37 @@
       if (nailHoldRefreshBtn) {
         nailHoldRefreshBtn.addEventListener("click", () => {
           void reloadNailHoldings();
+        });
+      }
+      const nailHoldSelectBtn = document.getElementById("nailHoldSelectBtn");
+      if (nailHoldSelectBtn) {
+        nailHoldSelectBtn.addEventListener("click", () => {
+          setNailHoldSelectMode(!nailHoldSelectMode);
+        });
+      }
+      const nailHoldBatchSelectAllBtn = document.getElementById(
+        "nailHoldBatchSelectAllBtn",
+      );
+      if (nailHoldBatchSelectAllBtn) {
+        nailHoldBatchSelectAllBtn.addEventListener("click", () => {
+          selectAllHoldWatchSymbols();
+        });
+      }
+      const nailHoldBatchClearBtn = document.getElementById(
+        "nailHoldBatchClearBtn",
+      );
+      if (nailHoldBatchClearBtn) {
+        nailHoldBatchClearBtn.addEventListener("click", () => {
+          selectedHoldSymbols.clear();
+          syncNailHoldSelectUi();
+        });
+      }
+      const nailHoldBatchRemoveBtn = document.getElementById(
+        "nailHoldBatchRemoveBtn",
+      );
+      if (nailHoldBatchRemoveBtn) {
+        nailHoldBatchRemoveBtn.addEventListener("click", () => {
+          void removeSelectedHoldWatchSymbols();
         });
       }
       const nailHoldSettingsBtn = document.getElementById("nailHoldSettingsBtn");
