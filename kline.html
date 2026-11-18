@@ -27245,6 +27245,41 @@
         if (next) void refreshNailNoticeHealth();
       }
 
+      /**
+       * 摘要/通知跳转到某张 K 线卡：滚到可视区中央并闪一下。
+       * nearest 常不滚动；图表异步撑高后补一次居中。
+       */
+      function scrollJumpTargetIntoView(card, options) {
+        if (!card || typeof card.scrollIntoView !== "function") return;
+        const opts = options || {};
+        const behavior = opts.behavior || "smooth";
+        card.scrollIntoView({
+          block: "center",
+          inline: "nearest",
+          behavior,
+        });
+        if (opts.flash !== false) {
+          card.classList.remove("is-jump-target");
+          void card.offsetWidth;
+          card.classList.add("is-jump-target");
+          if (card._jumpFlashTimer) window.clearTimeout(card._jumpFlashTimer);
+          card._jumpFlashTimer = window.setTimeout(() => {
+            card.classList.remove("is-jump-target");
+            card._jumpFlashTimer = null;
+          }, 2900);
+        }
+        if (opts.resettle === false) return;
+        const wait = Number(opts.resettleMs) > 0 ? Number(opts.resettleMs) : 450;
+        window.setTimeout(() => {
+          if (!card.isConnected) return;
+          card.scrollIntoView({
+            block: "center",
+            inline: "nearest",
+            behavior: "auto",
+          });
+        }, wait);
+      }
+
       async function openNailNoticeDrawer(options) {
         const opts = options || {};
         // 通知已是钉子页的一个分栏：任何入口进来都先切到该分栏，保证看得见。
@@ -27278,25 +27313,42 @@
         const jumpKey = String(opts.jumpSymbol || "")
           .trim()
           .toUpperCase();
+        const jumpNoticeCard = (behavior) => {
+          if (!jumpKey) return false;
+          const card = document.querySelector(
+            `#nailNoticeList .nail-notice-card[data-notice-symbol="${jumpKey}"]`,
+          );
+          if (!card) return false;
+          scrollJumpTargetIntoView(card, {
+            behavior: behavior || "smooth",
+            resettleMs: 480,
+          });
+          return true;
+        };
         if (jumpKey) {
+          // 滤镜/开栏后先居中；列表强刷重渲后还要再跳一次，否则锚点恢复会把位置冲掉。
           requestAnimationFrame(() => {
-            const card = document.querySelector(
-              `#nailNoticeList .nail-notice-card[data-notice-symbol="${jumpKey}"]`,
-            );
-            if (card && typeof card.scrollIntoView === "function") {
-              card.scrollIntoView({ block: "nearest", behavior: "smooth" });
-            }
+            requestAnimationFrame(() => {
+              if (!jumpNoticeCard("smooth")) {
+                window.setTimeout(() => jumpNoticeCard("smooth"), 420);
+              }
+            });
           });
         }
         if (!opts.skipMarkRead) {
           void markNailNoticesRead();
           markPriceAlertsRead();
         }
-        void reloadNailNoticeList({ force: true, forceRender: true }).catch(
-          (error) => {
+        void reloadNailNoticeList({ force: true, forceRender: true })
+          .then(() => {
+            if (!jumpKey) return;
+            requestAnimationFrame(() => {
+              jumpNoticeCard("smooth");
+            });
+          })
+          .catch((error) => {
             console.warn("open notice reload failed", error);
-          },
-        );
+          });
         void refreshNailNoticeHealth({ silent: true });
       }
 
@@ -28348,18 +28400,10 @@
         if (digestStack && !digestStack.dataset.bound) {
           digestStack.dataset.bound = "1";
           const flashJumpTargetCard = (card) => {
-            if (!card) return;
-            if (typeof card.scrollIntoView === "function") {
-              card.scrollIntoView({ block: "nearest", behavior: "smooth" });
-            }
-            card.classList.remove("is-jump-target");
-            void card.offsetWidth;
-            card.classList.add("is-jump-target");
-            if (card._jumpFlashTimer) window.clearTimeout(card._jumpFlashTimer);
-            card._jumpFlashTimer = window.setTimeout(() => {
-              card.classList.remove("is-jump-target");
-              card._jumpFlashTimer = null;
-            }, 2900);
+            scrollJumpTargetIntoView(card, {
+              behavior: "smooth",
+              resettleMs: 520,
+            });
           };
           const openOverlookAutoPinFocus = (focusSymbol) => {
             const key = String(focusSymbol || "")
