@@ -10637,7 +10637,12 @@
         nailAutoPinOverlookFocusRows = [...map.values()].sort(
           (a, b) => (b.at || 0) - (a.at || 0),
         );
-        nailAutoPinOverlookFocus = visibleOverlookFocusRows().length > 0;
+        // 先置 true：visibleOverlookFocusRows 在 focus=false 时会直接返回 []，
+        // 否则首次点进摘要永远建不起俯瞰置顶区。
+        nailAutoPinOverlookFocus = true;
+        if (!visibleOverlookFocusRows().length) {
+          nailAutoPinOverlookFocus = false;
+        }
       }
       /**
        * 跨端已读基线：价格提醒 / 自动盯的已读时刻同步到 watch-ui-read-state.json。
