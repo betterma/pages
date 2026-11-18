@@ -4755,7 +4755,7 @@
         box-shadow: none;
         padding-bottom: 0;
       }
-      /* 置顶分栏顶部摘要条：俯瞰优先，其次普通新通知；点一下直达。 */
+      /* 置顶分栏顶部的新通知摘要条：一眼知道有几个新目标，点一下直达通知栏。 */
       .nail-digest {
         display: flex;
         flex: 0 0 auto;
@@ -4763,7 +4763,7 @@
         justify-content: space-between;
         gap: 8px;
         margin: 8px 12px 0;
-        padding: 8px 10px;
+        padding: 7px 10px;
         border-radius: 8px;
         border: 0.5px solid
           color-mix(in srgb, var(--accent, #2f8f6e) 38%, var(--separator));
@@ -4777,53 +4777,12 @@
         cursor: pointer;
         flex: 0 0 auto;
       }
-      .nail-digest.is-overlook {
-        border-color: color-mix(
-          in srgb,
-          var(--warn, #b07030) 55%,
-          var(--separator)
-        );
-        background: color-mix(
-          in srgb,
-          var(--warn, #b07030) 16%,
-          transparent
-        );
-        box-shadow: 0 0 0 1px
-          color-mix(in srgb, var(--warn, #b07030) 18%, transparent);
-      }
       .nail-digest[hidden] {
-        display: none !important;
-      }
-      .nail-digest-copy {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        min-width: 0;
-        flex: 1 1 auto;
-      }
-      .nail-digest-copy strong {
-        font-size: 13px;
-        font-weight: 700;
-        letter-spacing: 0.01em;
-      }
-      .nail-digest.is-overlook .nail-digest-copy strong {
-        color: color-mix(in srgb, var(--warn, #b07030) 75%, var(--label));
-      }
-      .nail-digest-sub {
-        color: var(--secondary);
-        font-size: 11px;
-        font-weight: 560;
-      }
-      .nail-digest-sub[hidden] {
         display: none !important;
       }
       .nail-digest-go {
         color: var(--accent, #2f8f6e);
         font-weight: 650;
-        flex: 0 0 auto;
-      }
-      .nail-digest.is-overlook .nail-digest-go {
-        color: color-mix(in srgb, var(--warn, #b07030) 80%, var(--label));
       }
       /* 24h 排序：滚动时右侧位置百分比（类阅读进度气泡） */
       .nail-scroll-pct {
@@ -8607,6 +8566,18 @@
                 <span class="nail-hold-live-warn" id="nailHoldLiveWarn" hidden
                   >实盘已开</span
                 >
+                <div class="nail-hold-live-item">
+                  <span>隐藏0余额</span>
+                  <button
+                    type="button"
+                    class="nail-switch"
+                    id="nailHoldHideZeroSwitch"
+                    role="switch"
+                    aria-checked="false"
+                    title="打开后，可用与冻结都为 0 的币从列表隐藏；账户 USDT 行也按余额判断。偏好保存在本机。"
+                    aria-label="隐藏0余额"
+                  ></button>
+                </div>
               </div>
               <form class="nail-hold-form" id="nailHoldForm">
                 <label>
@@ -8900,11 +8871,8 @@
               tabindex="0"
               hidden
             >
-              <div class="nail-digest-copy">
-                <strong id="nailDigestText">新通知 0</strong>
-                <span class="nail-digest-sub" id="nailDigestSub" hidden></span>
-              </div>
-              <span class="nail-digest-go" id="nailDigestGo">查看 →</span>
+              <span id="nailDigestText">新通知 0</span>
+              <span class="nail-digest-go">查看 →</span>
             </div>
             <div class="nail-pin-toolbar" id="nailPinToolbar">
               <button type="button" id="nailAddBtn" title="钉一个新币种">
@@ -9829,7 +9797,6 @@
           "watch-nail-green-notices.json",
         BALANCE_NOTICES_PATH:
           KLINE_PATHS.BALANCE_NOTICES_PATH || "watch-balance-notices.json",
-        OVERLOOK_PATH: KLINE_PATHS.OVERLOOK_PATH || "watch-overlook.json",
         NAIL_DAILY_RESET_PATH:
           KLINE_PATHS.NAIL_DAILY_RESET_PATH || "watch-nail-daily-reset.json",
         WATCH_POOL_RANK: 30,
@@ -10286,11 +10253,6 @@
         ]),
       };
       const AUTO_PIN_SEEN_KEY = "kline-nail-autopin-seen-v1";
-      const OVERLOOK_SEEN_KEY = "kline-overlook-seen-v1";
-      /** 俯瞰类：云函数写入 watch-overlook.json；置顶摘要条优先展示强俯瞰。 */
-      let overlookItems = [];
-      let overlookSeenAt = 0;
-      let overlookLoading = false;
       /**
        * 跨端已读基线：价格提醒 / 自动盯的已读时刻同步到 watch-ui-read-state.json。
        * 状态变量与合并入队函数放在这里（自动盯角标初始化时就会用到），
@@ -10300,8 +10262,7 @@
         (typeof WatchFavorites !== "undefined" &&
           WatchFavorites.UI_READ_STATE_PATH) ||
         "watch-ui-read-state.json";
-      /** 已读戳合并窗口：略拉长，少打连续 PUT，降低 409；本机 localStorage 仍即时生效。 */
-      const UI_READ_STATE_DEBOUNCE_MS = 1500;
+      const UI_READ_STATE_DEBOUNCE_MS = 300;
       const UI_READ_STATE_POLL_MS = 30 * 1000;
       let uiReadStateLoadedAt = 0;
       let uiReadStateBusy = false;
@@ -10311,14 +10272,12 @@
       /** 合并短时间内的多个「标记已读」动作，避免打开分栏时并发写三次。 */
       function queueSharedUiReadState(patch) {
         if (!patch || typeof patch !== "object") return;
-        ["priceAlertReadAt", "autoPinSeenAt", "overlookSeenAt"].forEach(
-          (key) => {
+        ["priceAlertReadAt", "autoPinSeenAt"].forEach((key) => {
           const value = Number(patch[key]) || 0;
           if (value > (Number(uiReadStatePending[key]) || 0)) {
             uiReadStatePending[key] = value;
           }
-          },
-        );
+        });
         if (uiReadStateTimer) clearTimeout(uiReadStateTimer);
         uiReadStateTimer = setTimeout(() => {
           const next = uiReadStatePending;
@@ -13998,7 +13957,38 @@
       let simFloatVisible = true;
       let simHoldBusy = false;
 
+      /** 持有浮窗「隐藏0余额」开关：默认关，状态存本机。 */
+      const NAIL_HOLD_HIDE_ZERO_KEY = "kline-nail-hold-hide-zero-v1";
+      let nailHoldHideZeroOn = false;
+      try {
+        nailHoldHideZeroOn =
+          localStorage.getItem(NAIL_HOLD_HIDE_ZERO_KEY) === "1";
+      } catch (_) {
+        nailHoldHideZeroOn = false;
+      }
+
+      function syncNailHoldHideZeroUi() {
+        const btn = document.getElementById("nailHoldHideZeroSwitch");
+        if (!btn) return;
+        btn.setAttribute("aria-checked", nailHoldHideZeroOn ? "true" : "false");
+      }
+
+      /** 切换只影响展示：对齐余额为 0 的币，不改关注名单、不做任何写盘。 */
+      function setNailHoldHideZero(on) {
+        const next = !!on;
+        if (next === nailHoldHideZeroOn) return;
+        nailHoldHideZeroOn = next;
+        try {
+          localStorage.setItem(NAIL_HOLD_HIDE_ZERO_KEY, next ? "1" : "0");
+        } catch (_) {
+          /* ignore */
+        }
+        syncNailHoldHideZeroUi();
+        renderNailHoldList();
+      }
+
       function syncNailHoldLiveSwitches() {
+        syncNailHoldHideZeroUi();
         const sellOn = !!(nailSellTasksState && nailSellTasksState.live);
         const buyOn = !!(nailBuyTasksState && nailBuyTasksState.live);
         const sellBtn = document.getElementById("nailSellLiveSwitch");
@@ -14854,6 +14844,21 @@
             return symbolInActiveUniverse(pair);
           });
         }
+        // 「隐藏0余额」只作用于展示：可用为 0 且冻结也为 0 的币不渲染。
+        // holdingsFreeQty 已把「估值 < 0.01 USDT」的尘埃视为 0，口径一致。
+        if (nailHoldHideZeroOn) {
+          const bal = nailHoldingsState.balances || {};
+          symbols = symbols.filter((symbol) => {
+            const asset = holdingsBaseAsset(symbol);
+            if (!asset) return true;
+            const row = bal[asset] || {};
+            const locked = Number(row.locked);
+            return (
+              holdingsFreeQty(symbol) > 0 ||
+              (Number.isFinite(locked) && locked > 0)
+            );
+          });
+        }
         if (hint) {
           const err = String(nailHoldingsState.lastError || "").trim();
           const stamp = Number(nailHoldingsState.updatedAt) || 0;
@@ -14879,8 +14884,9 @@
             : `上次同步 ${when}`;
         }
         if (!symbols.length) {
-          list.innerHTML =
-            KLINE_MODE === "bstock"
+          list.innerHTML = nailHoldHideZeroOn
+            ? '<div class="nail-hold-empty">没有非零余额的币 · 关闭设置里的「隐藏0余额」可看全部</div>'
+            : KLINE_MODE === "bstock"
               ? '<div class="nail-hold-empty">暂无 bStock 持仓 · 点设置加入关注后等云函数回填</div>'
               : '<div class="nail-hold-empty">暂无关注币 · 点设置加入，等云函数回填余额</div>';
           syncNailHoldLiveSwitches();
@@ -22843,16 +22849,13 @@
       function readLocalUiReadState() {
         let price = 0;
         let auto = 0;
-        let overlook = 0;
         try {
           price = Number(localStorage.getItem(PRICE_ALERT_READ_KEY)) || 0;
           auto = Number(localStorage.getItem(AUTO_PIN_SEEN_KEY)) || 0;
-          overlook = Number(localStorage.getItem(OVERLOOK_SEEN_KEY)) || 0;
         } catch (_) {}
         return {
           priceAlertReadAt: Math.max(price, Number(priceAlertReadAt) || 0),
           autoPinSeenAt: auto,
-          overlookSeenAt: Math.max(overlook, Number(overlookSeenAt) || 0),
         };
       }
 
@@ -22861,17 +22864,12 @@
           Number(priceAlertReadAt) || 0,
           Number(state.priceAlertReadAt) || 0,
         );
-        overlookSeenAt = Math.max(
-          Number(overlookSeenAt) || 0,
-          Number(state.overlookSeenAt) || 0,
-        );
         try {
           localStorage.setItem(PRICE_ALERT_READ_KEY, String(priceAlertReadAt));
           localStorage.setItem(
             AUTO_PIN_SEEN_KEY,
             String(Number(state.autoPinSeenAt) || 0),
           );
-          localStorage.setItem(OVERLOOK_SEEN_KEY, String(overlookSeenAt));
         } catch (_) {}
       }
 
@@ -22888,27 +22886,20 @@
             Number(base.autoPinSeenAt) || 0,
             local.autoPinSeenAt,
           ),
-          overlookSeenAt: Math.max(
-            Number(base.overlookSeenAt) || 0,
-            local.overlookSeenAt,
-          ),
         };
         const changed =
           next.priceAlertReadAt > local.priceAlertReadAt ||
-          next.autoPinSeenAt > local.autoPinSeenAt ||
-          next.overlookSeenAt > local.overlookSeenAt;
+          next.autoPinSeenAt > local.autoPinSeenAt;
         writeLocalUiReadState(next);
         if (
           next.priceAlertReadAt > (Number(base.priceAlertReadAt) || 0) ||
-          next.autoPinSeenAt > (Number(base.autoPinSeenAt) || 0) ||
-          next.overlookSeenAt > (Number(base.overlookSeenAt) || 0)
+          next.autoPinSeenAt > (Number(base.autoPinSeenAt) || 0)
         ) {
           queueSharedUiReadState(next);
         }
         if (changed) {
           syncNailNoticeEntryUi();
           syncNailAutoPinBadge();
-          syncNailDigest();
         }
         // 雷达标记名单：按时间戳取较新的一份；本地更新说明离线改过，补推整表。
         const cloudFixedAt = Number(base.radarFixedAt) || 0;
@@ -25636,7 +25627,6 @@
           if (nailSegment !== "notice") {
             await refreshNailGreenNotices({ force: true });
           }
-          await refreshOverlookState({ force: true });
           await pollAutoPinBadgeOnce();
         } catch (error) {
           console.warn("nail reminder poll failed", error);
@@ -26728,7 +26718,6 @@
 
       async function maybeOpenNailNoticeOnEntry() {
         await refreshNailGreenNotices();
-        void refreshOverlookState({ force: true });
         // 分栏化后，未读不再强行切走主视图——置顶栏顶部的摘要条负责提示；
         // 只有用户在设置里显式勾了「进入即打开通知」才自动落到通知栏。
         if (nailDefaultNoticeOnEnter && nailNoticeMode === "closed") {
@@ -27255,135 +27244,17 @@
         }).length;
       }
 
-      function overlookLabel(symbol) {
-        return String(symbol || "").replace(/USDT$/i, "");
-      }
-
-      function formatOverlookPct(pct) {
-        const n = Number(pct);
-        if (!Number.isFinite(n)) return "";
-        const sign = n > 0 ? "+" : "";
-        return `${sign}${n.toFixed(1)}%`;
-      }
-
-      /** 未读俯瞰（默认只要强俯瞰；弱俯瞰不抢摘要条）。 */
-      function unreadOverlookItems(opts) {
-        const strongOnly = !(opts && opts.includeWeak);
-        const seen = Number(overlookSeenAt) || 0;
-        return (Array.isArray(overlookItems) ? overlookItems : []).filter(
-          (row) => {
-            if (!row) return false;
-            if (strongOnly && row.tier !== "strong") return false;
-            return (Number(row.detectedAt) || 0) > seen;
-          },
-        );
-      }
-
-      function markOverlookSeen(at) {
-        const latest = (
-          Array.isArray(overlookItems) ? overlookItems : []
-        ).reduce((max, row) => Math.max(max, Number(row.detectedAt) || 0), 0);
-        const next = Math.max(
-          Number(at) || 0,
-          latest,
-          Number(overlookSeenAt) || 0,
-          Date.now(),
-        );
-        if (next <= (Number(overlookSeenAt) || 0)) return;
-        overlookSeenAt = next;
-        try {
-          localStorage.setItem(OVERLOOK_SEEN_KEY, String(next));
-        } catch (_) {
-          /* ignore */
-        }
-        queueSharedUiReadState({ overlookSeenAt: next });
-        syncNailDigest();
-      }
-
-      async function refreshOverlookState(options) {
-        const opts = options || {};
-        if (
-          overlookLoading ||
-          !WatchFavorites ||
-          typeof WatchFavorites.loadOverlookRaw !== "function"
-        ) {
-          return overlookItems;
-        }
-        overlookLoading = true;
-        try {
-          const packed = await WatchFavorites.loadOverlookRaw({
-            force: !!opts.force,
-            path:
-              (WatchFavorites && WatchFavorites.OVERLOOK_PATH) ||
-              CONFIG.OVERLOOK_PATH,
-          });
-          const state =
-            (packed && packed.state) ||
-            (WatchFavorites.emptyOverlookState
-              ? WatchFavorites.emptyOverlookState()
-              : { items: [] });
-          overlookItems = Array.isArray(state.items) ? state.items : [];
-          syncNailDigest();
-          return overlookItems;
-        } catch (error) {
-          console.warn("load overlook failed", error);
-          return overlookItems;
-        } finally {
-          overlookLoading = false;
-        }
-      }
-
-      /** 置顶分栏顶部摘要条：强俯瞰优先，其次未读通知。 */
+      /** 置顶分栏顶部摘要条：有未读通知才出现，点一下直达通知栏。 */
       function syncNailDigest() {
         const bar = document.getElementById("nailDigestBar");
         const text = document.getElementById("nailDigestText");
-        const sub = document.getElementById("nailDigestSub");
-        const go = document.getElementById("nailDigestGo");
         if (!bar || !text) return;
-        const overs = unreadOverlookItems();
-        const unread = nailGreenUnreadCount();
-        if (!overs.length && !unread) {
-          bar.hidden = true;
-          bar.classList.remove("is-overlook");
-          bar.dataset.digestMode = "";
-          if (sub) {
-            sub.hidden = true;
-            sub.textContent = "";
-          }
-          return;
-        }
-        bar.hidden = false;
-        if (overs.length) {
-          const top = overs[0];
-          const pct = formatOverlookPct(top.overPct);
-          const name = overlookLabel(top.symbol);
-          bar.classList.add("is-overlook");
-          bar.dataset.digestMode = "overlook";
-          bar.dataset.digestSymbol = String(top.symbol || "");
-          text.textContent =
-            overs.length === 1
-              ? `俯瞰 ${name}${pct ? ` · ${pct}` : ""}`
-              : `俯瞰 ${overs.length} · ${name}${pct ? ` ${pct}` : ""}`;
-          if (sub) {
-            const noticeBit = unread ? `另有通知 ${unread}` : "";
-            const more =
-              overs.length > 1
-                ? overs
-                    .slice(1, 3)
-                    .map((row) => overlookLabel(row.symbol))
-                    .join(" / ")
-                : "";
-            const parts = [more, noticeBit].filter(Boolean);
-            sub.textContent = parts.join(" · ");
-            sub.hidden = !parts.length;
-          }
-          if (go) go.textContent = "去看 →";
-          return;
-        }
-        bar.classList.remove("is-overlook");
-        bar.dataset.digestMode = "notice";
-        bar.dataset.digestSymbol = "";
         const list = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
+        const unread = nailGreenUnreadCount();
+        if (!unread) {
+          bar.hidden = true;
+          return;
+        }
         const readAt = Number(nailGreenNoticesReadAt) || 0;
         let fresh = 0;
         list.forEach((item) => {
@@ -27393,14 +27264,10 @@
             Number(item.firstSeenAt) > 0 ? Number(item.firstSeenAt) : at;
           if (at - first <= 5 * 60 * 1000) fresh += 1;
         });
+        bar.hidden = false;
         text.textContent = fresh
           ? `新通知 ${unread} · 首次进通知 ${fresh}`
           : `新通知 ${unread}`;
-        if (sub) {
-          sub.hidden = true;
-          sub.textContent = "";
-        }
-        if (go) go.textContent = "查看 →";
       }
 
       function syncNailSegBadges() {
@@ -27477,23 +27344,6 @@
         const digest = document.getElementById("nailDigestBar");
         if (digest) {
           const go = () => {
-            const mode = String(digest.dataset.digestMode || "");
-            if (mode === "overlook") {
-              const symbol = String(digest.dataset.digestSymbol || "")
-                .trim()
-                .toUpperCase();
-              markOverlookSeen();
-              void setNailSegment("autopin").then(() => {
-                if (!symbol) return;
-                const card = document.querySelector(
-                  `#nailAutoPinList .nail-auto-pin-card[data-autopin-card="${symbol}"]`,
-                );
-                if (card && typeof card.scrollIntoView === "function") {
-                  card.scrollIntoView({ block: "nearest", behavior: "smooth" });
-                }
-              });
-              return;
-            }
             void setNailSegment("notice");
           };
           digest.addEventListener("click", go);
@@ -29409,7 +29259,6 @@
           syncNailPriceRows();
           await paintNailKlines();
           await refreshNailGreenNotices();
-          await refreshOverlookState({ force: true });
           if (nailNoticeMode === "open") renderNailNoticeList();
           showToast("钉子已刷新");
         } catch (error) {
@@ -32780,6 +32629,17 @@
         nailBuyLiveSwitch.addEventListener("click", () => {
           const on = nailBuyLiveSwitch.getAttribute("aria-checked") === "true";
           void setNailTradeLive("buy", !on);
+        });
+      }
+      const nailHoldHideZeroSwitch = document.getElementById(
+        "nailHoldHideZeroSwitch",
+      );
+      if (nailHoldHideZeroSwitch) {
+        syncNailHoldHideZeroUi();
+        nailHoldHideZeroSwitch.addEventListener("click", () => {
+          const on =
+            nailHoldHideZeroSwitch.getAttribute("aria-checked") === "true";
+          setNailHoldHideZero(!on);
         });
       }
       const nailSimFloatVisibleSwitch = document.getElementById(
