@@ -4794,6 +4794,26 @@
         color: var(--label);
         background: color-mix(in srgb, var(--label) 8%, transparent);
       }
+      .nail-digest-sym {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-weight: 700;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        cursor: pointer;
+      }
+      .nail-digest-sym:hover,
+      .nail-digest-sym:focus-visible {
+        opacity: 0.85;
+      }
+      .nail-digest-sub .nail-digest-sym {
+        font-weight: 650;
+        color: var(--label);
+      }
       .nail-digest.is-overlook {
         border-color: color-mix(
           in srgb,
@@ -4827,12 +4847,21 @@
         color: color-mix(in srgb, var(--warn, #b07030) 75%, var(--label));
       }
       .nail-digest-sub {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 6px;
         color: var(--secondary);
         font-size: 11px;
         font-weight: 560;
       }
       .nail-digest-sub[hidden] {
         display: none !important;
+      }
+      .nail-digest-sep {
+        color: var(--secondary);
+        opacity: 0.55;
+        user-select: none;
       }
       .nail-digest-go {
         color: var(--accent, #2f8f6e);
@@ -27511,36 +27540,45 @@
         bar.hidden = false;
         if (overs.length) {
           const top = overs[0];
-          const pct = formatOverlookPct(top.overPct);
-          const name = overlookLabel(top.symbol);
-          const tierLabel = top.tier === "strong" ? "强俯瞰" : "俯瞰";
+          const topSym = String(top.symbol || "")
+            .trim()
+            .toUpperCase();
+          const strongN = overs.filter((row) => row.tier === "strong").length;
+          const tierLabel = strongN > 0 ? "强俯瞰" : "俯瞰";
+          const symBtn = (symbol, label) => {
+            const key = String(symbol || "")
+              .trim()
+              .toUpperCase();
+            const shown = escapeHtml(
+              label || String(key).replace(/USDT$/i, ""),
+            );
+            return `<button type="button" class="nail-digest-sym" data-digest-jump="${escapeHtml(key)}" title="去自动盯看 ${shown}">${shown}</button>`;
+          };
           bar.classList.add("is-overlook");
           bar.classList.remove("is-pullback");
           bar.dataset.digestMode = "overlook";
-          bar.dataset.digestSymbol = String(top.symbol || "");
+          bar.dataset.digestSymbol = topSym;
+          // 主行只写类别+数量；全部币名放副行，个个可点。
           text.textContent =
             overs.length === 1
-              ? `${tierLabel} ${name}${pct ? ` · ${pct}` : ""}`
-              : `${tierLabel} ${overs.length} · ${name}${pct ? ` ${pct}` : ""}`;
+              ? `${tierLabel} · 未读 1`
+              : `${tierLabel} · 未读 ${overs.length}`;
           if (sub) {
-            const pbBit = pullbacks.length
-              ? `回踩 ${pullbacks.length}`
-              : "";
-            const noticeBit =
-              unread && !pullbacks.length ? `另有通知 ${unread}` : "";
-            const more =
-              overs.length > 1
-                ? overs
-                    .slice(1, 3)
-                    .map((row) => {
-                      const tag = row.tier === "strong" ? "强" : "";
-                      return `${tag}${overlookLabel(row.symbol)}`;
-                    })
-                    .join(" / ")
-                : "";
-            const parts = [more, pbBit, noticeBit].filter(Boolean);
-            sub.textContent = parts.join(" · ");
-            sub.hidden = !parts.length;
+            const bits = overs.map((row) => {
+              const pct = formatOverlookPct(row.overPct);
+              const label = overlookLabel(row.symbol);
+              const strongTag = row.tier === "strong" ? "强 " : "";
+              const shown = `${strongTag}${label}${pct ? ` ${pct}` : ""}`;
+              return symBtn(row.symbol, shown);
+            });
+            let html = bits.join('<span class="nail-digest-sep">·</span>');
+            if (pullbacks.length) {
+              html += `<span class="nail-digest-sep">·</span>回踩 ${pullbacks.length}`;
+            } else if (unread) {
+              html += `<span class="nail-digest-sep">·</span>另有通知 ${unread}`;
+            }
+            sub.innerHTML = html;
+            sub.hidden = false;
           }
           if (go) go.textContent = "去看 →";
           return;
@@ -27672,22 +27710,26 @@
         });
         const digest = document.getElementById("nailDigestBar");
         if (digest) {
+          const jumpOverlookSymbol = (symbol) => {
+            const key = String(symbol || "")
+              .trim()
+              .toUpperCase();
+            if (!key) return;
+            digest.dataset.digestSymbol = key;
+            void setNailSegment("autopin").then(() => {
+              const card = document.querySelector(
+                `#nailAutoPinList .nail-auto-pin-card[data-autopin-card="${key}"]`,
+              );
+              if (card && typeof card.scrollIntoView === "function") {
+                card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+              }
+            });
+          };
           const go = () => {
             const mode = String(digest.dataset.digestMode || "");
-            // 点正文：去看目标；不标已读、不关摘要（关闭用右侧 ×）。
+            // 点正文空白/「去看」：看当前主币；不标已读（关闭用 ×）。
             if (mode === "overlook") {
-              const symbol = String(digest.dataset.digestSymbol || "")
-                .trim()
-                .toUpperCase();
-              void setNailSegment("autopin").then(() => {
-                if (!symbol) return;
-                const card = document.querySelector(
-                  `#nailAutoPinList .nail-auto-pin-card[data-autopin-card="${symbol}"]`,
-                );
-                if (card && typeof card.scrollIntoView === "function") {
-                  card.scrollIntoView({ block: "nearest", behavior: "smooth" });
-                }
-              });
+              jumpOverlookSymbol(digest.dataset.digestSymbol);
               return;
             }
             if (mode === "pullback") {
@@ -27719,7 +27761,19 @@
               }
             });
           }
-          digest.addEventListener("click", go);
+          digest.addEventListener("click", (event) => {
+            const jumpBtn =
+              event.target &&
+              event.target.closest &&
+              event.target.closest("[data-digest-jump]");
+            if (jumpBtn) {
+              event.preventDefault();
+              event.stopPropagation();
+              jumpOverlookSymbol(jumpBtn.getAttribute("data-digest-jump"));
+              return;
+            }
+            go();
+          });
           digest.addEventListener("keydown", (event) => {
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
