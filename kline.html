@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -27355,17 +27355,24 @@
         return `${sign}${n.toFixed(1)}%`;
       }
 
-      /** 未读俯瞰（默认只要强俯瞰；弱俯瞰不抢摘要条）。 */
+      /** 未读俯瞰（强+弱都进摘要条；强档排前）。 */
       function unreadOverlookItems(opts) {
-        const strongOnly = !(opts && opts.includeWeak);
+        const strongOnly = !!(opts && opts.strongOnly);
         const seen = Number(overlookSeenAt) || 0;
-        return (Array.isArray(overlookItems) ? overlookItems : []).filter(
+        const rows = (Array.isArray(overlookItems) ? overlookItems : []).filter(
           (row) => {
             if (!row) return false;
             if (strongOnly && row.tier !== "strong") return false;
             return (Number(row.detectedAt) || 0) > seen;
           },
         );
+        rows.sort((a, b) => {
+          const as = a.tier === "strong" ? 1 : 0;
+          const bs = b.tier === "strong" ? 1 : 0;
+          if (as !== bs) return bs - as;
+          return (Number(b.detectedAt) || 0) - (Number(a.detectedAt) || 0);
+        });
+        return rows;
       }
 
       function markOverlookSeen(at) {
@@ -27454,7 +27461,7 @@
         return rows;
       }
 
-      /** 置顶分栏顶部摘要条：强俯瞰 → 回踩观察/放量 → 未读通知。 */
+      /** 置顶分栏顶部摘要条：俯瞰(强弱) → 回踩观察/放量 → 未读通知。 */
       function syncNailDigest() {
         const bar = document.getElementById("nailDigestBar");
         const text = document.getElementById("nailDigestText");
@@ -27480,14 +27487,15 @@
           const top = overs[0];
           const pct = formatOverlookPct(top.overPct);
           const name = overlookLabel(top.symbol);
+          const tierLabel = top.tier === "strong" ? "强俯瞰" : "俯瞰";
           bar.classList.add("is-overlook");
           bar.classList.remove("is-pullback");
           bar.dataset.digestMode = "overlook";
           bar.dataset.digestSymbol = String(top.symbol || "");
           text.textContent =
             overs.length === 1
-              ? `俯瞰 ${name}${pct ? ` · ${pct}` : ""}`
-              : `俯瞰 ${overs.length} · ${name}${pct ? ` ${pct}` : ""}`;
+              ? `${tierLabel} ${name}${pct ? ` · ${pct}` : ""}`
+              : `${tierLabel} ${overs.length} · ${name}${pct ? ` ${pct}` : ""}`;
           if (sub) {
             const pbBit = pullbacks.length
               ? `回踩 ${pullbacks.length}`
@@ -27498,7 +27506,10 @@
               overs.length > 1
                 ? overs
                     .slice(1, 3)
-                    .map((row) => overlookLabel(row.symbol))
+                    .map((row) => {
+                      const tag = row.tier === "strong" ? "强" : "";
+                      return `${tag}${overlookLabel(row.symbol)}`;
+                    })
                     .join(" / ")
                 : "";
             const parts = [more, pbBit, noticeBit].filter(Boolean);

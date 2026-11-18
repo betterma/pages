@@ -20,7 +20,7 @@ alwaysApply: true
 
 ## 通知策略（按用户偏好）
 
-- **主通道 = 网页置顶摘要条**（`#nailDigestBar`）：强俯瞰优先高亮，点一下进自动盯并滚到该币。
+- **主通道 = 网页置顶摘要条**（`#nailDigestBar`）：强弱俯瞰都进摘要；**强档优先**排序/文案（「强俯瞰」），点一下进自动盯并滚到该币。
 - **不要**为俯瞰推企微（企微看得少）。
 - **不要**用油猴桌面通知做俯瞰（右下角浏览器通知偏吵）；油猴继续只服务天平/直拉批次即可。
 - 已读基线：`watch-ui-read-state.json` 的 `overlookSeenAt`（与 `autoPinSeenAt` 同模式）。
@@ -28,4 +28,4 @@ alwaysApply: true
 ## 约束
 
 - 分类与定时检测在云 ~5m 任务（`notify.js` → `runOverlookDetect`），页面只读 JSON。
-- 摘要条只强调 **strong**；weak 落盘供以后筛，但不抢置顶条。
+- 摘要条展示全部未读俯瞰（含 weak）；强档排前。
