@@ -160,6 +160,20 @@ function trimBalanceNotices(list, now) {
       batchBySymbol[symbol] = bat;
     }
   });
+  const kindsBySymbol = {};
+  filtered.forEach((item) => {
+    const symbol = String(item.symbol || '')
+      .trim()
+      .toUpperCase();
+    if (!symbol) return;
+    const kinds = Array.isArray(item.kinds)
+      ? item.kinds.map(String).filter(Boolean)
+      : [];
+    if (!kindsBySymbol[symbol]) kindsBySymbol[symbol] = [];
+    kinds.forEach((k) => {
+      if (!kindsBySymbol[symbol].includes(k)) kindsBySymbol[symbol].push(k);
+    });
+  });
   const seen = new Set();
   const out = [];
   filtered
@@ -170,9 +184,7 @@ function trimBalanceNotices(list, now) {
         .toUpperCase();
       if (!symbol || seen.has(symbol)) return;
       seen.add(symbol);
-      const kinds = Array.isArray(item.kinds)
-        ? item.kinds.map(String).filter(Boolean)
-        : [];
+      const kinds = kindsBySymbol[symbol] || [];
       const pinPrice = Number(item.pinPrice);
       const at = Number(item.at) || 0;
       const openTime = Number(item.openTime) || currentWindowOpen(at);
@@ -908,6 +920,7 @@ async function runBalanceAlerts(options) {
 
 module.exports = {
   runBalanceAlerts,
+  appendBalanceNotices,
   evaluateBalance,
   evaluateStraight,
   evaluatePatterns,

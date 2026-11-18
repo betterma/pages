@@ -64,6 +64,16 @@
 - `BALANCE_ALERT_CHECK_MAX`：默认 `0`=**企微冷却到期全查**；设为正数则单轮限量并用 `checkCursor` 轮询
 - 并发 `BALANCE_ALERT_CONCURRENCY`（默认 8）；全查时建议函数超时 ≥ 120s
 
+## 回踩观察 / 回踩放量（仅网页，不发企微）
+
+仅扫描**自动盯池** 4h K（含成交量）：启动大实体 → 回踩 → 缩量观察 → 放量收阳确认。
+
+- `kinds`：`回踩观察`（预警）/ `回踩放量`（执行确认），写入同一 `watch-balance-notices.json`（与天平/直拉并集；同币 kinds 合并）
+- 网页筛选芯片：**回踩**（观察 + 放量）；置顶摘要条优先提示未读「回踩观察」
+- 状态：`watch-pullback-volume.json`；同币同 tier 默认冷却 4h
+- `PULLBACK_VOLUME`：默认 `1`；`0` 关闭
+- `PULLBACK_VOLUME_CHECK_MAX`：默认 `24`；并发 `PULLBACK_VOLUME_CONCURRENCY`（默认 6）
+
 ## 排序动态（notes-rank 快照）
 
 云函数在 **5 分钟定时**里检查：距上一帧 ≥ **约 30 分钟** 则对「记一笔 ∪ 盯一下」（去拉黑）按共享排序维度算分，**只对网页 K 线视图那一批**（各维度 Top10 命中并集，`hitCount>0`）拍快照，写入 `watch-notes-rank-snaps.json`；与上一帧对比后写动作日志 `rank-new` / `rank-up`（「排序动态」，保留 1 天）。**不对比列表里的全部币。不依赖网页打开。**

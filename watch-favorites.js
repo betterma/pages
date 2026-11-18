@@ -1734,6 +1734,18 @@
         batchBySymbol[key] = bat;
       }
     });
+    const kindsBySymbol = {};
+    normalized.forEach((item) => {
+      const key = String(item.symbol || "").toUpperCase();
+      if (!key) return;
+      if (!kindsBySymbol[key]) kindsBySymbol[key] = [];
+      (Array.isArray(item.kinds) ? item.kinds : []).forEach((k) => {
+        const kind = String(k || "").trim();
+        if (kind && !kindsBySymbol[key].includes(kind)) {
+          kindsBySymbol[key].push(kind);
+        }
+      });
+    });
     const seen = new Set();
     const out = [];
     normalized
@@ -1744,6 +1756,10 @@
         seen.add(key);
         out.push({
           ...item,
+          kinds:
+            kindsBySymbol[key] && kindsBySymbol[key].length
+              ? kindsBySymbol[key]
+              : item.kinds,
           firstSeenAt: firstBySymbol[key] || item.firstSeenAt || item.at,
           batchAt: batchBySymbol[key] || item.batchAt || 0,
         });

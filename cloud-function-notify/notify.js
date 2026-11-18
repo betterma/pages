@@ -70,6 +70,20 @@ try {
   );
 }
 
+let runPullbackVolumeDetect = async () => ({
+  skipped: true,
+  reason: 'module-missing',
+});
+try {
+  runPullbackVolumeDetect =
+    require('./pullback-volume').runPullbackVolumeDetect;
+} catch (error) {
+  console.warn(
+    'pullback-volume module missing — 请整包上传 cloud-function-notify',
+    error && error.message ? error.message : error,
+  );
+}
+
 let pruneStaleAutoPinNails = async () => ({
   skipped: true,
   reason: 'module-missing',
@@ -2149,6 +2163,26 @@ async function main(event, context) {
     };
   }
 
+  // 回踩观察/放量：仅自动盯池；写 notices kinds，不推企微。
+  let pullbackVolume = { skipped: true, reason: 'not-run' };
+  try {
+    pullbackVolume = await runPullbackVolumeDetect({
+      now,
+      pins,
+    });
+    console.log('pullback-volume', JSON.stringify(pullbackVolume));
+  } catch (error) {
+    console.warn(
+      'pullback-volume failed',
+      error && error.message ? error.message : error,
+    );
+    pullbackVolume = {
+      skipped: true,
+      reason: 'error',
+      error: error && error.message ? error.message : String(error),
+    };
+  }
+
   // 检测段一结束就写心跳：后面业务再崩，网页仍能看到「本轮已跑过」。
   try {
     const balanceHealth = summarizeBalanceHealth(balanceAlert);
@@ -2617,6 +2651,7 @@ async function main(event, context) {
     buyTasks,
     nailGreenAlert,
     balanceAlert,
+    pullbackVolume,
     overlookDetect,
     staleNailPrune: staleNailPruneSummary,
     bstockAutoPinned,

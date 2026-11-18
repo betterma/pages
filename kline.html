@@ -4755,7 +4755,7 @@
         box-shadow: none;
         padding-bottom: 0;
       }
-      /* 置顶分栏顶部的新通知摘要条：一眼知道有几个新目标，点一下直达通知栏。 */
+      /* 置顶分栏顶部摘要条：俯瞰优先，其次普通新通知；点一下直达。 */
       .nail-digest {
         display: flex;
         flex: 0 0 auto;
@@ -4763,7 +4763,7 @@
         justify-content: space-between;
         gap: 8px;
         margin: 8px 12px 0;
-        padding: 7px 10px;
+        padding: 8px 10px;
         border-radius: 8px;
         border: 0.5px solid
           color-mix(in srgb, var(--accent, #2f8f6e) 38%, var(--separator));
@@ -4777,12 +4777,69 @@
         cursor: pointer;
         flex: 0 0 auto;
       }
+      .nail-digest.is-overlook {
+        border-color: color-mix(
+          in srgb,
+          var(--warn, #b07030) 55%,
+          var(--separator)
+        );
+        background: color-mix(
+          in srgb,
+          var(--warn, #b07030) 16%,
+          transparent
+        );
+        box-shadow: 0 0 0 1px
+          color-mix(in srgb, var(--warn, #b07030) 18%, transparent);
+      }
       .nail-digest[hidden] {
+        display: none !important;
+      }
+      .nail-digest-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+      .nail-digest-copy strong {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+      }
+      .nail-digest.is-overlook .nail-digest-copy strong {
+        color: color-mix(in srgb, var(--warn, #b07030) 75%, var(--label));
+      }
+      .nail-digest-sub {
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 560;
+      }
+      .nail-digest-sub[hidden] {
         display: none !important;
       }
       .nail-digest-go {
         color: var(--accent, #2f8f6e);
         font-weight: 650;
+        flex: 0 0 auto;
+      }
+      .nail-digest.is-overlook .nail-digest-go {
+        color: color-mix(in srgb, var(--warn, #b07030) 80%, var(--label));
+      }
+      .nail-digest.is-pullback {
+        border-color: color-mix(
+          in srgb,
+          var(--accent, #2f8f6e) 55%,
+          var(--separator)
+        );
+        background: color-mix(
+          in srgb,
+          var(--accent, #2f8f6e) 18%,
+          transparent
+        );
+      }
+      .nail-digest.is-pullback .nail-digest-copy strong,
+      .nail-digest.is-pullback .nail-digest-go {
+        color: color-mix(in srgb, var(--accent, #2f8f6e) 82%, var(--label));
       }
       /* 24h 排序：滚动时右侧位置百分比（类阅读进度气泡） */
       .nail-scroll-pct {
@@ -8455,7 +8512,7 @@
                 持有
               </button>
             </div>
-          </div>
+            </div>
           </div>
           <div class="nail-auto-pin-popover" id="nailAutoPinPopover" hidden>
             <div class="nail-auto-pin-popover-title">自动盯记录</div>
@@ -8566,18 +8623,6 @@
                 <span class="nail-hold-live-warn" id="nailHoldLiveWarn" hidden
                   >实盘已开</span
                 >
-                <div class="nail-hold-live-item">
-                  <span>隐藏0余额</span>
-                  <button
-                    type="button"
-                    class="nail-switch"
-                    id="nailHoldHideZeroSwitch"
-                    role="switch"
-                    aria-checked="false"
-                    title="打开后，可用与冻结都为 0 的币从列表隐藏；账户 USDT 行也按余额判断。偏好保存在本机。"
-                    aria-label="隐藏0余额"
-                  ></button>
-                </div>
               </div>
               <form class="nail-hold-form" id="nailHoldForm">
                 <label>
@@ -8871,8 +8916,11 @@
               tabindex="0"
               hidden
             >
-              <span id="nailDigestText">新通知 0</span>
-              <span class="nail-digest-go">查看 →</span>
+              <div class="nail-digest-copy">
+                <strong id="nailDigestText">新通知 0</strong>
+                <span class="nail-digest-sub" id="nailDigestSub" hidden></span>
+              </div>
+              <span class="nail-digest-go" id="nailDigestGo">查看 →</span>
             </div>
             <div class="nail-pin-toolbar" id="nailPinToolbar">
               <button type="button" id="nailAddBtn" title="钉一个新币种">
@@ -9069,8 +9117,8 @@
                       aria-hidden="true"
                     ></span>
                     健康
-                  </button>
-                </div>
+                </button>
+              </div>
                 <button
                   type="button"
                   id="nailNoticeCloseBtn"
@@ -9133,6 +9181,15 @@
               title="打开：只显示直拉（盯后实体从未跌破 pin，下影线不算；现价高于盯价；不要求当前窗上涨）。可与「天平」同开（并集）；在全部/窗上涨/窗下跌下均可用。偏好保存在本机。"
             >
               直拉
+            </button>
+            <button
+              type="button"
+              id="nailNoticePullbackBtn"
+              class="nail-notice-deblue"
+              aria-pressed="false"
+              title="打开：显示回踩观察+回踩放量（自动盯池；观察=缩量预警，放量=确认）。可与天平/直拉同开（并集）。偏好保存在本机。"
+            >
+              回踩
             </button>
             <button
               type="button"
@@ -9551,7 +9608,7 @@
             >
               设提醒
             </button>
-            <button type="button" id="klineZoomClose">关闭</button>
+          <button type="button" id="klineZoomClose">关闭</button>
           </div>
         </div>
         <div class="kline-zoom-chart kline-zoom-main-chart" id="klineZoomChart">
@@ -9797,6 +9854,7 @@
           "watch-nail-green-notices.json",
         BALANCE_NOTICES_PATH:
           KLINE_PATHS.BALANCE_NOTICES_PATH || "watch-balance-notices.json",
+        OVERLOOK_PATH: KLINE_PATHS.OVERLOOK_PATH || "watch-overlook.json",
         NAIL_DAILY_RESET_PATH:
           KLINE_PATHS.NAIL_DAILY_RESET_PATH || "watch-nail-daily-reset.json",
         WATCH_POOL_RANK: 30,
@@ -10253,6 +10311,11 @@
         ]),
       };
       const AUTO_PIN_SEEN_KEY = "kline-nail-autopin-seen-v1";
+      const OVERLOOK_SEEN_KEY = "kline-overlook-seen-v1";
+      /** 俯瞰类：云函数写入 watch-overlook.json；置顶摘要条优先展示强俯瞰。 */
+      let overlookItems = [];
+      let overlookSeenAt = 0;
+      let overlookLoading = false;
       /**
        * 跨端已读基线：价格提醒 / 自动盯的已读时刻同步到 watch-ui-read-state.json。
        * 状态变量与合并入队函数放在这里（自动盯角标初始化时就会用到），
@@ -10262,7 +10325,8 @@
         (typeof WatchFavorites !== "undefined" &&
           WatchFavorites.UI_READ_STATE_PATH) ||
         "watch-ui-read-state.json";
-      const UI_READ_STATE_DEBOUNCE_MS = 300;
+      /** 已读戳合并窗口：略拉长，少打连续 PUT，降低 409；本机 localStorage 仍即时生效。 */
+      const UI_READ_STATE_DEBOUNCE_MS = 1500;
       const UI_READ_STATE_POLL_MS = 30 * 1000;
       let uiReadStateLoadedAt = 0;
       let uiReadStateBusy = false;
@@ -10272,12 +10336,14 @@
       /** 合并短时间内的多个「标记已读」动作，避免打开分栏时并发写三次。 */
       function queueSharedUiReadState(patch) {
         if (!patch || typeof patch !== "object") return;
-        ["priceAlertReadAt", "autoPinSeenAt"].forEach((key) => {
+        ["priceAlertReadAt", "autoPinSeenAt", "overlookSeenAt"].forEach(
+          (key) => {
           const value = Number(patch[key]) || 0;
           if (value > (Number(uiReadStatePending[key]) || 0)) {
             uiReadStatePending[key] = value;
           }
-        });
+          },
+        );
         if (uiReadStateTimer) clearTimeout(uiReadStateTimer);
         uiReadStateTimer = setTimeout(() => {
           const next = uiReadStatePending;
@@ -13093,8 +13159,8 @@
         const paintOne = async (canvas) => {
           if (token !== nailAutoPinPaintToken) return;
           const symbol = String(canvas.getAttribute("data-autopin-chart") || "")
-            .trim()
-            .toUpperCase();
+                  .trim()
+                  .toUpperCase();
           if (!symbol) return;
           const card = canvas.closest(".nail-auto-pin-card");
           try {
@@ -13480,39 +13546,39 @@
           const isMarked = markedSet.has(
             String(symbol).trim().toUpperCase(),
           );
-          const label = String(symbol || "").replace(/USDT$/i, "");
-          const change24h = Number(marketMap[symbol] && marketMap[symbol].change24h);
-          const win = windowPriceChange(symbol, interval);
-          const rankMeta = nailRadarRankDelta(symbol, interval);
-          const winCls =
-            Number.isFinite(win) && win > 0
-              ? "nail-radar-up"
-              : Number.isFinite(win) && win < 0
-                ? "nail-radar-down"
-                : "";
-          const chCls =
-            Number.isFinite(change24h) && change24h > 0
-              ? "nail-radar-up"
-              : Number.isFinite(change24h) && change24h < 0
-                ? "nail-radar-down"
-                : "";
+            const label = String(symbol || "").replace(/USDT$/i, "");
+            const change24h = Number(marketMap[symbol] && marketMap[symbol].change24h);
+            const win = windowPriceChange(symbol, interval);
+            const rankMeta = nailRadarRankDelta(symbol, interval);
+            const winCls =
+              Number.isFinite(win) && win > 0
+                ? "nail-radar-up"
+                : Number.isFinite(win) && win < 0
+                  ? "nail-radar-down"
+                  : "";
+            const chCls =
+              Number.isFinite(change24h) && change24h > 0
+                ? "nail-radar-up"
+                : Number.isFinite(change24h) && change24h < 0
+                  ? "nail-radar-down"
+                  : "";
           let rankHtml = rank ? `#${rank}` : "—";
-          if (rankMeta && Number.isFinite(rankMeta.improvement)) {
-            const imp = rankMeta.improvement;
-            if (imp > 0) {
+            if (rankMeta && Number.isFinite(rankMeta.improvement)) {
+              const imp = rankMeta.improvement;
+              if (imp > 0) {
               rankHtml = `<span class="nail-radar-up">+${imp}</span> <span>#${rank || rankMeta.currentRank}</span>`;
-            } else if (imp < 0) {
+              } else if (imp < 0) {
               rankHtml = `<span class="nail-radar-down">${imp}</span> <span>#${rank || rankMeta.currentRank}</span>`;
+              }
             }
-          }
-          const rowClass = [
-            pool.has(symbol) ? "is-pool" : "",
+            const rowClass = [
+              pool.has(symbol) ? "is-pool" : "",
             rank && rank <= 20 ? "is-top20" : "",
             opts.extra ? "is-radar-extra" : "",
             isMarked ? "is-radar-fixed" : "",
-          ]
-            .filter(Boolean)
-            .join(" ");
+            ]
+              .filter(Boolean)
+              .join(" ");
           const showKline =
             nailRadarAllKlineOn ||
             isMarked ||
@@ -13957,38 +14023,7 @@
       let simFloatVisible = true;
       let simHoldBusy = false;
 
-      /** 持有浮窗「隐藏0余额」开关：默认关，状态存本机。 */
-      const NAIL_HOLD_HIDE_ZERO_KEY = "kline-nail-hold-hide-zero-v1";
-      let nailHoldHideZeroOn = false;
-      try {
-        nailHoldHideZeroOn =
-          localStorage.getItem(NAIL_HOLD_HIDE_ZERO_KEY) === "1";
-      } catch (_) {
-        nailHoldHideZeroOn = false;
-      }
-
-      function syncNailHoldHideZeroUi() {
-        const btn = document.getElementById("nailHoldHideZeroSwitch");
-        if (!btn) return;
-        btn.setAttribute("aria-checked", nailHoldHideZeroOn ? "true" : "false");
-      }
-
-      /** 切换只影响展示：对齐余额为 0 的币，不改关注名单、不做任何写盘。 */
-      function setNailHoldHideZero(on) {
-        const next = !!on;
-        if (next === nailHoldHideZeroOn) return;
-        nailHoldHideZeroOn = next;
-        try {
-          localStorage.setItem(NAIL_HOLD_HIDE_ZERO_KEY, next ? "1" : "0");
-        } catch (_) {
-          /* ignore */
-        }
-        syncNailHoldHideZeroUi();
-        renderNailHoldList();
-      }
-
       function syncNailHoldLiveSwitches() {
-        syncNailHoldHideZeroUi();
         const sellOn = !!(nailSellTasksState && nailSellTasksState.live);
         const buyOn = !!(nailBuyTasksState && nailBuyTasksState.live);
         const sellBtn = document.getElementById("nailSellLiveSwitch");
@@ -14844,21 +14879,6 @@
             return symbolInActiveUniverse(pair);
           });
         }
-        // 「隐藏0余额」只作用于展示：可用为 0 且冻结也为 0 的币不渲染。
-        // holdingsFreeQty 已把「估值 < 0.01 USDT」的尘埃视为 0，口径一致。
-        if (nailHoldHideZeroOn) {
-          const bal = nailHoldingsState.balances || {};
-          symbols = symbols.filter((symbol) => {
-            const asset = holdingsBaseAsset(symbol);
-            if (!asset) return true;
-            const row = bal[asset] || {};
-            const locked = Number(row.locked);
-            return (
-              holdingsFreeQty(symbol) > 0 ||
-              (Number.isFinite(locked) && locked > 0)
-            );
-          });
-        }
         if (hint) {
           const err = String(nailHoldingsState.lastError || "").trim();
           const stamp = Number(nailHoldingsState.updatedAt) || 0;
@@ -14884,9 +14904,8 @@
             : `上次同步 ${when}`;
         }
         if (!symbols.length) {
-          list.innerHTML = nailHoldHideZeroOn
-            ? '<div class="nail-hold-empty">没有非零余额的币 · 关闭设置里的「隐藏0余额」可看全部</div>'
-            : KLINE_MODE === "bstock"
+          list.innerHTML =
+            KLINE_MODE === "bstock"
               ? '<div class="nail-hold-empty">暂无 bStock 持仓 · 点设置加入关注后等云函数回填</div>'
               : '<div class="nail-hold-empty">暂无关注币 · 点设置加入，等云函数回填余额</div>';
           syncNailHoldLiveSwitches();
@@ -14927,9 +14946,9 @@
               <div class="nail-hold-row-top">
                 <div class="nail-hold-identity">
                   <div class="nail-hold-sym-wrap">
-                    <button type="button" class="nail-hold-sym" data-hold-jump="${escapeHtml(symbol)}" title="跳到钉子 K 线">USDT</button>
+                  <button type="button" class="nail-hold-sym" data-hold-jump="${escapeHtml(symbol)}" title="跳到钉子 K 线">USDT</button>
                     <span class="nail-hold-status-chip is-held">账户资金</span>
-                  </div>
+              </div>
                   <div class="nail-hold-pair">资金资产 · 用于限价买入</div>
                   <div class="nail-hold-summary">可用 ${escapeHtml(freeText)} USDT</div>
                 </div>
@@ -15020,7 +15039,7 @@
               const maxBuy =
                 buy && Number(buy.maxBuy) > 0 ? String(buy.maxBuy) : "";
               const sellPlanQty = freeNum * (sellPct / 100);
-              const usdtFreeNum = Number(usdtBal.free) || 0;
+                const usdtFreeNum = Number(usdtBal.free) || 0;
               const buySpendHint = usdtFreeNum * (buyPct / 100);
               const entryPx = holdingsEntryPriceOf(symbol);
               const entryInput = entryPx != null ? String(entryPx) : "";
@@ -15118,7 +15137,7 @@
               <div class="nail-hold-row-top">
                 <div class="nail-hold-identity">
                   <div class="nail-hold-sym-wrap">
-                    <button type="button" class="nail-hold-sym" data-hold-jump="${escapeHtml(symbol)}" title="跳到钉子 K 线">${escapeHtml(asset)}</button>
+                  <button type="button" class="nail-hold-sym" data-hold-jump="${escapeHtml(symbol)}" title="跳到钉子 K 线">${escapeHtml(asset)}</button>
                     ${statusChip}
                   </div>
                   <div class="nail-hold-pair">${escapeHtml(asset)} / USDT · 现货</div>
@@ -15127,7 +15146,7 @@
                 <div class="nail-hold-px-block">
                   <span class="nail-hold-px">${escapeHtml(pxText)}</span>
                   <span class="nail-hold-px-caption">当前价格 · USDT</span>
-                </div>
+              </div>
                 <div class="nail-hold-more">
                   <button type="button" class="nail-hold-toggle-btn" data-hold-toggle="${escapeHtml(symbol)}" aria-expanded="false" title="展开详情">▾</button>
                   <button type="button" class="nail-hold-app-btn" data-sell-instant="${escapeHtml(symbol)}" title="前往币安 App / 现货页；手机尽量唤起 App">前往APP</button>
@@ -15188,12 +15207,12 @@
                 </div>
                 <div class="nail-hold-entry" data-hold-entry-editor hidden>
                   <label>编辑成本价（USDT）
-                    <input type="number" min="0" step="any" value="${escapeHtml(entryInput)}" placeholder="手填成本" data-hold-entry="${escapeHtml(symbol)}" inputmode="decimal" />
+                <input type="number" min="0" step="any" value="${escapeHtml(entryInput)}" placeholder="手填成本" data-hold-entry="${escapeHtml(symbol)}" inputmode="decimal" />
                   </label>
                   <div class="nail-hold-entry-preview">
                     <div>新的 -3% 触发价<strong data-hold-preview-stop3="${escapeHtml(symbol)}">${escapeHtml(stop3Px)}</strong></div>
                     <div>新的 -5% 触发价<strong data-hold-preview-stop5="${escapeHtml(symbol)}">${escapeHtml(stop5Px)}</strong></div>
-                  </div>
+              </div>
                   <div class="nail-hold-entry-hint">保存后按新成本更新（或创建）-3%/-5% 止损任务，不会重复挂两条。</div>
                   <div class="nail-hold-entry-actions">
                     <button type="button" data-hold-entry-cancel="${escapeHtml(symbol)}">取消</button>
@@ -15205,71 +15224,71 @@
               }
               <div class="nail-hold-sec">
                 <div class="nail-hold-ops${canSell ? "" : " is-buy-only"}">${ops}</div>
-                <div class="nail-hold-panel" data-hold-panel="sell" hidden>
-                  <div class="nail-hold-panel-title">设置卖出 · ${escapeHtml(asset)}</div>
+              <div class="nail-hold-panel" data-hold-panel="sell" hidden>
+                <div class="nail-hold-panel-title">设置卖出 · ${escapeHtml(asset)}</div>
                   <div class="nail-hold-panel-stats">
                     <div>当前现价<strong>${escapeHtml(pxText)} USDT</strong></div>
                     <div>可用数量<strong data-sell-avail="${escapeHtml(symbol)}">${escapeHtml(formatHoldingsQty(freeNum))} ${escapeHtml(asset)}</strong></div>
                   </div>
-                  <div>
+                <div>
                     <label>最低卖出价格（须 ≥ 现价，可更高等涨）</label>
-                    <div class="nail-hold-price-row">
-                      <input type="number" min="${escapeHtml(formatHoldingsPriceInput(holdingsSpotPrice(symbol)) || "0")}" step="any" value="${escapeHtml(defaultHoldPriceInput(minSell, symbol, "sell"))}" placeholder="须 ≥ 现价" data-sell-min="${escapeHtml(symbol)}" />
+                  <div class="nail-hold-price-row">
+                    <input type="number" min="${escapeHtml(formatHoldingsPriceInput(holdingsSpotPrice(symbol)) || "0")}" step="any" value="${escapeHtml(defaultHoldPriceInput(minSell, symbol, "sell"))}" placeholder="须 ≥ 现价" data-sell-min="${escapeHtml(symbol)}" />
                       <button type="button" data-hold-price-refresh="${escapeHtml(symbol)}" data-hold-price-mode="sell" title="查询现价并填入">刷新现价</button>
-                    </div>
                   </div>
-                  <div>
-                    <div class="nail-hold-pct-line"><span>卖出比例</span><span data-sell-pct-label="${escapeHtml(symbol)}">${escapeHtml(String(sellPct))}%</span></div>
-                    <input type="range" min="1" max="100" step="1" value="${escapeHtml(String(sellPct))}" data-sell-pct="${escapeHtml(symbol)}" />
-                    <div class="nail-hold-qty-hint" data-sell-qty-hint="${escapeHtml(symbol)}">可用 ${escapeHtml(formatHoldingsQty(freeNum))} · 本单约 ${escapeHtml(formatHoldingsQty(sellPlanQty))}</div>
-                  </div>
+                </div>
+                <div>
+                  <div class="nail-hold-pct-line"><span>卖出比例</span><span data-sell-pct-label="${escapeHtml(symbol)}">${escapeHtml(String(sellPct))}%</span></div>
+                  <input type="range" min="1" max="100" step="1" value="${escapeHtml(String(sellPct))}" data-sell-pct="${escapeHtml(symbol)}" />
+                  <div class="nail-hold-qty-hint" data-sell-qty-hint="${escapeHtml(symbol)}">可用 ${escapeHtml(formatHoldingsQty(freeNum))} · 本单约 ${escapeHtml(formatHoldingsQty(sellPlanQty))}</div>
+                </div>
                   <div class="nail-hold-panel-stats">
                     <div>本单数量<strong data-sell-plan-qty="${escapeHtml(symbol)}">${escapeHtml(formatHoldingsQty(sellPlanQty))}</strong></div>
                     <div>预计成交金额<strong data-sell-notional="${escapeHtml(symbol)}">${escapeHtml(sellNotional)} USDT</strong></div>
-                  </div>
-                  <div class="nail-hold-panel-actions">
-                    <button type="button" data-hold-cancel-panel="${escapeHtml(symbol)}">取消</button>
-                    <button type="button" class="primary" data-sell-arm="${escapeHtml(symbol)}">创建卖出任务</button>
-                  </div>
                 </div>
-                <div class="nail-hold-panel" data-hold-panel="buy" hidden>
+                <div class="nail-hold-panel-actions">
+                  <button type="button" data-hold-cancel-panel="${escapeHtml(symbol)}">取消</button>
+                    <button type="button" class="primary" data-sell-arm="${escapeHtml(symbol)}">创建卖出任务</button>
+                </div>
+              </div>
+              <div class="nail-hold-panel" data-hold-panel="buy" hidden>
                   <div class="nail-hold-panel-title">买入 · ${escapeHtml(asset)}</div>
                   <div class="nail-hold-panel-stats">
                     <div>当前现价<strong>${escapeHtml(pxText)} USDT</strong></div>
                     <div>可用 USDT<strong>${escapeHtml(usdtFree)}</strong></div>
                   </div>
-                  <div>
+                <div>
                     <label>最高买入价格（须 ≤ 现价，可更低等跌）</label>
-                    <div class="nail-hold-price-row">
-                      <input type="number" min="0" max="${escapeHtml(formatHoldingsPriceInput(holdingsSpotPrice(symbol)) || "")}" step="any" value="${escapeHtml(defaultHoldPriceInput(maxBuy, symbol, "buy"))}" placeholder="须 ≤ 现价" data-buy-max="${escapeHtml(symbol)}" />
+                  <div class="nail-hold-price-row">
+                    <input type="number" min="0" max="${escapeHtml(formatHoldingsPriceInput(holdingsSpotPrice(symbol)) || "")}" step="any" value="${escapeHtml(defaultHoldPriceInput(maxBuy, symbol, "buy"))}" placeholder="须 ≤ 现价" data-buy-max="${escapeHtml(symbol)}" />
                       <button type="button" data-hold-price-refresh="${escapeHtml(symbol)}" data-hold-price-mode="buy" title="查询现价并填入">刷新现价</button>
-                    </div>
                   </div>
-                  <div>
-                    <div class="nail-hold-pct-line"><span>使用 USDT 比例</span><span data-buy-pct-label="${escapeHtml(symbol)}">${escapeHtml(String(buyPct))}%</span></div>
-                    <input type="range" min="1" max="100" step="1" value="${escapeHtml(String(buyPct))}" data-buy-pct="${escapeHtml(symbol)}" />
-                    <div class="nail-hold-qty-hint" data-buy-qty-hint="${escapeHtml(symbol)}">可用 USDT ${escapeHtml(usdtFree)} · 本单约 ${escapeHtml(formatHoldingsUsdt(buySpendHint))} USDT</div>
-                  </div>
+                </div>
+                <div>
+                  <div class="nail-hold-pct-line"><span>使用 USDT 比例</span><span data-buy-pct-label="${escapeHtml(symbol)}">${escapeHtml(String(buyPct))}%</span></div>
+                  <input type="range" min="1" max="100" step="1" value="${escapeHtml(String(buyPct))}" data-buy-pct="${escapeHtml(symbol)}" />
+                  <div class="nail-hold-qty-hint" data-buy-qty-hint="${escapeHtml(symbol)}">可用 USDT ${escapeHtml(usdtFree)} · 本单约 ${escapeHtml(formatHoldingsUsdt(buySpendHint))} USDT</div>
+                </div>
                   <div class="nail-hold-panel-stats">
                     <div>预计花费<strong data-buy-spend="${escapeHtml(symbol)}">${escapeHtml(formatHoldingsUsdt(buySpendHint))} USDT</strong></div>
                     <div>预计获得数量<strong data-buy-get-qty="${escapeHtml(symbol)}">${escapeHtml(buyGetQty)}</strong></div>
-                  </div>
-                  <div class="nail-hold-panel-actions">
-                    <button type="button" data-hold-cancel-panel="${escapeHtml(symbol)}">取消</button>
-                    <button type="button" class="primary" data-buy-arm="${escapeHtml(symbol)}">创建买入任务</button>
-                  </div>
                 </div>
+                <div class="nail-hold-panel-actions">
+                  <button type="button" data-hold-cancel-panel="${escapeHtml(symbol)}">取消</button>
+                    <button type="button" class="primary" data-buy-arm="${escapeHtml(symbol)}">创建买入任务</button>
+                </div>
+              </div>
               </div>
               <div class="nail-hold-sec">
                 <div class="nail-hold-sec-head">
                   <span class="nail-hold-sec-label">自动化任务</span>
                   <span class="nail-hold-sec-tag">${taskRows.length ? `${taskRows.length} 项` : "无"}</span>
-                </div>
-                ${
-                  taskRows.length
-                    ? `<div class="nail-hold-task-list">${taskRows.join("")}</div>`
+              </div>
+              ${
+                taskRows.length
+                  ? `<div class="nail-hold-task-list">${taskRows.join("")}</div>`
                     : `<div class="nail-hold-task-empty">暂无运行中的任务</div>`
-                }
+              }
               </div>
             </div>`;
             })
@@ -15811,23 +15830,23 @@
         }
         if (!pause) setNailHoldPanelLoading(panel, true, "创建中…");
         try {
-          if (!pause) {
-            try {
-              const spot = await resolveHoldSpotPrice(key);
-              if (minSell < spot * 0.999999) {
-                showToast(
-                  `卖出价须 ≥ 现价 ${formatHoldingsPriceInput(spot)}（更高=等涨）`,
-                );
-                return;
-              }
-            } catch (error) {
+        if (!pause) {
+          try {
+            const spot = await resolveHoldSpotPrice(key);
+            if (minSell < spot * 0.999999) {
               showToast(
-                (error && (error.userMessage || error.message)) ||
-                  "无法校验现价",
+                `卖出价须 ≥ 现价 ${formatHoldingsPriceInput(spot)}（更高=等涨）`,
               );
               return;
             }
+          } catch (error) {
+            showToast(
+                (error && (error.userMessage || error.message)) ||
+                  "无法校验现价",
+            );
+            return;
           }
+        }
           const result = await WatchFavorites.patchSellTasks({
             repo: CONFIG.GITHUB_REPO,
             message: pause
@@ -15936,23 +15955,23 @@
         }
         if (!pause) setNailHoldPanelLoading(panel, true, "创建中…");
         try {
-          if (!pause) {
-            try {
-              const spot = await resolveHoldSpotPrice(key);
-              if (maxBuy > spot * 1.000001) {
-                showToast(
-                  `买入价须 ≤ 现价 ${formatHoldingsPriceInput(spot)}（更低=等跌）`,
-                );
-                return;
-              }
-            } catch (error) {
+        if (!pause) {
+          try {
+            const spot = await resolveHoldSpotPrice(key);
+            if (maxBuy > spot * 1.000001) {
               showToast(
-                (error && (error.userMessage || error.message)) ||
-                  "无法校验现价",
+                `买入价须 ≤ 现价 ${formatHoldingsPriceInput(spot)}（更低=等跌）`,
               );
               return;
             }
+          } catch (error) {
+            showToast(
+                (error && (error.userMessage || error.message)) ||
+                  "无法校验现价",
+            );
+            return;
           }
+        }
           const result = await WatchFavorites.patchBuyTasks({
             repo: CONFIG.GITHUB_REPO,
             message: pause
@@ -16307,9 +16326,9 @@
               <div class="nail-hold-row-top">
                 <div class="nail-hold-identity">
                   <div class="nail-hold-sym-wrap">
-                    <button type="button" class="nail-hold-sym" data-sim-jump="${escapeHtml(symbol)}" title="跳到钉子 K 线">USDT</button>
+                  <button type="button" class="nail-hold-sym" data-sim-jump="${escapeHtml(symbol)}" title="跳到钉子 K 线">USDT</button>
                     <span class="nail-hold-status-chip is-held">模拟资金</span>
-                  </div>
+              </div>
                   <div class="nail-hold-pair">资金资产</div>
                 </div>
                 <div class="nail-hold-px-block">
@@ -16378,7 +16397,7 @@
               <div class="nail-hold-row-top">
                 <div class="nail-hold-identity">
                   <div class="nail-hold-sym-wrap">
-                    <button type="button" class="nail-hold-sym" data-sim-jump="${escapeHtml(symbol)}" title="跳到钉子 K 线">${escapeHtml(asset)}</button>
+                  <button type="button" class="nail-hold-sym" data-sim-jump="${escapeHtml(symbol)}" title="跳到钉子 K 线">${escapeHtml(asset)}</button>
                     ${statusChip}
                   </div>
                   <div class="nail-hold-pair">${escapeHtml(asset)} / USDT · 模拟</div>
@@ -16386,7 +16405,7 @@
                 <div class="nail-hold-px-block">
                   <span class="nail-hold-px">${escapeHtml(pxText)}</span>
                   <span class="nail-hold-px-caption">当前价格 · USDT</span>
-                </div>
+              </div>
                 <div class="nail-hold-more">
                   <button type="button" class="nail-hold-more-btn" data-sim-more-toggle aria-label="更多">···</button>
                   <div class="nail-hold-more-menu" hidden>
@@ -16442,40 +16461,40 @@
                 </div>
                 <div class="nail-hold-entry" data-sim-entry-editor hidden>
                   <label>编辑成本价（USDT）
-                    <input type="number" min="0" step="any" value="${escapeHtml(entryInput)}" placeholder="手填成本" data-sim-entry="${escapeHtml(symbol)}" inputmode="decimal" />
+                <input type="number" min="0" step="any" value="${escapeHtml(entryInput)}" placeholder="手填成本" data-sim-entry="${escapeHtml(symbol)}" inputmode="decimal" />
                   </label>
                   <div class="nail-hold-entry-actions">
                     <button type="button" data-sim-entry-cancel="${escapeHtml(symbol)}">取消</button>
                     <button type="button" class="primary" data-sim-entry-save="${escapeHtml(symbol)}" title="保存后自动加 -3%/-5% 止损">保存成本</button>
-                  </div>
+              </div>
                 </div>
               </div>
               <div class="nail-hold-sec">
                 <div class="nail-hold-ops${canSell ? "" : " is-buy-only"}">${ops}</div>
-                <div class="nail-hold-panel" data-sim-panel="sell" hidden>
-                  <div class="nail-hold-panel-title">市价卖出 · ${escapeHtml(asset)}</div>
-                  <div>
-                    <div class="nail-hold-pct-line"><span>卖出比例</span><span data-sim-sell-pct-label="${escapeHtml(symbol)}">50%</span></div>
-                    <input type="range" min="1" max="100" step="1" value="50" data-sim-sell-pct="${escapeHtml(symbol)}" />
-                    <div class="nail-hold-qty-hint" data-sim-sell-qty-hint="${escapeHtml(symbol)}">可用 ${escapeHtml(free)} · 本单约 ${escapeHtml(formatHoldingsQty(freeNum * 0.5))}</div>
-                  </div>
-                  <div class="nail-hold-panel-actions">
-                    <button type="button" data-sim-cancel-panel="${escapeHtml(symbol)}">取消</button>
-                    <button type="button" class="primary" data-sim-sell-arm="${escapeHtml(symbol)}">按现价卖出</button>
-                  </div>
+              <div class="nail-hold-panel" data-sim-panel="sell" hidden>
+                <div class="nail-hold-panel-title">市价卖出 · ${escapeHtml(asset)}</div>
+                <div>
+                  <div class="nail-hold-pct-line"><span>卖出比例</span><span data-sim-sell-pct-label="${escapeHtml(symbol)}">50%</span></div>
+                  <input type="range" min="1" max="100" step="1" value="50" data-sim-sell-pct="${escapeHtml(symbol)}" />
+                  <div class="nail-hold-qty-hint" data-sim-sell-qty-hint="${escapeHtml(symbol)}">可用 ${escapeHtml(free)} · 本单约 ${escapeHtml(formatHoldingsQty(freeNum * 0.5))}</div>
                 </div>
-                <div class="nail-hold-panel" data-sim-panel="buy" hidden>
-                  <div class="nail-hold-panel-title">市价买入 · ${escapeHtml(asset)} · USDT ${escapeHtml(usdtFree)}</div>
-                  <div>
-                    <div class="nail-hold-pct-line"><span>使用 USDT 比例</span><span data-sim-buy-pct-label="${escapeHtml(symbol)}">50%</span></div>
-                    <input type="range" min="1" max="100" step="1" value="50" data-sim-buy-pct="${escapeHtml(symbol)}" />
-                    <div class="nail-hold-qty-hint" data-sim-buy-qty-hint="${escapeHtml(symbol)}">可用 USDT ${escapeHtml(usdtFree)} · 本单约 ${escapeHtml(formatHoldingsUsdt((Number(usdtBal.free) || 0) * 0.5))} USDT</div>
-                  </div>
-                  <div class="nail-hold-panel-actions">
-                    <button type="button" data-sim-cancel-panel="${escapeHtml(symbol)}">取消</button>
-                    <button type="button" class="primary" data-sim-buy-arm="${escapeHtml(symbol)}">按现价买入</button>
-                  </div>
+                <div class="nail-hold-panel-actions">
+                  <button type="button" data-sim-cancel-panel="${escapeHtml(symbol)}">取消</button>
+                  <button type="button" class="primary" data-sim-sell-arm="${escapeHtml(symbol)}">按现价卖出</button>
                 </div>
+              </div>
+              <div class="nail-hold-panel" data-sim-panel="buy" hidden>
+                <div class="nail-hold-panel-title">市价买入 · ${escapeHtml(asset)} · USDT ${escapeHtml(usdtFree)}</div>
+                <div>
+                  <div class="nail-hold-pct-line"><span>使用 USDT 比例</span><span data-sim-buy-pct-label="${escapeHtml(symbol)}">50%</span></div>
+                  <input type="range" min="1" max="100" step="1" value="50" data-sim-buy-pct="${escapeHtml(symbol)}" />
+                  <div class="nail-hold-qty-hint" data-sim-buy-qty-hint="${escapeHtml(symbol)}">可用 USDT ${escapeHtml(usdtFree)} · 本单约 ${escapeHtml(formatHoldingsUsdt((Number(usdtBal.free) || 0) * 0.5))} USDT</div>
+                </div>
+                <div class="nail-hold-panel-actions">
+                  <button type="button" data-sim-cancel-panel="${escapeHtml(symbol)}">取消</button>
+                  <button type="button" class="primary" data-sim-buy-arm="${escapeHtml(symbol)}">按现价买入</button>
+                </div>
+              </div>
               </div>
               <div class="nail-hold-sec">
                 <div class="nail-hold-sec-head">
@@ -17460,9 +17479,9 @@
           }),
           ...(FEATURE_BREAK_HIGH
             ? [
-                soft("break", "破点高", async () => {
-                  await loadSharedBreakHigh();
-                }),
+          soft("break", "破点高", async () => {
+            await loadSharedBreakHigh();
+          }),
               ]
             : []),
           soft("rankPrefs", "排序偏好", async () => {
@@ -22849,13 +22868,16 @@
       function readLocalUiReadState() {
         let price = 0;
         let auto = 0;
+        let overlook = 0;
         try {
           price = Number(localStorage.getItem(PRICE_ALERT_READ_KEY)) || 0;
           auto = Number(localStorage.getItem(AUTO_PIN_SEEN_KEY)) || 0;
+          overlook = Number(localStorage.getItem(OVERLOOK_SEEN_KEY)) || 0;
         } catch (_) {}
         return {
           priceAlertReadAt: Math.max(price, Number(priceAlertReadAt) || 0),
           autoPinSeenAt: auto,
+          overlookSeenAt: Math.max(overlook, Number(overlookSeenAt) || 0),
         };
       }
 
@@ -22864,12 +22886,17 @@
           Number(priceAlertReadAt) || 0,
           Number(state.priceAlertReadAt) || 0,
         );
+        overlookSeenAt = Math.max(
+          Number(overlookSeenAt) || 0,
+          Number(state.overlookSeenAt) || 0,
+        );
         try {
           localStorage.setItem(PRICE_ALERT_READ_KEY, String(priceAlertReadAt));
           localStorage.setItem(
             AUTO_PIN_SEEN_KEY,
             String(Number(state.autoPinSeenAt) || 0),
           );
+          localStorage.setItem(OVERLOOK_SEEN_KEY, String(overlookSeenAt));
         } catch (_) {}
       }
 
@@ -22886,20 +22913,27 @@
             Number(base.autoPinSeenAt) || 0,
             local.autoPinSeenAt,
           ),
+          overlookSeenAt: Math.max(
+            Number(base.overlookSeenAt) || 0,
+            local.overlookSeenAt,
+          ),
         };
         const changed =
           next.priceAlertReadAt > local.priceAlertReadAt ||
-          next.autoPinSeenAt > local.autoPinSeenAt;
+          next.autoPinSeenAt > local.autoPinSeenAt ||
+          next.overlookSeenAt > local.overlookSeenAt;
         writeLocalUiReadState(next);
         if (
           next.priceAlertReadAt > (Number(base.priceAlertReadAt) || 0) ||
-          next.autoPinSeenAt > (Number(base.autoPinSeenAt) || 0)
+          next.autoPinSeenAt > (Number(base.autoPinSeenAt) || 0) ||
+          next.overlookSeenAt > (Number(base.overlookSeenAt) || 0)
         ) {
           queueSharedUiReadState(next);
         }
         if (changed) {
           syncNailNoticeEntryUi();
           syncNailAutoPinBadge();
+          syncNailDigest();
         }
         // 雷达标记名单：按时间戳取较新的一份；本地更新说明离线改过，补推整表。
         const cloudFixedAt = Number(base.radarFixedAt) || 0;
@@ -24503,6 +24537,7 @@
       const NAIL_NOTICE_DELTA_KEY = "kline-nail-notice-window-v2";
       const NAIL_NOTICE_BALANCE_KEY = "kline-nail-notice-balance-v1";
       const NAIL_NOTICE_STRAIGHT_KEY = "kline-nail-notice-straight-v1";
+      const NAIL_NOTICE_PULLBACK_KEY = "kline-nail-notice-pullback-v1";
       const NAIL_NOTICE_AUTO_PIN_SOURCES = new Set([
         "auto-rising",
         "auto-cloud",
@@ -24562,9 +24597,27 @@
           /* ignore */
         }
       }
+      function readLocalNailNoticePullback() {
+        try {
+          return localStorage.getItem(NAIL_NOTICE_PULLBACK_KEY) === "1";
+        } catch (_) {
+          return false;
+        }
+      }
+      function writeLocalNailNoticePullback(enabled) {
+        try {
+          localStorage.setItem(
+            NAIL_NOTICE_PULLBACK_KEY,
+            enabled ? "1" : "0",
+          );
+        } catch (_) {
+          /* ignore */
+        }
+      }
       let nailNoticeDeltaFilter = readLocalNailNoticeDelta(); // all | up | down
       let nailNoticeBalanceEnabled = readLocalNailNoticeBalance();
       let nailNoticeStraightEnabled = readLocalNailNoticeStraight();
+      let nailNoticePullbackEnabled = readLocalNailNoticePullback();
       let nailDailyResetState = null;
       let nailDailyResetPromptKind = null; // pre | post
       let nailDailyResetPromptBusy = false;
@@ -24705,10 +24758,10 @@
             nailGreenNoticesReadAt,
           );
         } else {
-          const read = Number(nailGreenNoticesReadAt) || 0;
+        const read = Number(nailGreenNoticesReadAt) || 0;
           count = (nailGreenNotices || []).filter(
-            (item) => Number(item.at) > read,
-          ).length;
+          (item) => Number(item.at) > read,
+        ).length;
         }
         // 到价提醒与天平/直拉共用一个角标，命中由云函数写 hitAt。
         return count + priceAlertUnreadCount();
@@ -24775,7 +24828,7 @@
             items: nailGreenNotices,
             readAt: nailGreenNoticesReadAt,
           };
-        } catch (error) {
+              } catch (error) {
           console.warn("load balance/straight notices failed", error);
           syncNailNoticeEntryUi();
           return {
@@ -24804,18 +24857,20 @@
       }
 
       function buildNailNoticeCardHtml(item) {
-        const key = String(item.symbol || "").toUpperCase();
-        const symbol = escapeHtml(item.symbol);
-        const label = escapeHtml(
-          item.label || String(item.symbol || "").replace(/USDT$/i, ""),
-        );
-        const id = escapeHtml(item.id || `${item.symbol}:${item.openTime}`);
-        const isNew = Number(item.at) > (Number(nailGreenNoticesReadAt) || 0);
+            const key = String(item.symbol || "").toUpperCase();
+            const symbol = escapeHtml(item.symbol);
+            const label = escapeHtml(
+              item.label || String(item.symbol || "").replace(/USDT$/i, ""),
+            );
+            const id = escapeHtml(item.id || `${item.symbol}:${item.openTime}`);
+            const isNew = Number(item.at) > (Number(nailGreenNoticesReadAt) || 0);
         const kinds = Array.isArray(item.kinds)
           ? item.kinds.map(String).filter(Boolean)
           : [];
         const hitBal = kinds.includes("天平");
         const hitStraight = kinds.includes("直拉");
+        const hitPullback =
+          kinds.includes("回踩观察") || kinds.includes("回踩放量");
         const notePrice = Number(item.alertPrice);
         const pinPrice = Number(item.pinPrice);
         const firstSeenAt =
@@ -24829,28 +24884,28 @@
         const isFirstEntry =
           Number(item.at) - firstSeenAt <= NOTICE_FIRST_ENTRY_MS;
         const batchAt = Number(item.batchAt) || 0;
-        const selected =
-          nailNoticeSelectMode && selectedNoticeSymbols.has(key)
-            ? " is-selected"
-            : "";
-        const check = nailNoticeSelectMode
-          ? `<input type="checkbox" class="nail-notice-check" data-notice-select="${symbol}" ${selectedNoticeSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
-          : "";
-        return [
-          `<article class="nail-notice-card${isFirstEntry ? " is-first" : ""}${selected}" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-batch="${batchAt}" data-notice-first="${firstSeenAt}" data-notice-balance="${hitBal ? "1" : "0"}" data-notice-straight="${hitStraight ? "1" : "0"}">`,
-          check,
-          `<div class="nail-notice-card-top">`,
+            const selected =
+              nailNoticeSelectMode && selectedNoticeSymbols.has(key)
+                ? " is-selected"
+                : "";
+            const check = nailNoticeSelectMode
+              ? `<input type="checkbox" class="nail-notice-check" data-notice-select="${symbol}" ${selectedNoticeSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
+              : "";
+            return [
+          `<article class="nail-notice-card${isFirstEntry ? " is-first" : ""}${selected}" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-batch="${batchAt}" data-notice-first="${firstSeenAt}" data-notice-balance="${hitBal ? "1" : "0"}" data-notice-straight="${hitStraight ? "1" : "0"}" data-notice-pullback="${hitPullback ? "1" : "0"}">`,
+              check,
+              `<div class="nail-notice-card-top">`,
           `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}</button>`,
-          `<span class="nail-notice-card-stamps">${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
-          `</div>`,
-          `<div class="nail-notice-meta">`,
+              `<span class="nail-notice-card-stamps">${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
+              `</div>`,
+              `<div class="nail-notice-meta">`,
           `<span class="nail-notice-line"><span class="nail-notice-key">便签</span><span>${notePrice > 0 ? escapeHtml(formatPinPrice(notePrice)) : "—"}</span><span class="nail-notice-iv">${escapeHtml(item.interval || "4h")}</span></span>`,
           `<span class="nail-notice-line"><span class="nail-notice-key">盯价</span><span>${pinPrice > 0 ? escapeHtml(formatPinPrice(pinPrice)) : "—"}</span></span>`,
-          `<span class="nail-notice-line"><span class="nail-notice-key">现价</span><span data-notice-live>--</span><span class="nail-notice-delta" data-notice-delta></span></span>`,
-          `</div>`,
+              `<span class="nail-notice-line"><span class="nail-notice-key">现价</span><span data-notice-live>--</span><span class="nail-notice-delta" data-notice-delta></span></span>`,
+              `</div>`,
           `<canvas width="640" height="160" data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-first="${firstSeenAt}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${notePrice > 0 ? notePrice : 0}" data-notice-pin-price="${pinPrice > 0 ? pinPrice : 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
-          `</article>`,
-        ].join("");
+              `</article>`,
+            ].join("");
       }
 
       /** 按 batchAt 分组：新批次在上；币被新批次带走后旧批次自动变少，空则不展示。 */
@@ -25291,6 +25346,7 @@
         });
         syncNailNoticeBalanceUi();
         syncNailNoticeStraightUi();
+        syncNailNoticePullbackUi();
       }
 
       function syncNailNoticeBalanceUi() {
@@ -25313,6 +25369,16 @@
         btn.textContent = on ? "直拉·开" : "直拉";
       }
 
+      function syncNailNoticePullbackUi() {
+        const btn = document.getElementById("nailNoticePullbackBtn");
+        if (!btn) return;
+        const on = !!nailNoticePullbackEnabled;
+        btn.hidden = false;
+        btn.classList.toggle("is-on", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+        btn.textContent = on ? "回踩·开" : "回踩";
+      }
+
       function describeNailNoticeFilter() {
         const bits = [];
         if (nailNoticeDeltaFilter === "up") bits.push("窗上涨");
@@ -25320,6 +25386,7 @@
         else bits.push("全部");
         if (nailNoticeBalanceEnabled) bits.push("天平");
         if (nailNoticeStraightEnabled) bits.push("直拉");
+        if (nailNoticePullbackEnabled) bits.push("回踩");
         return bits.join("·");
       }
 
@@ -25415,13 +25482,21 @@
         void runNailNoticeFilterRefresh("straight");
       }
 
+      function setNailNoticePullbackEnabled(enabled) {
+        nailNoticePullbackEnabled = !!enabled;
+        writeLocalNailNoticePullback(nailNoticePullbackEnabled);
+        syncNailNoticePullbackUi();
+        void runNailNoticeFilterRefresh("pullback");
+      }
+
       function applyNailNoticeDeltaFilter() {
         const listEl = document.getElementById("nailNoticeList");
         if (!listEl) return;
         const mode = nailNoticeDeltaFilter;
         const balanceOn = !!nailNoticeBalanceEnabled;
         const straightOn = !!nailNoticeStraightEnabled;
-        const patternOn = balanceOn || straightOn;
+        const pullbackOn = !!nailNoticePullbackEnabled;
+        const patternOn = balanceOn || straightOn || pullbackOn;
         let visible = 0;
         listEl.querySelectorAll(".nail-notice-card").forEach((card) => {
           // 筛选用当前4h窗相对开盘；染绿仍看 data-notice-dir（便签水位）。
@@ -25436,20 +25511,24 @@
           const pending = !win && mode !== "all";
           const balAttr = card.getAttribute("data-notice-balance");
           const straightAttr = card.getAttribute("data-notice-straight");
+          const pullbackAttr = card.getAttribute("data-notice-pullback");
           const balReady = balAttr !== null;
           const straightReady = straightAttr !== null;
-          // 天平/直拉：同开为并集；已命中立刻显示，否则等开启的标记都算完再藏。
+          const pullbackReady = pullbackAttr !== null;
+          // 天平/直拉/回踩放量：同开为并集；已命中立刻显示，否则等开启的标记都算完再藏。
           let patternHide = false;
           let patternPending = false;
           if (patternOn) {
             const hitBal = balanceOn && balAttr === "1";
             const hitStraight = straightOn && straightAttr === "1";
-            if (hitBal || hitStraight) {
+            const hitPullback = pullbackOn && pullbackAttr === "1";
+            if (hitBal || hitStraight || hitPullback) {
               patternHide = false;
             } else {
               const waitBal = balanceOn && !balReady;
               const waitStraight = straightOn && !straightReady;
-              if (waitBal || waitStraight) {
+              const waitPullback = pullbackOn && !pullbackReady;
+              if (waitBal || waitStraight || waitPullback) {
                 patternPending = true;
               } else {
                 patternHide = true;
@@ -25491,16 +25570,15 @@
             emptyEl.className = "nail-notice-empty nail-notice-filter-empty";
             listEl.appendChild(emptyEl);
           }
-          emptyEl.textContent =
-            balanceOn && straightOn
-              ? "暂无天平/直拉通知"
-              : balanceOn
-                ? "暂无天平通知"
-                : straightOn
-                  ? "暂无直拉通知"
-                  : mode === "up"
-                    ? "暂无窗上涨通知"
-                    : "暂无窗下跌通知";
+          const kindBits = [];
+          if (balanceOn) kindBits.push("天平");
+          if (straightOn) kindBits.push("直拉");
+          if (pullbackOn) kindBits.push("回踩");
+          emptyEl.textContent = kindBits.length
+            ? `暂无${kindBits.join("/")}通知`
+            : mode === "up"
+              ? "暂无窗上涨通知"
+              : "暂无窗下跌通知";
           emptyEl.hidden = false;
         } else if (emptyEl) {
           emptyEl.hidden = true;
@@ -25627,6 +25705,7 @@
           if (nailSegment !== "notice") {
             await refreshNailGreenNotices({ force: true });
           }
+          await refreshOverlookState({ force: true });
           await pollAutoPinBadgeOnce();
         } catch (error) {
           console.warn("nail reminder poll failed", error);
@@ -25914,8 +25993,8 @@
                 [],
                 alertPrice > 0
                   ? {
-                      price: alertPrice,
-                      fromAt: noteAt > 0 ? noteAt : 0,
+                  price: alertPrice,
+                  fromAt: noteAt > 0 ? noteAt : 0,
                     }
                   : null,
                 null,
@@ -25930,7 +26009,7 @@
                 }
                 if (!card.getAttribute("data-notice-window")) {
                   card.setAttribute("data-notice-window", "flat");
-                }
+              }
                 applyNailNoticeDeltaFilter();
               }
             } finally {
@@ -26556,13 +26635,19 @@
           initNailSegments();
           applyNailSegmentUi();
         }
-        // 打开通知页时恢复本机筛选：全部/蓝/红 + 天平/直拉。
+        // 打开通知页时恢复本机筛选：全部/蓝/红 + 天平/直拉/回踩。
         nailNoticeDeltaFilter = readLocalNailNoticeDelta();
         nailNoticeBalanceEnabled = readLocalNailNoticeBalance();
         nailNoticeStraightEnabled = readLocalNailNoticeStraight();
+        nailNoticePullbackEnabled = readLocalNailNoticePullback();
+        if (opts.pullbackFilter) {
+          nailNoticePullbackEnabled = true;
+          writeLocalNailNoticePullback(true);
+        }
         syncNailNoticeDeltaFilterUi();
         syncNailNoticeBalanceUi();
         syncNailNoticeStraightUi();
+        syncNailNoticePullbackUi();
         // 先开抽屉（用内存名单立刻出画面），再后台强刷，避免点击半秒停顿。
         if (
           (nailGreenNotices || []).length ||
@@ -26570,7 +26655,21 @@
         ) {
           renderNailNoticeList();
         }
+        applyNailNoticeDeltaFilter();
         setNailNoticeDrawerMode("open");
+        const jumpKey = String(opts.jumpSymbol || "")
+          .trim()
+          .toUpperCase();
+        if (jumpKey) {
+          requestAnimationFrame(() => {
+            const card = document.querySelector(
+              `#nailNoticeList .nail-notice-card[data-notice-symbol="${jumpKey}"]`,
+            );
+            if (card && typeof card.scrollIntoView === "function") {
+              card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            }
+          });
+        }
         if (!opts.skipMarkRead) {
           void markNailNoticesRead();
           markPriceAlertsRead();
@@ -26718,6 +26817,7 @@
 
       async function maybeOpenNailNoticeOnEntry() {
         await refreshNailGreenNotices();
+        void refreshOverlookState({ force: true });
         // 分栏化后，未读不再强行切走主视图——置顶栏顶部的摘要条负责提示；
         // 只有用户在设置里显式勾了「进入即打开通知」才自动落到通知栏。
         if (nailDefaultNoticeOnEnter && nailNoticeMode === "closed") {
@@ -27244,17 +27344,205 @@
         }).length;
       }
 
-      /** 置顶分栏顶部摘要条：有未读通知才出现，点一下直达通知栏。 */
+      function overlookLabel(symbol) {
+        return String(symbol || "").replace(/USDT$/i, "");
+      }
+
+      function formatOverlookPct(pct) {
+        const n = Number(pct);
+        if (!Number.isFinite(n)) return "";
+        const sign = n > 0 ? "+" : "";
+        return `${sign}${n.toFixed(1)}%`;
+      }
+
+      /** 未读俯瞰（默认只要强俯瞰；弱俯瞰不抢摘要条）。 */
+      function unreadOverlookItems(opts) {
+        const strongOnly = !(opts && opts.includeWeak);
+        const seen = Number(overlookSeenAt) || 0;
+        return (Array.isArray(overlookItems) ? overlookItems : []).filter(
+          (row) => {
+            if (!row) return false;
+            if (strongOnly && row.tier !== "strong") return false;
+            return (Number(row.detectedAt) || 0) > seen;
+          },
+        );
+      }
+
+      function markOverlookSeen(at) {
+        const latest = (
+          Array.isArray(overlookItems) ? overlookItems : []
+        ).reduce((max, row) => Math.max(max, Number(row.detectedAt) || 0), 0);
+        const next = Math.max(
+          Number(at) || 0,
+          latest,
+          Number(overlookSeenAt) || 0,
+          Date.now(),
+        );
+        if (next <= (Number(overlookSeenAt) || 0)) return;
+        overlookSeenAt = next;
+        try {
+          localStorage.setItem(OVERLOOK_SEEN_KEY, String(next));
+        } catch (_) {
+          /* ignore */
+        }
+        queueSharedUiReadState({ overlookSeenAt: next });
+        syncNailDigest();
+      }
+
+      async function refreshOverlookState(options) {
+        const opts = options || {};
+        if (
+          overlookLoading ||
+          !WatchFavorites ||
+          typeof WatchFavorites.loadOverlookRaw !== "function"
+        ) {
+          return overlookItems;
+        }
+        overlookLoading = true;
+        try {
+          const packed = await WatchFavorites.loadOverlookRaw({
+            force: !!opts.force,
+            path:
+              (WatchFavorites && WatchFavorites.OVERLOOK_PATH) ||
+              CONFIG.OVERLOOK_PATH,
+          });
+          const state =
+            (packed && packed.state) ||
+            (WatchFavorites.emptyOverlookState
+              ? WatchFavorites.emptyOverlookState()
+              : { items: [] });
+          overlookItems = Array.isArray(state.items) ? state.items : [];
+          syncNailDigest();
+          return overlookItems;
+        } catch (error) {
+          console.warn("load overlook failed", error);
+          return overlookItems;
+        } finally {
+          overlookLoading = false;
+        }
+      }
+
+      function unreadPullbackNoticeItems() {
+        const readAt = Number(nailGreenNoticesReadAt) || 0;
+        const list = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
+        const rows = [];
+        list.forEach((item) => {
+          if (!item || !item.symbol) return;
+          const at = Number(item.at) || 0;
+          if (!(at > readAt)) return;
+          const kinds = Array.isArray(item.kinds)
+            ? item.kinds.map(String)
+            : [];
+          const watch = kinds.includes("回踩观察");
+          const confirm = kinds.includes("回踩放量");
+          if (!watch && !confirm) return;
+          rows.push({
+            symbol: String(item.symbol).trim().toUpperCase(),
+            label:
+              item.label ||
+              String(item.symbol || "").replace(/USDT$/i, ""),
+            at,
+            tier: watch ? "watch" : "confirm",
+            kinds,
+          });
+        });
+        // 观察优先于放量；同档按时间新→旧。
+        rows.sort((a, b) => {
+          if (a.tier !== b.tier) return a.tier === "watch" ? -1 : 1;
+          return (b.at || 0) - (a.at || 0);
+        });
+        return rows;
+      }
+
+      /** 置顶分栏顶部摘要条：强俯瞰 → 回踩观察/放量 → 未读通知。 */
       function syncNailDigest() {
         const bar = document.getElementById("nailDigestBar");
         const text = document.getElementById("nailDigestText");
+        const sub = document.getElementById("nailDigestSub");
+        const go = document.getElementById("nailDigestGo");
         if (!bar || !text) return;
-        const list = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
+        const overs = unreadOverlookItems();
+        const pullbacks = unreadPullbackNoticeItems();
         const unread = nailGreenUnreadCount();
-        if (!unread) {
+        if (!overs.length && !pullbacks.length && !unread) {
           bar.hidden = true;
+          bar.classList.remove("is-overlook", "is-pullback");
+          bar.dataset.digestMode = "";
+          bar.dataset.digestSymbol = "";
+          if (sub) {
+            sub.hidden = true;
+            sub.textContent = "";
+          }
           return;
         }
+        bar.hidden = false;
+        if (overs.length) {
+          const top = overs[0];
+          const pct = formatOverlookPct(top.overPct);
+          const name = overlookLabel(top.symbol);
+          bar.classList.add("is-overlook");
+          bar.classList.remove("is-pullback");
+          bar.dataset.digestMode = "overlook";
+          bar.dataset.digestSymbol = String(top.symbol || "");
+          text.textContent =
+            overs.length === 1
+              ? `俯瞰 ${name}${pct ? ` · ${pct}` : ""}`
+              : `俯瞰 ${overs.length} · ${name}${pct ? ` ${pct}` : ""}`;
+          if (sub) {
+            const pbBit = pullbacks.length
+              ? `回踩 ${pullbacks.length}`
+              : "";
+            const noticeBit =
+              unread && !pullbacks.length ? `另有通知 ${unread}` : "";
+            const more =
+              overs.length > 1
+                ? overs
+                    .slice(1, 3)
+                    .map((row) => overlookLabel(row.symbol))
+                    .join(" / ")
+                : "";
+            const parts = [more, pbBit, noticeBit].filter(Boolean);
+            sub.textContent = parts.join(" · ");
+            sub.hidden = !parts.length;
+          }
+          if (go) go.textContent = "去看 →";
+          return;
+        }
+        if (pullbacks.length) {
+          const top = pullbacks[0];
+          const name = String(top.label || "").replace(/USDT$/i, "") || top.symbol;
+          const tierLabel = top.tier === "watch" ? "回踩观察" : "回踩放量";
+          bar.classList.remove("is-overlook");
+          bar.classList.add("is-pullback");
+          bar.dataset.digestMode = "pullback";
+          bar.dataset.digestSymbol = String(top.symbol || "");
+          text.textContent =
+            pullbacks.length === 1
+              ? `${tierLabel} ${name}`
+              : `${tierLabel} ${pullbacks.length} · ${name}`;
+          if (sub) {
+            const more = pullbacks
+              .slice(1, 3)
+              .map((row) =>
+                String(row.label || row.symbol || "").replace(/USDT$/i, ""),
+              )
+              .filter(Boolean)
+              .join(" / ");
+            const noticeBit =
+              unread > pullbacks.length
+                ? `另有通知 ${unread - pullbacks.length}`
+                : "";
+            const parts = [more, noticeBit].filter(Boolean);
+            sub.textContent = parts.join(" · ");
+            sub.hidden = !parts.length;
+          }
+          if (go) go.textContent = "去看 →";
+          return;
+        }
+        bar.classList.remove("is-overlook", "is-pullback");
+        bar.dataset.digestMode = "notice";
+        bar.dataset.digestSymbol = "";
+        const list = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
         const readAt = Number(nailGreenNoticesReadAt) || 0;
         let fresh = 0;
         list.forEach((item) => {
@@ -27264,10 +27552,14 @@
             Number(item.firstSeenAt) > 0 ? Number(item.firstSeenAt) : at;
           if (at - first <= 5 * 60 * 1000) fresh += 1;
         });
-        bar.hidden = false;
         text.textContent = fresh
           ? `新通知 ${unread} · 首次进通知 ${fresh}`
           : `新通知 ${unread}`;
+        if (sub) {
+          sub.hidden = true;
+          sub.textContent = "";
+        }
+        if (go) go.textContent = "查看 →";
       }
 
       function syncNailSegBadges() {
@@ -27344,6 +27636,33 @@
         const digest = document.getElementById("nailDigestBar");
         if (digest) {
           const go = () => {
+            const mode = String(digest.dataset.digestMode || "");
+            if (mode === "overlook") {
+              const symbol = String(digest.dataset.digestSymbol || "")
+                .trim()
+                .toUpperCase();
+              markOverlookSeen();
+              void setNailSegment("autopin").then(() => {
+                if (!symbol) return;
+                const card = document.querySelector(
+                  `#nailAutoPinList .nail-auto-pin-card[data-autopin-card="${symbol}"]`,
+                );
+                if (card && typeof card.scrollIntoView === "function") {
+                  card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+                }
+              });
+              return;
+            }
+            if (mode === "pullback") {
+              const symbol = String(digest.dataset.digestSymbol || "")
+                .trim()
+                .toUpperCase();
+              void openNailNoticeDrawer({
+                pullbackFilter: true,
+                jumpSymbol: symbol,
+              });
+              return;
+            }
             void setNailSegment("notice");
           };
           digest.addEventListener("click", go);
@@ -28575,13 +28894,13 @@
             if (labelEl) grid.appendChild(labelEl);
           }
           for (const item of section.items) {
-            const key = String(item.symbol || "").toUpperCase();
+          const key = String(item.symbol || "").toUpperCase();
             if (!key) continue;
             const sel = CSS.escape
               ? `.nail-kcard[data-nail-symbol="${CSS.escape(key)}"]`
               : `.nail-kcard[data-nail-symbol="${key}"]`;
             const card = grid.querySelector(sel);
-            if (card) grid.appendChild(card);
+          if (card) grid.appendChild(card);
           }
         }
       }
@@ -28651,8 +28970,8 @@
           listEl.innerHTML = nailPinnedOnlyOn
             ? '<div class="nail-empty">没有置顶的钉子 · 可在设置里关闭「只看置顶区」</div>'
             : nailRisingFilterOn
-              ? '<div class="nail-empty">当前没有窗口上涨的钉子 · 可关闭上方开关查看全部</div>'
-              : '<div class="nail-empty">还没有钉子</div>';
+            ? '<div class="nail-empty">当前没有窗口上涨的钉子 · 可关闭上方开关查看全部</div>'
+            : '<div class="nail-empty">还没有钉子</div>';
           applyFocusActionChrome();
           syncNailSelectUi();
           return;
@@ -28660,57 +28979,57 @@
         const sections = nailDrawerSectionParts(items);
         const showLabels = nailDrawerShowSectionLabels(sections);
         const cardHtml = (item) => {
-          const exited = Number(item.exitedAt) > 0;
-          const pinned = !!item.pinned;
-          const note = String(item.note || "").trim();
-          const tag = exited
-            ? '<span class="nail-exit-tag">退出</span>'
-            : "";
-          const label = escapeHtml(item.label || item.symbol);
-          const symbol = escapeHtml(item.symbol);
-          const key = String(item.symbol || "").toUpperCase();
-          const selected =
-            nailSelectMode && selectedNailSymbols.has(key)
-              ? " is-selected"
+            const exited = Number(item.exitedAt) > 0;
+            const pinned = !!item.pinned;
+            const note = String(item.note || "").trim();
+            const tag = exited
+              ? '<span class="nail-exit-tag">退出</span>'
               : "";
-          const check = nailSelectMode
-            ? `<input type="checkbox" class="nail-check" data-nail-select="${symbol}" ${selectedNailSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
-            : "";
-          // 蒙蔽双击揭开暂时关闭（NAIL_BROWSE_MASK_ENABLED）
-          const veiled =
-            NAIL_BROWSE_MASK_ENABLED &&
-            nailBrowseMaskSession &&
-            !nailBrowseRevealed.has(key);
-          const veil = veiled
-            ? `<div class="nail-kline-veil" data-nail-unveil="${symbol}">双击查看</div>`
-            : "";
-          return [
-            `<article class="nail-kcard${pinned ? " is-pinned" : ""}${selected}" data-nail-symbol="${symbol}">`,
-            `<div class="nail-kcard-head">`,
-            nailSelectMode
-              ? ""
+            const label = escapeHtml(item.label || item.symbol);
+            const symbol = escapeHtml(item.symbol);
+            const key = String(item.symbol || "").toUpperCase();
+            const selected =
+              nailSelectMode && selectedNailSymbols.has(key)
+                ? " is-selected"
+                : "";
+            const check = nailSelectMode
+              ? `<input type="checkbox" class="nail-check" data-nail-select="${symbol}" ${selectedNailSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
+              : "";
+            // 蒙蔽双击揭开暂时关闭（NAIL_BROWSE_MASK_ENABLED）
+            const veiled =
+              NAIL_BROWSE_MASK_ENABLED &&
+              nailBrowseMaskSession &&
+              !nailBrowseRevealed.has(key);
+            const veil = veiled
+              ? `<div class="nail-kline-veil" data-nail-unveil="${symbol}">双击查看</div>`
+              : "";
+            return [
+              `<article class="nail-kcard${pinned ? " is-pinned" : ""}${selected}" data-nail-symbol="${symbol}">`,
+              `<div class="nail-kcard-head">`,
+              nailSelectMode
+                ? ""
               : `<span class="nail-pin-wrap">
               <button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" aria-haspopup="${pinned ? "menu" : "false"}" aria-expanded="false" title="${pinned ? "置顶选项" : "置顶"}">${pinned ? "顶" : "↑"}</button>
             </span>`,
-            `<button type="button" class="nail-name" data-nail-copy-name="${label}" data-copy="${label}" title="点击复制名称">${label}${tag}</button>`,
-            nailSelectMode
-              ? ""
-              : `<button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线" aria-label="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button>`,
-            nailSelectMode
-              ? ""
-              : `<button type="button" class="nail-del" data-nail-del="${symbol}">删除</button>`,
-            `</div>`,
-            nailPriceRowHtml(item.symbol),
-            `<div class="nail-kline-wrap">`,
-            `<canvas class="nail-kline" data-kline="${symbol}"></canvas>`,
-            veil,
-            `</div>`,
-            note
-              ? `<p class="nail-note" data-nail-note-display="${symbol}">${formatNailNoteHtml(note)}</p>`
-              : "",
-            check,
-            `</article>`,
-          ].join("");
+              `<button type="button" class="nail-name" data-nail-copy-name="${label}" data-copy="${label}" title="点击复制名称">${label}${tag}</button>`,
+              nailSelectMode
+                ? ""
+                : `<button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线" aria-label="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button>`,
+              nailSelectMode
+                ? ""
+                : `<button type="button" class="nail-del" data-nail-del="${symbol}">删除</button>`,
+              `</div>`,
+              nailPriceRowHtml(item.symbol),
+              `<div class="nail-kline-wrap">`,
+              `<canvas class="nail-kline" data-kline="${symbol}"></canvas>`,
+              veil,
+              `</div>`,
+              note
+                ? `<p class="nail-note" data-nail-note-display="${symbol}">${formatNailNoteHtml(note)}</p>`
+                : "",
+              check,
+              `</article>`,
+            ].join("");
         };
         listEl.innerHTML = `<div class="nail-grid">${sections
           .map(
@@ -29259,6 +29578,7 @@
           syncNailPriceRows();
           await paintNailKlines();
           await refreshNailGreenNotices();
+          await refreshOverlookState({ force: true });
           if (nailNoticeMode === "open") renderNailNoticeList();
           showToast("钉子已刷新");
         } catch (error) {
@@ -32631,17 +32951,6 @@
           void setNailTradeLive("buy", !on);
         });
       }
-      const nailHoldHideZeroSwitch = document.getElementById(
-        "nailHoldHideZeroSwitch",
-      );
-      if (nailHoldHideZeroSwitch) {
-        syncNailHoldHideZeroUi();
-        nailHoldHideZeroSwitch.addEventListener("click", () => {
-          const on =
-            nailHoldHideZeroSwitch.getAttribute("aria-checked") === "true";
-          setNailHoldHideZero(!on);
-        });
-      }
       const nailSimFloatVisibleSwitch = document.getElementById(
         "nailSimFloatVisibleSwitch",
       );
@@ -32945,6 +33254,14 @@
       if (nailNoticeStraightBtn) {
         nailNoticeStraightBtn.addEventListener("click", () => {
           setNailNoticeStraightEnabled(!nailNoticeStraightEnabled);
+        });
+      }
+      const nailNoticePullbackBtn = document.getElementById(
+        "nailNoticePullbackBtn",
+      );
+      if (nailNoticePullbackBtn) {
+        nailNoticePullbackBtn.addEventListener("click", () => {
+          setNailNoticePullbackEnabled(!nailNoticePullbackEnabled);
         });
       }
       const nailNoticeRefreshBtn = document.getElementById(
