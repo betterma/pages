@@ -4858,14 +4858,25 @@
         box-shadow: none;
         padding-bottom: 0;
       }
-      /* 钉子页摘要条（分栏外）：俯瞰优先；点正文去看，点 × 才标已读关闭。 */
+      /* 钉子页摘要条（分栏外）：俯瞰 / 回踩 / 其它通知各一条，互不合并；点 × 才关。 */
+      .nail-digest-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 8px 12px 0;
+        flex: 0 0 auto;
+      }
+      .nail-digest-stack:empty,
+      .nail-digest-stack:not(:has(.nail-digest:not([hidden]))) {
+        display: none;
+      }
       .nail-digest {
         display: flex;
         flex: 0 0 auto;
         align-items: center;
         justify-content: space-between;
         gap: 8px;
-        margin: 8px 12px 0;
+        margin: 0;
         padding: 8px 10px;
         border-radius: 8px;
         border: 0.5px solid
@@ -9089,27 +9100,73 @@
             雷达
           </button>
         </div>
-        <div
-          class="nail-digest"
-          id="nailDigestBar"
-          role="button"
-          tabindex="0"
-          hidden
-        >
-          <div class="nail-digest-copy">
-            <strong id="nailDigestText">新通知 0</strong>
-            <span class="nail-digest-sub" id="nailDigestSub" hidden></span>
-          </div>
-          <span class="nail-digest-go" id="nailDigestGo">查看 →</span>
-          <button
-            type="button"
-            class="nail-digest-dismiss"
-            id="nailDigestDismiss"
-            title="关闭摘要（标已读）"
-            aria-label="关闭摘要"
+        <div class="nail-digest-stack" id="nailDigestStack">
+          <div
+            class="nail-digest is-overlook"
+            id="nailDigestOverlook"
+            data-digest-mode="overlook"
+            role="button"
+            tabindex="0"
+            hidden
           >
-            ×
-          </button>
+            <div class="nail-digest-copy">
+              <strong class="nail-digest-text">俯瞰</strong>
+              <span class="nail-digest-sub" hidden></span>
+            </div>
+            <span class="nail-digest-go">去看 →</span>
+            <button
+              type="button"
+              class="nail-digest-dismiss"
+              title="关闭俯瞰摘要（标已读）"
+              aria-label="关闭俯瞰摘要"
+            >
+              ×
+            </button>
+          </div>
+          <div
+            class="nail-digest is-pullback"
+            id="nailDigestPullback"
+            data-digest-mode="pullback"
+            role="button"
+            tabindex="0"
+            hidden
+          >
+            <div class="nail-digest-copy">
+              <strong class="nail-digest-text">回踩</strong>
+              <span class="nail-digest-sub" hidden></span>
+            </div>
+            <span class="nail-digest-go">去看 →</span>
+            <button
+              type="button"
+              class="nail-digest-dismiss"
+              title="关闭回踩摘要（标已读）"
+              aria-label="关闭回踩摘要"
+            >
+              ×
+            </button>
+          </div>
+          <div
+            class="nail-digest"
+            id="nailDigestNotice"
+            data-digest-mode="notice"
+            role="button"
+            tabindex="0"
+            hidden
+          >
+            <div class="nail-digest-copy">
+              <strong class="nail-digest-text">新通知 0</strong>
+              <span class="nail-digest-sub" hidden></span>
+            </div>
+            <span class="nail-digest-go">查看 →</span>
+            <button
+              type="button"
+              class="nail-digest-dismiss"
+              title="关闭通知摘要（标已读）"
+              aria-label="关闭通知摘要"
+            >
+              ×
+            </button>
+          </div>
         </div>
         <div class="nail-seg-host" id="nailSegHost">
           <div
@@ -10514,14 +10571,74 @@
       };
       const AUTO_PIN_SEEN_KEY = "kline-nail-autopin-seen-v1";
       const OVERLOOK_SEEN_KEY = "kline-overlook-seen-v1";
+      const PULLBACK_SEEN_KEY = "kline-pullback-digest-seen-v1";
       /** 俯瞰类：云函数写入 watch-overlook.json；置顶摘要条优先展示强俯瞰。 */
       let overlookItems = [];
       let overlookSeenAt = 0;
       let overlookLoading = false;
-      /** 点摘要条后：未读俯瞰在自动盯列表顶部单独成区（可看 K 线）。 */
+      /** 回踩摘要条独立已读基线（与天平/直拉通知已读分开，互不顶替）。 */
+      let pullbackSeenAt = 0;
+      try {
+        pullbackSeenAt = Number(localStorage.getItem(PULLBACK_SEEN_KEY)) || 0;
+      } catch (_) {
+        pullbackSeenAt = 0;
+      }
+      /**
+       * 点摘要条后：俯瞰在自动盯顶部单独成区（可看 K 线）。
+       * 用快照列表，不绑 overlookSeenAt——关摘要标已读不收起本区；
+       * 仅手动「移出」逐个拿掉，移空后区才消失。
+       */
       let nailAutoPinOverlookFocus = false;
-      /** 本轮从俯瞰置顶区手动移出的币（不改云端已读，只影响本机置顶区）。 */
+      /** @type {{ symbol: string, at: number, overPct: number, tier: string }[]} */
+      let nailAutoPinOverlookFocusRows = [];
+      /** 本机俯瞰置顶区手动移出的币（不改已读基线）。 */
       const nailAutoPinOverlookHidden = new Set();
+
+      function visibleOverlookFocusRows() {
+        if (!nailAutoPinOverlookFocus) return [];
+        return nailAutoPinOverlookFocusRows.filter(
+          (row) =>
+            row &&
+            row.symbol &&
+            !nailAutoPinOverlookHidden.has(String(row.symbol).toUpperCase()),
+        );
+      }
+
+      function clearOverlookFocusSection() {
+        nailAutoPinOverlookFocus = false;
+        nailAutoPinOverlookFocusRows = [];
+        nailAutoPinOverlookHidden.clear();
+        if (focusActionScope === "overlook") setFocusActionSymbol(null);
+      }
+
+      /** 把当前未读俯瞰并入置顶快照（已在区里的保留；新未读可再次进区）。 */
+      function mergeOverlookFocusFromUnread() {
+        const map = new Map();
+        nailAutoPinOverlookFocusRows.forEach((row) => {
+          const key = String((row && row.symbol) || "")
+            .trim()
+            .toUpperCase();
+          if (!key) return;
+          map.set(key, row);
+        });
+        unreadOverlookItems().forEach((row) => {
+          const symbol = String((row && row.symbol) || "")
+            .trim()
+            .toUpperCase();
+          if (!symbol) return;
+          nailAutoPinOverlookHidden.delete(symbol);
+          map.set(symbol, {
+            symbol,
+            at: Number(row.detectedAt) || Number(row.pinnedAt) || 0,
+            overPct: Number(row.overPct),
+            tier: row.tier === "strong" ? "strong" : "weak",
+          });
+        });
+        nailAutoPinOverlookFocusRows = [...map.values()].sort(
+          (a, b) => (b.at || 0) - (a.at || 0),
+        );
+        nailAutoPinOverlookFocus = visibleOverlookFocusRows().length > 0;
+      }
       /**
        * 跨端已读基线：价格提醒 / 自动盯的已读时刻同步到 watch-ui-read-state.json。
        * 状态变量与合并入队函数放在这里（自动盯角标初始化时就会用到），
@@ -10542,14 +10659,17 @@
       /** 合并短时间内的多个「标记已读」动作，避免打开分栏时并发写三次。 */
       function queueSharedUiReadState(patch) {
         if (!patch || typeof patch !== "object") return;
-        ["priceAlertReadAt", "autoPinSeenAt", "overlookSeenAt"].forEach(
-          (key) => {
+        [
+          "priceAlertReadAt",
+          "autoPinSeenAt",
+          "overlookSeenAt",
+          "pullbackSeenAt",
+        ].forEach((key) => {
           const value = Number(patch[key]) || 0;
           if (value > (Number(uiReadStatePending[key]) || 0)) {
             uiReadStatePending[key] = value;
           }
-          },
-        );
+        });
         if (uiReadStateTimer) clearTimeout(uiReadStateTimer);
         uiReadStateTimer = setTimeout(() => {
           const next = uiReadStatePending;
@@ -13262,30 +13382,10 @@
         const entries = nailAutoPinEntries().filter(
           (entry) => (Number(entry.at) || 0) >= lookbackCutoff,
         );
-        // 点摘要条后：未读俯瞰置顶成区（按 detectedAt 新→旧），背景区分。
-        const overlookFocusRows = nailAutoPinOverlookFocus
-          ? unreadOverlookItems()
-              .map((row) => {
-                const symbol = String((row && row.symbol) || "")
-                  .trim()
-                  .toUpperCase();
-                if (!symbol || nailAutoPinOverlookHidden.has(symbol)) {
-                  return null;
-                }
-                const at =
-                  Number(row.detectedAt) ||
-                  Number(row.pinnedAt) ||
-                  0;
-                return {
-                  symbol,
-                  at,
-                  overPct: Number(row.overPct),
-                  tier: row.tier === "strong" ? "strong" : "weak",
-                };
-              })
-              .filter(Boolean)
-              .sort((a, b) => (b.at || 0) - (a.at || 0))
-          : [];
+        // 俯瞰置顶区：来自点进摘要时的快照（关摘要不影响）；移空才消失。
+        const overlookFocusRows = visibleOverlookFocusRows().sort(
+          (a, b) => (b.at || 0) - (a.at || 0),
+        );
         const overlookFocusSet = new Set(
           overlookFocusRows.map((row) => row.symbol),
         );
@@ -23319,15 +23419,18 @@
         let price = 0;
         let auto = 0;
         let overlook = 0;
+        let pullback = 0;
         try {
           price = Number(localStorage.getItem(PRICE_ALERT_READ_KEY)) || 0;
           auto = Number(localStorage.getItem(AUTO_PIN_SEEN_KEY)) || 0;
           overlook = Number(localStorage.getItem(OVERLOOK_SEEN_KEY)) || 0;
+          pullback = Number(localStorage.getItem(PULLBACK_SEEN_KEY)) || 0;
         } catch (_) {}
         return {
           priceAlertReadAt: Math.max(price, Number(priceAlertReadAt) || 0),
           autoPinSeenAt: auto,
           overlookSeenAt: Math.max(overlook, Number(overlookSeenAt) || 0),
+          pullbackSeenAt: Math.max(pullback, Number(pullbackSeenAt) || 0),
         };
       }
 
@@ -23340,6 +23443,10 @@
           Number(overlookSeenAt) || 0,
           Number(state.overlookSeenAt) || 0,
         );
+        pullbackSeenAt = Math.max(
+          Number(pullbackSeenAt) || 0,
+          Number(state.pullbackSeenAt) || 0,
+        );
         try {
           localStorage.setItem(PRICE_ALERT_READ_KEY, String(priceAlertReadAt));
           localStorage.setItem(
@@ -23347,6 +23454,7 @@
             String(Number(state.autoPinSeenAt) || 0),
           );
           localStorage.setItem(OVERLOOK_SEEN_KEY, String(overlookSeenAt));
+          localStorage.setItem(PULLBACK_SEEN_KEY, String(pullbackSeenAt));
         } catch (_) {}
       }
 
@@ -23367,16 +23475,22 @@
             Number(base.overlookSeenAt) || 0,
             local.overlookSeenAt,
           ),
+          pullbackSeenAt: Math.max(
+            Number(base.pullbackSeenAt) || 0,
+            local.pullbackSeenAt,
+          ),
         };
         const changed =
           next.priceAlertReadAt > local.priceAlertReadAt ||
           next.autoPinSeenAt > local.autoPinSeenAt ||
-          next.overlookSeenAt > local.overlookSeenAt;
+          next.overlookSeenAt > local.overlookSeenAt ||
+          next.pullbackSeenAt > local.pullbackSeenAt;
         writeLocalUiReadState(next);
         if (
           next.priceAlertReadAt > (Number(base.priceAlertReadAt) || 0) ||
           next.autoPinSeenAt > (Number(base.autoPinSeenAt) || 0) ||
-          next.overlookSeenAt > (Number(base.overlookSeenAt) || 0)
+          next.overlookSeenAt > (Number(base.overlookSeenAt) || 0) ||
+          next.pullbackSeenAt > (Number(base.pullbackSeenAt) || 0)
         ) {
           queueSharedUiReadState(next);
         }
@@ -24676,6 +24790,12 @@
             .toUpperCase();
           if (!key) return;
           nailAutoPinOverlookHidden.add(key);
+          nailAutoPinOverlookFocusRows = nailAutoPinOverlookFocusRows.filter(
+            (row) => String((row && row.symbol) || "").toUpperCase() !== key,
+          );
+          if (!visibleOverlookFocusRows().length) {
+            clearOverlookFocusSection();
+          }
           setFocusActionSymbol(null);
           renderNailAutoPinList();
           void paintNailAutoPinCharts();
@@ -27886,16 +28006,7 @@
           /* ignore */
         }
         queueSharedUiReadState({ overlookSeenAt: next });
-        // 关摘要后收起自动盯里的俯瞰置顶区。
-        if (nailAutoPinOverlookFocus) {
-          nailAutoPinOverlookFocus = false;
-          nailAutoPinOverlookHidden.clear();
-          if (focusActionScope === "overlook") setFocusActionSymbol(null);
-          if (nailSegment === "autopin") {
-            renderNailAutoPinList();
-            void paintNailAutoPinCharts();
-          }
-        }
+        // 只关摘要条；自动盯俯瞰置顶区保留，等手动移空。
         syncNailDigest();
       }
 
@@ -27932,17 +28043,36 @@
         }
       }
 
+      function noticeKindsList(item) {
+        return Array.isArray(item && item.kinds)
+          ? item.kinds.map(String)
+          : [];
+      }
+
+      function noticeHasPullbackKind(item) {
+        const kinds = noticeKindsList(item);
+        return kinds.includes("回踩观察") || kinds.includes("回踩放量");
+      }
+
+      /** 纯回踩条目：只走回踩摘要条，不进「其它通知」摘要。 */
+      function noticeIsPullbackOnly(item) {
+        const kinds = noticeKindsList(item);
+        if (!kinds.length) return false;
+        const hasPb =
+          kinds.includes("回踩观察") || kinds.includes("回踩放量");
+        if (!hasPb) return false;
+        return kinds.every((k) => k === "回踩观察" || k === "回踩放量");
+      }
+
       function unreadPullbackNoticeItems() {
-        const readAt = Number(nailGreenNoticesReadAt) || 0;
+        const readAt = Number(pullbackSeenAt) || 0;
         const list = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
         const rows = [];
         list.forEach((item) => {
           if (!item || !item.symbol) return;
           const at = Number(item.at) || 0;
           if (!(at > readAt)) return;
-          const kinds = Array.isArray(item.kinds)
-            ? item.kinds.map(String)
-            : [];
+          const kinds = noticeKindsList(item);
           const watch = kinds.includes("回踩观察");
           const confirm = kinds.includes("回踩放量");
           if (!watch && !confirm) return;
@@ -27964,28 +28094,87 @@
         return rows;
       }
 
-      /** 置顶分栏顶部摘要条：俯瞰(强弱) → 回踩观察/放量 → 未读通知。 */
-      function syncNailDigest() {
-        const bar = document.getElementById("nailDigestBar");
-        const text = document.getElementById("nailDigestText");
-        const sub = document.getElementById("nailDigestSub");
-        const go = document.getElementById("nailDigestGo");
-        if (!bar || !text) return;
-        const overs = unreadOverlookItems();
-        const pullbacks = unreadPullbackNoticeItems();
-        const unread = nailGreenUnreadCount();
-        if (!overs.length && !pullbacks.length && !unread) {
-          bar.hidden = true;
-          bar.classList.remove("is-overlook", "is-pullback");
-          bar.dataset.digestMode = "";
+      function unreadGeneralDigestNotices() {
+        const readAt = Number(nailGreenNoticesReadAt) || 0;
+        const list = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
+        return list.filter((item) => {
+          if (!item) return false;
+          if (!(Number(item.at) > readAt)) return false;
+          return !noticeIsPullbackOnly(item);
+        });
+      }
+
+      function markPullbackSeen(at) {
+        const allLatest = (
+          Array.isArray(nailGreenNotices) ? nailGreenNotices : []
+        )
+          .filter((item) => noticeHasPullbackKind(item))
+          .reduce((max, item) => Math.max(max, Number(item.at) || 0), 0);
+        const next = Math.max(
+          Number(at) || 0,
+          allLatest,
+          Number(pullbackSeenAt) || 0,
+          Date.now(),
+        );
+        if (next <= (Number(pullbackSeenAt) || 0)) {
+          syncNailDigest();
+          return;
+        }
+        pullbackSeenAt = next;
+        try {
+          localStorage.setItem(PULLBACK_SEEN_KEY, String(next));
+        } catch (_) {
+          /* ignore */
+        }
+        queueSharedUiReadState({ pullbackSeenAt: next });
+        syncNailDigest();
+      }
+
+      function fillDigestBar(bar, options) {
+        if (!bar) return;
+        const opts = options || {};
+        const text = bar.querySelector(".nail-digest-text");
+        const sub = bar.querySelector(".nail-digest-sub");
+        const go = bar.querySelector(".nail-digest-go");
+        const show = !!opts.show;
+        bar.hidden = !show;
+        if (!show) {
           bar.dataset.digestSymbol = "";
           if (sub) {
             sub.hidden = true;
             sub.textContent = "";
+            sub.innerHTML = "";
           }
           return;
         }
-        bar.hidden = false;
+        if (opts.symbol != null) bar.dataset.digestSymbol = String(opts.symbol);
+        else bar.dataset.digestSymbol = "";
+        if (text && opts.text != null) text.textContent = opts.text;
+        if (go && opts.go != null) go.textContent = opts.go;
+        if (sub) {
+          if (opts.subHtml) {
+            sub.innerHTML = opts.subHtml;
+            sub.hidden = false;
+          } else if (opts.subText) {
+            sub.textContent = opts.subText;
+            sub.hidden = false;
+          } else {
+            sub.hidden = true;
+            sub.textContent = "";
+            sub.innerHTML = "";
+          }
+        }
+      }
+
+      /** 置顶分栏顶部：俯瞰 / 回踩 / 其它通知各一条，互不合并；仅 × 关闭。 */
+      function syncNailDigest() {
+        const overs = unreadOverlookItems();
+        const pullbacks = unreadPullbackNoticeItems();
+        const generals = unreadGeneralDigestNotices();
+        const priceUnread = priceAlertUnreadCount();
+        const noticeUnread = generals.length + priceUnread;
+
+        const overlookBar = document.getElementById("nailDigestOverlook");
         if (overs.length) {
           const top = overs[0];
           const topSym = String(top.symbol || "")
@@ -27993,96 +28182,87 @@
             .toUpperCase();
           const strongN = overs.filter((row) => row.tier === "strong").length;
           const tierLabel = strongN > 0 ? "强俯瞰" : "俯瞰";
-          const symBtn = (symbol, label) => {
-            const key = String(symbol || "")
+          const bits = overs.map((row) => {
+            const pct = formatOverlookPct(row.overPct);
+            const label = overlookLabel(row.symbol);
+            const strongTag = row.tier === "strong" ? "强 " : "";
+            const shown = `${strongTag}${label}${pct ? ` ${pct}` : ""}`;
+            const key = String(row.symbol || "")
               .trim()
               .toUpperCase();
-            const shown = escapeHtml(
-              label || String(key).replace(/USDT$/i, ""),
-            );
-            return `<button type="button" class="nail-digest-sym" data-digest-jump="${escapeHtml(key)}" title="去自动盯看 ${shown}">${shown}</button>`;
-          };
-          bar.classList.add("is-overlook");
-          bar.classList.remove("is-pullback");
-          bar.dataset.digestMode = "overlook";
-          bar.dataset.digestSymbol = topSym;
-          // 主行只写类别+数量；全部币名放副行，个个可点。
-          text.textContent =
-            overs.length === 1
-              ? `${tierLabel} · 未读 1`
-              : `${tierLabel} · 未读 ${overs.length}`;
-          if (sub) {
-            const bits = overs.map((row) => {
-              const pct = formatOverlookPct(row.overPct);
-              const label = overlookLabel(row.symbol);
-              const strongTag = row.tier === "strong" ? "强 " : "";
-              const shown = `${strongTag}${label}${pct ? ` ${pct}` : ""}`;
-              return symBtn(row.symbol, shown);
-            });
-            let html = bits.join('<span class="nail-digest-sep">·</span>');
-            if (pullbacks.length) {
-              html += `<span class="nail-digest-sep">·</span>回踩 ${pullbacks.length}`;
-            } else if (unread) {
-              html += `<span class="nail-digest-sep">·</span>另有通知 ${unread}`;
-            }
-            sub.innerHTML = html;
-            sub.hidden = false;
-          }
-          if (go) go.textContent = "去看 →";
-          return;
+            return `<button type="button" class="nail-digest-sym" data-digest-jump="${escapeHtml(key)}" title="去自动盯看 ${escapeHtml(shown)}">${escapeHtml(shown)}</button>`;
+          });
+          fillDigestBar(overlookBar, {
+            show: true,
+            symbol: topSym,
+            text:
+              overs.length === 1
+                ? `${tierLabel} · 未读 1`
+                : `${tierLabel} · 未读 ${overs.length}`,
+            subHtml: bits.join('<span class="nail-digest-sep">·</span>'),
+            go: "去看 →",
+          });
+        } else {
+          fillDigestBar(overlookBar, { show: false });
         }
+
+        const pullbackBar = document.getElementById("nailDigestPullback");
         if (pullbacks.length) {
           const top = pullbacks[0];
-          const name = String(top.label || "").replace(/USDT$/i, "") || top.symbol;
-          const tierLabel = top.tier === "watch" ? "回踩观察" : "回踩放量";
-          bar.classList.remove("is-overlook");
-          bar.classList.add("is-pullback");
-          bar.dataset.digestMode = "pullback";
-          bar.dataset.digestSymbol = String(top.symbol || "");
-          text.textContent =
-            pullbacks.length === 1
-              ? `${tierLabel} ${name}`
-              : `${tierLabel} ${pullbacks.length} · ${name}`;
-          if (sub) {
-            const more = pullbacks
-              .slice(1, 3)
-              .map((row) =>
-                String(row.label || row.symbol || "").replace(/USDT$/i, ""),
-              )
-              .filter(Boolean)
-              .join(" / ");
-            const noticeBit =
-              unread > pullbacks.length
-                ? `另有通知 ${unread - pullbacks.length}`
-                : "";
-            const parts = [more, noticeBit].filter(Boolean);
-            sub.textContent = parts.join(" · ");
-            sub.hidden = !parts.length;
-          }
-          if (go) go.textContent = "去看 →";
-          return;
+          const name =
+            String(top.label || "").replace(/USDT$/i, "") || top.symbol;
+          const watchN = pullbacks.filter((row) => row.tier === "watch").length;
+          const confirmN = pullbacks.length - watchN;
+          let tierLabel = "回踩";
+          if (watchN && !confirmN) tierLabel = "回踩观察";
+          else if (!watchN && confirmN) tierLabel = "回踩放量";
+          else if (watchN && confirmN) tierLabel = "回踩观察/放量";
+          const bits = pullbacks.map((row) => {
+            const shown = String(row.label || row.symbol || "").replace(
+              /USDT$/i,
+              "",
+            );
+            const tag = row.tier === "watch" ? "观察 " : "放量 ";
+            const key = String(row.symbol || "")
+              .trim()
+              .toUpperCase();
+            return `<button type="button" class="nail-digest-sym" data-digest-jump="${escapeHtml(key)}" title="去通知看 ${escapeHtml(shown)}">${escapeHtml(tag + shown)}</button>`;
+          });
+          fillDigestBar(pullbackBar, {
+            show: true,
+            symbol: String(top.symbol || ""),
+            text:
+              pullbacks.length === 1
+                ? `${tierLabel} ${name}`
+                : `${tierLabel} · 未读 ${pullbacks.length}`,
+            subHtml: bits.join('<span class="nail-digest-sep">·</span>'),
+            go: "去看 →",
+          });
+        } else {
+          fillDigestBar(pullbackBar, { show: false });
         }
-        bar.classList.remove("is-overlook", "is-pullback");
-        bar.dataset.digestMode = "notice";
-        bar.dataset.digestSymbol = "";
-        const list = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
-        const readAt = Number(nailGreenNoticesReadAt) || 0;
-        let fresh = 0;
-        list.forEach((item) => {
-          const at = Number(item.at) || 0;
-          if (at <= readAt) return;
-          const first =
-            Number(item.firstSeenAt) > 0 ? Number(item.firstSeenAt) : at;
-          if (at - first <= 5 * 60 * 1000) fresh += 1;
-        });
-        text.textContent = fresh
-          ? `新通知 ${unread} · 首次进通知 ${fresh}`
-          : `新通知 ${unread}`;
-        if (sub) {
-          sub.hidden = true;
-          sub.textContent = "";
+
+        const noticeBar = document.getElementById("nailDigestNotice");
+        if (noticeUnread > 0) {
+          const readAt = Number(nailGreenNoticesReadAt) || 0;
+          let fresh = 0;
+          generals.forEach((item) => {
+            const at = Number(item.at) || 0;
+            if (at <= readAt) return;
+            const first =
+              Number(item.firstSeenAt) > 0 ? Number(item.firstSeenAt) : at;
+            if (at - first <= 5 * 60 * 1000) fresh += 1;
+          });
+          fillDigestBar(noticeBar, {
+            show: true,
+            text: fresh
+              ? `新通知 ${noticeUnread} · 首次进通知 ${fresh}`
+              : `新通知 ${noticeUnread}`,
+            go: "查看 →",
+          });
+        } else {
+          fillDigestBar(noticeBar, { show: false });
         }
-        if (go) go.textContent = "查看 →";
       }
 
       function syncNailSegBadges() {
@@ -28159,8 +28339,9 @@
             void setNailSegment(seg);
           });
         });
-        const digest = document.getElementById("nailDigestBar");
-        if (digest) {
+        const digestStack = document.getElementById("nailDigestStack");
+        if (digestStack && !digestStack.dataset.bound) {
+          digestStack.dataset.bound = "1";
           const flashJumpTargetCard = (card) => {
             if (!card) return;
             if (typeof card.scrollIntoView === "function") {
@@ -28179,12 +28360,10 @@
             const key = String(focusSymbol || "")
               .trim()
               .toUpperCase();
-            nailAutoPinOverlookFocus = true;
-            // 新一轮点进摘要：清掉上一轮「移出」隐藏，重新展示全部未读。
-            nailAutoPinOverlookHidden.clear();
-            if (key) digest.dataset.digestSymbol = key;
+            mergeOverlookFocusFromUnread();
+            const overlookBar = document.getElementById("nailDigestOverlook");
+            if (key && overlookBar) overlookBar.dataset.digestSymbol = key;
             void setNailSegment("autopin").then(() => {
-              // 已在自动盯时 setNailSegment 仍会重开并重渲；再补一帧确保俯瞰区已挂上。
               if (nailSegment === "autopin") {
                 renderNailAutoPinList();
                 void paintNailAutoPinCharts();
@@ -28214,18 +28393,16 @@
               });
             });
           };
-          const jumpOverlookSymbol = (symbol) => {
-            openOverlookAutoPinFocus(symbol);
-          };
-          const go = () => {
-            const mode = String(digest.dataset.digestMode || "");
-            // 点正文空白/「去看」：俯瞰整类置顶到自动盯顶部（可看 K 线）；不标已读。
+          const goDigest = (bar) => {
+            if (!bar) return;
+            const mode = String(bar.dataset.digestMode || "");
+            // 点正文只跳转，不标已读；只有 × 才关条。
             if (mode === "overlook") {
-              openOverlookAutoPinFocus(digest.dataset.digestSymbol);
+              openOverlookAutoPinFocus(bar.dataset.digestSymbol);
               return;
             }
             if (mode === "pullback") {
-              const symbol = String(digest.dataset.digestSymbol || "")
+              const symbol = String(bar.dataset.digestSymbol || "")
                 .trim()
                 .toUpperCase();
               void openNailNoticeDrawer({
@@ -28235,25 +28412,28 @@
               });
               return;
             }
-            void setNailSegment("notice");
+            if (mode === "notice") {
+              void openNailNoticeDrawer({ skipMarkRead: true });
+            }
           };
-          const dismiss = document.getElementById("nailDigestDismiss");
-          if (dismiss) {
-            dismiss.addEventListener("click", (event) => {
+          digestStack.addEventListener("click", (event) => {
+            const dismiss =
+              event.target &&
+              event.target.closest &&
+              event.target.closest(".nail-digest-dismiss");
+            if (dismiss) {
               event.preventDefault();
               event.stopPropagation();
-              const mode = String(digest.dataset.digestMode || "");
-              if (mode === "overlook") {
-                markOverlookSeen();
-              } else if (mode === "pullback" || mode === "notice") {
+              const bar = dismiss.closest(".nail-digest");
+              const mode = String((bar && bar.dataset.digestMode) || "");
+              if (mode === "overlook") markOverlookSeen();
+              else if (mode === "pullback") markPullbackSeen();
+              else if (mode === "notice") {
                 void markNailNoticesRead();
                 syncNailDigest();
-              } else {
-                syncNailDigest();
               }
-            });
-          }
-          digest.addEventListener("click", (event) => {
+              return;
+            }
             const jumpBtn =
               event.target &&
               event.target.closest &&
@@ -28261,16 +28441,35 @@
             if (jumpBtn) {
               event.preventDefault();
               event.stopPropagation();
-              jumpOverlookSymbol(jumpBtn.getAttribute("data-digest-jump"));
+              const bar = jumpBtn.closest(".nail-digest");
+              const mode = String((bar && bar.dataset.digestMode) || "");
+              const sym = jumpBtn.getAttribute("data-digest-jump");
+              if (mode === "pullback") {
+                void openNailNoticeDrawer({
+                  pullbackFilter: true,
+                  jumpSymbol: String(sym || "").trim().toUpperCase(),
+                  skipMarkRead: true,
+                });
+                return;
+              }
+              openOverlookAutoPinFocus(sym);
               return;
             }
-            go();
+            const bar =
+              event.target &&
+              event.target.closest &&
+              event.target.closest(".nail-digest");
+            if (bar) goDigest(bar);
           });
-          digest.addEventListener("keydown", (event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              go();
-            }
+          digestStack.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            const bar =
+              event.target &&
+              event.target.closest &&
+              event.target.closest(".nail-digest");
+            if (!bar) return;
+            event.preventDefault();
+            goDigest(bar);
           });
         }
         syncNailSegBadges();

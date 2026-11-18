@@ -4614,6 +4614,7 @@
       priceAlertReadAt: num(data.priceAlertReadAt),
       autoPinSeenAt: num(data.autoPinSeenAt),
       overlookSeenAt: num(data.overlookSeenAt),
+      pullbackSeenAt: num(data.pullbackSeenAt),
       radarFixedSymbols: normalizeUiReadSymbols(data.radarFixedSymbols),
       radarFixedAt: num(data.radarFixedAt),
       updatedAt: num(data.updatedAt),
@@ -4627,6 +4628,7 @@
     if (left.priceAlertReadAt !== right.priceAlertReadAt) return false;
     if (left.autoPinSeenAt !== right.autoPinSeenAt) return false;
     if (left.overlookSeenAt !== right.overlookSeenAt) return false;
+    if (left.pullbackSeenAt !== right.pullbackSeenAt) return false;
     if (left.radarFixedAt !== right.radarFixedAt) return false;
     const ls = left.radarFixedSymbols;
     const rs = right.radarFixedSymbols;
@@ -4698,6 +4700,10 @@
           overlookSeenAt: Math.max(
             base.overlookSeenAt,
             wanted.overlookSeenAt,
+          ),
+          pullbackSeenAt: Math.max(
+            base.pullbackSeenAt,
+            wanted.pullbackSeenAt,
           ),
           radarFixedSymbols: base.radarFixedSymbols.slice(),
           radarFixedAt: base.radarFixedAt,
