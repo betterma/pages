@@ -3,6 +3,44 @@
   "readAt": 1794990282751,
   "items": [
     {
+      "id": "SENTUSDT:1794988800000:1794990780417",
+      "symbol": "SENTUSDT",
+      "label": "SENT",
+      "kinds": [
+        "直拉"
+      ],
+      "at": 1794990780417,
+      "firstSeenAt": 1794988800415,
+      "openTime": 1794988800000,
+      "pinPrice": 0.01921,
+      "pinnedAt": 1794976200374,
+      "alertPrice": 0.01919,
+      "notifyPrice": 0.0193,
+      "noteAt": 1794976200374,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1794990780417
+    },
+    {
+      "id": "MEGAUSDT:1794988800000:1794990780417",
+      "symbol": "MEGAUSDT",
+      "label": "MEGA",
+      "kinds": [
+        "直拉"
+      ],
+      "at": 1794990780417,
+      "firstSeenAt": 1794988800415,
+      "openTime": 1794988800000,
+      "pinPrice": 0.05237,
+      "pinnedAt": 1794985500588,
+      "alertPrice": 0.05235,
+      "notifyPrice": 0.05287,
+      "noteAt": 1794985500588,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1794990780417
+    },
+    {
       "id": "CRDOBUSDT:1794988800000:1794990780417",
       "symbol": "CRDOBUSDT",
       "label": "CRDOB",
@@ -289,25 +327,6 @@
       "batchAt": 0
     },
     {
-      "id": "MEGAUSDT:1794988800000:1794990600427",
-      "symbol": "MEGAUSDT",
-      "label": "MEGA",
-      "kinds": [
-        "直拉"
-      ],
-      "at": 1794990600427,
-      "firstSeenAt": 1794988800415,
-      "openTime": 1794988800000,
-      "pinPrice": 0.05237,
-      "pinnedAt": 1794985500588,
-      "alertPrice": 0.05235,
-      "notifyPrice": 0.05263,
-      "noteAt": 1794985500588,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1794988800415
-    },
-    {
       "id": "MRVLBUSDT:1794988800000:1794990600427",
       "symbol": "MRVLBUSDT",
       "label": "MRVLB",
@@ -360,25 +379,6 @@
       "alertPrice": 113.79,
       "notifyPrice": 115.07,
       "noteAt": 1794984000584,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 0
-    },
-    {
-      "id": "SENTUSDT:1794988800000:1794990600427",
-      "symbol": "SENTUSDT",
-      "label": "SENT",
-      "kinds": [
-        "直拉"
-      ],
-      "at": 1794990600427,
-      "firstSeenAt": 1794988800415,
-      "openTime": 1794988800000,
-      "pinPrice": 0.01921,
-      "pinnedAt": 1794976200374,
-      "alertPrice": 0.01919,
-      "notifyPrice": 0.01922,
-      "noteAt": 1794976200374,
       "interval": "4h",
       "windowUp": false,
       "batchAt": 0
@@ -709,6 +709,14 @@
   ],
   "batches": [
     {
+      "at": 1794990780417,
+      "count": 2,
+      "symbols": [
+        "MEGAUSDT",
+        "SENTUSDT"
+      ]
+    },
+    {
       "at": 1794990600427,
       "count": 7,
       "symbols": [
@@ -738,12 +746,11 @@
     },
     {
       "at": 1794988800415,
-      "count": 5,
+      "count": 4,
       "symbols": [
         "ALLOUSDT",
         "HYPERUSDT",
         "KAVAUSDT",
-        "MEGAUSDT",
         "MVLLBUSDT"
       ]
     }
