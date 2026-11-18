@@ -2805,7 +2805,7 @@
         font-size: 11px;
         font-weight: 650;
       }
-      /* 列序：币(1) K线(2) 24h(3) 窗涨(4) 名次(5) 操作(6)；序号已并入币名列。 */
+      /* 列序：币(1) K线(2) 24h(3) 操作(4)；序号已并入币名列。 */
       .nail-radar-table th:nth-child(1),
       .nail-radar-table td:nth-child(1) {
         /* 币名列压到约原来的 2/3：去掉星标后再收窄宽度与内边距，
@@ -2830,14 +2830,6 @@
         align-items: center;
         max-width: 100%;
         overflow: hidden;
-      }
-      .nail-radar-table th:nth-child(4),
-      .nail-radar-table td:nth-child(4),
-      .nail-radar-table th:nth-child(5),
-      .nail-radar-table td:nth-child(5) {
-        text-align: right;
-        padding-left: 4px;
-        padding-right: 4px;
       }
       .nail-radar-table th:nth-child(2),
       .nail-radar-table td:nth-child(2) {
@@ -2936,8 +2928,8 @@
         text-align: center;
       }
       /* 操作列：取消置顶 / 关注（写持仓新增关注）两个小胶囊按钮。 */
-      .nail-radar-table th:nth-child(6),
-      .nail-radar-table td:nth-child(6) {
+      .nail-radar-table th:nth-child(4),
+      .nail-radar-table td:nth-child(4) {
         text-align: right;
         padding-left: 4px;
         padding-right: 4px;
@@ -8709,7 +8701,7 @@
                 id="nailRadarGroupBtn"
                 class="nail-radar-toggle"
                 aria-pressed="false"
-                title="当前：背景色行留在原排名；点一下把它们归集到列表顶部"
+                title="当前：已点「归集」的行留在原排名；点一下把它们提到列表顶部"
               >
                 归集
               </button>
@@ -8735,8 +8727,6 @@
                     <th>币</th>
                     <th>K线</th>
                     <th>24h</th>
-                    <th>窗涨</th>
-                    <th>名次</th>
                     <th>操作</th>
                   </tr>
                 </thead>
@@ -13924,7 +13914,6 @@
         const body = document.getElementById("nailRadarBody");
         const wrap = document.getElementById("nailRadarTableWrap");
         if (!body) return;
-        const interval = CONFIG.KLINE_INTERVAL;
         const list = nailRadarRankList();
         if (!list.length) {
           body.innerHTML = "";
@@ -13956,39 +13945,24 @@
           const isMarked = markedSet.has(
             String(symbol).trim().toUpperCase(),
           );
-            const label = String(symbol || "").replace(/USDT$/i, "");
-            const change24h = Number(marketMap[symbol] && marketMap[symbol].change24h);
-            const win = windowPriceChange(symbol, interval);
-            const rankMeta = nailRadarRankDelta(symbol, interval);
-            const winCls =
-              Number.isFinite(win) && win > 0
-                ? "nail-radar-up"
-                : Number.isFinite(win) && win < 0
-                  ? "nail-radar-down"
-                  : "";
-            const chCls =
-              Number.isFinite(change24h) && change24h > 0
-                ? "nail-radar-up"
-                : Number.isFinite(change24h) && change24h < 0
-                  ? "nail-radar-down"
-                  : "";
-          let rankHtml = rank ? `#${rank}` : "—";
-            if (rankMeta && Number.isFinite(rankMeta.improvement)) {
-              const imp = rankMeta.improvement;
-              if (imp > 0) {
-              rankHtml = `<span class="nail-radar-up">+${imp}</span> <span>#${rank || rankMeta.currentRank}</span>`;
-              } else if (imp < 0) {
-              rankHtml = `<span class="nail-radar-down">${imp}</span> <span>#${rank || rankMeta.currentRank}</span>`;
-              }
-            }
-            const rowClass = [
-              pool.has(symbol) ? "is-pool" : "",
+          const label = String(symbol || "").replace(/USDT$/i, "");
+          const change24h = Number(
+            marketMap[symbol] && marketMap[symbol].change24h,
+          );
+          const chCls =
+            Number.isFinite(change24h) && change24h > 0
+              ? "nail-radar-up"
+              : Number.isFinite(change24h) && change24h < 0
+                ? "nail-radar-down"
+                : "";
+          const rowClass = [
+            pool.has(symbol) ? "is-pool" : "",
             rank && rank <= 20 ? "is-top20" : "",
             opts.extra ? "is-radar-extra" : "",
             isMarked ? "is-radar-fixed" : "",
-            ]
-              .filter(Boolean)
-              .join(" ");
+          ]
+            .filter(Boolean)
+            .join(" ");
           const showKline =
             nailRadarAllKlineOn ||
             isMarked ||
@@ -14002,13 +13976,13 @@
           const unpinHtml = isPinned
             ? `<button type="button" class="nail-radar-act is-danger" data-radar-unpin="${escapeHtml(symbol)}" title="取消置顶该币">取消置顶</button>`
             : "";
-          const markHtml = `<button type="button" class="nail-radar-act${isMarked ? " is-fixed" : ""}" data-radar-fixed-toggle="${escapeHtml(symbol)}" title="${isMarked ? "取消这一行的背景色" : "给这一行加背景色，仍按原排名显示"}">${isMarked ? "取消背景" : "背景色"}</button>`;
+          const markHtml = `<button type="button" class="nail-radar-act${isMarked ? " is-fixed" : ""}" data-radar-fixed-toggle="${escapeHtml(symbol)}" title="${isMarked ? "不归集：去掉背景，顶部归集时也不再收录" : "归集：加背景色；打开顶部「归集」后提到列表顶部"}">${isMarked ? "不归集" : "归集"}</button>`;
           const watchHtml = holdingsWatched.has(
             String(symbol).trim().toUpperCase(),
           )
             ? `<span class="nail-radar-act is-on" title="已在持仓关注列表">已关注</span>`
             : `<button type="button" class="nail-radar-act" data-radar-watch="${escapeHtml(symbol)}" title="加入持仓关注列表">持仓关注</button>`;
-          return `<tr class="${rowClass}"><td><span class="nail-radar-rank-mini">${rank ? `#${rank}` : "—"}</span><span class="nail-radar-sym-line"><button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></span></td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td class="${winCls}">${escapeHtml(formatPercent(win))}</td><td>${rankHtml}</td><td>${markHtml}${unpinHtml}${watchHtml}</td></tr>`;
+          return `<tr class="${rowClass}"><td><span class="nail-radar-rank-mini">${rank ? `#${rank}` : "—"}</span><span class="nail-radar-sym-line"><button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></span></td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td>${markHtml}${unpinHtml}${watchHtml}</td></tr>`;
         };
         const fullRanking = ranking();
         const rankOf = (symbol) => {
@@ -14030,7 +14004,7 @@
         const groupedSet = new Set(grouped);
         if (grouped.length) {
           rows.push(
-            `<tr class="is-radar-sep"><td colspan="6">已加背景 · 归集（${grouped.length}）</td></tr>`,
+            `<tr class="is-radar-sep"><td colspan="4">已归集（${grouped.length}）</td></tr>`,
           );
           grouped.forEach((symbol) => {
             rows.push(buildRow(symbol, rankOf(symbol) || 0));
@@ -14049,7 +14023,7 @@
         );
         if (extras.length) {
           rows.push(
-            `<tr class="is-radar-sep"><td colspan="6">榜单外 · 已置顶（${extras.length}）</td></tr>`,
+            `<tr class="is-radar-sep"><td colspan="4">榜单外 · 已置顶（${extras.length}）</td></tr>`,
           );
           extras
             .slice()
@@ -14263,8 +14237,8 @@
         btn.setAttribute("aria-pressed", nailRadarGroupOn ? "true" : "false");
         btn.classList.toggle("is-active", nailRadarGroupOn);
         btn.title = nailRadarGroupOn
-          ? "当前：背景色行已归集到顶部（仍显示真实名次），点一下恢复按名次排"
-          : "当前：背景色行留在原排名；点一下把它们归集到列表顶部";
+          ? "当前：已点「归集」的行已提到顶部（仍显示真实名次），点一下恢复按名次排"
+          : "当前：已点「归集」的行留在原排名；点一下把它们提到列表顶部";
       }
 
       /** 切换「归集」：只改变表格顺序，标记名单与排名数字都不变。 */
@@ -14303,11 +14277,10 @@
         renderNailRadarTable();
       }
 
-      /** 不重渲整表，只刷新 24h / 窗涨两列数字（K 线由 paintNailRadarKlines 负责）。 */
+      /** 不重渲整表，只刷新 24h 列数字（K 线由 paintNailRadarKlines 负责）。 */
       function updateNailRadarLiveCells() {
         const body = document.getElementById("nailRadarBody");
         if (!body) return;
-        const interval = CONFIG.KLINE_INTERVAL;
         body.querySelectorAll("tr").forEach((tr) => {
           const btn = tr.querySelector("[data-nail-radar-symbol]");
           if (!btn) return;
@@ -14321,22 +14294,18 @@
           const change24h = Number(
             marketMap[symbol] && marketMap[symbol].change24h,
           );
-          const win = windowPriceChange(symbol, interval);
-          const syncCell = (cell, value) => {
-            if (!cell) return;
-            const text = formatPercent(value);
-            if (cell.textContent !== text) cell.textContent = text;
-            cell.classList.toggle(
-              "nail-radar-up",
-              Number.isFinite(value) && value > 0,
-            );
-            cell.classList.toggle(
-              "nail-radar-down",
-              Number.isFinite(value) && value < 0,
-            );
-          };
-          syncCell(cells[2], change24h); // 24h 现在是第 3 列
-          syncCell(cells[3], win); // 窗涨现在是第 4 列
+          const cell = cells[2]; // 24h 是第 3 列
+          if (!cell) return;
+          const text = formatPercent(change24h);
+          if (cell.textContent !== text) cell.textContent = text;
+          cell.classList.toggle(
+            "nail-radar-up",
+            Number.isFinite(change24h) && change24h > 0,
+          );
+          cell.classList.toggle(
+            "nail-radar-down",
+            Number.isFinite(change24h) && change24h < 0,
+          );
         });
       }
 
