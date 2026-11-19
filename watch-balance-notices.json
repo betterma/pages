@@ -3,25 +3,6 @@
   "readAt": 1795095149609,
   "items": [
     {
-      "id": "GPSUSDT:1795089600000:1795095900665",
-      "symbol": "GPSUSDT",
-      "label": "GPS",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1795095900665,
-      "firstSeenAt": 1795079100640,
-      "openTime": 1795089600000,
-      "pinPrice": 0.00855,
-      "pinnedAt": 1795054801040,
-      "alertPrice": 0.00852,
-      "notifyPrice": 0.00858,
-      "noteAt": 1795054801040,
-      "interval": "4h",
-      "windowUp": true,
-      "batchAt": 1795093500685
-    },
-    {
       "id": "LINEAUSDT:1795089600000:1795095900665",
       "symbol": "LINEAUSDT",
       "label": "LINEA",
@@ -38,7 +19,26 @@
       "noteAt": 1795080900717,
       "interval": "4h",
       "windowUp": true,
-      "batchAt": 0
+      "batchAt": 1795095900665
+    },
+    {
+      "id": "GPSUSDT:1795089600000:1795095900665",
+      "symbol": "GPSUSDT",
+      "label": "GPS",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1795095900665,
+      "firstSeenAt": 1795079100640,
+      "openTime": 1795089600000,
+      "pinPrice": 0.00855,
+      "pinnedAt": 1795054801040,
+      "alertPrice": 0.00852,
+      "notifyPrice": 0.00858,
+      "noteAt": 1795054801040,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795095900665
     },
     {
       "id": "REUSDT:1795089600000:1795095900665",
@@ -57,7 +57,7 @@
       "noteAt": 1795017600515,
       "interval": "4h",
       "windowUp": true,
-      "batchAt": 1795093800440
+      "batchAt": 1795095900665
     },
     {
       "id": "PEPEUSDT:1795089600000:1795095600774",
@@ -2723,6 +2723,15 @@
   ],
   "batches": [
     {
+      "at": 1795095900665,
+      "count": 3,
+      "symbols": [
+        "GPSUSDT",
+        "LINEAUSDT",
+        "REUSDT"
+      ]
+    },
+    {
       "at": 1795095600774,
       "count": 2,
       "symbols": [
@@ -2803,23 +2812,21 @@
     },
     {
       "at": 1795093800440,
-      "count": 7,
+      "count": 6,
       "symbols": [
         "AIGENSYNUSDT",
         "ALABBUSDT",
         "CVCUSDT",
         "INITUSDT",
         "INTWBUSDT",
-        "REUSDT",
         "TQQQBUSDT"
       ]
     },
     {
       "at": 1795093500685,
-      "count": 4,
+      "count": 3,
       "symbols": [
         "FOGOUSDT",
-        "GPSUSDT",
         "NXPCUSDT",
         "TREEUSDT"
       ]
