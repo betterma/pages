@@ -2671,10 +2671,19 @@
         font-size: 11px;
         line-height: 1.6;
       }
-      /* 自动盯「列表」样式：对齐雷达表，只保留币名 / K线 / 24h。 */
+      /* 自动盯「列表」样式：对齐雷达——外层不滚，表包装满并独自滚动。 */
+      .nail-auto-pin-list.is-list-view {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
       .nail-auto-pin-table-wrap {
+        flex: 1 1 auto;
+        min-height: 0;
         overflow: auto;
+        -webkit-overflow-scrolling: touch;
         overscroll-behavior: contain;
+        touch-action: pan-y;
       }
       .nail-auto-pin-table {
         width: 100%;
@@ -2724,6 +2733,20 @@
       .nail-auto-pin-table .nail-auto-pin-kline {
         width: 168px;
         height: 62px;
+        max-width: 100%;
+      }
+      .nail-auto-pin-sep td {
+        padding: 10px 12px 6px;
+        border-bottom: 0.5px solid var(--separator);
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 650;
+        background: color-mix(in srgb, var(--label, #808080) 4%, transparent);
+        white-space: normal;
+      }
+      .nail-auto-pin-sep.is-overlook td {
+        color: color-mix(in srgb, var(--warn, #b07030) 72%, var(--label));
+        font-weight: 700;
       }
       .nail-auto-pin-row.is-overlook {
         background: color-mix(
@@ -4292,14 +4315,33 @@
         display: flex;
         flex-direction: column;
         align-items: stretch;
-        gap: 8px;
-        padding: 12px 14px 8px;
+        gap: 6px;
+        padding: 8px 10px 6px;
         border-bottom: 0.5px solid var(--separator);
         flex: 0 0 auto;
       }
-      .nail-notice-head h3 {
-        margin: 0;
-        font-size: 16px;
+      .nail-notice-head h3,
+      #nailNoticeTitle {
+        display: none !important;
+      }
+      /* 统计文案不再占行；仍留 DOM 供筛选完成提示读取。 */
+      #nailNoticeMeta {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .nail-notice-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px 5px;
+        min-width: 0;
       }
       .nail-notice-title-row {
         display: flex;
@@ -4317,14 +4359,14 @@
         flex: 0 0 auto;
         display: inline-flex;
         align-items: center;
-        gap: 5px;
+        gap: 4px;
         border: none;
         background: var(--fill);
         color: var(--secondary);
-        height: 28px;
-        padding: 0 10px;
-        border-radius: 8px;
-        font-size: 12px;
+        height: 26px;
+        padding: 0 8px;
+        border-radius: 7px;
+        font-size: 11px;
         font-weight: 650;
         cursor: pointer;
       }
@@ -4406,15 +4448,16 @@
         color: var(--secondary);
         font-size: 11px;
       }
+      .nail-notice-toolbar #nailNoticeCloseBtn,
       .nail-notice-title-row #nailNoticeCloseBtn {
         flex: 0 0 auto;
         border: none;
         background: var(--fill);
         color: var(--label);
-        height: 32px;
-        padding: 0 12px;
-        border-radius: 8px;
-        font-size: 13px;
+        height: 26px;
+        padding: 0 8px;
+        border-radius: 7px;
+        font-size: 11px;
         font-weight: 600;
         cursor: pointer;
       }
@@ -4424,18 +4467,29 @@
         color: var(--secondary);
       }
       .nail-notice-head-actions {
-        display: flex;
+        display: inline-flex;
         flex-wrap: wrap;
-        gap: 6px;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+        flex: 1 1 auto;
       }
-      .nail-notice-head-actions button {
+      .nail-notice-toolbar-end {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: auto;
+        flex: 0 0 auto;
+      }
+      .nail-notice-head-actions button,
+      .nail-notice-toolbar-end button {
         border: none;
         background: var(--fill);
         color: var(--label);
-        height: 32px;
-        padding: 0 10px;
-        border-radius: 8px;
-        font-size: 13px;
+        height: 26px;
+        padding: 0 7px;
+        border-radius: 7px;
+        font-size: 11px;
         font-weight: 600;
         cursor: pointer;
       }
@@ -4447,18 +4501,18 @@
         display: inline-flex;
         align-items: center;
         gap: 0;
-        margin-right: auto;
-        border-radius: 8px;
+        border-radius: 7px;
         overflow: hidden;
         background: var(--fill);
+        flex: 0 0 auto;
       }
       .nail-notice-delta-filter button {
         border: none;
         background: transparent;
         color: var(--secondary);
-        height: 32px;
-        padding: 0 10px;
-        font-size: 12px;
+        height: 26px;
+        padding: 0 6px;
+        font-size: 11px;
         font-weight: 650;
         cursor: pointer;
       }
@@ -4476,10 +4530,10 @@
         border: none;
         background: var(--fill);
         color: var(--secondary);
-        height: 32px;
-        padding: 0 10px;
-        border-radius: 8px;
-        font-size: 12px;
+        height: 26px;
+        padding: 0 7px;
+        border-radius: 7px;
+        font-size: 11px;
         font-weight: 650;
         cursor: pointer;
       }
@@ -9586,114 +9640,124 @@
         class="nail-notice-panel"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="nailNoticeTitle"
+        aria-label="通知"
       >
         <div class="nail-notice-head">
-          <div>
-              <div class="nail-notice-title-row">
-                <div class="nail-notice-title-cluster">
-                  <h3 id="nailNoticeTitle">天平·直拉</h3>
-                  <button
-                    type="button"
-                    id="nailNoticeHealthBtn"
-                    class="nail-notice-health-btn"
-                    aria-expanded="false"
-                    aria-controls="nailNoticeHealthPanel"
-                    title="定时检测健康度：上次跑到何时、本轮是否扫完"
-                  >
-                    <span
-                      class="nail-notice-health-dot"
-                      id="nailNoticeHealthDot"
-                      data-level="unknown"
-                      aria-hidden="true"
-                    ></span>
-                    健康
-                </button>
-              </div>
+          <div class="nail-notice-toolbar">
+            <h3 id="nailNoticeTitle">天平·直拉</h3>
+            <button
+              type="button"
+              id="nailNoticeHealthBtn"
+              class="nail-notice-health-btn"
+              aria-expanded="false"
+              aria-controls="nailNoticeHealthPanel"
+              title="定时检测健康度：上次跑到何时、本轮是否扫完"
+            >
+              <span
+                class="nail-notice-health-dot"
+                id="nailNoticeHealthDot"
+                data-level="unknown"
+                aria-hidden="true"
+              ></span>
+              健康
+            </button>
+            <div class="nail-notice-head-actions">
+              <div
+                class="nail-notice-delta-filter"
+                id="nailNoticeDeltaFilter"
+                role="group"
+                aria-label="按当前4h窗筛选"
+                title="相对当前4h开盘：全部 / 窗上涨 / 窗下跌。卡片染绿仍按便签水位，与此筛选无关。"
+              >
                 <button
                   type="button"
-                  id="nailNoticeCloseBtn"
-                  title="回到置顶栏"
+                  data-notice-delta-filter="all"
+                  class="is-active"
                 >
-                  置顶
+                  全部
+                </button>
+                <button
+                  type="button"
+                  data-notice-delta-filter="up"
+                  title="现价高于当前4h开盘"
+                >
+                  窗上涨
+                </button>
+                <button
+                  type="button"
+                  data-notice-delta-filter="down"
+                  title="现价低于当前4h开盘"
+                >
+                  窗下跌
                 </button>
               </div>
-            <p id="nailNoticeMeta">近 24h 命中 · 最新在上</p>
-            <div
-              id="nailNoticeHealthPanel"
-              class="nail-notice-health-panel"
-              hidden
-              role="region"
-              aria-label="定时检测健康度"
-            ></div>
-            <p
-              id="nailNoticeFilterStatus"
-              class="nail-notice-filter-status"
-              hidden
-              aria-live="polite"
-            ></p>
-          </div>
-          <div class="nail-notice-head-actions">
-            <div
-              class="nail-notice-delta-filter"
-              id="nailNoticeDeltaFilter"
-              role="group"
-              aria-label="按当前4h窗筛选"
-              title="相对当前4h开盘：全部 / 窗上涨 / 窗下跌。卡片染绿仍按便签水位，与此筛选无关。"
-            >
               <button
                 type="button"
-                data-notice-delta-filter="all"
-                class="is-active"
+                id="nailNoticeBalanceBtn"
+                class="nail-notice-deblue"
+                aria-pressed="false"
+                title="打开：只显示天平（盯后曾跌破 pin，现价高于跌破K最低收盘且不低于盯价；不要求当前窗上涨）。可与「直拉」同开（并集）；在全部/窗上涨/窗下跌下均可用。偏好保存在本机。"
               >
-                全部
+                天平
               </button>
-              <button type="button" data-notice-delta-filter="up" title="现价高于当前4h开盘">
-                窗上涨
+              <button
+                type="button"
+                id="nailNoticeStraightBtn"
+                class="nail-notice-deblue"
+                aria-pressed="false"
+                title="打开：只显示直拉（盯后实体从未跌破 pin，下影线不算；现价高于盯价；不要求当前窗上涨）。可与「天平」同开（并集）；在全部/窗上涨/窗下跌下均可用。偏好保存在本机。"
+              >
+                直拉
               </button>
-              <button type="button" data-notice-delta-filter="down" title="现价低于当前4h开盘">
-                窗下跌
+              <button
+                type="button"
+                id="nailNoticePullbackBtn"
+                class="nail-notice-deblue"
+                aria-pressed="false"
+                title="打开：显示回踩观察+回踩放量（自动盯池；观察=缩量预警，放量=确认）。可与天平/直拉同开（并集）。偏好保存在本机。"
+              >
+                回踩
               </button>
             </div>
-            <button
-              type="button"
-              id="nailNoticeBalanceBtn"
-              class="nail-notice-deblue"
-              aria-pressed="false"
-              title="打开：只显示天平（盯后曾跌破 pin，现价高于跌破K最低收盘且不低于盯价；不要求当前窗上涨）。可与「直拉」同开（并集）；在全部/窗上涨/窗下跌下均可用。偏好保存在本机。"
-            >
-              天平
-            </button>
-            <button
-              type="button"
-              id="nailNoticeStraightBtn"
-              class="nail-notice-deblue"
-              aria-pressed="false"
-              title="打开：只显示直拉（盯后实体从未跌破 pin，下影线不算；现价高于盯价；不要求当前窗上涨）。可与「天平」同开（并集）；在全部/窗上涨/窗下跌下均可用。偏好保存在本机。"
-            >
-              直拉
-            </button>
-            <button
-              type="button"
-              id="nailNoticePullbackBtn"
-              class="nail-notice-deblue"
-              aria-pressed="false"
-              title="打开：显示回踩观察+回踩放量（自动盯池；观察=缩量预警，放量=确认）。可与天平/直拉同开（并集）。偏好保存在本机。"
-            >
-              回踩
-            </button>
-            <button
-              type="button"
-              id="nailNoticeSelectBtn"
-              title="多选后批量置顶到钉子页"
-              aria-pressed="false"
-            >
-              多选
-            </button>
-            <button type="button" id="nailNoticeRefreshBtn" title="刷新通知列表">
-              刷新
-            </button>
+            <div class="nail-notice-toolbar-end">
+              <button
+                type="button"
+                id="nailNoticeSelectBtn"
+                title="多选后批量置顶到钉子页"
+                aria-pressed="false"
+              >
+                多选
+              </button>
+              <button
+                type="button"
+                id="nailNoticeRefreshBtn"
+                title="刷新通知列表"
+              >
+                刷新
+              </button>
+              <button
+                type="button"
+                id="nailNoticeCloseBtn"
+                title="回到置顶栏"
+              >
+                置顶
+              </button>
+            </div>
           </div>
+          <p id="nailNoticeMeta">近 24h 命中 · 最新在上</p>
+          <div
+            id="nailNoticeHealthPanel"
+            class="nail-notice-health-panel"
+            hidden
+            role="region"
+            aria-label="定时检测健康度"
+          ></div>
+          <p
+            id="nailNoticeFilterStatus"
+            class="nail-notice-filter-status"
+            hidden
+            aria-live="polite"
+          ></p>
         </div>
         <div class="nail-batch-bar" id="nailNoticeBatchBar" hidden>
           <span class="nail-batch-count" id="nailNoticeBatchCount">0</span>
@@ -14025,20 +14089,6 @@
         ].join("");
       }
 
-      function wrapNailAutoPinItemsHtml(rowsHtml, listMode) {
-        if (!listMode) {
-          return `<div class="nail-auto-pin-grid">${rowsHtml}</div>`;
-        }
-        return [
-          `<div class="nail-auto-pin-table-wrap">`,
-          `<table class="nail-auto-pin-table">`,
-          `<thead><tr><th>币</th><th>K线</th><th>24h</th></tr></thead>`,
-          `<tbody>${rowsHtml}</tbody>`,
-          `</table>`,
-          `</div>`,
-        ].join("");
-      }
-
       function renderNailAutoPinList() {
         const list = document.getElementById("nailAutoPinList");
         if (!list) return;
@@ -14089,30 +14139,108 @@
             else cards.push({ symbol, at });
           });
         });
+        // 「更早」按币去重：同一个币只保留最近一次出现。
+        const olderStat = new Map();
+        older.forEach((entry) => {
+          const at = Number(entry.at) || 0;
+          new Set(
+            (entry.symbols || [])
+              .map((symbol) => String(symbol || "").trim().toUpperCase())
+              .filter(Boolean),
+          ).forEach((key) => {
+            const stat = olderStat.get(key) || { latestAt: 0, count: 0 };
+            stat.count += 1;
+            if (at > stat.latestAt) stat.latestAt = at;
+            olderStat.set(key, stat);
+          });
+        });
+        const olderCards = [];
+        older.forEach((entry) => {
+          const at = Number(entry.at) || 0;
+          const seenHere = new Set();
+          (entry.symbols || []).forEach((symbol) => {
+            const key = String(symbol || "").trim().toUpperCase();
+            if (!key || seenHere.has(key)) return;
+            seenHere.add(key);
+            const stat = olderStat.get(key);
+            if (!stat || seen.has(key) || at !== stat.latestAt) return;
+            seen.add(key);
+            olderCards.push({ symbol: key, at, count: stat.count });
+          });
+        });
+
+        if (listMode) {
+          // 列表模式：整张表放进唯一滚动容器（对齐雷达），避免多层 overflow 抢手势。
+          const rows = [];
+          if (overlookFocusRows.length) {
+            rows.push(
+              `<tr class="nail-auto-pin-sep is-overlook" id="nailAutoPinOverlookSection"><td colspan="3">俯瞰 · ${overlookFocusRows.length} 个</td></tr>`,
+            );
+            overlookFocusRows.forEach((row) => {
+              rows.push(
+                buildItem(row.symbol, row.at, 0, {
+                  overlook: true,
+                  overPct: row.overPct,
+                }),
+              );
+            });
+          }
+          if (cards.length) {
+            rows.push(
+              `<tr class="nail-auto-pin-sep"><td colspan="3">近 8 小时 · ${cards.length} 个币</td></tr>`,
+            );
+            cards.forEach((row) => rows.push(buildItem(row.symbol, row.at)));
+          }
+          if (olderCards.length) {
+            rows.push(
+              `<tr class="nail-auto-pin-sep"><td colspan="3">更早（近 3 天）· ${olderCards.length} 个币</td></tr>`,
+            );
+            olderCards.forEach((row) => {
+              rows.push(buildItem(row.symbol, row.at, row.count));
+            });
+          }
+          if (!rows.length) {
+            list.innerHTML =
+              '<div class="nail-auto-pin-empty">暂无自动盯记录</div>';
+            return;
+          }
+          const more = overflow.length
+            ? `<div class="nail-auto-pin-more">另有 ${overflow.length} 个：${overflow
+                .map((symbol) => escapeHtml(symbol.replace(/USDT$/i, "")))
+                .join(" ")}</div>`
+            : "";
+          list.innerHTML = [
+            `<div class="nail-auto-pin-table-wrap">`,
+            `<table class="nail-auto-pin-table">`,
+            `<thead><tr><th>币</th><th>K线</th><th>24h</th></tr></thead>`,
+            `<tbody>${rows.join("")}</tbody>`,
+            `</table>`,
+            more,
+            `</div>`,
+          ].join("");
+          return;
+        }
+
         const parts = [];
         if (overlookFocusRows.length) {
           parts.push(
             `<div class="nail-auto-pin-section is-overlook" id="nailAutoPinOverlookSection">俯瞰 · ${overlookFocusRows.length} 个</div>`,
-            wrapNailAutoPinItemsHtml(
-              overlookFocusRows
-                .map((row) =>
-                  buildItem(row.symbol, row.at, 0, {
-                    overlook: true,
-                    overPct: row.overPct,
-                  }),
-                )
-                .join(""),
-              listMode,
-            ),
+            `<div class="nail-auto-pin-grid is-overlook">${overlookFocusRows
+              .map((row) =>
+                buildItem(row.symbol, row.at, 0, {
+                  overlook: true,
+                  overPct: row.overPct,
+                }),
+              )
+              .join("")}</div>`,
           );
         }
         if (cards.length) {
           parts.push(
             `<div class="nail-auto-pin-section">近 8 小时 · ${cards.length} 个币</div>`,
-            wrapNailAutoPinItemsHtml(
-              cards.map((row) => buildItem(row.symbol, row.at)).join(""),
-              listMode,
-            ),
+            `<div class="nail-auto-pin-grid">${cards
+              .map((row) => buildItem(row.symbol, row.at))
+              .join("")}</div>`,
           );
           if (overflow.length) {
             parts.push(
@@ -14122,50 +14250,13 @@
             );
           }
         }
-        if (older.length) {
-          // 「更早」按币去重：同一个币只保留最近一次出现（K 线是当前快照，
-          // 重复出现画出来一模一样）；卡片与「近 8 小时」完全同一套渲染，
-          // 样式尺寸一致；重复次数用 ×N 标在币名后面，不丢信息。
-          const olderStat = new Map();
-          older.forEach((entry) => {
-            const at = Number(entry.at) || 0;
-            new Set(
-              (entry.symbols || [])
-                .map((symbol) => String(symbol || "").trim().toUpperCase())
-                .filter(Boolean),
-            ).forEach((key) => {
-              const stat = olderStat.get(key) || { latestAt: 0, count: 0 };
-              stat.count += 1;
-              if (at > stat.latestAt) stat.latestAt = at;
-              olderStat.set(key, stat);
-            });
-          });
-          const olderCards = [];
-          older.forEach((entry) => {
-            const at = Number(entry.at) || 0;
-            const seenHere = new Set();
-            (entry.symbols || []).forEach((symbol) => {
-              const key = String(symbol || "").trim().toUpperCase();
-              if (!key || seenHere.has(key)) return;
-              seenHere.add(key);
-              const stat = olderStat.get(key);
-              // 只保留最近一次出现：8 小时内已画过，或本次不是最新时间点。
-              if (!stat || seen.has(key) || at !== stat.latestAt) return;
-              seen.add(key);
-              olderCards.push({ symbol: key, at, count: stat.count });
-            });
-          });
-          if (olderCards.length) {
-            parts.push(
-              `<div class="nail-auto-pin-section">更早（近 3 天）· ${olderCards.length} 个币</div>`,
-              wrapNailAutoPinItemsHtml(
-                olderCards
-                  .map((row) => buildItem(row.symbol, row.at, row.count))
-                  .join(""),
-                listMode,
-              ),
-            );
-          }
+        if (olderCards.length) {
+          parts.push(
+            `<div class="nail-auto-pin-section">更早（近 3 天）· ${olderCards.length} 个币</div>`,
+            `<div class="nail-auto-pin-grid">${olderCards
+              .map((row) => buildItem(row.symbol, row.at, row.count))
+              .join("")}</div>`,
+          );
         }
         if (!parts.length) {
           list.innerHTML =
@@ -14289,10 +14380,15 @@
         };
         // 卡片多（去掉条数上限后可能几百张）时懒画：只画视口内及下方
         // 一屏的卡片，滚到再画，避免一次几百张图把线程和币安限速打满。
+        // 列表样式下真正滚动的是 table-wrap，root 必须对上，否则几乎不触发。
         if (
           typeof IntersectionObserver === "function" &&
           canvases.length > 40
         ) {
+          const scrollRoot =
+            (list.classList.contains("is-list-view") &&
+              list.querySelector(".nail-auto-pin-table-wrap")) ||
+            list;
           const io = new IntersectionObserver(
             (observed) => {
               observed.forEach((entry) => {
@@ -14303,7 +14399,7 @@
                 void paintOne(canvas);
               });
             },
-            { root: list, rootMargin: "240px 0px" },
+            { root: scrollRoot, rootMargin: "240px 0px" },
           );
           canvases.forEach((canvas) => io.observe(canvas));
           nailAutoPinChartObserver = io;
