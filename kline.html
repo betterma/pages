@@ -2671,6 +2671,92 @@
         font-size: 11px;
         line-height: 1.6;
       }
+      /* 自动盯「列表」样式：对齐雷达表，只保留币名 / K线 / 24h。 */
+      .nail-auto-pin-table-wrap {
+        overflow: auto;
+        overscroll-behavior: contain;
+      }
+      .nail-auto-pin-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-auto-pin-table th,
+      .nail-auto-pin-table td {
+        padding: 7px 8px;
+        border-bottom: 0.5px solid var(--separator);
+        text-align: left;
+        white-space: nowrap;
+        vertical-align: middle;
+      }
+      .nail-auto-pin-table th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: var(--elevated, var(--grouped));
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 650;
+      }
+      .nail-auto-pin-table th:nth-child(1),
+      .nail-auto-pin-table td:nth-child(1) {
+        width: 72px;
+        min-width: 64px;
+        max-width: 96px;
+        padding-left: 10px;
+        padding-right: 4px;
+        overflow: hidden;
+      }
+      .nail-auto-pin-table th:nth-child(2),
+      .nail-auto-pin-table td:nth-child(2) {
+        width: 182px;
+        padding-left: 4px;
+        padding-right: 4px;
+      }
+      .nail-auto-pin-table th:nth-child(3),
+      .nail-auto-pin-table td:nth-child(3) {
+        text-align: right;
+        font-size: 10.5px;
+        padding-left: 4px;
+        padding-right: 12px;
+      }
+      .nail-auto-pin-table .nail-auto-pin-kline {
+        width: 168px;
+        height: 62px;
+      }
+      .nail-auto-pin-row.is-overlook {
+        background: color-mix(
+          in srgb,
+          var(--warn, #b07030) 12%,
+          transparent
+        );
+        cursor: pointer;
+      }
+      .nail-auto-pin-row.is-overlook.is-focus {
+        box-shadow: inset 0 0 0 2px
+          color-mix(in srgb, var(--warn, #b07030) 55%, transparent);
+      }
+      .nail-auto-pin-row .nail-auto-pin-card-name {
+        font-size: 12px;
+      }
+      .nail-auto-pin-row-meta {
+        display: block;
+        margin-top: 1px;
+        color: var(--secondary);
+        font-size: 9.5px;
+        line-height: 1.25;
+      }
+      .nail-auto-pin-row .nail-auto-pin-overpct {
+        color: color-mix(in srgb, var(--warn, #b07030) 80%, var(--label));
+        font-weight: 700;
+      }
+      .nail-auto-pin-chg.is-up {
+        color: var(--up, #3a7fc4);
+      }
+      .nail-auto-pin-chg.is-down {
+        color: var(--down, #c45c5c);
+      }
       .nail-head-actions .nail-icon-btn {
         position: relative;
       }
@@ -6536,6 +6622,7 @@
       }
       .kline-card.is-jump-target,
       .nail-auto-pin-card.is-jump-target,
+      .nail-auto-pin-row.is-jump-target,
       .nail-kcard.is-jump-target,
       .nail-notice-card.is-jump-target {
         outline: 2px solid transparent;
@@ -9072,6 +9159,21 @@
                 aria-label="默认打开通知页面"
               ></button>
             </div>
+            <div class="nail-rising-row nail-sort-row">
+              <span title="仅本机：自动盯分栏用卡片还是雷达式列表">自动盯样式</span>
+              <div
+                class="mode-switch pin-sort-switch"
+                id="nailAutoPinViewSwitch"
+                role="group"
+                aria-label="自动盯样式"
+                title="卡片：现状大方块；列表：币名 / K线 / 24h（类似雷达）"
+              >
+                <button type="button" data-autopin-view="card" class="is-active">
+                  卡片
+                </button>
+                <button type="button" data-autopin-view="list">列表</button>
+              </div>
+            </div>
             <div class="nail-rising-row">
               <span>当前窗口上涨</span>
               <button
@@ -10427,6 +10529,17 @@
           localStorage.getItem(NAIL_DEFAULT_NOTICE_ON_ENTER_KEY) === "1";
       } catch (_) {
         nailDefaultNoticeOnEnter = false;
+      }
+      /** 自动盯分栏展示：card 卡片（默认）/ list 雷达式列表；仅本机。 */
+      const NAIL_AUTOPIN_VIEW_KEY = "kline-nail-autopin-view-v1";
+      let nailAutoPinViewMode = "card";
+      try {
+        const savedView = localStorage.getItem(NAIL_AUTOPIN_VIEW_KEY);
+        if (savedView === "list" || savedView === "card") {
+          nailAutoPinViewMode = savedView;
+        }
+      } catch (_) {
+        nailAutoPinViewMode = "card";
       }
       const NAIL_AUTO_REFRESH_TOP_MS = 5000;
       const NAIL_AUTO_REFRESH_ALL_MS = 15000;
@@ -13795,6 +13908,34 @@
         return item.pinned ? "pinned" : "nailed";
       }
 
+      function syncNailAutoPinViewUi() {
+        const host = document.getElementById("nailAutoPinViewSwitch");
+        if (!host) return;
+        host.querySelectorAll("button[data-autopin-view]").forEach((btn) => {
+          const mode = btn.getAttribute("data-autopin-view");
+          btn.classList.toggle("is-active", mode === nailAutoPinViewMode);
+        });
+      }
+
+      function setNailAutoPinViewMode(mode) {
+        const next = mode === "list" ? "list" : "card";
+        if (next === nailAutoPinViewMode) {
+          syncNailAutoPinViewUi();
+          return;
+        }
+        nailAutoPinViewMode = next;
+        try {
+          localStorage.setItem(NAIL_AUTOPIN_VIEW_KEY, nailAutoPinViewMode);
+        } catch (_) {
+          /* ignore */
+        }
+        syncNailAutoPinViewUi();
+        if (nailSegment === "autopin") {
+          renderNailAutoPinList();
+          void paintNailAutoPinCharts();
+        }
+      }
+
       function buildNailAutoPinCardHtml(symbol, at, repeatCount, opts) {
         const key = String(symbol || "")
           .trim()
@@ -13842,11 +13983,72 @@
         ].join("");
       }
 
+      /** 雷达式列表行：币名 / K线 / 24h。 */
+      function buildNailAutoPinRowHtml(symbol, at, repeatCount, opts) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const overlook = !!(opts && opts.overlook);
+        const repeatN = Number(repeatCount) || 0;
+        const repeat =
+          repeatN > 1
+            ? `<i class="nail-auto-pin-repeat">×${repeatN}</i>`
+            : "";
+        const label = escapeHtml(key.replace(/USDT$/i, "")) + repeat;
+        const change24h = Number(
+          marketMap[key] && marketMap[key].change24h,
+        );
+        const chCls =
+          Number.isFinite(change24h) && change24h > 0
+            ? "nail-auto-pin-chg is-up"
+            : Number.isFinite(change24h) && change24h < 0
+              ? "nail-auto-pin-chg is-down"
+              : "nail-auto-pin-chg";
+        const metaBits = [];
+        if (overlook && Number.isFinite(Number(opts && opts.overPct))) {
+          metaBits.push(
+            `<span class="nail-auto-pin-overpct">${escapeHtml(formatOverlookPct(opts.overPct))}</span>`,
+          );
+        }
+        if (Number(at) > 0) {
+          metaBits.push(escapeHtml(formatActionLogTime(at)));
+        }
+        const meta = metaBits.length
+          ? `<span class="nail-auto-pin-row-meta">${metaBits.join(" · ")}</span>`
+          : "";
+        return [
+          `<tr class="nail-auto-pin-row${overlook ? " is-overlook" : ""}" data-autopin-card="${escapeHtml(key)}"${overlook ? ` data-autopin-overlook="1"` : ""}>`,
+          `<td><button type="button" class="nail-auto-pin-card-name" data-nail-auto-symbol="${escapeHtml(key)}">${label}</button>${meta}</td>`,
+          `<td><canvas class="nail-auto-pin-kline is-loading" data-kline="${escapeHtml(key)}" data-autopin-chart="${escapeHtml(key)}"></canvas></td>`,
+          `<td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td>`,
+          `</tr>`,
+        ].join("");
+      }
+
+      function wrapNailAutoPinItemsHtml(rowsHtml, listMode) {
+        if (!listMode) {
+          return `<div class="nail-auto-pin-grid">${rowsHtml}</div>`;
+        }
+        return [
+          `<div class="nail-auto-pin-table-wrap">`,
+          `<table class="nail-auto-pin-table">`,
+          `<thead><tr><th>币</th><th>K线</th><th>24h</th></tr></thead>`,
+          `<tbody>${rowsHtml}</tbody>`,
+          `</table>`,
+          `</div>`,
+        ].join("");
+      }
+
       function renderNailAutoPinList() {
         const list = document.getElementById("nailAutoPinList");
         if (!list) return;
         // 作废上一轮未画完的请求。
         nailAutoPinPaintToken += 1;
+        const listMode = nailAutoPinViewMode === "list";
+        list.classList.toggle("is-list-view", listMode);
+        const buildItem = listMode
+          ? buildNailAutoPinRowHtml
+          : buildNailAutoPinCardHtml;
         // 只看近 3 天：更早的陈年记录参考意义不大，且去重后卡片数随日志
         // 膨胀（全量约 350 张），3 天窗口规模可控。
         const lookbackCutoff = Date.now() - AUTO_PIN_LOOKBACK_MS;
@@ -13891,22 +14093,26 @@
         if (overlookFocusRows.length) {
           parts.push(
             `<div class="nail-auto-pin-section is-overlook" id="nailAutoPinOverlookSection">俯瞰 · ${overlookFocusRows.length} 个</div>`,
-            `<div class="nail-auto-pin-grid is-overlook">${overlookFocusRows
-              .map((row) =>
-                buildNailAutoPinCardHtml(row.symbol, row.at, 0, {
-                  overlook: true,
-                  overPct: row.overPct,
-                }),
-              )
-              .join("")}</div>`,
+            wrapNailAutoPinItemsHtml(
+              overlookFocusRows
+                .map((row) =>
+                  buildItem(row.symbol, row.at, 0, {
+                    overlook: true,
+                    overPct: row.overPct,
+                  }),
+                )
+                .join(""),
+              listMode,
+            ),
           );
         }
         if (cards.length) {
           parts.push(
             `<div class="nail-auto-pin-section">近 8 小时 · ${cards.length} 个币</div>`,
-            `<div class="nail-auto-pin-grid">${cards
-              .map((row) => buildNailAutoPinCardHtml(row.symbol, row.at))
-              .join("")}</div>`,
+            wrapNailAutoPinItemsHtml(
+              cards.map((row) => buildItem(row.symbol, row.at)).join(""),
+              listMode,
+            ),
           );
           if (overflow.length) {
             parts.push(
@@ -13952,11 +14158,12 @@
           if (olderCards.length) {
             parts.push(
               `<div class="nail-auto-pin-section">更早（近 3 天）· ${olderCards.length} 个币</div>`,
-              `<div class="nail-auto-pin-grid">${olderCards
-                .map((row) =>
-                  buildNailAutoPinCardHtml(row.symbol, row.at, row.count),
-                )
-                .join("")}</div>`,
+              wrapNailAutoPinItemsHtml(
+                olderCards
+                  .map((row) => buildItem(row.symbol, row.at, row.count))
+                  .join(""),
+                listMode,
+              ),
             );
           }
         }
@@ -13977,7 +14184,7 @@
           `#nailAutoPinList canvas[data-autopin-chart="${key}"]`,
         );
         if (!canvas) return false;
-        const card = canvas.closest(".nail-auto-pin-card");
+        const card = canvas.closest("[data-autopin-card]");
         canvas.classList.add("is-loading");
         try {
           const candles = await fetchKlines(key, chartInterval());
@@ -14038,7 +14245,7 @@
                   .trim()
                   .toUpperCase();
           if (!symbol) return;
-          const card = canvas.closest(".nail-auto-pin-card");
+          const card = canvas.closest("[data-autopin-card]");
           try {
             const candles = await fetchKlines(symbol, chartInterval());
             if (token !== nailAutoPinPaintToken) return;
@@ -25176,7 +25383,7 @@
         const scope = key ? focusActionScope || "main" : null;
         document
           .querySelectorAll(
-            ".kline-card.is-focus, .nail-kcard.is-focus, .nail-notice-card.is-focus, .nail-auto-pin-card.is-focus",
+            ".kline-card.is-focus, .nail-kcard.is-focus, .nail-notice-card.is-focus, .nail-auto-pin-card.is-focus, .nail-auto-pin-row.is-focus",
           )
           .forEach((card) => {
             card.classList.remove("is-focus");
@@ -25208,7 +25415,7 @@
         } else if (key && scope === "overlook") {
           document
             .querySelectorAll(
-              `#nailAutoPinList .nail-auto-pin-card.is-overlook[data-autopin-card="${key}"]`,
+              `#nailAutoPinList [data-autopin-overlook][data-autopin-card="${key}"]`,
             )
             .forEach((card) => card.classList.add("is-focus"));
         }
@@ -25342,7 +25549,7 @@
         if (focusActionScope === "overlook") {
           return (
             document.querySelector(
-              `#nailAutoPinList .nail-auto-pin-card.is-overlook[data-autopin-card="${key}"]`,
+              `#nailAutoPinList [data-autopin-overlook][data-autopin-card="${key}"]`,
             ) || null
           );
         }
@@ -29385,11 +29592,11 @@
               const find = () => {
                 if (key) {
                   return document.querySelector(
-                    `#nailAutoPinList .nail-auto-pin-card[data-autopin-card="${key}"]`,
+                    `#nailAutoPinList [data-autopin-card="${key}"]`,
                   );
                 }
                 return document.querySelector(
-                  "#nailAutoPinOverlookSection, #nailAutoPinList .nail-auto-pin-card.is-overlook",
+                  "#nailAutoPinOverlookSection, #nailAutoPinList [data-autopin-overlook]",
                 );
               };
               const run = () => {
@@ -34357,6 +34564,17 @@
           setNailDefaultNoticeOnEnter(!nailDefaultNoticeOnEnter);
         });
       }
+      const nailAutoPinViewSwitch = document.getElementById(
+        "nailAutoPinViewSwitch",
+      );
+      if (nailAutoPinViewSwitch) {
+        syncNailAutoPinViewUi();
+        nailAutoPinViewSwitch.addEventListener("click", (event) => {
+          const btn = event.target.closest("button[data-autopin-view]");
+          if (!btn) return;
+          setNailAutoPinViewMode(btn.getAttribute("data-autopin-view"));
+        });
+      }
       const nailRisingFilter = document.getElementById("nailRisingFilter");
       if (nailRisingFilter) {
         syncNailRisingFilterUi();
@@ -34480,10 +34698,10 @@
             return;
           }
           const overlookCard = event.target.closest(
-            ".nail-auto-pin-card.is-overlook[data-autopin-card]",
+            "[data-autopin-overlook][data-autopin-card]",
           );
           if (overlookCard) {
-            // 俯瞰区点 K 线/卡片：展开操作栏（置顶/刷新/移出）。
+            // 俯瞰区点 K 线/卡片/列表行：展开操作栏（置顶/刷新/移出）。
             // 点币名仍可去钉子抽屉。
             const nameBtn = event.target.closest("[data-nail-auto-symbol]");
             if (nameBtn) {
