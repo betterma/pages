@@ -69,7 +69,8 @@
 仅扫描**自动盯池** 4h K（含成交量）：启动大实体 → 回踩 → 缩量观察 → 放量收阳确认。
 
 - `kinds`：`回踩观察`（预警）/ `回踩放量`（执行确认），写入同一 `watch-balance-notices.json`（与天平/直拉并集；同币 kinds 合并）
-- 网页筛选芯片：**回踩**（观察 + 放量）；置顶摘要条优先提示未读「回踩观察」
+- 网页筛选芯片：**回踩**（观察 + 放量）；独立摘要条；点摘要进通知分栏「回踩置顶」区（置顶/刷新/移出；移出后本命中不再进摘要，直到再次命中）
+- 回踩置顶快照 + 移出水位：`watch-ui-read-state.json` 的 `pullbackFocusRows` / `pullbackFocusAt` / `pullbackFocusDismissed`（与俯瞰 `overlookFocus*` 同模式，电脑/手机一致）
 - 状态：`watch-pullback-volume.json`；同币同 tier 默认冷却 4h
 - `PULLBACK_VOLUME`：默认 `1`；`0` 关闭
 - `PULLBACK_VOLUME_CHECK_MAX`：默认 `24`；并发 `PULLBACK_VOLUME_CONCURRENCY`（默认 6）

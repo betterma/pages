@@ -4607,6 +4607,125 @@
     ].slice(0, 50);
   }
 
+  /** symbol -> 移出命中水位；跨端按 key 取 Math.max。 */
+  function normalizeDismissMap(raw) {
+    const out = {};
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+    Object.keys(raw).forEach((key) => {
+      const sym = String(key || "")
+        .trim()
+        .toUpperCase();
+      const at = Number(raw[key]) || 0;
+      if (sym && at > 0) out[sym] = at;
+    });
+    return out;
+  }
+
+  function mergeDismissMaps(a, b) {
+    const out = { ...normalizeDismissMap(a) };
+    const right = normalizeDismissMap(b);
+    Object.keys(right).forEach((key) => {
+      out[key] = Math.max(Number(out[key]) || 0, Number(right[key]) || 0);
+    });
+    return out;
+  }
+
+  function dismissMapsEqual(a, b) {
+    const left = normalizeDismissMap(a);
+    const right = normalizeDismissMap(b);
+    const lk = Object.keys(left);
+    const rk = Object.keys(right);
+    if (lk.length !== rk.length) return false;
+    for (let i = 0; i < lk.length; i += 1) {
+      const key = lk[i];
+      if (Number(left[key]) !== Number(right[key])) return false;
+    }
+    return true;
+  }
+
+  function normalizeOverlookFocusRows(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((row) => {
+        if (!row || typeof row !== "object") return null;
+        const symbol = String(row.symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!symbol) return null;
+        return {
+          symbol,
+          at: Number(row.at) || 0,
+          overPct: Number(row.overPct),
+          tier: row.tier === "strong" ? "strong" : "weak",
+        };
+      })
+      .filter(Boolean)
+      .slice(0, 80);
+  }
+
+  function normalizePullbackFocusRows(raw) {
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((row) => {
+        if (!row || typeof row !== "object") return null;
+        const symbol = String(row.symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!symbol) return null;
+        const kinds = Array.isArray(row.kinds)
+          ? row.kinds.map(String).filter(Boolean).slice(0, 6)
+          : [];
+        return {
+          symbol,
+          label: String(row.label || symbol.replace(/USDT$/i, "")),
+          at: Number(row.at) || 0,
+          tier: row.tier === "watch" ? "watch" : "confirm",
+          kinds,
+        };
+      })
+      .filter(Boolean)
+      .slice(0, 80);
+  }
+
+  function focusRowsEqual(a, b, kind) {
+    const left =
+      kind === "pullback"
+        ? normalizePullbackFocusRows(a)
+        : normalizeOverlookFocusRows(a);
+    const right =
+      kind === "pullback"
+        ? normalizePullbackFocusRows(b)
+        : normalizeOverlookFocusRows(b);
+    if (left.length !== right.length) return false;
+    for (let i = 0; i < left.length; i += 1) {
+      const x = left[i];
+      const y = right[i];
+      if (x.symbol !== y.symbol || Number(x.at) !== Number(y.at)) return false;
+      if (kind === "overlook") {
+        if (x.tier !== y.tier || Number(x.overPct) !== Number(y.overPct)) {
+          return false;
+        }
+      } else if (x.tier !== y.tier || String(x.label) !== String(y.label)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** 移出水位已覆盖的命中从置顶快照里裁掉（写入前统一做，避免云端残留）。 */
+  function filterFocusRowsByDismiss(rows, dismissMap, kind) {
+    const list =
+      kind === "pullback"
+        ? normalizePullbackFocusRows(rows)
+        : normalizeOverlookFocusRows(rows);
+    const dismiss = normalizeDismissMap(dismissMap);
+    return list.filter((row) => {
+      const watermark = Number(dismiss[row.symbol]) || 0;
+      if (!(watermark > 0)) return true;
+      return (Number(row.at) || 0) > watermark;
+    });
+  }
+
   function normalizeUiReadState(raw) {
     const data = raw && typeof raw === "object" ? raw : {};
     const num = (v) => (Number(v) > 0 ? Number(v) : 0);
@@ -4615,6 +4734,12 @@
       autoPinSeenAt: num(data.autoPinSeenAt),
       overlookSeenAt: num(data.overlookSeenAt),
       pullbackSeenAt: num(data.pullbackSeenAt),
+      overlookFocusDismissed: normalizeDismissMap(data.overlookFocusDismissed),
+      pullbackFocusDismissed: normalizeDismissMap(data.pullbackFocusDismissed),
+      overlookFocusRows: normalizeOverlookFocusRows(data.overlookFocusRows),
+      overlookFocusAt: num(data.overlookFocusAt),
+      pullbackFocusRows: normalizePullbackFocusRows(data.pullbackFocusRows),
+      pullbackFocusAt: num(data.pullbackFocusAt),
       radarFixedSymbols: normalizeUiReadSymbols(data.radarFixedSymbols),
       radarFixedAt: num(data.radarFixedAt),
       updatedAt: num(data.updatedAt),
@@ -4629,7 +4754,21 @@
     if (left.autoPinSeenAt !== right.autoPinSeenAt) return false;
     if (left.overlookSeenAt !== right.overlookSeenAt) return false;
     if (left.pullbackSeenAt !== right.pullbackSeenAt) return false;
+    if (left.overlookFocusAt !== right.overlookFocusAt) return false;
+    if (left.pullbackFocusAt !== right.pullbackFocusAt) return false;
     if (left.radarFixedAt !== right.radarFixedAt) return false;
+    if (!dismissMapsEqual(left.overlookFocusDismissed, right.overlookFocusDismissed)) {
+      return false;
+    }
+    if (!dismissMapsEqual(left.pullbackFocusDismissed, right.pullbackFocusDismissed)) {
+      return false;
+    }
+    if (!focusRowsEqual(left.overlookFocusRows, right.overlookFocusRows, "overlook")) {
+      return false;
+    }
+    if (!focusRowsEqual(left.pullbackFocusRows, right.pullbackFocusRows, "pullback")) {
+      return false;
+    }
     const ls = left.radarFixedSymbols;
     const rs = right.radarFixedSymbols;
     if (ls.length !== rs.length) return false;
@@ -4690,7 +4829,40 @@
           token: opts.token,
         });
         const base = normalizeUiReadState(current.data);
-        const wanted = normalizeUiReadState(opts.patch);
+        const patchRaw =
+          opts.patch && typeof opts.patch === "object" ? opts.patch : {};
+        const wanted = normalizeUiReadState(patchRaw);
+        // 仅当 patch 显式带 focus 字段才整表替换；纯 dismiss/已读补丁不得用 at=0 清空快照。
+        const wantedHasOverlookFocus =
+          Object.prototype.hasOwnProperty.call(patchRaw, "overlookFocusAt") ||
+          Object.prototype.hasOwnProperty.call(patchRaw, "overlookFocusRows");
+        const wantedHasPullbackFocus =
+          Object.prototype.hasOwnProperty.call(patchRaw, "pullbackFocusAt") ||
+          Object.prototype.hasOwnProperty.call(patchRaw, "pullbackFocusRows");
+        const nextOverlookFocusDismissed = mergeDismissMaps(
+          base.overlookFocusDismissed,
+          wanted.overlookFocusDismissed,
+        );
+        const nextPullbackFocusDismissed = mergeDismissMaps(
+          base.pullbackFocusDismissed,
+          wanted.pullbackFocusDismissed,
+        );
+        const nextOverlookFocusRows = filterFocusRowsByDismiss(
+          wantedHasOverlookFocus &&
+            wanted.overlookFocusAt >= base.overlookFocusAt
+            ? wanted.overlookFocusRows
+            : base.overlookFocusRows,
+          nextOverlookFocusDismissed,
+          "overlook",
+        );
+        const nextPullbackFocusRows = filterFocusRowsByDismiss(
+          wantedHasPullbackFocus &&
+            wanted.pullbackFocusAt >= base.pullbackFocusAt
+            ? wanted.pullbackFocusRows
+            : base.pullbackFocusRows,
+          nextPullbackFocusDismissed,
+          "pullback",
+        );
         let state = {
           priceAlertReadAt: Math.max(
             base.priceAlertReadAt,
@@ -4705,6 +4877,17 @@
             base.pullbackSeenAt,
             wanted.pullbackSeenAt,
           ),
+          overlookFocusDismissed: nextOverlookFocusDismissed,
+          pullbackFocusDismissed: nextPullbackFocusDismissed,
+          // 置顶快照按时间戳取较新整表（移出/并入都靠整表替换收敛）。
+          overlookFocusAt: wantedHasOverlookFocus
+            ? Math.max(base.overlookFocusAt, wanted.overlookFocusAt)
+            : base.overlookFocusAt,
+          overlookFocusRows: nextOverlookFocusRows,
+          pullbackFocusAt: wantedHasPullbackFocus
+            ? Math.max(base.pullbackFocusAt, wanted.pullbackFocusAt)
+            : base.pullbackFocusAt,
+          pullbackFocusRows: nextPullbackFocusRows,
           radarFixedSymbols: base.radarFixedSymbols.slice(),
           radarFixedAt: base.radarFixedAt,
           updatedAt: base.updatedAt,
@@ -4716,6 +4899,42 @@
           state = {
             ...state,
             ...result,
+            overlookFocusDismissed: normalizeDismissMap(
+              result.overlookFocusDismissed === undefined
+                ? state.overlookFocusDismissed
+                : result.overlookFocusDismissed,
+            ),
+            pullbackFocusDismissed: normalizeDismissMap(
+              result.pullbackFocusDismissed === undefined
+                ? state.pullbackFocusDismissed
+                : result.pullbackFocusDismissed,
+            ),
+            overlookFocusRows: filterFocusRowsByDismiss(
+              result.overlookFocusRows === undefined
+                ? state.overlookFocusRows
+                : result.overlookFocusRows,
+              result.overlookFocusDismissed === undefined
+                ? state.overlookFocusDismissed
+                : result.overlookFocusDismissed,
+              "overlook",
+            ),
+            overlookFocusAt:
+              Number(result.overlookFocusAt) > 0
+                ? Number(result.overlookFocusAt)
+                : state.overlookFocusAt,
+            pullbackFocusRows: filterFocusRowsByDismiss(
+              result.pullbackFocusRows === undefined
+                ? state.pullbackFocusRows
+                : result.pullbackFocusRows,
+              result.pullbackFocusDismissed === undefined
+                ? state.pullbackFocusDismissed
+                : result.pullbackFocusDismissed,
+              "pullback",
+            ),
+            pullbackFocusAt:
+              Number(result.pullbackFocusAt) > 0
+                ? Number(result.pullbackFocusAt)
+                : state.pullbackFocusAt,
             radarFixedSymbols:
               result.radarFixedSymbols === undefined
                 ? state.radarFixedSymbols
@@ -4994,6 +5213,10 @@
     UI_READ_STATE_PATH,
     normalizeUiReadState,
     normalizeUiReadSymbols,
+    normalizeDismissMap,
+    mergeDismissMaps,
+    normalizeOverlookFocusRows,
+    normalizePullbackFocusRows,
     uiReadStateEqual,
     loadUiReadState,
     patchUiReadState,

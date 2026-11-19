@@ -6169,21 +6169,54 @@
         z-index: 140;
         width: min(420px, calc(100vw - 16px));
       }
-      .card-focus-bar.is-overlook-scope {
+      .card-focus-bar.is-overlook-scope,
+      .card-focus-bar.is-pullback-scope {
         z-index: 145;
         width: min(420px, calc(100vw - 16px));
       }
       .card-focus-bar.is-notice-scope [data-focus-action]:not([data-focus-action="refresh"]):not([data-focus-action="nail"]):not([data-focus-action="review"]) {
         display: none;
       }
-      .card-focus-bar.is-overlook-scope [data-focus-action]:not([data-focus-action="refresh"]):not([data-focus-action="nail"]):not([data-focus-action="remove-overlook"]) {
+      .card-focus-bar.is-overlook-scope [data-focus-action]:not([data-focus-action="refresh"]):not([data-focus-action="nail"]):not([data-focus-action="remove-overlook"]),
+      .card-focus-bar.is-pullback-scope [data-focus-action]:not([data-focus-action="refresh"]):not([data-focus-action="nail"]):not([data-focus-action="remove-overlook"]) {
         display: none;
       }
       .card-focus-bar:not(.is-notice-scope) [data-focus-action="review"] {
         display: none;
       }
-      .card-focus-bar:not(.is-overlook-scope) [data-focus-action="remove-overlook"] {
+      .card-focus-bar:not(.is-overlook-scope):not(.is-pullback-scope) [data-focus-action="remove-overlook"] {
         display: none;
+      }
+      .nail-notice-pullback-focus {
+        grid-column: 1 / -1;
+        margin: 0 0 10px;
+        padding: 8px;
+        border-radius: 10px;
+        border: 0.5px solid
+          color-mix(in srgb, var(--accent, #2f8f6e) 42%, var(--separator));
+        background: color-mix(
+          in srgb,
+          var(--accent, #2f8f6e) 10%,
+          transparent
+        );
+      }
+      .nail-notice-pullback-focus-head {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 700;
+        color: color-mix(in srgb, var(--accent, #2f8f6e) 78%, var(--label));
+      }
+      .nail-notice-card.is-pullback-focus {
+        border-color: color-mix(
+          in srgb,
+          var(--accent, #2f8f6e) 48%,
+          var(--separator)
+        );
+        background: color-mix(
+          in srgb,
+          var(--accent, #2f8f6e) 8%,
+          var(--elevated, #fff)
+        );
       }
       .card-focus-bar.is-nail-scope [data-focus-action="nail"],
       .card-focus-bar.is-nail-scope [data-focus-action="zoom"],
@@ -9735,7 +9768,7 @@
       <button
         type="button"
         data-focus-action="remove-overlook"
-        title="从自动盯俯瞰置顶区移出"
+        title="从俯瞰/回踩置顶区移出"
       >
         移出
       </button>
@@ -10577,31 +10610,246 @@
        * 点摘要条后：俯瞰在自动盯顶部单独成区（可看 K 线）。
        * 用快照列表，不绑 overlookSeenAt——关摘要标已读不收起本区；
        * 仅手动「移出」逐个拿掉，移空后区才消失。
+       * 移出后本命中不再进摘要/置顶；再一次命中（detectedAt 更新）才回来。
        */
       let nailAutoPinOverlookFocus = false;
       /** @type {{ symbol: string, at: number, overPct: number, tier: string }[]} */
       let nailAutoPinOverlookFocusRows = [];
       /** 本机俯瞰置顶区手动移出的币（不改已读基线）。 */
       const nailAutoPinOverlookHidden = new Set();
+      const OVERLOOK_FOCUS_DISMISS_KEY = "kline-overlook-focus-dismiss-v1";
+      const PULLBACK_FOCUS_DISMISS_KEY = "kline-pullback-focus-dismiss-v1";
+      const OVERLOOK_FOCUS_ROWS_KEY = "kline-overlook-focus-rows-v1";
+      const PULLBACK_FOCUS_ROWS_KEY = "kline-pullback-focus-rows-v1";
+
+      function loadFocusDismissMap(storageKey) {
+        const map = new Map();
+        try {
+          const raw = JSON.parse(localStorage.getItem(storageKey) || "{}");
+          if (!raw || typeof raw !== "object") return map;
+          Object.keys(raw).forEach((key) => {
+            const sym = String(key || "")
+              .trim()
+              .toUpperCase();
+            const at = Number(raw[key]) || 0;
+            if (sym && at > 0) map.set(sym, at);
+          });
+        } catch (_) {
+          /* ignore */
+        }
+        return map;
+      }
+
+      function dismissMapToObject(map) {
+        const obj = {};
+        map.forEach((at, key) => {
+          if (key && Number(at) > 0) obj[key] = Number(at);
+        });
+        return obj;
+      }
+
+      function saveFocusDismissMap(storageKey, map) {
+        try {
+          localStorage.setItem(
+            storageKey,
+            JSON.stringify(dismissMapToObject(map)),
+          );
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
+      function mergeDismissIntoMap(map, raw) {
+        const src =
+          typeof WatchFavorites !== "undefined" &&
+          typeof WatchFavorites.normalizeDismissMap === "function"
+            ? WatchFavorites.normalizeDismissMap(raw)
+            : raw && typeof raw === "object"
+              ? raw
+              : {};
+        let changed = false;
+        Object.keys(src || {}).forEach((key) => {
+          const sym = String(key || "")
+            .trim()
+            .toUpperCase();
+          const at = Number(src[key]) || 0;
+          if (!sym || !(at > 0)) return;
+          if (at > (Number(map.get(sym)) || 0)) {
+            map.set(sym, at);
+            changed = true;
+          }
+        });
+        return changed;
+      }
+
+      /** symbol -> 已移出命中的 detectedAt/at 水位；只有更高的新命中才再进摘要/置顶。 */
+      const overlookFocusDismissed = loadFocusDismissMap(
+        OVERLOOK_FOCUS_DISMISS_KEY,
+      );
+      const pullbackFocusDismissed = loadFocusDismissMap(
+        PULLBACK_FOCUS_DISMISS_KEY,
+      );
+      /** 置顶快照跨端版本戳（写入 watch-ui-read-state.json）。 */
+      let overlookFocusSharedAt = 0;
+      let pullbackFocusSharedAt = 0;
+
+      function isFocusHitDismissed(map, symbol, hitAt) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return true;
+        const dismissed = Number(map.get(key)) || 0;
+        if (!(dismissed > 0)) return false;
+        return (Number(hitAt) || 0) <= dismissed;
+      }
+
+      function dismissFocusHit(map, storageKey, symbol, hitAt) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        const next = Math.max(
+          Number(map.get(key)) || 0,
+          Number(hitAt) || 0,
+          Date.now(),
+        );
+        map.set(key, next);
+        saveFocusDismissMap(storageKey, map);
+        if (map === overlookFocusDismissed) {
+          queueSharedUiReadState({
+            overlookFocusDismissed: dismissMapToObject(map),
+          });
+        } else if (map === pullbackFocusDismissed) {
+          queueSharedUiReadState({
+            pullbackFocusDismissed: dismissMapToObject(map),
+          });
+        }
+      }
+
+      function saveFocusRowsLocal(kind) {
+        try {
+          if (kind === "pullback") {
+            localStorage.setItem(
+              PULLBACK_FOCUS_ROWS_KEY,
+              JSON.stringify({
+                at: pullbackFocusSharedAt,
+                rows: nailNoticePullbackFocus
+                  ? nailNoticePullbackFocusRows
+                  : [],
+              }),
+            );
+          } else {
+            localStorage.setItem(
+              OVERLOOK_FOCUS_ROWS_KEY,
+              JSON.stringify({
+                at: overlookFocusSharedAt,
+                rows: nailAutoPinOverlookFocus
+                  ? nailAutoPinOverlookFocusRows
+                  : [],
+              }),
+            );
+          }
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
+      function loadFocusRowsLocal(kind) {
+        try {
+          const key =
+            kind === "pullback"
+              ? PULLBACK_FOCUS_ROWS_KEY
+              : OVERLOOK_FOCUS_ROWS_KEY;
+          const raw = JSON.parse(localStorage.getItem(key) || "null");
+          if (!raw || typeof raw !== "object") return;
+          const at = Number(raw.at) || 0;
+          const rows = Array.isArray(raw.rows) ? raw.rows : [];
+          if (kind === "pullback") {
+            if (!(at > pullbackFocusSharedAt)) return;
+            pullbackFocusSharedAt = at;
+            nailNoticePullbackFocusRows =
+              typeof WatchFavorites !== "undefined" &&
+              typeof WatchFavorites.normalizePullbackFocusRows === "function"
+                ? WatchFavorites.normalizePullbackFocusRows(rows)
+                : rows;
+            nailNoticePullbackFocusRows = nailNoticePullbackFocusRows.filter(
+              (row) =>
+                !isFocusHitDismissed(
+                  pullbackFocusDismissed,
+                  row && row.symbol,
+                  row && row.at,
+                ),
+            );
+            nailNoticePullbackFocus = nailNoticePullbackFocusRows.length > 0;
+          } else {
+            if (!(at > overlookFocusSharedAt)) return;
+            overlookFocusSharedAt = at;
+            nailAutoPinOverlookFocusRows =
+              typeof WatchFavorites !== "undefined" &&
+              typeof WatchFavorites.normalizeOverlookFocusRows === "function"
+                ? WatchFavorites.normalizeOverlookFocusRows(rows)
+                : rows;
+            nailAutoPinOverlookFocusRows = nailAutoPinOverlookFocusRows.filter(
+              (row) =>
+                !isFocusHitDismissed(
+                  overlookFocusDismissed,
+                  row && row.symbol,
+                  row && row.at,
+                ),
+            );
+            nailAutoPinOverlookFocus = nailAutoPinOverlookFocusRows.length > 0;
+          }
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
+      /** 俯瞰/回踩置顶快照写入共享状态（电脑/手机同一份）。 */
+      function queueFocusRowsShared(kind) {
+        const at = Date.now();
+        if (kind === "pullback") {
+          pullbackFocusSharedAt = Math.max(pullbackFocusSharedAt, at);
+          saveFocusRowsLocal("pullback");
+          queueSharedUiReadState({
+            pullbackFocusAt: pullbackFocusSharedAt,
+            pullbackFocusRows: nailNoticePullbackFocus
+              ? nailNoticePullbackFocusRows.slice()
+              : [],
+          });
+          return;
+        }
+        overlookFocusSharedAt = Math.max(overlookFocusSharedAt, at);
+        saveFocusRowsLocal("overlook");
+        queueSharedUiReadState({
+          overlookFocusAt: overlookFocusSharedAt,
+          overlookFocusRows: nailAutoPinOverlookFocus
+            ? nailAutoPinOverlookFocusRows.slice()
+            : [],
+        });
+      }
 
       function visibleOverlookFocusRows() {
         if (!nailAutoPinOverlookFocus) return [];
-        return nailAutoPinOverlookFocusRows.filter(
-          (row) =>
-            row &&
-            row.symbol &&
-            !nailAutoPinOverlookHidden.has(String(row.symbol).toUpperCase()),
-        );
+        return nailAutoPinOverlookFocusRows.filter((row) => {
+          if (!row || !row.symbol) return false;
+          const key = String(row.symbol).toUpperCase();
+          if (nailAutoPinOverlookHidden.has(key)) return false;
+          if (isFocusHitDismissed(overlookFocusDismissed, key, row.at)) {
+            return false;
+          }
+          return true;
+        });
       }
 
-      function clearOverlookFocusSection() {
+      function clearOverlookFocusSection(options) {
         nailAutoPinOverlookFocus = false;
         nailAutoPinOverlookFocusRows = [];
         nailAutoPinOverlookHidden.clear();
         if (focusActionScope === "overlook") setFocusActionSymbol(null);
+        if (!(options && options.skipShare)) queueFocusRowsShared("overlook");
       }
 
-      /** 把当前未读俯瞰并入置顶快照（已在区里的保留；新未读可再次进区）。 */
+      /** 把当前未读俯瞰并入置顶快照（已移出的本命中不会再进来）。 */
       function mergeOverlookFocusFromUnread() {
         const map = new Map();
         nailAutoPinOverlookFocusRows.forEach((row) => {
@@ -10609,6 +10857,9 @@
             .trim()
             .toUpperCase();
           if (!key) return;
+          if (isFocusHitDismissed(overlookFocusDismissed, key, row && row.at)) {
+            return;
+          }
           map.set(key, row);
         });
         unreadOverlookItems().forEach((row) => {
@@ -10616,7 +10867,6 @@
             .trim()
             .toUpperCase();
           if (!symbol) return;
-          nailAutoPinOverlookHidden.delete(symbol);
           map.set(symbol, {
             symbol,
             at: Number(row.detectedAt) || Number(row.pinnedAt) || 0,
@@ -10633,6 +10883,76 @@
         if (!visibleOverlookFocusRows().length) {
           nailAutoPinOverlookFocus = false;
         }
+        queueFocusRowsShared("overlook");
+      }
+
+      /**
+       * 回踩摘要 → 通知分栏顶部置顶区（可置顶/刷新/移出）。
+       * 移出后本命中不再进摘要/置顶，直到再次命中。
+       */
+      let nailNoticePullbackFocus = false;
+      /** @type {{ symbol: string, label: string, at: number, tier: string, kinds: string[] }[]} */
+      let nailNoticePullbackFocusRows = [];
+      loadFocusRowsLocal("overlook");
+      loadFocusRowsLocal("pullback");
+
+      function visiblePullbackFocusRows() {
+        if (!nailNoticePullbackFocus) return [];
+        return nailNoticePullbackFocusRows.filter((row) => {
+          if (!row || !row.symbol) return false;
+          if (
+            isFocusHitDismissed(
+              pullbackFocusDismissed,
+              row.symbol,
+              row.at,
+            )
+          ) {
+            return false;
+          }
+          return true;
+        });
+      }
+
+      function clearPullbackFocusSection(options) {
+        nailNoticePullbackFocus = false;
+        nailNoticePullbackFocusRows = [];
+        if (focusActionScope === "pullback") setFocusActionSymbol(null);
+        if (!(options && options.skipShare)) queueFocusRowsShared("pullback");
+      }
+
+      function mergePullbackFocusFromUnread() {
+        const map = new Map();
+        nailNoticePullbackFocusRows.forEach((row) => {
+          const key = String((row && row.symbol) || "")
+            .trim()
+            .toUpperCase();
+          if (!key) return;
+          if (isFocusHitDismissed(pullbackFocusDismissed, key, row && row.at)) {
+            return;
+          }
+          map.set(key, row);
+        });
+        unreadPullbackNoticeItems().forEach((row) => {
+          const symbol = String((row && row.symbol) || "")
+            .trim()
+            .toUpperCase();
+          if (!symbol) return;
+          map.set(symbol, {
+            symbol,
+            label: row.label || String(symbol).replace(/USDT$/i, ""),
+            at: Number(row.at) || 0,
+            tier: row.tier === "watch" ? "watch" : "confirm",
+            kinds: Array.isArray(row.kinds) ? row.kinds.slice() : [],
+          });
+        });
+        nailNoticePullbackFocusRows = [...map.values()].sort(
+          (a, b) => (b.at || 0) - (a.at || 0),
+        );
+        nailNoticePullbackFocus = true;
+        if (!visiblePullbackFocusRows().length) {
+          nailNoticePullbackFocus = false;
+        }
+        queueFocusRowsShared("pullback");
       }
       /**
        * 跨端已读基线：价格提醒 / 自动盯的已读时刻同步到 watch-ui-read-state.json。
@@ -10665,6 +10985,48 @@
             uiReadStatePending[key] = value;
           }
         });
+        const mergeDismissPending = (field) => {
+          if (!Object.prototype.hasOwnProperty.call(patch, field)) return;
+          const merge =
+            typeof WatchFavorites !== "undefined" &&
+            typeof WatchFavorites.mergeDismissMaps === "function"
+              ? WatchFavorites.mergeDismissMaps
+              : (a, b) => ({ ...(a || {}), ...(b || {}) });
+          uiReadStatePending[field] = merge(
+            uiReadStatePending[field] || {},
+            patch[field] || {},
+          );
+        };
+        mergeDismissPending("overlookFocusDismissed");
+        mergeDismissPending("pullbackFocusDismissed");
+        if (
+          Object.prototype.hasOwnProperty.call(patch, "overlookFocusAt") ||
+          Object.prototype.hasOwnProperty.call(patch, "overlookFocusRows")
+        ) {
+          const at = Number(patch.overlookFocusAt) || 0;
+          if (at >= (Number(uiReadStatePending.overlookFocusAt) || 0)) {
+            uiReadStatePending.overlookFocusAt = at;
+            uiReadStatePending.overlookFocusRows = Array.isArray(
+              patch.overlookFocusRows,
+            )
+              ? patch.overlookFocusRows.slice()
+              : [];
+          }
+        }
+        if (
+          Object.prototype.hasOwnProperty.call(patch, "pullbackFocusAt") ||
+          Object.prototype.hasOwnProperty.call(patch, "pullbackFocusRows")
+        ) {
+          const at = Number(patch.pullbackFocusAt) || 0;
+          if (at >= (Number(uiReadStatePending.pullbackFocusAt) || 0)) {
+            uiReadStatePending.pullbackFocusAt = at;
+            uiReadStatePending.pullbackFocusRows = Array.isArray(
+              patch.pullbackFocusRows,
+            )
+              ? patch.pullbackFocusRows.slice()
+              : [];
+          }
+        }
         if (uiReadStateTimer) clearTimeout(uiReadStateTimer);
         uiReadStateTimer = setTimeout(() => {
           const next = uiReadStatePending;
@@ -23408,6 +23770,16 @@
           autoPinSeenAt: auto,
           overlookSeenAt: Math.max(overlook, Number(overlookSeenAt) || 0),
           pullbackSeenAt: Math.max(pullback, Number(pullbackSeenAt) || 0),
+          overlookFocusDismissed: dismissMapToObject(overlookFocusDismissed),
+          pullbackFocusDismissed: dismissMapToObject(pullbackFocusDismissed),
+          overlookFocusAt: Number(overlookFocusSharedAt) || 0,
+          overlookFocusRows: nailAutoPinOverlookFocus
+            ? nailAutoPinOverlookFocusRows.slice()
+            : [],
+          pullbackFocusAt: Number(pullbackFocusSharedAt) || 0,
+          pullbackFocusRows: nailNoticePullbackFocus
+            ? nailNoticePullbackFocusRows.slice()
+            : [],
         };
       }
 
@@ -23424,6 +23796,16 @@
           Number(pullbackSeenAt) || 0,
           Number(state.pullbackSeenAt) || 0,
         );
+        mergeDismissIntoMap(
+          overlookFocusDismissed,
+          state.overlookFocusDismissed,
+        );
+        mergeDismissIntoMap(
+          pullbackFocusDismissed,
+          state.pullbackFocusDismissed,
+        );
+        saveFocusDismissMap(OVERLOOK_FOCUS_DISMISS_KEY, overlookFocusDismissed);
+        saveFocusDismissMap(PULLBACK_FOCUS_DISMISS_KEY, pullbackFocusDismissed);
         try {
           localStorage.setItem(PRICE_ALERT_READ_KEY, String(priceAlertReadAt));
           localStorage.setItem(
@@ -23435,10 +23817,96 @@
         } catch (_) {}
       }
 
+      function applySharedFocusSnapshots(state) {
+        let overlookChanged = false;
+        let pullbackChanged = false;
+        const cloudOverlookAt = Number(state.overlookFocusAt) || 0;
+        if (cloudOverlookAt > overlookFocusSharedAt) {
+          overlookFocusSharedAt = cloudOverlookAt;
+          nailAutoPinOverlookFocusRows =
+            typeof WatchFavorites !== "undefined" &&
+            typeof WatchFavorites.normalizeOverlookFocusRows === "function"
+              ? WatchFavorites.normalizeOverlookFocusRows(
+                  state.overlookFocusRows,
+                )
+              : Array.isArray(state.overlookFocusRows)
+                ? state.overlookFocusRows.slice()
+                : [];
+          nailAutoPinOverlookHidden.clear();
+          overlookChanged = true;
+        }
+        const overlookBefore = nailAutoPinOverlookFocusRows.length;
+        nailAutoPinOverlookFocusRows = nailAutoPinOverlookFocusRows.filter(
+          (row) =>
+            !isFocusHitDismissed(
+              overlookFocusDismissed,
+              row && row.symbol,
+              row && row.at,
+            ),
+        );
+        if (nailAutoPinOverlookFocusRows.length !== overlookBefore) {
+          overlookChanged = true;
+        }
+        if (overlookChanged) {
+          nailAutoPinOverlookFocus = nailAutoPinOverlookFocusRows.length > 0;
+          saveFocusRowsLocal("overlook");
+          if (nailSegment === "autopin") {
+            renderNailAutoPinList();
+            void paintNailAutoPinCharts();
+          }
+        }
+
+        const cloudPullbackAt = Number(state.pullbackFocusAt) || 0;
+        if (cloudPullbackAt > pullbackFocusSharedAt) {
+          pullbackFocusSharedAt = cloudPullbackAt;
+          nailNoticePullbackFocusRows =
+            typeof WatchFavorites !== "undefined" &&
+            typeof WatchFavorites.normalizePullbackFocusRows === "function"
+              ? WatchFavorites.normalizePullbackFocusRows(
+                  state.pullbackFocusRows,
+                )
+              : Array.isArray(state.pullbackFocusRows)
+                ? state.pullbackFocusRows.slice()
+                : [];
+          pullbackChanged = true;
+        }
+        const pullbackBefore = nailNoticePullbackFocusRows.length;
+        nailNoticePullbackFocusRows = nailNoticePullbackFocusRows.filter(
+          (row) =>
+            !isFocusHitDismissed(
+              pullbackFocusDismissed,
+              row && row.symbol,
+              row && row.at,
+            ),
+        );
+        if (nailNoticePullbackFocusRows.length !== pullbackBefore) {
+          pullbackChanged = true;
+        }
+        if (pullbackChanged) {
+          nailNoticePullbackFocus = nailNoticePullbackFocusRows.length > 0;
+          saveFocusRowsLocal("pullback");
+          if (nailNoticeMode === "open") renderNailNoticeList();
+        }
+        return overlookChanged || pullbackChanged;
+      }
+
       /** 云端与本地取最大值收敛；本地更新时补推，绝不让旧值覆盖新值。 */
       function applySharedUiReadState(cloud) {
         const local = readLocalUiReadState();
         const base = cloud || {};
+        const mergeDismiss =
+          typeof WatchFavorites !== "undefined" &&
+          typeof WatchFavorites.mergeDismissMaps === "function"
+            ? WatchFavorites.mergeDismissMaps
+            : (a, b) => ({ ...(a || {}), ...(b || {}) });
+        const nextOverlookFocusAt = Math.max(
+          Number(base.overlookFocusAt) || 0,
+          local.overlookFocusAt,
+        );
+        const nextPullbackFocusAt = Math.max(
+          Number(base.pullbackFocusAt) || 0,
+          local.pullbackFocusAt,
+        );
         const next = {
           priceAlertReadAt: Math.max(
             Number(base.priceAlertReadAt) || 0,
@@ -23456,22 +23924,106 @@
             Number(base.pullbackSeenAt) || 0,
             local.pullbackSeenAt,
           ),
+          overlookFocusDismissed: mergeDismiss(
+            base.overlookFocusDismissed,
+            local.overlookFocusDismissed,
+          ),
+          pullbackFocusDismissed: mergeDismiss(
+            base.pullbackFocusDismissed,
+            local.pullbackFocusDismissed,
+          ),
+          overlookFocusAt: nextOverlookFocusAt,
+          overlookFocusRows:
+            (Number(base.overlookFocusAt) || 0) >= local.overlookFocusAt
+              ? Array.isArray(base.overlookFocusRows)
+                ? base.overlookFocusRows.slice()
+                : []
+              : local.overlookFocusRows.slice(),
+          pullbackFocusAt: nextPullbackFocusAt,
+          pullbackFocusRows:
+            (Number(base.pullbackFocusAt) || 0) >= local.pullbackFocusAt
+              ? Array.isArray(base.pullbackFocusRows)
+                ? base.pullbackFocusRows.slice()
+                : []
+              : local.pullbackFocusRows.slice(),
         };
+        const dismissChanged =
+          mergeDismissIntoMap(
+            overlookFocusDismissed,
+            next.overlookFocusDismissed,
+          ) ||
+          mergeDismissIntoMap(
+            pullbackFocusDismissed,
+            next.pullbackFocusDismissed,
+          );
+        // 合并水位后再裁剪快照，避免补推时把已移出的行写回云端。
+        const overlookBefore = next.overlookFocusRows.length;
+        const pullbackBefore = next.pullbackFocusRows.length;
+        next.overlookFocusRows = next.overlookFocusRows.filter(
+          (row) =>
+            !isFocusHitDismissed(
+              overlookFocusDismissed,
+              row && row.symbol,
+              row && row.at,
+            ),
+        );
+        next.pullbackFocusRows = next.pullbackFocusRows.filter(
+          (row) =>
+            !isFocusHitDismissed(
+              pullbackFocusDismissed,
+              row && row.symbol,
+              row && row.at,
+            ),
+        );
+        const rowsPruned =
+          next.overlookFocusRows.length !== overlookBefore ||
+          next.pullbackFocusRows.length !== pullbackBefore;
         const changed =
           next.priceAlertReadAt > local.priceAlertReadAt ||
           next.autoPinSeenAt > local.autoPinSeenAt ||
           next.overlookSeenAt > local.overlookSeenAt ||
-          next.pullbackSeenAt > local.pullbackSeenAt;
+          next.pullbackSeenAt > local.pullbackSeenAt ||
+          dismissChanged;
         writeLocalUiReadState(next);
-        if (
+        const focusChanged = applySharedFocusSnapshots(next);
+        // 以内存裁剪结果为准（与 UI 一致）再决定是否补推。
+        next.overlookFocusAt = Number(overlookFocusSharedAt) || next.overlookFocusAt;
+        next.pullbackFocusAt = Number(pullbackFocusSharedAt) || next.pullbackFocusAt;
+        next.overlookFocusRows = nailAutoPinOverlookFocus
+          ? nailAutoPinOverlookFocusRows.slice()
+          : [];
+        next.pullbackFocusRows = nailNoticePullbackFocus
+          ? nailNoticePullbackFocusRows.slice()
+          : [];
+        const needPush =
           next.priceAlertReadAt > (Number(base.priceAlertReadAt) || 0) ||
           next.autoPinSeenAt > (Number(base.autoPinSeenAt) || 0) ||
           next.overlookSeenAt > (Number(base.overlookSeenAt) || 0) ||
-          next.pullbackSeenAt > (Number(base.pullbackSeenAt) || 0)
-        ) {
+          next.pullbackSeenAt > (Number(base.pullbackSeenAt) || 0) ||
+          local.overlookFocusAt > (Number(base.overlookFocusAt) || 0) ||
+          local.pullbackFocusAt > (Number(base.pullbackFocusAt) || 0);
+        // dismiss 本机更高时也要补推
+        let dismissNeedPush = false;
+        Object.keys(local.overlookFocusDismissed || {}).forEach((key) => {
+          if (
+            (Number(local.overlookFocusDismissed[key]) || 0) >
+            (Number((base.overlookFocusDismissed || {})[key]) || 0)
+          ) {
+            dismissNeedPush = true;
+          }
+        });
+        Object.keys(local.pullbackFocusDismissed || {}).forEach((key) => {
+          if (
+            (Number(local.pullbackFocusDismissed[key]) || 0) >
+            (Number((base.pullbackFocusDismissed || {})[key]) || 0)
+          ) {
+            dismissNeedPush = true;
+          }
+        });
+        if (needPush || dismissNeedPush || rowsPruned) {
           queueSharedUiReadState(next);
         }
-        if (changed) {
+        if (changed || focusChanged || dismissChanged) {
           syncNailNoticeEntryUi();
           syncNailAutoPinBadge();
           syncNailDigest();
@@ -24525,12 +25077,20 @@
             .forEach((card) => card.classList.add("is-focus"));
         } else if (key && scope === "notice") {
           document
-            .querySelectorAll("#nailNoticeList .nail-notice-card[data-notice-symbol]")
+            .querySelectorAll(
+              "#nailNoticeList .nail-notice-card[data-notice-symbol]:not(.is-pullback-focus)",
+            )
             .forEach((card) => {
               if (String(card.dataset.noticeSymbol || "").toUpperCase() === key) {
                 card.classList.add("is-focus");
               }
             });
+        } else if (key && scope === "pullback") {
+          document
+            .querySelectorAll(
+              `#nailNoticeList .nail-notice-card.is-pullback-focus[data-notice-symbol="${key}"]`,
+            )
+            .forEach((card) => card.classList.add("is-focus"));
         } else if (key && scope === "overlook") {
           document
             .querySelectorAll(
@@ -24544,9 +25104,14 @@
         bar.classList.toggle("is-nail-scope", scope === "nail");
         bar.classList.toggle("is-notice-scope", scope === "notice");
         bar.classList.toggle("is-overlook-scope", scope === "overlook");
+        bar.classList.toggle("is-pullback-scope", scope === "pullback");
         const nailBtn = bar.querySelector('[data-focus-action="nail"]');
         if (nailBtn) {
-          if (scope === "notice" || scope === "overlook") {
+          if (
+            scope === "notice" ||
+            scope === "overlook" ||
+            scope === "pullback"
+          ) {
             nailBtn.textContent = "置顶";
             nailBtn.title = "置顶到钉子页";
           } else {
@@ -24560,6 +25125,7 @@
           nailNoticeSelectMode ||
           (scope === "nail" && !isNailDrawerOpen()) ||
           (scope === "notice" && nailNoticeMode !== "open") ||
+          (scope === "pullback" && nailNoticeMode !== "open") ||
           (scope === "overlook" && nailSegment !== "autopin")
         ) {
           bar.hidden = true;
@@ -24606,7 +25172,8 @@
         focusActionScope = key
           ? scope === "nail" ||
             scope === "notice" ||
-            scope === "overlook"
+            scope === "overlook" ||
+            scope === "pullback"
             ? scope
             : "main"
           : null;
@@ -24621,7 +25188,8 @@
         const nextScope =
           scope === "nail" ||
           scope === "notice" ||
-          scope === "overlook"
+          scope === "overlook" ||
+          scope === "pullback"
             ? scope
             : "main";
         if (focusActionSymbol === key && focusActionScope === nextScope) {
@@ -24643,10 +25211,17 @@
         if (focusActionScope === "notice") {
           return (
             [...document.querySelectorAll(
-              "#nailNoticeList .nail-notice-card[data-notice-symbol]",
+              "#nailNoticeList .nail-notice-card[data-notice-symbol]:not(.is-pullback-focus)",
             )].find(
               (card) =>
                 String(card.dataset.noticeSymbol || "").toUpperCase() === key,
+            ) || null
+          );
+        }
+        if (focusActionScope === "pullback") {
+          return (
+            document.querySelector(
+              `#nailNoticeList .nail-notice-card.is-pullback-focus[data-notice-symbol="${key}"]`,
             ) || null
           );
         }
@@ -24732,7 +25307,8 @@
         if (action === "nail") {
           if (
             focusActionScope === "notice" ||
-            focusActionScope === "overlook"
+            focusActionScope === "overlook" ||
+            focusActionScope === "pullback"
           ) {
             setFocusBarBusy(true, activeBtn, "置顶中");
             try {
@@ -24761,23 +25337,71 @@
           return;
         }
         if (action === "remove-overlook") {
-          if (focusActionScope !== "overlook") return;
           const key = String(symbol || "")
             .trim()
             .toUpperCase();
           if (!key) return;
-          nailAutoPinOverlookHidden.add(key);
-          nailAutoPinOverlookFocusRows = nailAutoPinOverlookFocusRows.filter(
-            (row) => String((row && row.symbol) || "").toUpperCase() !== key,
-          );
-          if (!visibleOverlookFocusRows().length) {
-            clearOverlookFocusSection();
+          if (focusActionScope === "overlook") {
+            const focusRow = nailAutoPinOverlookFocusRows.find(
+              (row) =>
+                String((row && row.symbol) || "").toUpperCase() === key,
+            );
+            const cloudRow = (overlookItems || []).find(
+              (row) =>
+                String((row && row.symbol) || "").toUpperCase() === key,
+            );
+            const hitAt =
+              Number(focusRow && focusRow.at) ||
+              Number(cloudRow && cloudRow.detectedAt) ||
+              Date.now();
+            dismissFocusHit(
+              overlookFocusDismissed,
+              OVERLOOK_FOCUS_DISMISS_KEY,
+              key,
+              hitAt,
+            );
+            nailAutoPinOverlookHidden.add(key);
+            nailAutoPinOverlookFocusRows = nailAutoPinOverlookFocusRows.filter(
+              (row) => String((row && row.symbol) || "").toUpperCase() !== key,
+            );
+            if (!visibleOverlookFocusRows().length) {
+              clearOverlookFocusSection();
+            } else {
+              queueFocusRowsShared("overlook");
+            }
+            setFocusActionSymbol(null);
+            renderNailAutoPinList();
+            void paintNailAutoPinCharts();
+            syncNailDigest();
+            showToast(`${key.replace(/USDT$/i, "")} 已移出俯瞰置顶`);
+            return;
           }
-          setFocusActionSymbol(null);
-          renderNailAutoPinList();
-          void paintNailAutoPinCharts();
-          showToast(`${key.replace(/USDT$/i, "")} 已移出俯瞰置顶`);
-          return;
+          if (focusActionScope === "pullback") {
+            const focusRow = nailNoticePullbackFocusRows.find(
+              (row) =>
+                String((row && row.symbol) || "").toUpperCase() === key,
+            );
+            const hitAt = Number(focusRow && focusRow.at) || Date.now();
+            dismissFocusHit(
+              pullbackFocusDismissed,
+              PULLBACK_FOCUS_DISMISS_KEY,
+              key,
+              hitAt,
+            );
+            nailNoticePullbackFocusRows = nailNoticePullbackFocusRows.filter(
+              (row) => String((row && row.symbol) || "").toUpperCase() !== key,
+            );
+            if (!visiblePullbackFocusRows().length) {
+              clearPullbackFocusSection();
+            } else {
+              queueFocusRowsShared("pullback");
+            }
+            setFocusActionSymbol(null);
+            renderNailNoticeList();
+            syncNailDigest();
+            showToast(`${key.replace(/USDT$/i, "")} 已移出回踩置顶`);
+            return;
+          }
         }
         if (action === "refresh") {
           setFocusBarBusy(true, activeBtn, "刷新中");
@@ -24788,10 +25412,17 @@
                 showToast("钉子列表找不到该币");
                 return;
               }
-            } else if (focusActionScope === "notice") {
+            } else if (
+              focusActionScope === "notice" ||
+              focusActionScope === "pullback"
+            ) {
               const ok = await refreshNailNoticeChart(symbol);
               if (!ok) {
-                showToast("通知列表找不到这张 K 线");
+                showToast(
+                  focusActionScope === "pullback"
+                    ? "回踩置顶找不到这张 K 线"
+                    : "通知列表找不到这张 K 线",
+                );
                 return;
               }
             } else if (focusActionScope === "overlook") {
@@ -24809,12 +25440,19 @@
             }
             let price = Number(marketMap[symbol]?.price);
             if (
-              focusActionScope === "notice" &&
+              (focusActionScope === "notice" ||
+                focusActionScope === "pullback") &&
               !(Number.isFinite(price) && price > 0)
             ) {
-              const liveEl = document.querySelector(
-                `#nailNoticeList .nail-notice-card[data-notice-symbol="${CSS.escape ? CSS.escape(symbol) : symbol}"] [data-notice-live]`,
-              );
+              const esc = CSS.escape ? CSS.escape(symbol) : symbol;
+              const liveEl =
+                (focusActionScope === "pullback" &&
+                  document.querySelector(
+                    `#nailNoticeList .nail-notice-card.is-pullback-focus[data-notice-symbol="${esc}"] [data-notice-live]`,
+                  )) ||
+                document.querySelector(
+                  `#nailNoticeList .nail-notice-card[data-notice-symbol="${esc}"] [data-notice-live]`,
+                );
               const parsed = Number(
                 liveEl && String(liveEl.textContent || "").replace(/,/g, ""),
               );
@@ -25446,13 +26084,20 @@
         return `======${pad(d.getHours())}.${pad(d.getMinutes())}======`;
       }
 
-      function buildNailNoticeCardHtml(item) {
+      function buildNailNoticeCardHtml(item, options) {
+        const opts = options || {};
+        const pullbackFocus = !!opts.pullbackFocus;
             const key = String(item.symbol || "").toUpperCase();
             const symbol = escapeHtml(item.symbol);
             const label = escapeHtml(
               item.label || String(item.symbol || "").replace(/USDT$/i, ""),
             );
-            const id = escapeHtml(item.id || `${item.symbol}:${item.openTime}`);
+            const id = escapeHtml(
+              item.id ||
+                (pullbackFocus
+                  ? `pb-focus:${item.symbol}:${item.at}`
+                  : `${item.symbol}:${item.openTime}`),
+            );
             const isNew = Number(item.at) > (Number(nailGreenNoticesReadAt) || 0);
         const kinds = Array.isArray(item.kinds)
           ? item.kinds.map(String).filter(Boolean)
@@ -25475,18 +26120,27 @@
           Number(item.at) - firstSeenAt <= NOTICE_FIRST_ENTRY_MS;
         const batchAt = Number(item.batchAt) || 0;
             const selected =
-              nailNoticeSelectMode && selectedNoticeSymbols.has(key)
+              !pullbackFocus &&
+              nailNoticeSelectMode &&
+              selectedNoticeSymbols.has(key)
                 ? " is-selected"
                 : "";
-            const check = nailNoticeSelectMode
+            const check =
+              !pullbackFocus && nailNoticeSelectMode
               ? `<input type="checkbox" class="nail-notice-check" data-notice-select="${symbol}" ${selectedNoticeSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
               : "";
+        const tierTag =
+          pullbackFocus && kinds.includes("回踩观察")
+            ? '<span class="nail-notice-new">观察</span>'
+            : pullbackFocus
+              ? '<span class="nail-notice-new">放量</span>'
+              : "";
             return [
-          `<article class="nail-notice-card${isFirstEntry ? " is-first" : ""}${selected}" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-batch="${batchAt}" data-notice-first="${firstSeenAt}" data-notice-balance="${hitBal ? "1" : "0"}" data-notice-straight="${hitStraight ? "1" : "0"}" data-notice-pullback="${hitPullback ? "1" : "0"}">`,
+          `<article class="nail-notice-card${isFirstEntry ? " is-first" : ""}${selected}${pullbackFocus ? " is-pullback-focus" : ""}" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-batch="${batchAt}" data-notice-first="${firstSeenAt}" data-notice-balance="${hitBal ? "1" : "0"}" data-notice-straight="${hitStraight ? "1" : "0"}" data-notice-pullback="${hitPullback || pullbackFocus ? "1" : "0"}"${pullbackFocus ? ' data-pullback-focus="1"' : ""}>`,
               check,
               `<div class="nail-notice-card-top">`,
           `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}</button>`,
-              `<span class="nail-notice-card-stamps">${isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
+              `<span class="nail-notice-card-stamps">${tierTag}${!pullbackFocus && isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
               `</div>`,
               `<div class="nail-notice-meta">`,
           `<span class="nail-notice-line"><span class="nail-notice-key">便签</span><span>${notePrice > 0 ? escapeHtml(formatPinPrice(notePrice)) : "—"}</span><span class="nail-notice-iv">${escapeHtml(item.interval || "4h")}</span></span>`,
@@ -25496,6 +26150,46 @@
           `<canvas width="640" height="160" data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-first="${firstSeenAt}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${notePrice > 0 ? notePrice : 0}" data-notice-pin-price="${pinPrice > 0 ? pinPrice : 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
               `</article>`,
             ].join("");
+      }
+
+      function findPullbackNoticeItem(symbol, at) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const wantAt = Number(at) || 0;
+        const list = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
+        let best = null;
+        list.forEach((item) => {
+          if (!item || !noticeHasPullbackKind(item)) return;
+          if (String(item.symbol || "").trim().toUpperCase() !== key) return;
+          if (wantAt > 0 && Number(item.at) === wantAt) {
+            best = item;
+            return;
+          }
+          if (!best || Number(item.at) > Number(best.at)) best = item;
+        });
+        return best;
+      }
+
+      function buildPullbackFocusCardHtml(row) {
+        const symbol = String((row && row.symbol) || "")
+          .trim()
+          .toUpperCase();
+        if (!symbol) return "";
+        const found = findPullbackNoticeItem(symbol, row && row.at);
+        const item = found || {
+          symbol,
+          label: (row && row.label) || symbol.replace(/USDT$/i, ""),
+          at: Number(row && row.at) || 0,
+          kinds:
+            Array.isArray(row && row.kinds) && row.kinds.length
+              ? row.kinds
+              : row && row.tier === "watch"
+                ? ["回踩观察"]
+                : ["回踩放量"],
+          id: `pb-focus:${symbol}:${Number(row && row.at) || 0}`,
+        };
+        return buildNailNoticeCardHtml(item, { pullbackFocus: true });
       }
 
       /** 按 batchAt 分组：新批次在上；币被新批次带走后旧批次自动变少，空则不展示。 */
@@ -25597,7 +26291,25 @@
         const scrollSnap = captureNailNoticeScroll(listEl);
         const items = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
         const alerts = priceAlertNoticeItems();
-        const grouped = groupNailNoticesByBatch(items);
+        const pullbackFocusRows = visiblePullbackFocusRows();
+        const pullbackFocusSet = new Set(
+          pullbackFocusRows.map((row) =>
+            String((row && row.symbol) || "")
+              .trim()
+              .toUpperCase(),
+          ),
+        );
+        const listItems = pullbackFocusSet.size
+          ? items.filter(
+              (item) =>
+                !pullbackFocusSet.has(
+                  String((item && item.symbol) || "")
+                    .trim()
+                    .toUpperCase(),
+                ),
+            )
+          : items;
+        const grouped = groupNailNoticesByBatch(listItems);
         if (metaEl) {
           const bits = [];
           if (items.length) {
@@ -25606,13 +26318,21 @@
             );
           }
           if (alerts.length) bits.push(`${alerts.length} 条价格提醒`);
+          if (pullbackFocusRows.length) {
+            bits.push(`回踩置顶 ${pullbackFocusRows.length}`);
+          }
           metaEl.textContent = bits.length
             ? `近 24h · ${bits.join(" · ")} · 最新在上`
             : "近 24h 暂无命中与价格提醒";
         }
         listEl.classList.toggle("is-selecting", nailNoticeSelectMode);
-        if (!items.length && !alerts.length) {
-          if (focusActionScope === "notice") setFocusActionSymbol(null);
+        if (!items.length && !alerts.length && !pullbackFocusRows.length) {
+          if (
+            focusActionScope === "notice" ||
+            focusActionScope === "pullback"
+          ) {
+            setFocusActionSymbol(null);
+          }
           listEl.innerHTML =
             '<div class="nail-notice-empty">暂无命中与价格提醒</div>';
           syncNailNoticeSelectUi();
@@ -25620,6 +26340,15 @@
           return;
         }
         const parts = [];
+        if (pullbackFocusRows.length) {
+          parts.push(
+            `<section class="nail-notice-pullback-focus" id="nailNoticePullbackFocusSection">`,
+            `<h4 class="nail-notice-pullback-focus-head">回踩置顶 · ${pullbackFocusRows.length} 个</h4>`,
+            `<div class="nail-notice-batch-list">`,
+            pullbackFocusRows.map((row) => buildPullbackFocusCardHtml(row)).join(""),
+            `</div></section>`,
+          );
+        }
         if (alerts.length) {
           parts.push(
             `<section class="nail-price-alert-section" data-price-alert-section>`,
@@ -25698,9 +26427,15 @@
           });
         });
         if (focusActionScope === "notice") {
-          const stillVisible = items.some(
+          const stillVisible = listItems.some(
             (item) =>
               String(item.symbol || "").toUpperCase() === focusActionSymbol,
+          );
+          if (stillVisible) applyFocusActionChrome();
+          else setFocusActionSymbol(null);
+        } else if (focusActionScope === "pullback") {
+          const stillVisible = pullbackFocusSet.has(
+            String(focusActionSymbol || "").toUpperCase(),
           );
           if (stillVisible) applyFocusActionChrome();
           else setFocusActionSymbol(null);
@@ -25742,7 +26477,10 @@
         }
         nailNoticeSelectMode = next;
         if (!nailNoticeSelectMode) selectedNoticeSymbols.clear();
-        if (nailNoticeSelectMode && focusActionScope === "notice") {
+        if (
+          nailNoticeSelectMode &&
+          (focusActionScope === "notice" || focusActionScope === "pullback")
+        ) {
           setFocusActionSymbol(null);
         }
         renderNailNoticeList();
@@ -26089,6 +26827,12 @@
         const patternOn = balanceOn || straightOn || pullbackOn;
         let visible = 0;
         listEl.querySelectorAll(".nail-notice-card").forEach((card) => {
+          // 回踩置顶区不受筛选隐藏，始终可见。
+          if (card.classList.contains("is-pullback-focus")) {
+            card.classList.remove("is-delta-filtered");
+            visible += 1;
+            return;
+          }
           // 筛选用当前4h窗相对开盘；染绿仍看 data-notice-dir（便签水位）。
           const win = card.getAttribute("data-notice-window") || "";
           const hide =
@@ -27254,6 +27998,8 @@
 
       async function openNailNoticeDrawer(options) {
         const opts = options || {};
+        const alreadyOpen =
+          nailSegment === "notice" && nailNoticeMode === "open";
         // 通知已是钉子页的一个分栏：任何入口进来都先切到该分栏，保证看得见。
         if (nailSegment !== "notice") {
           nailSegment = "notice";
@@ -27265,9 +28011,12 @@
         nailNoticeBalanceEnabled = readLocalNailNoticeBalance();
         nailNoticeStraightEnabled = readLocalNailNoticeStraight();
         nailNoticePullbackEnabled = readLocalNailNoticePullback();
-        if (opts.pullbackFilter) {
+        if (opts.pullbackFilter || opts.pullbackFocus) {
           nailNoticePullbackEnabled = true;
           writeLocalNailNoticePullback(true);
+        }
+        if (opts.pullbackFocus) {
+          mergePullbackFocusFromUnread();
         }
         syncNailNoticeDeltaFilterUi();
         syncNailNoticeBalanceUi();
@@ -27276,7 +28025,8 @@
         // 先开抽屉（用内存名单立刻出画面），再后台强刷，避免点击半秒停顿。
         if (
           (nailGreenNotices || []).length ||
-          priceAlertNoticeItems().length
+          priceAlertNoticeItems().length ||
+          visiblePullbackFocusRows().length
         ) {
           renderNailNoticeList();
         }
@@ -27285,11 +28035,20 @@
         const jumpKey = String(opts.jumpSymbol || "")
           .trim()
           .toUpperCase();
+        const preferPullbackFocus = !!opts.pullbackFocus;
         const jumpNoticeCard = (behavior) => {
           if (!jumpKey) return false;
-          const card = document.querySelector(
-            `#nailNoticeList .nail-notice-card[data-notice-symbol="${jumpKey}"]`,
-          );
+          const card =
+            (preferPullbackFocus &&
+              document.querySelector(
+                `#nailNoticeList .nail-notice-card.is-pullback-focus[data-notice-symbol="${jumpKey}"]`,
+              )) ||
+            document.querySelector(
+              `#nailNoticeList .nail-notice-card.is-pullback-focus[data-notice-symbol="${jumpKey}"]`,
+            ) ||
+            document.querySelector(
+              `#nailNoticeList .nail-notice-card[data-notice-symbol="${jumpKey}"]`,
+            );
           if (!card) return false;
           scrollJumpTargetIntoView(card, {
             behavior: behavior || "smooth",
@@ -27311,9 +28070,18 @@
           void markNailNoticesRead();
           markPriceAlertsRead();
         }
+        // 已在通知页点回踩摘要：只重渲置顶区并跳锚点，不强制整表重载。
+        if (alreadyOpen && opts.pullbackFocus) {
+          renderNailNoticeList();
+          applyNailNoticeDeltaFilter();
+          void paintNailNoticeCharts();
+          requestAnimationFrame(() => jumpNoticeCard("smooth"));
+          return;
+        }
         void reloadNailNoticeList({ force: true, forceRender: true })
           .then(() => {
-            if (!jumpKey) return;
+            if (!jumpKey && !opts.pullbackFocus) return;
+            if (opts.pullbackFocus) renderNailNoticeList();
             requestAnimationFrame(() => {
               jumpNoticeCard("smooth");
             });
@@ -27997,7 +28765,7 @@
         return `${sign}${n.toFixed(1)}%`;
       }
 
-      /** 未读俯瞰（强+弱都进摘要条；强档排前）。 */
+      /** 未读俯瞰（强+弱都进摘要条；强档排前）。手动移出的本命中不进摘要。 */
       function unreadOverlookItems(opts) {
         const strongOnly = !!(opts && opts.strongOnly);
         const seen = Number(overlookSeenAt) || 0;
@@ -28005,7 +28773,12 @@
           (row) => {
             if (!row) return false;
             if (strongOnly && row.tier !== "strong") return false;
-            return (Number(row.detectedAt) || 0) > seen;
+            const at = Number(row.detectedAt) || 0;
+            if (!(at > seen)) return false;
+            if (isFocusHitDismissed(overlookFocusDismissed, row.symbol, at)) {
+              return false;
+            }
+            return true;
           },
         );
         rows.sort((a, b) => {
@@ -28105,8 +28878,10 @@
           const watch = kinds.includes("回踩观察");
           const confirm = kinds.includes("回踩放量");
           if (!watch && !confirm) return;
+          const symbol = String(item.symbol).trim().toUpperCase();
+          if (isFocusHitDismissed(pullbackFocusDismissed, symbol, at)) return;
           rows.push({
-            symbol: String(item.symbol).trim().toUpperCase(),
+            symbol,
             label:
               item.label ||
               String(item.symbol || "").replace(/USDT$/i, ""),
@@ -28475,6 +29250,7 @@
                 .toUpperCase();
               void openNailNoticeDrawer({
                 pullbackFilter: true,
+                pullbackFocus: true,
                 jumpSymbol: symbol,
                 skipMarkRead: true,
               });
@@ -28515,6 +29291,7 @@
               if (mode === "pullback") {
                 void openNailNoticeDrawer({
                   pullbackFilter: true,
+                  pullbackFocus: true,
                   jumpSymbol: String(sym || "").trim().toUpperCase(),
                   skipMarkRead: true,
                 });
@@ -30070,7 +30847,10 @@
             toggleNoticeSelectSymbol(card.dataset.noticeSymbol);
             return;
           }
-          toggleFocusActionSymbol(card.dataset.noticeSymbol, "notice");
+          const scope = card.classList.contains("is-pullback-focus")
+            ? "pullback"
+            : "notice";
+          toggleFocusActionSymbol(card.dataset.noticeSymbol, scope);
         });
       }
 
