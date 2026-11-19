@@ -3,6 +3,45 @@
   "readAt": 1795066364549,
   "items": [
     {
+      "id": "FLUXUSDT:1795060800000:1795066500840",
+      "symbol": "FLUXUSDT",
+      "label": "FLUX",
+      "kinds": [
+        "天平",
+        "直拉"
+      ],
+      "at": 1795066500840,
+      "firstSeenAt": 1794988800415,
+      "openTime": 1795060800000,
+      "pinPrice": 0.0504,
+      "pinnedAt": 1794981600581,
+      "alertPrice": 0.0501,
+      "notifyPrice": 0.0514,
+      "noteAt": 1794987743669,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795066500840
+    },
+    {
+      "id": "FUSDT:1795060800000:1795066500840",
+      "symbol": "FUSDT",
+      "label": "F",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1795066500840,
+      "firstSeenAt": 1795053000438,
+      "openTime": 1795060800000,
+      "pinPrice": 0.002243,
+      "pinnedAt": 1795023600862,
+      "alertPrice": 0.002243,
+      "notifyPrice": 0.002328,
+      "noteAt": 1795023600862,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795066500840
+    },
+    {
       "id": "PROVEUSDT:1795060800000:1795066500840",
       "symbol": "PROVEUSDT",
       "label": "PROVE",
@@ -276,26 +315,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1795062300447
-    },
-    {
-      "id": "FLUXUSDT:1795060800000:1795066200983",
-      "symbol": "FLUXUSDT",
-      "label": "FLUX",
-      "kinds": [
-        "天平",
-        "直拉"
-      ],
-      "at": 1795066200983,
-      "firstSeenAt": 1794988800415,
-      "openTime": 1795060800000,
-      "pinPrice": 0.0504,
-      "pinnedAt": 1794981600581,
-      "alertPrice": 0.0501,
-      "notifyPrice": 0.0511,
-      "noteAt": 1794987743669,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1795060501042
     },
     {
       "id": "FRAXUSDT:1795060800000:1795066200983",
@@ -706,25 +725,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1795061700612
-    },
-    {
-      "id": "FUSDT:1795060800000:1795065600627",
-      "symbol": "FUSDT",
-      "label": "F",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1795065600627,
-      "firstSeenAt": 1795053000438,
-      "openTime": 1795060800000,
-      "pinPrice": 0.002243,
-      "pinnedAt": 1795023600862,
-      "alertPrice": 0.002243,
-      "notifyPrice": 0.002316,
-      "noteAt": 1795023600862,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1795063500688
     },
     {
       "id": "HEMIUSDT:1795060800000:1795065600627",
@@ -2348,6 +2348,14 @@
   ],
   "batches": [
     {
+      "at": 1795066500840,
+      "count": 2,
+      "symbols": [
+        "FLUXUSDT",
+        "FUSDT"
+      ]
+    },
+    {
       "at": 1795066200983,
       "count": 7,
       "symbols": [
@@ -2416,10 +2424,9 @@
     },
     {
       "at": 1795063500688,
-      "count": 4,
+      "count": 3,
       "symbols": [
         "ALLOUSDT",
-        "FUSDT",
         "GNSUSDT",
         "MDBBUSDT"
       ]
@@ -2492,11 +2499,10 @@
     },
     {
       "at": 1795060501042,
-      "count": 5,
+      "count": 4,
       "symbols": [
         "BBBUSDT",
         "BOTBUSDT",
-        "FLUXUSDT",
         "FRAXUSDT",
         "PENGUUSDT"
       ]
