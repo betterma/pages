@@ -4862,6 +4862,68 @@
       .nail-digest-stack:not(:has(.nail-digest:not([hidden]))) {
         display: none;
       }
+      /* 桌面不用交通灯；手机见下方 @media。 */
+      .nail-digest-lights {
+        display: none;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 10px;
+        padding: 2px 2px 0;
+        flex: 0 0 auto;
+      }
+      .nail-digest-light {
+        width: 14px;
+        height: 14px;
+        margin: 0;
+        padding: 0;
+        border: 1px solid color-mix(in srgb, var(--label) 18%, transparent);
+        border-radius: 50%;
+        background: #8a3030;
+        opacity: 0.28;
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+        cursor: default;
+        flex: 0 0 auto;
+        transition: opacity 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+      }
+      .nail-digest-light.is-red {
+        background: #c62828;
+      }
+      .nail-digest-light.is-green {
+        background: #2e7d32;
+      }
+      .nail-digest-light.is-yellow {
+        background: #c9a000;
+      }
+      .nail-digest-light.is-on {
+        opacity: 1;
+        cursor: pointer;
+        box-shadow:
+          0 0 0 1px color-mix(in srgb, currentColor 20%, transparent),
+          0 0 8px color-mix(in srgb, currentColor 55%, transparent),
+          inset 0 1px 2px rgba(255, 255, 255, 0.25);
+      }
+      .nail-digest-light.is-red.is-on {
+        color: #ff5252;
+        background: #e53935;
+      }
+      .nail-digest-light.is-green.is-on {
+        color: #69f0ae;
+        background: #43a047;
+      }
+      .nail-digest-light.is-yellow.is-on {
+        color: #ffd54f;
+        background: #f9a825;
+      }
+      .nail-digest-light.is-on.is-expanded {
+        transform: scale(1.18);
+        box-shadow:
+          0 0 0 2px color-mix(in srgb, var(--label) 22%, transparent),
+          0 0 10px color-mix(in srgb, currentColor 70%, transparent);
+      }
+      .nail-digest-light:focus-visible {
+        outline: 2px solid var(--accent, #2f8f6e);
+        outline-offset: 2px;
+      }
       .nail-digest {
         display: flex;
         flex: 0 0 auto;
@@ -4992,6 +5054,27 @@
       .nail-digest.is-pullback .nail-digest-copy strong,
       .nail-digest.is-pullback .nail-digest-go {
         color: color-mix(in srgb, var(--accent, #2f8f6e) 82%, var(--label));
+      }
+      /* 移动端：三条摘要收成交通灯；点亮的灯可展开/收起对应摘要条。 */
+      @media (max-width: 720px) {
+        .nail-digest-stack,
+        .nail-digest-stack:not(:has(.nail-digest:not([hidden]))) {
+          display: flex;
+        }
+        .nail-digest-lights {
+          display: flex;
+        }
+        .nail-digest:not([hidden]) {
+          display: none;
+        }
+        .nail-digest-stack[data-mobile-expand="overlook"]
+          .nail-digest.is-overlook:not([hidden]),
+        .nail-digest-stack[data-mobile-expand="pullback"]
+          .nail-digest.is-pullback:not([hidden]),
+        .nail-digest-stack[data-mobile-expand="notice"]
+          #nailDigestNotice:not([hidden]) {
+          display: flex;
+        }
       }
       /* 24h 排序：滚动时右侧位置百分比（类阅读进度气泡） */
       .nail-scroll-pct {
@@ -9124,6 +9207,37 @@
           </button>
         </div>
         <div class="nail-digest-stack" id="nailDigestStack">
+          <div
+            class="nail-digest-lights"
+            id="nailDigestLights"
+            role="toolbar"
+            aria-label="通知指示灯：红俯瞰、绿回踩、黄通知"
+          >
+            <button
+              type="button"
+              class="nail-digest-light is-red"
+              data-digest-light="overlook"
+              title="俯瞰"
+              aria-label="俯瞰"
+              aria-pressed="false"
+            ></button>
+            <button
+              type="button"
+              class="nail-digest-light is-green"
+              data-digest-light="pullback"
+              title="回踩"
+              aria-label="回踩"
+              aria-pressed="false"
+            ></button>
+            <button
+              type="button"
+              class="nail-digest-light is-yellow"
+              data-digest-light="notice"
+              title="通知"
+              aria-label="通知"
+              aria-pressed="false"
+            ></button>
+          </div>
           <div
             class="nail-digest is-overlook"
             id="nailDigestOverlook"
@@ -28970,6 +29084,79 @@
         }
       }
 
+      /** 移动端交通灯当前展开的摘要：overlook / pullback / notice / ""。 */
+      function getDigestMobileExpand() {
+        const stack = document.getElementById("nailDigestStack");
+        const mode = String((stack && stack.dataset.mobileExpand) || "");
+        if (
+          mode === "overlook" ||
+          mode === "pullback" ||
+          mode === "notice"
+        ) {
+          return mode;
+        }
+        return "";
+      }
+
+      function setDigestMobileExpand(mode) {
+        const stack = document.getElementById("nailDigestStack");
+        if (!stack) return;
+        const next =
+          mode === "overlook" || mode === "pullback" || mode === "notice"
+            ? mode
+            : "";
+        if (next) stack.dataset.mobileExpand = next;
+        else delete stack.dataset.mobileExpand;
+        syncDigestMobileLightsUi();
+      }
+
+      function syncDigestMobileLightsUi(flags) {
+        const map = {
+          overlook: false,
+          pullback: false,
+          notice: false,
+        };
+        if (flags) {
+          map.overlook = !!flags.overlook;
+          map.pullback = !!flags.pullback;
+          map.notice = !!flags.notice;
+        } else {
+          // 未传 flags 时从三条摘要的 hidden 推断亮灭。
+          const overlookBar = document.getElementById("nailDigestOverlook");
+          const pullbackBar = document.getElementById("nailDigestPullback");
+          const noticeBar = document.getElementById("nailDigestNotice");
+          map.overlook = !!(overlookBar && !overlookBar.hidden);
+          map.pullback = !!(pullbackBar && !pullbackBar.hidden);
+          map.notice = !!(noticeBar && !noticeBar.hidden);
+        }
+        let expand = getDigestMobileExpand();
+        if (expand && !map[expand]) {
+          const stack = document.getElementById("nailDigestStack");
+          if (stack) delete stack.dataset.mobileExpand;
+          expand = "";
+        }
+        document.querySelectorAll("[data-digest-light]").forEach((btn) => {
+          const mode = String(btn.getAttribute("data-digest-light") || "");
+          const on = !!map[mode];
+          btn.classList.toggle("is-on", on);
+          btn.classList.toggle("is-expanded", on && expand === mode);
+          btn.setAttribute(
+            "aria-pressed",
+            on && expand === mode ? "true" : "false",
+          );
+          if (mode === "overlook") {
+            btn.title = on ? "俯瞰（点开/收起）" : "俯瞰（暂无）";
+            btn.setAttribute("aria-label", on ? "俯瞰有通知" : "俯瞰无通知");
+          } else if (mode === "pullback") {
+            btn.title = on ? "回踩（点开/收起）" : "回踩（暂无）";
+            btn.setAttribute("aria-label", on ? "回踩有通知" : "回踩无通知");
+          } else if (mode === "notice") {
+            btn.title = on ? "通知（点开/收起）" : "通知（暂无）";
+            btn.setAttribute("aria-label", on ? "有普通通知" : "无普通通知");
+          }
+        });
+      }
+
       /** 置顶分栏顶部：俯瞰 / 回踩 / 其它通知各一条，互不合并；仅 × 关闭。 */
       function syncNailDigest() {
         const overs = unreadOverlookItems();
@@ -29067,6 +29254,12 @@
         } else {
           fillDigestBar(noticeBar, { show: false });
         }
+
+        syncDigestMobileLightsUi({
+          overlook: overs.length > 0,
+          pullback: pullbacks.length > 0,
+          notice: noticeUnread > 0,
+        });
       }
 
       function syncNailSegBadges() {
@@ -29261,6 +29454,21 @@
             }
           };
           digestStack.addEventListener("click", (event) => {
+            const lightBtn =
+              event.target &&
+              event.target.closest &&
+              event.target.closest("[data-digest-light]");
+            if (lightBtn) {
+              event.preventDefault();
+              event.stopPropagation();
+              const mode = String(
+                lightBtn.getAttribute("data-digest-light") || "",
+              );
+              if (!lightBtn.classList.contains("is-on")) return;
+              if (getDigestMobileExpand() === mode) setDigestMobileExpand("");
+              else setDigestMobileExpand(mode);
+              return;
+            }
             const dismiss =
               event.target &&
               event.target.closest &&
