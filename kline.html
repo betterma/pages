@@ -2486,12 +2486,24 @@
       .nail-auto-pin-popover[hidden] {
         display: none !important;
       }
-      .nail-auto-pin-popover-title {
-        padding: 10px 12px 8px;
+      .nail-auto-pin-popover-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
         border-bottom: 0.5px solid var(--separator);
+        flex: 0 0 auto;
+      }
+      .nail-auto-pin-popover-title {
+        padding: 0;
+        border-bottom: none;
         color: var(--secondary);
         font-size: 12px;
         font-weight: 650;
+        margin-right: auto;
+      }
+      .nail-auto-pin-popover-head .nail-radar-toggle {
+        margin-left: auto;
       }
       .nail-auto-pin-list {
         /* 弹层已固定为钉子头到屏幕底，列表占满剩余空间即可。 */
@@ -4971,8 +4983,11 @@
         min-height: 0;
       }
       /* 自动盯 / 雷达：原本是贴边浮窗，现在改为同一层内的分栏内容。 */
-      .nail-seg-panel > .nail-auto-pin-popover > .nail-auto-pin-popover-title {
-        /* 分栏标签已经写着「自动盯」，重复标题省掉，多留内容高度。 */
+      .nail-seg-panel
+        > .nail-auto-pin-popover
+        > .nail-auto-pin-popover-head
+        > .nail-auto-pin-popover-title {
+        /* 分栏标签已经写着「自动盯」，重复标题省掉；保留 bStock 开关。 */
         display: none;
       }
       .nail-seg-panel > .nail-auto-pin-popover,
@@ -8937,7 +8952,18 @@
             </div>
           </div>
           <div class="nail-auto-pin-popover" id="nailAutoPinPopover" hidden>
-            <div class="nail-auto-pin-popover-title">自动盯记录</div>
+            <div class="nail-auto-pin-popover-head">
+              <div class="nail-auto-pin-popover-title">自动盯记录</div>
+              <button
+                type="button"
+                id="nailAutoPinBstockBtn"
+                class="nail-radar-toggle"
+                aria-pressed="true"
+                title="代币化美股（bStock / TRD_GRP_261）：开=显示，关=隐藏。仅本机。"
+              >
+                bStock
+              </button>
+            </div>
             <div class="nail-auto-pin-list" id="nailAutoPinList"></div>
           </div>
           <div class="nail-radar-popover" id="nailRadarPopover" hidden>
@@ -9071,10 +9097,10 @@
                 >
                   多选
                 </button>
-                <button type="button" class="nail-hold-refresh" id="nailHoldRefreshBtn" title="拉取余额、现价与买卖任务">
+              <button type="button" class="nail-hold-refresh" id="nailHoldRefreshBtn" title="拉取余额、现价与买卖任务">
                   <span class="nail-hold-refresh-spin" hidden aria-hidden="true"></span>
                   <span class="nail-hold-refresh-label">刷新</span>
-                </button>
+              </button>
               </div>
             </div>
             <div class="nail-hold-list" id="nailHoldList"></div>
@@ -9660,46 +9686,46 @@
                 aria-hidden="true"
               ></span>
               健康
-            </button>
-            <div class="nail-notice-head-actions">
-              <div
-                class="nail-notice-delta-filter"
-                id="nailNoticeDeltaFilter"
-                role="group"
+                </button>
+          <div class="nail-notice-head-actions">
+            <div
+              class="nail-notice-delta-filter"
+              id="nailNoticeDeltaFilter"
+              role="group"
                 aria-label="按当前4h窗筛选"
                 title="相对当前4h开盘：全部 / 窗上涨 / 窗下跌。卡片染绿仍按便签水位，与此筛选无关。"
+            >
+              <button
+                type="button"
+                data-notice-delta-filter="all"
+                class="is-active"
               >
-                <button
-                  type="button"
-                  data-notice-delta-filter="all"
-                  class="is-active"
-                >
-                  全部
-                </button>
+                全部
+              </button>
                 <button
                   type="button"
                   data-notice-delta-filter="up"
                   title="现价高于当前4h开盘"
                 >
                   窗上涨
-                </button>
+              </button>
                 <button
                   type="button"
                   data-notice-delta-filter="down"
                   title="现价低于当前4h开盘"
                 >
                   窗下跌
-                </button>
-              </div>
-              <button
-                type="button"
-                id="nailNoticeBalanceBtn"
-                class="nail-notice-deblue"
-                aria-pressed="false"
-                title="打开：只显示天平（盯后曾跌破 pin，现价高于跌破K最低收盘且不低于盯价；不要求当前窗上涨）。可与「直拉」同开（并集）；在全部/窗上涨/窗下跌下均可用。偏好保存在本机。"
-              >
-                天平
               </button>
+            </div>
+            <button
+              type="button"
+                id="nailNoticeBalanceBtn"
+              class="nail-notice-deblue"
+              aria-pressed="false"
+                title="打开：只显示天平（盯后曾跌破 pin，现价高于跌破K最低收盘且不低于盯价；不要求当前窗上涨）。可与「直拉」同开（并集）；在全部/窗上涨/窗下跌下均可用。偏好保存在本机。"
+            >
+                天平
+            </button>
               <button
                 type="button"
                 id="nailNoticeStraightBtn"
@@ -9720,21 +9746,21 @@
               </button>
             </div>
             <div class="nail-notice-toolbar-end">
-              <button
-                type="button"
-                id="nailNoticeSelectBtn"
-                title="多选后批量置顶到钉子页"
-                aria-pressed="false"
-              >
-                多选
-              </button>
+            <button
+              type="button"
+              id="nailNoticeSelectBtn"
+              title="多选后批量置顶到钉子页"
+              aria-pressed="false"
+            >
+              多选
+            </button>
               <button
                 type="button"
                 id="nailNoticeRefreshBtn"
                 title="刷新通知列表"
               >
-                刷新
-              </button>
+              刷新
+            </button>
               <button
                 type="button"
                 id="nailNoticeCloseBtn"
@@ -9742,7 +9768,7 @@
               >
                 置顶
               </button>
-            </div>
+          </div>
           </div>
           <p id="nailNoticeMeta">近 24h 命中 · 最新在上</p>
           <div
@@ -10604,6 +10630,16 @@
         }
       } catch (_) {
         nailAutoPinViewMode = "card";
+      }
+      /** 自动盯是否显示 bStock（代币化美股）；仅本机，默认显示。 */
+      const NAIL_AUTOPIN_SHOW_BSTOCK_KEY = "kline-nail-autopin-show-bstock-v1";
+      let nailAutoPinShowBstock = true;
+      try {
+        const savedBstock = localStorage.getItem(NAIL_AUTOPIN_SHOW_BSTOCK_KEY);
+        if (savedBstock === "0") nailAutoPinShowBstock = false;
+        else if (savedBstock === "1") nailAutoPinShowBstock = true;
+      } catch (_) {
+        nailAutoPinShowBstock = true;
       }
       const NAIL_AUTO_REFRESH_TOP_MS = 5000;
       const NAIL_AUTO_REFRESH_ALL_MS = 15000;
@@ -14000,6 +14036,62 @@
         }
       }
 
+      function isBstockSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return false;
+        return !!(
+          bstockSymbolSet &&
+          bstockSymbolSet.size &&
+          bstockSymbolSet.has(key)
+        );
+      }
+
+      /** 自动盯列表是否收录该币；bStock 页不过滤，crypto 页可关 bStock。 */
+      function autoPinSymbolVisible(symbol) {
+        if (KLINE_MODE === "bstock") return true;
+        if (nailAutoPinShowBstock) return true;
+        // 名单未拉到前先放行，避免整表空白；拉完后会再渲一次。
+        if (!(bstockSymbolSet && bstockSymbolSet.size)) return true;
+        return !isBstockSymbol(symbol);
+      }
+
+      function syncNailAutoPinBstockUi() {
+        const btn = document.getElementById("nailAutoPinBstockBtn");
+        if (!btn) return;
+        if (KLINE_MODE === "bstock") {
+          btn.hidden = true;
+          return;
+        }
+        btn.hidden = false;
+        btn.classList.toggle("is-active", nailAutoPinShowBstock);
+        btn.setAttribute(
+          "aria-pressed",
+          nailAutoPinShowBstock ? "true" : "false",
+        );
+        btn.title = nailAutoPinShowBstock
+          ? "bStock：开（显示代币化美股）。点一下隐藏。"
+          : "bStock：关（已隐藏代币化美股）。点一下显示。";
+      }
+
+      function setNailAutoPinShowBstock(on) {
+        nailAutoPinShowBstock = !!on;
+        try {
+          localStorage.setItem(
+            NAIL_AUTOPIN_SHOW_BSTOCK_KEY,
+            nailAutoPinShowBstock ? "1" : "0",
+          );
+        } catch (_) {
+          /* ignore */
+        }
+        syncNailAutoPinBstockUi();
+        if (nailSegment === "autopin") {
+          renderNailAutoPinList();
+          void paintNailAutoPinCharts();
+        }
+      }
+
       function buildNailAutoPinCardHtml(symbol, at, repeatCount, opts) {
         const key = String(symbol || "")
           .trim()
@@ -14106,9 +14198,9 @@
           (entry) => (Number(entry.at) || 0) >= lookbackCutoff,
         );
         // 俯瞰置顶区：来自点进摘要时的快照（关摘要不影响）；移空才消失。
-        const overlookFocusRows = visibleOverlookFocusRows().sort(
-          (a, b) => (b.at || 0) - (a.at || 0),
-        );
+        const overlookFocusRows = visibleOverlookFocusRows()
+          .filter((row) => autoPinSymbolVisible(row && row.symbol))
+          .sort((a, b) => (b.at || 0) - (a.at || 0));
         const overlookFocusSet = new Set(
           overlookFocusRows.map((row) => row.symbol),
         );
@@ -14129,7 +14221,7 @@
           }
           const symbols = (entry.symbols || [])
             .map((symbol) => String(symbol || "").trim().toUpperCase())
-            .filter(Boolean);
+            .filter((symbol) => symbol && autoPinSymbolVisible(symbol));
           if (!symbols.length) return;
           // 同一币只保留最近一次（K 线是当前快照，重复画没意义）。
           symbols.forEach((symbol) => {
@@ -14160,7 +14252,7 @@
           const seenHere = new Set();
           (entry.symbols || []).forEach((symbol) => {
             const key = String(symbol || "").trim().toUpperCase();
-            if (!key || seenHere.has(key)) return;
+            if (!key || seenHere.has(key) || !autoPinSymbolVisible(key)) return;
             seenHere.add(key);
             const stat = olderStat.get(key);
             if (!stat || seen.has(key) || at !== stat.latestAt) return;
@@ -14267,9 +14359,9 @@
       }
 
       async function refreshNailAutoPinChart(symbol) {
-        const key = String(symbol || "")
-          .trim()
-          .toUpperCase();
+                const key = String(symbol || "")
+                  .trim()
+                  .toUpperCase();
         if (!key) return false;
         const canvas = document.querySelector(
           `#nailAutoPinList canvas[data-autopin-chart="${key}"]`,
@@ -14727,24 +14819,24 @@
           const isMarked = markedSet.has(
             String(symbol).trim().toUpperCase(),
           );
-          const label = String(symbol || "").replace(/USDT$/i, "");
+            const label = String(symbol || "").replace(/USDT$/i, "");
           const change24h = Number(
             marketMap[symbol] && marketMap[symbol].change24h,
           );
-          const chCls =
-            Number.isFinite(change24h) && change24h > 0
-              ? "nail-radar-up"
-              : Number.isFinite(change24h) && change24h < 0
-                ? "nail-radar-down"
-                : "";
-          const rowClass = [
-            pool.has(symbol) ? "is-pool" : "",
+            const chCls =
+              Number.isFinite(change24h) && change24h > 0
+                ? "nail-radar-up"
+                : Number.isFinite(change24h) && change24h < 0
+                  ? "nail-radar-down"
+                  : "";
+            const rowClass = [
+              pool.has(symbol) ? "is-pool" : "",
             rank && rank <= 20 ? "is-top20" : "",
             opts.extra ? "is-radar-extra" : "",
             isMarked ? "is-radar-fixed" : "",
-          ]
-            .filter(Boolean)
-            .join(" ");
+            ]
+              .filter(Boolean)
+              .join(" ");
           const showKline =
             nailRadarAllKlineOn ||
             isMarked ||
@@ -17410,23 +17502,23 @@
                 // 账户 USDT 余额由云同步，不随「移除关注」清掉
                 if (asset && asset !== "USDT") delete balances[asset];
                 delete entryPrices[symbol];
-                delete stopCancel[symbol];
+              delete stopCancel[symbol];
               });
               return { ...state, symbols, balances, entryPrices, stopCancel };
             },
           });
           nailHoldingsState = result.state || nailHoldingsState;
           for (const symbol of keys) {
-            await clearNailSellTask(symbol, {
-              confirm: false,
-              silent: true,
-              skipRender: true,
-            });
-            await clearNailBuyTask(symbol, {
-              confirm: false,
-              silent: true,
-              skipRender: true,
-            });
+          await clearNailSellTask(symbol, {
+            confirm: false,
+            silent: true,
+            skipRender: true,
+          });
+          await clearNailBuyTask(symbol, {
+            confirm: false,
+            silent: true,
+            skipRender: true,
+          });
             selectedHoldSymbols.delete(symbol);
           }
           renderNailHoldList();
@@ -19575,6 +19667,15 @@
             usdtTradingSet = set;
             bstockSymbolSet = stocks;
             usdtTradingSetAt = Date.now();
+            // bStock 名单到位后，关着「显示 bStock」的自动盯要重渲一次。
+            if (
+              KLINE_MODE !== "bstock" &&
+              !nailAutoPinShowBstock &&
+              nailSegment === "autopin"
+            ) {
+              renderNailAutoPinList();
+              void paintNailAutoPinCharts();
+            }
             return set;
           } catch (error) {
             lastError =
@@ -25869,7 +25970,7 @@
                   )) ||
                 document.querySelector(
                   `#nailNoticeList .nail-notice-card[data-notice-symbol="${esc}"] [data-notice-live]`,
-                );
+              );
               const parsed = Number(
                 liveEl && String(liveEl.textContent || "").replace(/,/g, ""),
               );
@@ -34818,6 +34919,15 @@
           if (!button) return;
           void setNailAutoPinPopoverOpen(false);
           openNailDrawerAtSymbol(button.getAttribute("data-nail-auto-symbol"));
+        });
+      }
+      const nailAutoPinBstockBtn = document.getElementById(
+        "nailAutoPinBstockBtn",
+      );
+      if (nailAutoPinBstockBtn) {
+        syncNailAutoPinBstockUi();
+        nailAutoPinBstockBtn.addEventListener("click", () => {
+          setNailAutoPinShowBstock(!nailAutoPinShowBstock);
         });
       }
       const nailRadarBtn = document.getElementById("nailRadarBtn");
