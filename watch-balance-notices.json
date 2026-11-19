@@ -3,6 +3,44 @@
   "readAt": 1795096517975,
   "items": [
     {
+      "id": "USTCUSDT:1795089600000:1795096500520",
+      "symbol": "USTCUSDT",
+      "label": "USTC",
+      "kinds": [
+        "直拉"
+      ],
+      "at": 1795096500520,
+      "firstSeenAt": 1795060800432,
+      "openTime": 1795089600000,
+      "pinPrice": 0.00401,
+      "pinnedAt": 1795049100782,
+      "alertPrice": 0.00401,
+      "notifyPrice": 0.00425,
+      "noteAt": 1795049100782,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795096500520
+    },
+    {
+      "id": "CHIPUSDT:1795089600000:1795096500520",
+      "symbol": "CHIPUSDT",
+      "label": "CHIP",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1795096500520,
+      "firstSeenAt": 1795022100467,
+      "openTime": 1795089600000,
+      "pinPrice": 0.0289,
+      "pinnedAt": 1795014300895,
+      "alertPrice": 0.0289,
+      "notifyPrice": 0.03267,
+      "noteAt": 1795017600515,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795096500520
+    },
+    {
       "id": "NXPCUSDT:1795089600000:1795096500520",
       "symbol": "NXPCUSDT",
       "label": "NXPC",
@@ -20,7 +58,26 @@
       "noteAt": 1795017600515,
       "interval": "4h",
       "windowUp": true,
-      "batchAt": 1795093500685
+      "batchAt": 1795096500520
+    },
+    {
+      "id": "AIGENSYNUSDT:1795089600000:1795096500520",
+      "symbol": "AIGENSYNUSDT",
+      "label": "AIGENSYN",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1795096500520,
+      "firstSeenAt": 1795005000443,
+      "openTime": 1795089600000,
+      "pinPrice": 0.01336,
+      "pinnedAt": 1795002600534,
+      "alertPrice": 0.0132,
+      "notifyPrice": 0.01342,
+      "noteAt": 1795017600515,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795096500520
     },
     {
       "id": "AWEUSDT:1795089600000:1795096200669",
@@ -585,25 +642,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1795095600774
-    },
-    {
-      "id": "AIGENSYNUSDT:1795089600000:1795095600774",
-      "symbol": "AIGENSYNUSDT",
-      "label": "AIGENSYN",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1795095600774,
-      "firstSeenAt": 1795005000443,
-      "openTime": 1795089600000,
-      "pinPrice": 0.01336,
-      "pinnedAt": 1795002600534,
-      "alertPrice": 0.0132,
-      "notifyPrice": 0.01337,
-      "noteAt": 1795017600515,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1795093800440
     },
     {
       "id": "ALABBUSDT:1795089600000:1795095600774",
@@ -1171,25 +1209,6 @@
       "batchAt": 1795093500685
     },
     {
-      "id": "USTCUSDT:1795089600000:1795095301274",
-      "symbol": "USTCUSDT",
-      "label": "USTC",
-      "kinds": [
-        "直拉"
-      ],
-      "at": 1795095301274,
-      "firstSeenAt": 1795060800432,
-      "openTime": 1795089600000,
-      "pinPrice": 0.00401,
-      "pinnedAt": 1795049100782,
-      "alertPrice": 0.00401,
-      "notifyPrice": 0.00421,
-      "noteAt": 1795049100782,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1795088700931
-    },
-    {
       "id": "WENBUSDT:1795089600000:1795095000482",
       "symbol": "WENBUSDT",
       "label": "WENB",
@@ -1659,25 +1678,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1795088700931
-    },
-    {
-      "id": "CHIPUSDT:1795089600000:1795094701191",
-      "symbol": "CHIPUSDT",
-      "label": "CHIP",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1795094701191,
-      "firstSeenAt": 1795022100467,
-      "openTime": 1795089600000,
-      "pinPrice": 0.0289,
-      "pinnedAt": 1795014300895,
-      "alertPrice": 0.0289,
-      "notifyPrice": 0.032,
-      "noteAt": 1795017600515,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1795092600640
     },
     {
       "id": "GTCUSDT:1795089600000:1795094701191",
@@ -2723,6 +2723,16 @@
   ],
   "batches": [
     {
+      "at": 1795096500520,
+      "count": 4,
+      "symbols": [
+        "AIGENSYNUSDT",
+        "CHIPUSDT",
+        "NXPCUSDT",
+        "USTCUSDT"
+      ]
+    },
+    {
       "at": 1795096200669,
       "count": 5,
       "symbols": [
@@ -2819,9 +2829,8 @@
     },
     {
       "at": 1795093800440,
-      "count": 6,
+      "count": 5,
       "symbols": [
-        "AIGENSYNUSDT",
         "ALABBUSDT",
         "CVCUSDT",
         "INITUSDT",
@@ -2831,10 +2840,9 @@
     },
     {
       "at": 1795093500685,
-      "count": 3,
+      "count": 2,
       "symbols": [
         "FOGOUSDT",
-        "NXPCUSDT",
         "TREEUSDT"
       ]
     },
@@ -2848,9 +2856,8 @@
     },
     {
       "at": 1795092600640,
-      "count": 5,
+      "count": 4,
       "symbols": [
-        "CHIPUSDT",
         "GTCUSDT",
         "RENDERUSDT",
         "SOXLBUSDT",
@@ -2911,7 +2918,7 @@
     },
     {
       "at": 1795088700931,
-      "count": 12,
+      "count": 11,
       "symbols": [
         "ALLOUSDT",
         "BABYUSDT",
@@ -2923,8 +2930,7 @@
         "QIUSDT",
         "SKUUBUSDT",
         "SPCXBUSDT",
-        "USDEBUSDT",
-        "USTCUSDT"
+        "USDEBUSDT"
       ]
     },
     {
