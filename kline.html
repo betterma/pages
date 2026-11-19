@@ -2558,6 +2558,11 @@
         border: 0.5px solid var(--separator);
         border-radius: 9px;
         background: color-mix(in srgb, var(--label, #808080) 5%, transparent);
+        cursor: pointer;
+      }
+      .nail-auto-pin-card.is-focus:not(.is-overlook) {
+        box-shadow: 0 0 0 2px
+          color-mix(in srgb, var(--accent, #2f8f6e) 55%, transparent);
       }
       .nail-auto-pin-card.is-overlook {
         border-color: color-mix(
@@ -2760,13 +2765,19 @@
         color: color-mix(in srgb, var(--warn, #b07030) 72%, var(--label));
         font-weight: 700;
       }
+      .nail-auto-pin-row {
+        cursor: pointer;
+      }
+      .nail-auto-pin-row.is-focus:not(.is-overlook) {
+        box-shadow: inset 0 0 0 2px
+          color-mix(in srgb, var(--accent, #2f8f6e) 55%, transparent);
+      }
       .nail-auto-pin-row.is-overlook {
         background: color-mix(
           in srgb,
           var(--warn, #b07030) 12%,
           transparent
         );
-        cursor: pointer;
       }
       .nail-auto-pin-row.is-overlook.is-focus {
         box-shadow: inset 0 0 0 2px
@@ -6408,7 +6419,8 @@
         width: min(420px, calc(100vw - 16px));
       }
       .card-focus-bar.is-overlook-scope,
-      .card-focus-bar.is-pullback-scope {
+      .card-focus-bar.is-pullback-scope,
+      .card-focus-bar.is-autopin-scope {
         z-index: 145;
         width: min(420px, calc(100vw - 16px));
       }
@@ -6417,6 +6429,10 @@
       }
       .card-focus-bar.is-overlook-scope [data-focus-action]:not([data-focus-action="refresh"]):not([data-focus-action="nail"]):not([data-focus-action="remove-overlook"]),
       .card-focus-bar.is-pullback-scope [data-focus-action]:not([data-focus-action="refresh"]):not([data-focus-action="nail"]):not([data-focus-action="remove-overlook"]) {
+        display: none;
+      }
+      /* 普通自动盯：只要置顶 / 刷新，不要移出。 */
+      .card-focus-bar.is-autopin-scope [data-focus-action]:not([data-focus-action="refresh"]):not([data-focus-action="nail"]) {
         display: none;
       }
       .card-focus-bar:not(.is-notice-scope) [data-focus-action="review"] {
@@ -25615,6 +25631,12 @@
               `#nailAutoPinList [data-autopin-overlook][data-autopin-card="${key}"]`,
             )
             .forEach((card) => card.classList.add("is-focus"));
+        } else if (key && scope === "autopin") {
+          document
+            .querySelectorAll(
+              `#nailAutoPinList [data-autopin-card="${key}"]:not([data-autopin-overlook])`,
+            )
+            .forEach((card) => card.classList.add("is-focus"));
         }
         const bar = document.getElementById("cardFocusBar");
         const labelEl = document.getElementById("cardFocusLabel");
@@ -25623,12 +25645,14 @@
         bar.classList.toggle("is-notice-scope", scope === "notice");
         bar.classList.toggle("is-overlook-scope", scope === "overlook");
         bar.classList.toggle("is-pullback-scope", scope === "pullback");
+        bar.classList.toggle("is-autopin-scope", scope === "autopin");
         const nailBtn = bar.querySelector('[data-focus-action="nail"]');
         if (nailBtn) {
           if (
             scope === "notice" ||
             scope === "overlook" ||
-            scope === "pullback"
+            scope === "pullback" ||
+            scope === "autopin"
           ) {
             nailBtn.textContent = "置顶";
             nailBtn.title = "置顶到钉子页";
@@ -25644,7 +25668,8 @@
           (scope === "nail" && !isNailDrawerOpen()) ||
           (scope === "notice" && nailNoticeMode !== "open") ||
           (scope === "pullback" && nailNoticeMode !== "open") ||
-          (scope === "overlook" && nailSegment !== "autopin")
+          ((scope === "overlook" || scope === "autopin") &&
+            nailSegment !== "autopin")
         ) {
           bar.hidden = true;
           document.body.classList.remove("has-card-focus");
@@ -25682,19 +25707,25 @@
         });
       }
 
+      function normalizeFocusActionScope(scope) {
+        if (
+          scope === "nail" ||
+          scope === "notice" ||
+          scope === "overlook" ||
+          scope === "pullback" ||
+          scope === "autopin"
+        ) {
+          return scope;
+        }
+        return "main";
+      }
+
       function setFocusActionSymbol(symbol, scope) {
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
         focusActionSymbol = key || null;
-        focusActionScope = key
-          ? scope === "nail" ||
-            scope === "notice" ||
-            scope === "overlook" ||
-            scope === "pullback"
-            ? scope
-            : "main"
-          : null;
+        focusActionScope = key ? normalizeFocusActionScope(scope) : null;
         applyFocusActionChrome();
       }
 
@@ -25703,13 +25734,7 @@
           .trim()
           .toUpperCase();
         if (!key) return;
-        const nextScope =
-          scope === "nail" ||
-          scope === "notice" ||
-          scope === "overlook" ||
-          scope === "pullback"
-            ? scope
-            : "main";
+        const nextScope = normalizeFocusActionScope(scope);
         if (focusActionSymbol === key && focusActionScope === nextScope) {
           setFocusActionSymbol(null);
         } else {
@@ -25747,6 +25772,13 @@
           return (
             document.querySelector(
               `#nailAutoPinList [data-autopin-overlook][data-autopin-card="${key}"]`,
+            ) || null
+          );
+        }
+        if (focusActionScope === "autopin") {
+          return (
+            document.querySelector(
+              `#nailAutoPinList [data-autopin-card="${key}"]:not([data-autopin-overlook])`,
             ) || null
           );
         }
@@ -25826,7 +25858,8 @@
           if (
             focusActionScope === "notice" ||
             focusActionScope === "overlook" ||
-            focusActionScope === "pullback"
+            focusActionScope === "pullback" ||
+            focusActionScope === "autopin"
           ) {
             setFocusBarBusy(true, activeBtn, "置顶中");
             try {
@@ -25943,10 +25976,17 @@
                 );
                 return;
               }
-            } else if (focusActionScope === "overlook") {
+            } else if (
+              focusActionScope === "overlook" ||
+              focusActionScope === "autopin"
+            ) {
               const ok = await refreshNailAutoPinChart(symbol);
               if (!ok) {
-                showToast("俯瞰列表找不到这张 K 线");
+                showToast(
+                  focusActionScope === "overlook"
+                    ? "俯瞰列表找不到这张 K 线"
+                    : "自动盯列表找不到这张 K 线",
+                );
                 return;
               }
             } else {
@@ -29694,7 +29734,12 @@
         // 四个面互斥：进哪个，其余三个的浮层状态全部收起。
         if (next !== "autopin") {
           await setNailAutoPinPopoverOpen(false);
-          if (focusActionScope === "overlook") setFocusActionSymbol(null);
+          if (
+            focusActionScope === "overlook" ||
+            focusActionScope === "autopin"
+          ) {
+            setFocusActionSymbol(null);
+          }
         }
         if (next !== "radar") await setNailRadarPopoverOpen(false);
         if (next !== "notice") closeNailNoticeDrawer();
@@ -34912,6 +34957,24 @@
             toggleFocusActionSymbol(
               overlookCard.getAttribute("data-autopin-card"),
               "overlook",
+            );
+            return;
+          }
+          const autoPinCard = event.target.closest("[data-autopin-card]");
+          if (autoPinCard) {
+            // 普通自动盯：点卡/行展开置顶/刷新；点币名仍去钉子抽屉。
+            const nameBtn = event.target.closest("[data-nail-auto-symbol]");
+            if (nameBtn) {
+              void setNailAutoPinPopoverOpen(false);
+              openNailDrawerAtSymbol(
+                nameBtn.getAttribute("data-nail-auto-symbol"),
+              );
+              return;
+            }
+            event.preventDefault();
+            toggleFocusActionSymbol(
+              autoPinCard.getAttribute("data-autopin-card"),
+              "autopin",
             );
             return;
           }
