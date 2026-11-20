@@ -6535,6 +6535,7 @@
         vertical-align: -1px;
         animation: card-action-spin 0.7s linear infinite;
       }
+      .card-focus-bar button.is-already-pinned,
       .card-focus-bar button:disabled {
         opacity: 0.5;
       }
@@ -8969,7 +8970,7 @@
           </div>
           <div class="nail-auto-pin-popover" id="nailAutoPinPopover" hidden>
             <div class="nail-auto-pin-popover-head">
-              <div class="nail-auto-pin-popover-title">自动盯记录</div>
+            <div class="nail-auto-pin-popover-title">自动盯记录</div>
               <button
                 type="button"
                 id="nailAutoPinBstockBtn"
@@ -9783,7 +9784,7 @@
                 title="回到置顶栏"
               >
                 置顶
-              </button>
+            </button>
           </div>
           </div>
           <p id="nailNoticeMeta">近 24h 命中 · 最新在上</p>
@@ -25648,17 +25649,29 @@
         bar.classList.toggle("is-autopin-scope", scope === "autopin");
         const nailBtn = bar.querySelector('[data-focus-action="nail"]');
         if (nailBtn) {
+          const alreadyPinned = nailAutoPinPinState(key) === "pinned";
           if (
             scope === "notice" ||
             scope === "overlook" ||
             scope === "pullback" ||
             scope === "autopin"
           ) {
-            nailBtn.textContent = "置顶";
-            nailBtn.title = "置顶到钉子页";
+            if (alreadyPinned) {
+              nailBtn.textContent = "已置顶";
+              nailBtn.title = "已在钉子置顶区";
+              nailBtn.disabled = true;
+              nailBtn.classList.add("is-already-pinned");
+            } else {
+              nailBtn.textContent = "置顶";
+              nailBtn.title = "置顶到钉子页";
+              nailBtn.disabled = false;
+              nailBtn.classList.remove("is-already-pinned");
+            }
           } else {
             nailBtn.textContent = "钉";
             nailBtn.title = "加入钉子，便签自动备注当前价";
+            nailBtn.disabled = false;
+            nailBtn.classList.remove("is-already-pinned");
           }
         }
         if (
@@ -25861,6 +25874,10 @@
             focusActionScope === "pullback" ||
             focusActionScope === "autopin"
           ) {
+            if (nailAutoPinPinState(symbol) === "pinned") {
+              applyFocusActionChrome();
+              return;
+            }
             setFocusBarBusy(true, activeBtn, "置顶中");
             try {
               await pinNoticeSymbolsToNails([symbol], {
@@ -25873,6 +25890,7 @@
               showToast(error.message || "置顶到钉子失败");
             } finally {
               setFocusBarBusy(false);
+              applyFocusActionChrome();
             }
             return;
           }
@@ -26551,6 +26569,38 @@
         }
         // 到价提醒与天平/直拉共用一个角标，命中由云函数写 hitAt。
         return count + priceAlertUnreadCount();
+      }
+
+      /** 未读通知里最新一条的币名（进通知分栏时滚到对应 K 线）。 */
+      function latestUnreadNoticeJumpSymbol() {
+        let bestSym = "";
+        let bestAt = 0;
+        const noticeRead = Number(nailGreenNoticesReadAt) || 0;
+        (nailGreenNotices || []).forEach((item) => {
+          const at = Number(item && item.at) || 0;
+          if (!(at > noticeRead)) return;
+          const sym = String((item && item.symbol) || "")
+            .trim()
+            .toUpperCase();
+          if (!sym) return;
+          if (at >= bestAt) {
+            bestAt = at;
+            bestSym = sym;
+          }
+        });
+        (priceAlertNoticeItems() || []).forEach((item) => {
+          const at = Number(item && item.hitAt) || 0;
+          if (!(at > (Number(priceAlertReadAt) || 0))) return;
+          const sym = String((item && item.symbol) || "")
+            .trim()
+            .toUpperCase();
+          if (!sym) return;
+          if (at >= bestAt) {
+            bestAt = at;
+            bestSym = sym;
+          }
+        });
+        return bestSym;
       }
 
       function syncNailNoticeEntryUi() {
@@ -29748,7 +29798,15 @@
         // 收起过程中用户又点了别的分栏，这次就不必再打开了。
         if (token !== nailSegSwitchToken) return;
         if (next === "notice") {
-          if (changed || opts.force) await openNailNoticeDrawer();
+          if (changed || opts.force) {
+            const jumpSymbol =
+              nailGreenUnreadCount() > 0
+                ? latestUnreadNoticeJumpSymbol()
+                : "";
+            await openNailNoticeDrawer(
+              jumpSymbol ? { jumpSymbol } : undefined,
+            );
+          }
         } else if (next === "autopin") {
           await setNailAutoPinPopoverOpen(true);
         } else if (next === "radar") {

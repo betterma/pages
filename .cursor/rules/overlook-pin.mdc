@@ -7,11 +7,12 @@ alwaysApply: true
 
 ## 定义
 
-自动盯价 **高于** 页面默认渲染窗「前方」全部 4h K 线最高价：
+自动盯价 **高于** 页面默认渲染窗「前方」全部 4h K 线**收盘价**（上影线 / high 不计入）：
 
 - 窗口 = 近 3 天 · 4h ≈ **18 根**（`OVERLOOK_WINDOW_BARS`）
 - 盯价所在那根不计入「前方」；前方 = 同窗内该根之前最多 17 根
-- `overPct = pinPrice / priorHigh - 1`
+- 参考位 = `max(prior.close)`（JSON 字段名仍为 `priorHigh`）
+- `overPct = pinPrice / priorClose - 1`
 - `overlooks`：`overPct > 0`
 - **强俯瞰** `tier=strong`：`overPct >= 5`（`OVERLOOK_STRONG_PCT`；弱俯瞰 0–2% 噪声大）
 

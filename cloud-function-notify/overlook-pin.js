@@ -1,16 +1,18 @@
 'use strict';
 
 /**
- * 俯瞰类（overlook）：自动盯价高于「渲染窗前方」全部 4h K 线最高价。
+ * 俯瞰类（overlook）：自动盯价高于「渲染窗前方」全部 4h K 线收盘价。
  *
  * 口径（与页面默认「近3天 · 4h」≈18 根一致）：
  * - 取盯价所在那根 4h K（openTime ≤ pinnedAt < openTime+4h）
  * - 前方 = 该根之前、同一 18 根窗内的最多 17 根
- * - overPct = pinPrice / max(prior.high) - 1
+ * - 参考位 = max(prior.close)（只要超过收盘价；上影线 / high 不计入）
+ * - overPct = pinPrice / priorClose - 1
  * - 俯瞰：overPct > 0；强俯瞰：overPct >= OVERLOOK_STRONG_PCT（默认 5）
  *
  * 本模块只负责分类与度量，不写盘、不推企微。
  * 落盘 / 通知应在 notify 定时任务里调用后写入 watch-overlook.json（或 pin 附加字段）。
+ * JSON 字段名仍用 priorHigh，语义为「前方收盘最高」。
  */
 
 const { requestRaw } = require('./github-wecom');
@@ -36,14 +38,14 @@ const OVERLOOK_STATE_PATH =
 /**
  * @typedef {object} OverlookMeasure
  * @property {string} classId  'overlook' | ''
- * @property {boolean} overlooks  pinPrice > priorHigh
+ * @property {boolean} overlooks  pinPrice > priorClose（字段名 priorHigh）
  * @property {boolean} strong  overlooks && overPct >= STRONG
  * @property {string} tier  'strong' | 'weak' | 'none'
  * @property {number} overPct
- * @property {number} priorHigh
+ * @property {number} priorHigh  前方收盘最高（历史字段名，不再取 high）
  * @property {number} priorCount
  * @property {number} pinIdx
- * @property {number} openVsPriorPct  当前根开盘相对 priorHigh
+ * @property {number} openVsPriorPct  当前根开盘相对 priorClose
  * @property {number} pinVsOpenPct   盯价相对当前根开盘
  */
 
@@ -106,13 +108,14 @@ function measureOverlook(candles, pinPrice, pinnedAt, opts) {
   let priorHigh = NaN;
   let priorCount = 0;
   if (priorEnd >= start) {
-    let maxH = -Infinity;
+    // 只要超过前方收盘价；上影线（high）不参与。
+    let maxClose = -Infinity;
     for (let i = start; i <= priorEnd; i += 1) {
-      const h = Number(list[i].h);
-      if (Number.isFinite(h) && h > maxH) maxH = h;
+      const close = Number(list[i].c);
+      if (Number.isFinite(close) && close > maxClose) maxClose = close;
       priorCount += 1;
     }
-    if (maxH > -Infinity) priorHigh = maxH;
+    if (maxClose > -Infinity) priorHigh = maxClose;
   }
 
   const overPct =
