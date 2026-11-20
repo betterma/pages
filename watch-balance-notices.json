@@ -3,25 +3,6 @@
   "readAt": 1795143800578,
   "items": [
     {
-      "id": "BTTCUSDT:1795147200000:1795147500633",
-      "symbol": "BTTCUSDT",
-      "label": "BTTC",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1795147500633,
-      "firstSeenAt": 1795077901017,
-      "openTime": 1795147200000,
-      "pinPrice": 3.2e-7,
-      "pinnedAt": 1795033501068,
-      "alertPrice": 3.2e-7,
-      "notifyPrice": 3.2e-7,
-      "noteAt": 1795104000458,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 0
-    },
-    {
       "id": "IQUSDT:1795147200000:1795147500633",
       "symbol": "IQUSDT",
       "label": "IQ",
@@ -38,6 +19,64 @@
       "noteAt": 1795139701040,
       "interval": "4h",
       "windowUp": true,
+      "batchAt": 1795147500633
+    },
+    {
+      "id": "STEEMUSDT:1795147200000:1795147500633",
+      "symbol": "STEEMUSDT",
+      "label": "STEEM",
+      "kinds": [
+        "直拉",
+        "回踩观察"
+      ],
+      "at": 1795147500633,
+      "firstSeenAt": 1795143000485,
+      "openTime": 1795147200000,
+      "pinPrice": 0.04216,
+      "pinnedAt": 1795143000485,
+      "alertPrice": 0.04217,
+      "notifyPrice": 0.0436,
+      "noteAt": 1795143000485,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795147500633
+    },
+    {
+      "id": "DEXEUSDT:1795147200000:1795147500633",
+      "symbol": "DEXEUSDT",
+      "label": "DEXE",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1795147500633,
+      "firstSeenAt": 1795079100640,
+      "openTime": 1795147200000,
+      "pinPrice": 1.175,
+      "pinnedAt": 1795002300651,
+      "alertPrice": 1.204,
+      "notifyPrice": 1.182,
+      "noteAt": 1795104000458,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795147500633
+    },
+    {
+      "id": "BTTCUSDT:1795147200000:1795147500633",
+      "symbol": "BTTCUSDT",
+      "label": "BTTC",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1795147500633,
+      "firstSeenAt": 1795077901017,
+      "openTime": 1795147200000,
+      "pinPrice": 3.2e-7,
+      "pinnedAt": 1795033501068,
+      "alertPrice": 3.2e-7,
+      "notifyPrice": 3.2e-7,
+      "noteAt": 1795104000458,
+      "interval": "4h",
+      "windowUp": false,
       "batchAt": 0
     },
     {
@@ -290,26 +329,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1795143600634
-    },
-    {
-      "id": "STEEMUSDT:1795147200000:1795147200688",
-      "symbol": "STEEMUSDT",
-      "label": "STEEM",
-      "kinds": [
-        "直拉",
-        "回踩观察"
-      ],
-      "at": 1795147200688,
-      "firstSeenAt": 1795143000485,
-      "openTime": 1795147200000,
-      "pinPrice": 0.04216,
-      "pinnedAt": 1795143000485,
-      "alertPrice": 0.04217,
-      "notifyPrice": 0.04338,
-      "noteAt": 1795143000485,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 0
     },
     {
       "id": "TREEUSDT:1795147200000:1795147200688",
@@ -584,25 +603,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1795130400815
-    },
-    {
-      "id": "DEXEUSDT:1795132800000:1795146600638",
-      "symbol": "DEXEUSDT",
-      "label": "DEXE",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1795146600638,
-      "firstSeenAt": 1795079100640,
-      "openTime": 1795132800000,
-      "pinPrice": 1.175,
-      "pinnedAt": 1795002300651,
-      "alertPrice": 1.204,
-      "notifyPrice": 1.183,
-      "noteAt": 1795104000458,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1795133701221
     },
     {
       "id": "ENSOUSDT:1795132800000:1795146600638",
@@ -3213,6 +3213,15 @@
   ],
   "batches": [
     {
+      "at": 1795147500633,
+      "count": 3,
+      "symbols": [
+        "DEXEUSDT",
+        "IQUSDT",
+        "STEEMUSDT"
+      ]
+    },
+    {
       "at": 1795147200688,
       "count": 5,
       "symbols": [
@@ -3403,9 +3412,8 @@
     },
     {
       "at": 1795133701221,
-      "count": 2,
+      "count": 1,
       "symbols": [
-        "DEXEUSDT",
         "LUNCUSDT"
       ]
     },
