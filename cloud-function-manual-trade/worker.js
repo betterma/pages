@@ -103,6 +103,11 @@ function isPemPrivateKey(secret) {
   );
 }
 
+function pemLabelOf(pem) {
+  const m = String(pem || '').match(/-----BEGIN ([^-]+)-----/);
+  return m ? m[1].trim() : '';
+}
+
 function bytesToBase64(bytes) {
   let s = '';
   const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
@@ -116,15 +121,73 @@ function bytesToHex(bytes) {
     .join('');
 }
 
-function pemToPkcs8Buffer(pem) {
+function concatBytes(...parts) {
+  const arrays = parts.map((p) =>
+    p instanceof Uint8Array ? p : new Uint8Array(p),
+  );
+  const total = arrays.reduce((n, a) => n + a.length, 0);
+  const out = new Uint8Array(total);
+  let off = 0;
+  arrays.forEach((a) => {
+    out.set(a, off);
+    off += a.length;
+  });
+  return out;
+}
+
+function encodeAsn1Length(len) {
+  if (len < 0x80) return new Uint8Array([len]);
+  if (len < 0x100) return new Uint8Array([0x81, len]);
+  if (len < 0x10000) {
+    return new Uint8Array([0x82, (len >> 8) & 0xff, len & 0xff]);
+  }
+  return new Uint8Array([
+    0x83,
+    (len >> 16) & 0xff,
+    (len >> 8) & 0xff,
+    len & 0xff,
+  ]);
+}
+
+function encodeAsn1Sequence(contents) {
+  const body = contents instanceof Uint8Array ? contents : new Uint8Array(contents);
+  const len = encodeAsn1Length(body.length);
+  return concatBytes(new Uint8Array([0x30]), len, body);
+}
+
+function encodeAsn1OctetString(contents) {
+  const body = contents instanceof Uint8Array ? contents : new Uint8Array(contents);
+  const len = encodeAsn1Length(body.length);
+  return concatBytes(new Uint8Array([0x04]), len, body);
+}
+
+/** PKCS#1 RSA → PKCS#8，供 Web Crypto importKey('pkcs8') 使用 */
+function wrapRsaPkcs1ToPkcs8(pkcs1Der) {
+  const version = new Uint8Array([0x02, 0x01, 0x00]);
+  // AlgorithmIdentifier: rsaEncryption + NULL
+  const algId = new Uint8Array([
+    0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01,
+    0x01, 0x05, 0x00,
+  ]);
+  const octet = encodeAsn1OctetString(pkcs1Der);
+  return encodeAsn1Sequence(concatBytes(version, algId, octet));
+}
+
+function pemBodyToBytes(pem) {
   const body = String(pem || '')
     .replace(/-----BEGIN [^-]+-----/g, '')
     .replace(/-----END [^-]+-----/g, '')
     .replace(/\s+/g, '');
-  const raw = atob(body);
+  if (!body) throw new Error('PEM 正文为空');
+  let raw;
+  try {
+    raw = atob(body);
+  } catch (_) {
+    throw new Error('PEM Base64 无法解码（可能被截断或含非法字符）');
+  }
   const buf = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i += 1) buf[i] = raw.charCodeAt(i);
-  return buf.buffer;
+  return buf;
 }
 
 async function hmacHex(secret, message) {
@@ -140,32 +203,14 @@ async function hmacHex(secret, message) {
   return bytesToHex(sig);
 }
 
-/**
- * HMAC → hex；Ed25519 / RSA PEM → base64（对齐币安自签 Key + 华为云 signBinanceQuery）
- */
-async function signBinanceQuery(query, secret) {
-  const material = normalizeSecret(secret);
-  if (!material) throw new Error('Empty BINANCE_API_SECRET');
-  if (!isPemPrivateKey(material)) {
-    return hmacHex(material, query);
-  }
-
-  const keyData = pemToPkcs8Buffer(material);
+async function subtleSignWithPkcs8(pkcs8Der, query, algorithms) {
   const data = new TextEncoder().encode(query);
-  const attempts = [
-    { name: 'Ed25519', algorithm: { name: 'Ed25519' }, signAlgo: 'Ed25519' },
-    {
-      name: 'RSASSA-PKCS1-v1_5',
-      algorithm: { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-      signAlgo: { name: 'RSASSA-PKCS1-v1_5' },
-    },
-  ];
   let lastError = null;
-  for (const attempt of attempts) {
+  for (const attempt of algorithms) {
     try {
       const key = await crypto.subtle.importKey(
         'pkcs8',
-        keyData,
+        pkcs8Der,
         attempt.algorithm,
         false,
         ['sign'],
@@ -176,10 +221,67 @@ async function signBinanceQuery(query, secret) {
       lastError = error;
     }
   }
+  throw lastError || new Error('subtle import/sign failed');
+}
+
+/**
+ * HMAC → hex；Ed25519 / RSA PEM → base64（对齐币安自签 Key + 华为云 signBinanceQuery）
+ * 兼容 BEGIN PRIVATE KEY（PKCS#8）与 BEGIN RSA PRIVATE KEY（PKCS#1，自动包一层 PKCS#8）
+ */
+async function signBinanceQuery(query, secret) {
+  const material = normalizeSecret(secret);
+  if (!material) throw new Error('Empty BINANCE_API_SECRET');
+  if (!isPemPrivateKey(material)) {
+    return hmacHex(material, query);
+  }
+
+  const label = pemLabelOf(material);
+  if (/ENCRYPTED/i.test(label)) {
+    throw new Error('不支持加密 PEM（ENCRYPTED PRIVATE KEY），请改用未加密私钥');
+  }
+
+  const der = pemBodyToBytes(material);
+  const rsaAlgos = [
+    {
+      name: 'RSASSA-PKCS1-v1_5',
+      algorithm: { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+      signAlgo: { name: 'RSASSA-PKCS1-v1_5' },
+    },
+  ];
+  const bothAlgos = [
+    { name: 'Ed25519', algorithm: { name: 'Ed25519' }, signAlgo: 'Ed25519' },
+    ...rsaAlgos,
+  ];
+
+  const errors = [];
+  const trySign = async (pkcs8Der, algorithms, tag) => {
+    try {
+      return await subtleSignWithPkcs8(pkcs8Der, query, algorithms);
+    } catch (error) {
+      errors.push(
+        `${tag}:${error && error.message ? error.message : String(error)}`,
+      );
+      return null;
+    }
+  };
+
+  // RSA PRIVATE KEY = PKCS#1，必须先包成 PKCS#8
+  if (/RSA PRIVATE KEY/i.test(label)) {
+    const wrapped = wrapRsaPkcs1ToPkcs8(der);
+    const sig = await trySign(wrapped, rsaAlgos, 'pkcs1→pkcs8/rsa');
+    if (sig) return sig;
+  } else {
+    // PKCS#8：先试 Ed25519 再 RSA
+    let sig = await trySign(der, bothAlgos, 'pkcs8');
+    if (sig) return sig;
+    // 少数工具把 PKCS#1 误标成 PRIVATE KEY：再试包一层
+    const wrapped = wrapRsaPkcs1ToPkcs8(der);
+    sig = await trySign(wrapped, rsaAlgos, 'wrap/rsa');
+    if (sig) return sig;
+  }
+
   throw new Error(
-    `PEM 私钥无法用于 Ed25519/RSA 签名：${
-      lastError && lastError.message ? lastError.message : lastError
-    }`,
+    `PEM 私钥无法用于签名（label=${label || '?'} derLen=${der.length} head=${bytesToHex(der.slice(0, 4))}）：${errors.join(' | ')}`,
   );
 }
 
