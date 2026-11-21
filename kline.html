@@ -5620,6 +5620,40 @@
         );
         color: color-mix(in srgb, var(--warn, #f2b84b) 55%, var(--label));
       }
+      .nail-section-label-title {
+        display: inline-flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 6px;
+        min-width: 0;
+      }
+      .nail-section-pnl {
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+      .nail-section-pnl.is-up,
+      .nail-pnl.is-up {
+        color: var(--up, #16a66a);
+      }
+      .nail-section-pnl.is-down,
+      .nail-pnl.is-down {
+        color: var(--down, #e0444a);
+      }
+      .nail-section-pnl.is-flat,
+      .nail-pnl.is-flat {
+        color: var(--secondary, #9aa3a0);
+      }
+      .nail-pnl {
+        margin: 4px 0 0;
+        font-size: 11px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.3;
+      }
+      .nail-pnl + .nail-note {
+        margin-top: 2px;
+      }
       .nail-section-label.is-pin {
         border-color: color-mix(in srgb, var(--accent) 42%, var(--separator));
         background: color-mix(
@@ -12450,6 +12484,9 @@
           : "尚未成功刷新";
       }
 
+      /** 买卖成交 / 失败提示停留更久，方便看清均价与数量。 */
+      const TRADE_TOAST_MS = 4500;
+
       function showToast(message, options) {
         const existing = document.querySelector(".toast");
         if (existing) existing.remove();
@@ -12462,6 +12499,12 @@
             ? Math.max(800, options.duration)
             : 1600;
         setTimeout(() => toast.remove(), ms);
+      }
+
+      function showTradeToast(message, options) {
+        const opts = options && typeof options === "object" ? { ...options } : {};
+        if (!Number.isFinite(opts.duration)) opts.duration = TRADE_TOAST_MS;
+        showToast(message, opts);
       }
 
       /** 删除 / 清空 / 取消盯住等破坏性操作统一二次确认。 */
@@ -15955,6 +15998,56 @@
         return Number.isFinite(price) && price > 0 ? price : null;
       }
 
+      /** 相对成本价 P 的浮动盈亏（USDT）；无成本 / 无仓 / 无现价则 null。 */
+      function holdingsPnlOf(symbol) {
+        const key = normalizeHoldSymbol(symbol);
+        if (!key || key === "USDT") return null;
+        const entryPx = holdingsEntryPriceOf(key);
+        if (!(entryPx > 0)) return null;
+        const px = holdingsSpotPrice(key);
+        if (!(Number.isFinite(px) && px > 0)) return null;
+        const asset = holdingsBaseAsset(key);
+        const row =
+          (nailHoldingsState &&
+            nailHoldingsState.balances &&
+            nailHoldingsState.balances[asset]) ||
+          {};
+        const qty = (Number(row.free) || 0) + (Number(row.locked) || 0);
+        if (!(qty > 0)) return null;
+        const notional = qty * px;
+        if (!(notional >= HOLDINGS_DUST_USDT)) return null;
+        const usdt = (px - entryPx) * qty;
+        const pct = ((px - entryPx) / entryPx) * 100;
+        return { usdt, pct, entryPx, px, qty };
+      }
+
+      function holdingsPnlTone(usdt) {
+        const n = Number(usdt);
+        if (!(Number.isFinite(n))) return "is-flat";
+        if (n > 1e-8) return "is-up";
+        if (n < -1e-8) return "is-down";
+        return "is-flat";
+      }
+
+      function formatHoldingsPnlUsdt(usdt) {
+        const n = Number(usdt);
+        if (!Number.isFinite(n)) return "";
+        const sign = n > 0 ? "+" : "";
+        return `${sign}${formatHoldingsUsdt(n)} USDT`;
+      }
+
+      function holdingsHeldPnlTotal(items) {
+        let sum = 0;
+        let any = false;
+        (items || []).forEach((item) => {
+          const pnl = holdingsPnlOf(item && item.symbol);
+          if (!pnl) return;
+          any = true;
+          sum += pnl.usdt;
+        });
+        return any ? { usdt: sum } : null;
+      }
+
       function buildFixedStopTasks(symbol, entryPrice, now) {
         const key = String(symbol || "")
           .trim()
@@ -17289,11 +17382,42 @@
         }
       }
 
+      /** 卖光 / 灰尘：清买卖任务；已挂单的标 cancel_requested，其余直接删。 */
+      function purgeHoldTradeTasksForSymbols(tasks, symbols, stamp) {
+        const drop = new Set(
+          (symbols || [])
+            .map((s) => normalizeHoldSymbol(s))
+            .filter((s) => s && s !== "USDT"),
+        );
+        if (!drop.size) return Array.isArray(tasks) ? tasks.slice() : [];
+        const next = [];
+        (Array.isArray(tasks) ? tasks : []).forEach((task) => {
+          if (!task) return;
+          const sym = String(task.symbol || "")
+            .trim()
+            .toUpperCase();
+          if (!drop.has(sym)) {
+            next.push(task);
+            return;
+          }
+          if (task.openOrderId) {
+            next.push({
+              ...task,
+              status: "cancel_requested",
+              enabled: true,
+              updatedAt: stamp,
+            });
+          }
+        });
+        return next;
+      }
+
       async function applyLiveBalancesToHoldings(liveBalances, now) {
         const stamp = Number(now) || Date.now();
         const byAsset =
           liveBalances && typeof liveBalances === "object" ? liveBalances : {};
-        const flatSymbols = [];
+        /** 卖光或名义 < 0.1 USDT：清成本 + 全部监控任务 + 移出关注。 */
+        const clearedSymbols = [];
         const beforeSymbols = new Set(
           (Array.isArray(nailHoldingsState.symbols)
             ? nailHoldingsState.symbols
@@ -17316,6 +17440,7 @@
           repo: CONFIG.GITHUB_REPO,
           message: "Holdings live sync",
           mutate: (state) => {
+            clearedSymbols.length = 0;
             const prevSymbols = Array.isArray(state.symbols)
               ? state.symbols.slice()
               : [];
@@ -17324,12 +17449,21 @@
             const stopCancel = { ...(state.stopCancel || {}) };
             const seen = new Set();
             const merged = [];
+            const clearedSeen = new Set();
 
             const pushSymbol = (raw) => {
               const key = normalizeHoldSymbol(raw);
               if (!key || key === "USDT" || seen.has(key)) return;
               seen.add(key);
               merged.push(key);
+            };
+
+            const markCleared = (key) => {
+              if (!key || key === "USDT" || clearedSeen.has(key)) return;
+              clearedSeen.add(key);
+              clearedSymbols.push(key);
+              if (entryPrices[key]) delete entryPrices[key];
+              if (stopCancel[key]) delete stopCancel[key];
             };
 
             prevSymbols.forEach((symbol) => pushSymbol(symbol));
@@ -17360,18 +17494,19 @@
               const free = Number(row.free) || 0;
               const locked = Number(row.locked) || 0;
               balances[asset] = { free, locked, at: stamp };
-              if (free <= 0 && locked <= 0) {
-                if (entryPrices[key]) delete entryPrices[key];
-                if (stopCancel[key]) delete stopCancel[key];
-                flatSymbols.push(key);
-              }
               const px = holdingsSpotPrice(key);
               const notional =
                 Number.isFinite(px) && px > 0 ? (free + locked) * px : 0;
-              const keep =
-                !!(entryPrices[key] && Number(entryPrices[key].price) > 0) ||
-                holdingsHasActiveTradeTasks(key);
-              if (notional < HOLDINGS_DUST_USDT && !keep) return;
+              const isFlat = free <= 0 && locked <= 0;
+              const isDust =
+                !isFlat &&
+                Number.isFinite(px) &&
+                px > 0 &&
+                notional < HOLDINGS_DUST_USDT;
+              if (isFlat || isDust) {
+                markCleared(key);
+                return;
+              }
               nextSymbols.push(key);
             });
             // 账户资金行：USDT 始终保留在名单里（不走灰尘剔除）。
@@ -17406,30 +17541,41 @@
           if (!afterSymbols.has(sym)) removed += 1;
         });
 
-        if (
-          flatSymbols.length &&
-          typeof WatchFavorites.patchSellTasks === "function"
-        ) {
-          const sellResult = await WatchFavorites.patchSellTasks({
-            repo: CONFIG.GITHUB_REPO,
-            message: `Drop stops after flat ${flatSymbols.join(",")}`,
-            mutate: (state) => {
-              const tasks = Array.isArray(state.tasks)
-                ? state.tasks.filter((t) => {
-                    if (!t) return false;
-                    const sym = String(t.symbol || "")
-                      .trim()
-                      .toUpperCase();
-                    if (!flatSymbols.includes(sym)) return true;
-                    return String(t.kind || "").toLowerCase() !== "stop";
-                  })
-                : [];
-              return { ...state, tasks, updatedAt: stamp };
-            },
-          });
-          nailSellTasksState = sellResult.state || nailSellTasksState;
+        if (clearedSymbols.length) {
+          if (typeof WatchFavorites.patchSellTasks === "function") {
+            const sellResult = await WatchFavorites.patchSellTasks({
+              repo: CONFIG.GITHUB_REPO,
+              message: `Clear all sell tasks after flat/dust ${clearedSymbols.join(",")}`,
+              mutate: (state) => ({
+                ...state,
+                tasks: purgeHoldTradeTasksForSymbols(
+                  state.tasks,
+                  clearedSymbols,
+                  stamp,
+                ),
+                updatedAt: stamp,
+              }),
+            });
+            nailSellTasksState = sellResult.state || nailSellTasksState;
+          }
+          if (typeof WatchFavorites.patchBuyTasks === "function") {
+            const buyResult = await WatchFavorites.patchBuyTasks({
+              repo: CONFIG.GITHUB_REPO,
+              message: `Clear buy tasks after flat/dust ${clearedSymbols.join(",")}`,
+              mutate: (state) => ({
+                ...state,
+                tasks: purgeHoldTradeTasksForSymbols(
+                  state.tasks,
+                  clearedSymbols,
+                  stamp,
+                ),
+                updatedAt: stamp,
+              }),
+            });
+            nailBuyTasksState = buyResult.state || nailBuyTasksState;
+          }
         }
-        return { flatSymbols, added, removed };
+        return { flatSymbols: clearedSymbols, clearedSymbols, added, removed };
       }
 
       async function reloadNailHoldings(options) {
@@ -17926,7 +18072,6 @@
           return false;
         }
         setNailHoldPanelLoading(panel, true, "买入中…");
-        showToast(`现价买入 ${asset}…`);
         try {
           const data = await callManualTradeHttp("/buy", {
             symbol: key,
@@ -17940,19 +18085,19 @@
               ? Number(order.cummulativeQuoteQty) / Number(order.executedQty)
               : NaN);
           if (!(avg > 0)) {
-            showToast("已下单但均价缺失，请手动核对成本");
+            showTradeToast("已下单但均价缺失，请手动核对成本");
             await reloadNailHoldings({ silent: true });
             return false;
           }
           await applyMarketBuyCostAndStops(key, avg);
           await reloadNailHoldings({ silent: true });
-          showToast(
+          showTradeToast(
             `${asset} 现价买入成交 · 成本 ${formatHoldingsPriceInput(avg)} · 已重挂止损`,
           );
           return true;
         } catch (error) {
           console.warn("executeNailMarketBuy failed", error);
-          showToast(error.message || "现价买入失败");
+          showTradeToast(error.message || "现价买入失败");
           if (panel && panel.isConnected) {
             setNailHoldPanelLoading(panel, false);
             syncNailMarketTradeButtons();
@@ -18002,7 +18147,6 @@
           return false;
         }
         setNailHoldPanelLoading(panel, true, "卖出中…");
-        showToast(`现价卖出 ${asset}…`);
         try {
           const data = await callManualTradeHttp("/sell", {
             symbol: key,
@@ -18011,7 +18155,7 @@
           const order = (data && data.order) || {};
           const filled = Number(order.executedQty) || quantity;
           await reloadNailHoldings({ silent: true });
-          showToast(
+          showTradeToast(
             `${asset} 现价卖出成交 · ${formatHoldingsQty(filled)}${
               order.avgPrice
                 ? ` · 均价 ${formatHoldingsPriceInput(order.avgPrice)}`
@@ -18021,7 +18165,7 @@
           return true;
         } catch (error) {
           console.warn("executeNailMarketSell failed", error);
-          showToast(error.message || "现价卖出失败");
+          showTradeToast(error.message || "现价卖出失败");
           if (panel && panel.isConnected) {
             setNailHoldPanelLoading(panel, false);
             syncNailMarketTradeButtons();
@@ -18649,14 +18793,13 @@
               return false;
             }
             setQuickTradeBusy(true, "卖出中…");
-            showToast(`现价卖出 ${asset}…`);
             const data = await callManualTradeHttp("/sell", {
               symbol: st.symbol,
               quantity,
             });
             const order = (data && data.order) || {};
             const filled = Number(order.executedQty) || quantity;
-            closeQuickTradeSheet();
+            setQuickTradeBusy(true, "同步中…");
             if (isManualTradeConfigured()) {
               try {
                 const live = await callManualTradeHttp("/balances", null, {
@@ -18670,7 +18813,11 @@
                 /* ignore */
               }
             }
-            showToast(
+            if (typeof applyNailListOrder === "function") applyNailListOrder();
+            if (typeof syncNailHeldPnlUi === "function") syncNailHeldPnlUi();
+            if (typeof renderNailHoldList === "function") renderNailHoldList();
+            closeQuickTradeSheet();
+            showTradeToast(
               `${asset} 现价卖出成交 · ${formatHoldingsQty(filled)}${
                 order.avgPrice
                   ? ` · 均价 ${formatHoldingsPriceInput(order.avgPrice)}`
@@ -18700,7 +18847,6 @@
             return false;
           }
           setQuickTradeBusy(true, "买入中…");
-          showToast(`现价买入 ${asset}…`);
           const data = await callManualTradeHttp("/buy", {
             symbol: st.symbol,
             quote,
@@ -18712,14 +18858,9 @@
             Number(order.executedQty) > 0
               ? Number(order.cummulativeQuoteQty) / Number(order.executedQty)
               : NaN);
-          closeQuickTradeSheet();
+          setQuickTradeBusy(true, "同步中…");
           if (avg > 0) {
             await applyMarketBuyCostAndStops(st.symbol, avg);
-            showToast(
-              `${asset} 现价买入成交 · 成本 ${formatHoldingsPriceInput(avg)} · 已重挂止损`,
-            );
-          } else {
-            showToast("已下单但均价缺失，请手动核对成本");
           }
           if (isManualTradeConfigured()) {
             try {
@@ -18734,10 +18875,21 @@
               /* ignore */
             }
           }
+          if (typeof applyNailListOrder === "function") applyNailListOrder();
+          if (typeof syncNailHeldPnlUi === "function") syncNailHeldPnlUi();
+          if (typeof renderNailHoldList === "function") renderNailHoldList();
+          closeQuickTradeSheet();
+          if (avg > 0) {
+            showTradeToast(
+              `${asset} 现价买入成交 · 成本 ${formatHoldingsPriceInput(avg)} · 已重挂止损`,
+            );
+          } else {
+            showTradeToast("已下单但均价缺失，请手动核对成本");
+          }
           return true;
         } catch (error) {
           console.warn("confirmQuickTradeSheet failed", error);
-          showToast(error.message || "下单失败");
+          showTradeToast(error.message || "下单失败");
           setQuickTradeBusy(false);
           return false;
         }
@@ -31772,7 +31924,63 @@
               pinChangeEl.remove();
             }
           });
+        syncNailHeldPnlUi();
         if (nailSortMode === "change24h") applyNailListOrder();
+      }
+
+      /** 置顶列表：持有段合计 + 各卡便签区盈亏随现价刷新。 */
+      function syncNailHeldPnlUi() {
+        const list = document.getElementById("nailList");
+        if (!list) return;
+        list.querySelectorAll(".nail-kcard[data-nail-symbol]").forEach((card) => {
+          const key = String(card.getAttribute("data-nail-symbol") || "")
+            .trim()
+            .toUpperCase();
+          if (!key) return;
+          const pnl = holdingsPnlOf(key);
+          let el = card.querySelector("[data-nail-pnl]");
+          if (!pnl) {
+            if (el) el.remove();
+            return;
+          }
+          if (!el) {
+            el = document.createElement("p");
+            el.setAttribute("data-nail-pnl", key);
+            el.title = "相对成本价浮动盈亏";
+            const note = card.querySelector("[data-nail-note-display]");
+            const wrap = card.querySelector(".nail-kline-wrap");
+            if (note) card.insertBefore(el, note);
+            else if (wrap) wrap.insertAdjacentElement("afterend", el);
+            else card.appendChild(el);
+          }
+          el.className = `nail-pnl ${holdingsPnlTone(pnl.usdt)}`;
+          el.textContent = formatHoldingsPnlUsdt(pnl.usdt);
+        });
+        const heldLabel = list.querySelector(
+          '.nail-section-label[data-nail-section="held"]',
+        );
+        if (!heldLabel) return;
+        const heldSection = nailDrawerSectionParts(
+          nailDrawerVisibleItems(),
+        ).find((section) => section.id === "held");
+        const total = heldSection
+          ? holdingsHeldPnlTotal(heldSection.items)
+          : null;
+        let totalEl = heldLabel.querySelector("[data-nail-held-pnl]");
+        const titleEl = heldLabel.querySelector(".nail-section-label-title");
+        if (!total) {
+          if (totalEl) totalEl.remove();
+          return;
+        }
+        if (!totalEl) {
+          totalEl = document.createElement("span");
+          totalEl.setAttribute("data-nail-held-pnl", "");
+          totalEl.title = "持有合计浮动盈亏（相对成本价）";
+          if (titleEl) titleEl.appendChild(totalEl);
+          else heldLabel.appendChild(totalEl);
+        }
+        totalEl.className = `nail-section-pnl ${holdingsPnlTone(total.usdt)}`;
+        totalEl.textContent = formatHoldingsPnlUsdt(total.usdt);
       }
 
       function syncNailRisingFilterUi() {
@@ -32607,9 +32815,17 @@
           section.id === "pin"
             ? `<button type="button" class="nail-pin-review-eye" data-nail-pin-review aria-label="筛选置顶" title="滑动筛选置顶">${NAIL_PIN_REVIEW_EYE_SVG}</button>`
             : "";
+        let pnlBit = "";
+        if (section.id === "held") {
+          const total = holdingsHeldPnlTotal(section.items);
+          if (total) {
+            const tone = holdingsPnlTone(total.usdt);
+            pnlBit = `<span class="nail-section-pnl ${tone}" data-nail-held-pnl title="持有合计浮动盈亏（相对成本价）">${escapeHtml(formatHoldingsPnlUsdt(total.usdt))}</span>`;
+          }
+        }
         return (
           `<div class="nail-section-label ${section.className}" data-nail-section="${section.id}">` +
-          `<span>${section.label}</span>` +
+          `<span class="nail-section-label-title"><span>${section.label}</span>${pnlBit}</span>` +
           `<span class="nail-section-label-end">${eye}<span class="nail-section-count">${section.items.length}</span></span>` +
           `</div>`
         );
@@ -32740,6 +32956,13 @@
             const veil = veiled
               ? `<div class="nail-kline-veil" data-nail-unveil="${symbol}">双击查看</div>`
               : "";
+            const pnl = holdingsPnlOf(item.symbol);
+            const pnlHtml = pnl
+              ? `<p class="nail-pnl ${holdingsPnlTone(pnl.usdt)}" data-nail-pnl="${symbol}" title="相对成本价浮动盈亏">${escapeHtml(formatHoldingsPnlUsdt(pnl.usdt))}</p>`
+              : "";
+            const noteHtml = note
+              ? `<p class="nail-note" data-nail-note-display="${symbol}">${formatNailNoteHtml(note)}</p>`
+              : "";
             return [
               `<article class="nail-kcard${pinned ? " is-pinned" : ""}${selected}" data-nail-symbol="${symbol}">`,
               `<div class="nail-kcard-head">`,
@@ -32761,9 +32984,8 @@
               `<canvas class="nail-kline" data-kline="${symbol}"></canvas>`,
               veil,
               `</div>`,
-              note
-                ? `<p class="nail-note" data-nail-note-display="${symbol}">${formatNailNoteHtml(note)}</p>`
-                : "",
+              pnlHtml,
+              noteHtml,
               check,
               `</article>`,
             ].join("");

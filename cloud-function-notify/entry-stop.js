@@ -108,6 +108,41 @@ function dropFixedStopTasks(tasks, symbol) {
 }
 
 /**
+ * 卖光 / 灰尘：清掉该币全部监控任务；已挂单标 cancel_requested，其余删除。
+ * @param {object[]} tasks
+ * @param {string|string[]} symbols
+ * @param {number} [now]
+ */
+function dropAllSymbolTradeTasks(tasks, symbols, now) {
+  const list = Array.isArray(symbols) ? symbols : [symbols];
+  const drop = new Set(
+    list.map((s) => normalizeSymbol(s)).filter(Boolean),
+  );
+  if (!drop.size) return Array.isArray(tasks) ? tasks.slice() : [];
+  const ts = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+  const next = [];
+  (Array.isArray(tasks) ? tasks : []).forEach((task) => {
+    if (!task) return;
+    const sym = String(task.symbol || '')
+      .trim()
+      .toUpperCase();
+    if (!drop.has(sym)) {
+      next.push(task);
+      return;
+    }
+    if (task.openOrderId) {
+      next.push({
+        ...task,
+        status: 'cancel_requested',
+        enabled: true,
+        updatedAt: ts,
+      });
+    }
+  });
+  return next;
+}
+
+/**
  * 加仓加权均价：P' = (prevQty×prevP + fillQty×fillP) / (prevQty+fillQty)。
  * 缺旧仓/旧 P 时退回 fillP。
  */
@@ -305,6 +340,7 @@ module.exports = {
   buildStopTask,
   upsertFixedStopTasks,
   dropFixedStopTasks,
+  dropAllSymbolTradeTasks,
   computeWeightedEntryPrice,
   applyEntryPriceAndSeedStops,
 };

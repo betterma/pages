@@ -2,7 +2,8 @@
 
 /**
  * 持仓余额同步：网页指定关注币种 → 云函数拉账户余额写回 GitHub。
- * 签名支持 HMAC（系统生成 Secret）与 Ed25519/RSA（自行生成 PEM 私钥）。
+ * 卖光或名义 < HOLDINGS_DUST_USDT：清成本 P、移出关注、清全部买卖监控任务
+ *（已挂单标 cancel_requested）。签名支持 HMAC / Ed25519/RSA PEM。
  * 本文件仍不做下单；交易权限 Key 也可用于只读 account。
  */
 
@@ -13,10 +14,13 @@ const {
   getUserDataFirst,
   diagSources,
 } = require('./runtime-env');
-const { dropFixedStopTasks } = require('./entry-stop');
+const { dropAllSymbolTradeTasks } = require('./entry-stop');
 
 const HOLDINGS_PATH = process.env.HOLDINGS_PATH || 'watch-holdings.json';
 const SELL_TASKS_PATH = process.env.SELL_TASKS_PATH || 'watch-sell-tasks.json';
+const BUY_TASKS_PATH = process.env.BUY_TASKS_PATH || 'watch-buy-tasks.json';
+/** 名义价值低于此值视为灰尘：移出关注并清全部监控。 */
+const HOLDINGS_DUST_USDT = Number(process.env.HOLDINGS_DUST_USDT) || 0.1;
 
 const KEY_NAMES = [
   'BINANCE_API_KEY',
@@ -239,6 +243,51 @@ async function fetchAccountBalances(context) {
   return signedGet('/api/v3/account', {}, context);
 }
 
+/** 公开行情：用于灰尘判定（名义 USDT）。失败则跳过灰尘、只按归零处理。 */
+async function fetchSpotPrices(symbols, context) {
+  const map = {};
+  const keys = [
+    ...new Set(
+      (symbols || [])
+        .map((s) => normalizeSymbol(s))
+        .filter((s) => s && s !== 'USDT'),
+    ),
+  ];
+  if (!keys.length) return map;
+  const { baseUrl } = binanceConfig(context);
+  const root = baseUrl || 'https://api.binance.com';
+  try {
+    if (keys.length === 1) {
+      const response = await requestJson(
+        `${root}/api/v3/ticker/price?symbol=${encodeURIComponent(keys[0])}`,
+      );
+      if (response.ok && response.data) {
+        const px = Number(response.data.price);
+        if (px > 0) map[keys[0]] = px;
+      }
+      return map;
+    }
+    const param = encodeURIComponent(JSON.stringify(keys));
+    const response = await requestJson(
+      `${root}/api/v3/ticker/price?symbols=${param}`,
+    );
+    const rows = Array.isArray(response.data) ? response.data : [];
+    rows.forEach((row) => {
+      const sym = String((row && row.symbol) || '')
+        .trim()
+        .toUpperCase();
+      const px = Number(row && row.price);
+      if (sym && px > 0) map[sym] = px;
+    });
+  } catch (error) {
+    console.warn(
+      'holdings price fetch failed',
+      error && error.message ? error.message : error,
+    );
+  }
+  return map;
+}
+
 function normalizeSymbol(raw) {
   let key = String(raw || '')
     .trim()
@@ -433,7 +482,10 @@ async function runHoldingsSync(options) {
   const balances = { ...(state.balances || {}) };
   const entryPrices = { ...(state.entryPrices || {}) };
   const stopCancel = { ...(state.stopCancel || {}) };
-  const flatSymbols = [];
+  const clearedSymbols = [];
+  const priceMap = await fetchSpotPrices(state.symbols, context);
+
+  const nextSymbols = [];
   state.symbols.forEach((symbol) => {
     const asset = baseAssetOf(symbol);
     const row = byAsset.get(asset) || { free: 0, locked: 0 };
@@ -443,12 +495,24 @@ async function runHoldingsSync(options) {
       at: now,
     };
     result.updated += 1;
-    // 余额归零：清买入价 P，并丢掉该币固定止损（限价卖出计划保留到用户手清/移除）
-    if (symbol !== 'USDT' && row.free <= 0 && row.locked <= 0) {
+    if (symbol === 'USDT') {
+      nextSymbols.push(symbol);
+      return;
+    }
+    const qty = (Number(row.free) || 0) + (Number(row.locked) || 0);
+    const isFlat = qty <= 0;
+    const px = Number(priceMap[symbol]);
+    const notional = Number.isFinite(px) && px > 0 ? qty * px : NaN;
+    const isDust =
+      !isFlat && Number.isFinite(notional) && notional < HOLDINGS_DUST_USDT;
+    // 卖光 / 灰尘：清成本 P，移出关注，并清全部买卖监控（见下方）
+    if (isFlat || isDust) {
       if (entryPrices[symbol]) delete entryPrices[symbol];
       if (stopCancel[symbol]) delete stopCancel[symbol];
-      flatSymbols.push(symbol);
+      clearedSymbols.push(symbol);
+      return;
     }
+    nextSymbols.push(symbol);
   });
   // 买入任务需要 USDT 可用额；无论关注列表是否含 USDT 都回填。
   {
@@ -459,17 +523,19 @@ async function runHoldingsSync(options) {
       at: now,
     };
   }
+  if (!nextSymbols.includes('USDT')) nextSymbols.unshift('USDT');
 
   const nextState = {
     updatedAt: now,
-    symbols: state.symbols,
+    symbols: nextSymbols,
     balances,
     entryPrices,
     stopCancel,
     lastError: null,
   };
-  if (flatSymbols.length) {
-    result.clearedEntry = flatSymbols;
+  if (clearedSymbols.length) {
+    result.clearedEntry = clearedSymbols;
+    result.clearedSymbols = clearedSymbols;
   }
 
   try {
@@ -477,7 +543,9 @@ async function runHoldingsSync(options) {
       HOLDINGS_PATH,
       nextState,
       file.sha,
-      `Holdings sync ${result.updated} assets`,
+      clearedSymbols.length
+        ? `Holdings sync · clear flat/dust ${clearedSymbols.join(',')}`
+        : `Holdings sync ${result.updated} assets`,
     );
   } catch (error) {
     const message = error && error.message ? error.message : String(error);
@@ -489,15 +557,16 @@ async function runHoldingsSync(options) {
     throw error;
   }
 
-  if (flatSymbols.length) {
+  if (clearedSymbols.length) {
     try {
       const sellFile = await loadJson(SELL_TASKS_PATH);
       const sellData =
         sellFile.data && typeof sellFile.data === 'object' ? sellFile.data : {};
-      let tasks = Array.isArray(sellData.tasks) ? sellData.tasks.slice() : [];
-      flatSymbols.forEach((symbol) => {
-        tasks = dropFixedStopTasks(tasks, symbol);
-      });
+      const tasks = dropAllSymbolTradeTasks(
+        sellData.tasks,
+        clearedSymbols,
+        now,
+      );
       await saveJson(
         SELL_TASKS_PATH,
         {
@@ -506,11 +575,36 @@ async function runHoldingsSync(options) {
           tasks,
         },
         sellFile.sha,
-        `Drop stops after flat ${flatSymbols.join(',')}`,
+        `Clear all sell tasks after flat/dust ${clearedSymbols.join(',')}`,
       );
     } catch (error) {
       console.warn(
-        'drop stops after flat failed',
+        'clear sell tasks after flat/dust failed',
+        error && error.message ? error.message : error,
+      );
+    }
+    try {
+      const buyFile = await loadJson(BUY_TASKS_PATH);
+      const buyData =
+        buyFile.data && typeof buyFile.data === 'object' ? buyFile.data : {};
+      const tasks = dropAllSymbolTradeTasks(
+        buyData.tasks,
+        clearedSymbols,
+        now,
+      );
+      await saveJson(
+        BUY_TASKS_PATH,
+        {
+          updatedAt: now,
+          live: buyData.live === true,
+          tasks,
+        },
+        buyFile.sha,
+        `Clear buy tasks after flat/dust ${clearedSymbols.join(',')}`,
+      );
+    } catch (error) {
+      console.warn(
+        'clear buy tasks after flat/dust failed',
         error && error.message ? error.message : error,
       );
     }
@@ -524,4 +618,5 @@ module.exports = {
   runHoldingsSync,
   normalizeState,
   HOLDINGS_PATH,
+  HOLDINGS_DUST_USDT,
 };
