@@ -6088,6 +6088,7 @@
         .nail-panel,
         .nail-hold-popover,
         .card-focus-bar,
+        .nail-trade-dock,
         .quick-trade-sheet,
         .float-tabs,
         .notify-float {
@@ -6587,24 +6588,28 @@
       .nail-trade-dock {
         --nail-trade-dock-h: 48px;
         position: fixed;
-        left: 50%;
-        bottom: calc(var(--float-dock-h, 48px) + 8px);
-        transform: translateX(-50%);
+        left: 0;
+        right: 0;
+        bottom: 0;
         /* 须高于 .nail-drawer(122)，与置顶操作栏同级，否则会被整页盖住 */
         z-index: 131;
         display: flex;
         align-items: center;
         gap: 8px;
-        width: min(420px, calc(100vw - 16px));
-        max-width: calc(100vw - 16px);
-        min-height: var(--nail-trade-dock-h);
-        padding: 8px 10px;
-        border-radius: 12px;
-        border: 0.5px solid var(--separator, rgba(200, 208, 204, 0.85));
-        background: color-mix(in srgb, var(--elevated, #fbfcfa) 96%, transparent);
-        box-shadow: 0 6px 18px rgba(40, 50, 48, 0.16);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        width: 100%;
+        max-width: none;
+        min-height: calc(
+          var(--nail-trade-dock-h) + env(safe-area-inset-bottom, 0px)
+        );
+        padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+        border-radius: 0;
+        border: none;
+        border-top: 0.5px solid
+          color-mix(in srgb, var(--separator, rgba(200, 208, 204, 0.85)) 70%, transparent);
+        background: var(--chrome-blur);
+        box-shadow: none;
+        backdrop-filter: saturate(180%) blur(20px);
+        -webkit-backdrop-filter: saturate(180%) blur(20px);
         box-sizing: border-box;
       }
       .nail-trade-dock[hidden] {
@@ -6644,10 +6649,18 @@
         opacity: 0.45;
         cursor: not-allowed;
       }
+      /* 有买卖栏时：操作栏紧贴其上方，无空隙 */
       body.has-nail-trade-dock .card-focus-bar {
+        left: 0;
+        right: 0;
         bottom: calc(
-          var(--float-dock-h, 48px) + 8px + var(--nail-trade-dock-h, 48px) + 8px
+          var(--nail-trade-dock-h, 48px) + env(safe-area-inset-bottom, 0px)
         );
+        transform: none;
+        width: 100%;
+        max-width: none;
+        border-radius: 0;
+        box-shadow: none;
       }
       .card-focus-bar {
         --card-focus-bar-h: 52px;
@@ -6664,12 +6677,14 @@
         min-height: var(--card-focus-bar-h);
         padding: 8px 28px 8px 10px;
         border-radius: 12px;
-        border: 0.5px solid var(--separator, rgba(200, 208, 204, 0.85));
-        background: color-mix(in srgb, var(--elevated, #fbfcfa) 94%, transparent);
+        border: 0.5px solid
+          color-mix(in srgb, var(--separator, rgba(200, 208, 204, 0.85)) 55%, transparent);
+        /* 毛玻璃：按钮样式不动，只透底 */
+        background: var(--chrome-blur);
         color: var(--label, #5a6a68);
-        box-shadow: 0 6px 18px rgba(40, 50, 48, 0.14);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
+        box-shadow: 0 6px 18px rgba(40, 50, 48, 0.1);
+        backdrop-filter: saturate(180%) blur(20px);
+        -webkit-backdrop-filter: saturate(180%) blur(20px);
         box-sizing: border-box;
       }
       .card-focus-bar[hidden] {
