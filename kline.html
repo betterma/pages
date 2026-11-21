@@ -6590,7 +6590,8 @@
         left: 50%;
         bottom: calc(var(--float-dock-h, 48px) + 8px);
         transform: translateX(-50%);
-        z-index: 87;
+        /* 须高于 .nail-drawer(122)，与置顶操作栏同级，否则会被整页盖住 */
+        z-index: 131;
         display: flex;
         align-items: center;
         gap: 8px;
