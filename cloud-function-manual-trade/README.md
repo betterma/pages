@@ -49,6 +49,12 @@ curl -X POST https://<你的worker域名>/sell \
   -d '{"symbol":"BTC","quantity":0.001}'
 ```
 
+**账户余额**（即时拉币安现货，供持有页「刷新」）：
+
+```bash
+curl https://<你的worker域名>/balances -H "Authorization: Bearer <TOKEN>"
+```
+
 **健康检查**：
 
 ```bash

@@ -9202,7 +9202,7 @@
                 >
                   多选
                 </button>
-              <button type="button" class="nail-hold-refresh" id="nailHoldRefreshBtn" title="拉取余额、现价与买卖任务">
+              <button type="button" class="nail-hold-refresh" id="nailHoldRefreshBtn" title="即时拉币安余额（需配置现价 Worker），并刷新现价与买卖任务">
                   <span class="nail-hold-refresh-spin" hidden aria-hidden="true"></span>
                   <span class="nail-hold-refresh-label">刷新</span>
               </button>
@@ -16938,8 +16938,34 @@
           return;
         }
         if (!silent) setNailHoldRefreshBusy(refreshBtn, true);
-        if (!silent) showToast("正在拉取余额 / 现价 / 任务…");
+        const liveReady = isManualTradeConfigured();
+        if (!silent) {
+          showToast(
+            liveReady
+              ? "正在即时拉取账户余额 / 现价 / 任务…"
+              : "正在拉取余额 / 现价 / 任务…",
+          );
+        }
         try {
+          let liveNote = "";
+          if (liveReady) {
+            try {
+              const live = await callManualTradeWorker("/balances", null, {
+                method: "GET",
+              });
+              await applyLiveBalancesToHoldings(live && live.balances, Date.now());
+              liveNote = " · 即时余额";
+            } catch (liveError) {
+              console.warn("live balances failed", liveError);
+              if (!silent) {
+                showToast(
+                  `即时余额失败：${(liveError && liveError.message) || "未知错误"}，改读缓存`,
+                );
+              }
+              liveNote = " · 缓存余额";
+            }
+          }
+
           const [raw, sellRaw, buyRaw] = await Promise.all([
             WatchFavorites.loadHoldingsRaw({
               repo: CONFIG.GITHUB_REPO,
@@ -16955,14 +16981,21 @@
                 })
               : Promise.resolve({ state: { updatedAt: 0, live: false, tasks: [] } }),
           ]);
-          nailHoldingsState =
-            raw && raw.state
-              ? raw.state
-              : { updatedAt: 0, symbols: [], balances: {}, lastError: null };
+          // 即时写入后以 GitHub 为准再读一遍，保证跨端一致；读失败则保留刚写入的内存态。
+          if (raw && raw.state) {
+            nailHoldingsState = raw.state;
+          } else if (!(liveReady && nailHoldingsState)) {
+            nailHoldingsState = {
+              updatedAt: 0,
+              symbols: [],
+              balances: {},
+              lastError: null,
+            };
+          }
           nailSellTasksState =
             sellRaw && sellRaw.state
               ? sellRaw.state
-              : { updatedAt: 0, live: false, tasks: [] };
+              : nailSellTasksState || { updatedAt: 0, live: false, tasks: [] };
           nailBuyTasksState =
             buyRaw && buyRaw.state
               ? buyRaw.state
@@ -16985,12 +17018,12 @@
           if (isNailDrawerOpen()) applyNailListOrder();
           if (!silent) {
             showToast(
-              `已刷新 · ${symbols.length} 币 / 卖任务 ${(nailSellTasksState.tasks || []).length} / 买任务 ${(nailBuyTasksState.tasks || []).length}`,
+              `已刷新${liveNote} · ${symbols.length} 币 / 卖任务 ${(nailSellTasksState.tasks || []).length} / 买任务 ${(nailBuyTasksState.tasks || []).length}`,
             );
           }
         } catch (error) {
           console.warn("reloadNailHoldings failed", error);
-          if (!silent) showToast("刷新持有失败");
+          if (!silent) showToast(error.message || "刷新持有失败");
         } finally {
           if (!silent) setNailHoldRefreshBusy(refreshBtn, false);
         }
@@ -17303,22 +17336,23 @@
         return price;
       }
 
-      async function callManualTradeWorker(path, body) {
+      async function callManualTradeWorker(path, body, options) {
+        const opts = options || {};
         const cfg = loadManualTradeConfig();
         if (!cfg.url || !cfg.token) {
           throw new Error("请先配置现价交易 Worker");
         }
+        const method = String(opts.method || "POST").toUpperCase();
         const endpoint = `${cfg.url}${path.startsWith("/") ? path : `/${path}`}`;
+        const headers = { Authorization: `Bearer ${cfg.token}` };
+        const init = { method, headers };
+        if (method !== "GET" && method !== "HEAD") {
+          headers["Content-Type"] = "application/json";
+          init.body = JSON.stringify(body || {});
+        }
         let res;
         try {
-          res = await fetch(endpoint, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${cfg.token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(body || {}),
-          });
+          res = await fetch(endpoint, init);
         } catch (error) {
           throw new Error(
             (error && error.message) || "Worker 不可达，请检查 URL / 网络",
@@ -17342,6 +17376,79 @@
           );
         }
         return data;
+      }
+
+      async function applyLiveBalancesToHoldings(liveBalances, now) {
+        const stamp = Number(now) || Date.now();
+        const byAsset =
+          liveBalances && typeof liveBalances === "object" ? liveBalances : {};
+        const flatSymbols = [];
+        const holdResult = await WatchFavorites.patchHoldings({
+          repo: CONFIG.GITHUB_REPO,
+          message: "Holdings live sync",
+          mutate: (state) => {
+            const symbols = Array.isArray(state.symbols)
+              ? state.symbols.slice()
+              : [];
+            const balances = { ...(state.balances || {}) };
+            const entryPrices = { ...(state.entryPrices || {}) };
+            const stopCancel = { ...(state.stopCancel || {}) };
+            symbols.forEach((symbol) => {
+              const key = String(symbol || "")
+                .trim()
+                .toUpperCase();
+              if (!key) return;
+              const asset = holdingsBaseAsset(key);
+              const row = byAsset[asset] || { free: 0, locked: 0 };
+              const free = Number(row.free) || 0;
+              const locked = Number(row.locked) || 0;
+              balances[asset] = { free, locked, at: stamp };
+              if (key !== "USDT" && free <= 0 && locked <= 0) {
+                if (entryPrices[key]) delete entryPrices[key];
+                if (stopCancel[key]) delete stopCancel[key];
+                flatSymbols.push(key);
+              }
+            });
+            const usdtRow = byAsset.USDT || { free: 0, locked: 0 };
+            balances.USDT = {
+              free: Number(usdtRow.free) || 0,
+              locked: Number(usdtRow.locked) || 0,
+              at: stamp,
+            };
+            return {
+              ...state,
+              symbols,
+              balances,
+              entryPrices,
+              stopCancel,
+              updatedAt: stamp,
+              lastError: null,
+            };
+          },
+        });
+        nailHoldingsState = holdResult.state || nailHoldingsState;
+
+        if (flatSymbols.length && typeof WatchFavorites.patchSellTasks === "function") {
+          const sellResult = await WatchFavorites.patchSellTasks({
+            repo: CONFIG.GITHUB_REPO,
+            message: `Drop stops after flat ${flatSymbols.join(",")}`,
+            mutate: (state) => {
+              const tasks = Array.isArray(state.tasks)
+                ? state.tasks.filter((t) => {
+                    if (!t) return false;
+                    const sym = String(t.symbol || "")
+                      .trim()
+                      .toUpperCase();
+                    if (!flatSymbols.includes(sym)) return true;
+                    return String(t.kind || "").toLowerCase() !== "stop";
+                  })
+                : [];
+              return { ...state, tasks, updatedAt: stamp };
+            },
+          });
+          nailSellTasksState = sellResult.state || nailSellTasksState;
+        }
+        return { flatSymbols };
       }
 
       async function executeNailMarketBuy(symbol) {

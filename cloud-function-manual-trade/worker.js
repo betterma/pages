@@ -7,9 +7,10 @@
  * - 只做「立即按现价市价单成交」，手动单自己管，不进自动仓位
  *
  * 端点：
- *   POST /buy   { symbol, quote }     按 USDT 金额市价买入
- *   POST /sell  { symbol, quantity }  按数量市价卖出（自动按 stepSize 取整）
- *   GET  /ping                        健康检查（需鉴权）
+ *   POST /buy       { symbol, quote }     按 USDT 金额市价买入
+ *   POST /sell      { symbol, quantity }  按数量市价卖出（自动按 stepSize 取整）
+ *   GET  /balances                       拉币安现货账户余额（即时）
+ *   GET  /ping                           健康检查（需鉴权）
  *
  * 鉴权：请求头 Authorization: Bearer <MANUAL_TRADE_TOKEN>
  *
@@ -97,7 +98,7 @@ async function publicGet(env, path, params = {}) {
   return data;
 }
 
-async function signedPost(env, path, params) {
+async function signedRequest(env, method, path, params = {}) {
   const apiKey = String(env.BINANCE_API_KEY || '');
   const apiSecret = String(env.BINANCE_API_SECRET || '');
   if (!apiKey || !apiSecret) {
@@ -114,12 +115,13 @@ async function signedPost(env, path, params) {
       .map(([k, v]) => [k, String(v)]),
   ).toString();
   const signature = await hmacHex(apiSecret, query);
+  const headers = { 'X-MBX-APIKEY': apiKey };
+  if (method === 'POST') {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded';
+  }
   const res = await fetch(`${baseUrl(env)}${path}?${query}&signature=${signature}`, {
-    method: 'POST',
-    headers: {
-      'X-MBX-APIKEY': apiKey,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    method,
+    headers,
   });
   const text = await res.text();
   let data;
@@ -132,6 +134,14 @@ async function signedPost(env, path, params) {
     throw new Error(`Binance ${res.status}: ${JSON.stringify(data).slice(0, 250)}`);
   }
   return data;
+}
+
+async function signedGet(env, path, params = {}) {
+  return signedRequest(env, 'GET', path, params);
+}
+
+async function signedPost(env, path, params) {
+  return signedRequest(env, 'POST', path, params);
 }
 
 async function getLotFilters(env, symbol) {
@@ -254,6 +264,30 @@ async function handleSell(request, env) {
   });
 }
 
+async function handleBalances(env) {
+  const account = await signedGet(env, '/api/v3/account');
+  const now = Date.now();
+  const balances = {};
+  (account.balances || []).forEach((row) => {
+    const asset = String((row && row.asset) || '').toUpperCase();
+    if (!asset) return;
+    const free = Number(row.free) || 0;
+    const locked = Number(row.locked) || 0;
+    // 只回非零资产 + USDT，减小 payload；关注币若为零由页面按 symbols 补 0
+    if (asset !== 'USDT' && free <= 0 && locked <= 0) return;
+    balances[asset] = { free, locked, at: now };
+  });
+  if (!balances.USDT) {
+    balances.USDT = { free: 0, locked: 0, at: now };
+  }
+  return json({
+    ok: true,
+    action: 'balances',
+    at: now,
+    balances,
+  });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
@@ -277,6 +311,9 @@ export default {
     try {
       if (path === '/ping' && request.method === 'GET') {
         return json({ ok: true, service: 'manual-trade', at: Date.now() });
+      }
+      if (path === '/balances' && (request.method === 'GET' || request.method === 'POST')) {
+        return await handleBalances(env);
       }
       if (path === '/buy' && request.method === 'POST') return await handleBuy(request, env);
       if (path === '/sell' && request.method === 'POST') return await handleSell(request, env);
