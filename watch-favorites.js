@@ -21,6 +21,7 @@
   const PINS_PATH = "watch-pins.json";
   const MOM_NOTES_PATH = "watch-mom-notes.json";
   const ACTION_LOG_PATH = "watch-action-log.json";
+  const TRADE_PNL_PATH = "watch-trade-pnl.json";
   const CARD_EGGS_PATH = "watch-card-eggs.json";
   const BREAK_HIGH_PATH = "watch-break-high.json";
   const HOLDINGS_PATH = "watch-holdings.json";
@@ -3012,6 +3013,104 @@
     throw lastError || new Error("保存动作日志失败");
   }
 
+  function emptyTradePnl() {
+    return { entries: [], updatedAt: 0 };
+  }
+
+  function normalizeTradePnl(raw) {
+    const data = raw && typeof raw === "object" ? raw : {};
+    const seen = new Set();
+    const entries = [];
+    (Array.isArray(data.entries) ? data.entries : []).forEach((row) => {
+      if (!row || typeof row !== "object") return;
+      const symbol = normalizeHoldingsSymbol(row.symbol);
+      if (!symbol || symbol === "USDT") return;
+      const pnl = Number(row.pnl);
+      if (!Number.isFinite(pnl)) return;
+      const at = Number(row.at);
+      const id = String(row.id || `${symbol}:${at}:${pnl}`);
+      if (seen.has(id)) return;
+      seen.add(id);
+      entries.push({
+        id,
+        symbol,
+        label: String(row.label || symbol.replace(/USDT$/i, "")),
+        side: String(row.side || "sell"),
+        quantity: Number(row.quantity) || 0,
+        buyPrice: Number(row.buyPrice) || 0,
+        sellPrice: Number(row.sellPrice) || 0,
+        fee: Number(row.fee) || 0,
+        pnl,
+        at: Number.isFinite(at) && at > 0 ? at : 0,
+        source: String(row.source || "manual"),
+      });
+    });
+    entries.sort((a, b) => b.at - a.at);
+    return { entries, updatedAt: Number(data.updatedAt) || 0 };
+  }
+
+  async function loadTradePnlRaw(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || TRADE_PNL_PATH;
+    try {
+      const current = await fetchJsonFile({
+        repo,
+        path,
+        token: options && options.token,
+      });
+      return {
+        state: normalizeTradePnl(current.data || emptyTradePnl()),
+        sha: current.sha,
+      };
+    } catch (error) {
+      return { state: emptyTradePnl(), sha: "", error };
+    }
+  }
+
+  async function patchTradePnl(options) {
+    const repo = (options && options.repo) || DEFAULT_REPO;
+    const path = (options && options.path) || TRADE_PNL_PATH;
+    const maxAttempts = (options && options.maxAttempts) || 3;
+    let lastError = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const current = await fetchJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+        });
+        const base = normalizeTradePnl(current.data || emptyTradePnl());
+        let next = base;
+        if (typeof options.mutate === "function") {
+          const result = options.mutate(base.entries.slice(), base);
+          const list = Array.isArray(result)
+            ? result
+            : result && Array.isArray(result.entries)
+              ? result.entries
+              : result && result.skipWrite
+                ? null
+                : base.entries;
+          if (!list) return { state: base, skipped: true };
+          next = normalizeTradePnl({ entries: list, updatedAt: Date.now() });
+        }
+        const nextData = { ...next, updatedAt: Date.now() };
+        await writeJsonFile({
+          repo,
+          path,
+          token: options && options.token,
+          data: nextData,
+          sha: current.sha,
+          message: options.message || "Update trade realized PnL",
+        });
+        return { state: normalizeTradePnl(nextData), skipped: false };
+      } catch (error) {
+        lastError = error;
+        if (error.code !== "conflict") throw error;
+      }
+    }
+    throw lastError || new Error("保存交易盈亏记录失败");
+  }
+
   function emptyCardEggs() {
     return {
       periodHigh: {},
@@ -5067,6 +5166,10 @@
     loadMomNotesRaw,
     patchMomNotes,
     ACTION_LOG_PATH,
+    TRADE_PNL_PATH,
+    normalizeTradePnl,
+    loadTradePnlRaw,
+    patchTradePnl,
     ACTION_LOG_MAX,
     ACTION_LOG_TTL_MS,
     ACTION_LOG_RANK_TTL_MS,
