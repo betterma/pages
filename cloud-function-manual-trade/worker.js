@@ -53,10 +53,10 @@ function baseUrl(env) {
   return String(env.BINANCE_API_BASE || DEFAULT_BASE).replace(/\/$/, '');
 }
 
-function authorized(request, env) {
+async function authorized(request, env) {
   const header = request.headers.get('Authorization') || '';
   const supplied = header.replace(/^Bearer\s+/i, '').trim();
-  const expected = String(env.MANUAL_TRADE_TOKEN || '');
+  const expected = String(await resolveEnvSecret(env.MANUAL_TRADE_TOKEN) || '').trim();
   // 两边都必须非空，避免未配置 token 时任意请求都能下单
   return !!expected && !!supplied && supplied === expected;
 }
@@ -173,11 +173,30 @@ function wrapRsaPkcs1ToPkcs8(pkcs1Der) {
   return encodeAsn1Sequence(concatBytes(version, algId, octet));
 }
 
+function extractPemBase64(pem) {
+  const text = String(pem || '').replace(/\r/g, '\n');
+  const lines = text.split('\n');
+  const chunks = [];
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t || t.startsWith('-----')) continue;
+    if (t.includes(':')) continue; // Proc-Type / DEK-Info
+    if (!/^[A-Za-z0-9+/]+=*$/.test(t)) continue;
+    chunks.push(t);
+  }
+  let body = chunks.join('');
+  if (!body) {
+    // 单行 PEM：去掉头尾后只留 Base64
+    body = text
+      .replace(/-----BEGIN [^-]+-----/g, '')
+      .replace(/-----END [^-]+-----/g, '')
+      .replace(/\s+/g, '');
+  }
+  return body;
+}
+
 function pemBodyToBytes(pem) {
-  const body = String(pem || '')
-    .replace(/-----BEGIN [^-]+-----/g, '')
-    .replace(/-----END [^-]+-----/g, '')
-    .replace(/\s+/g, '');
+  const body = extractPemBase64(pem);
   if (!body) throw new Error('PEM 正文为空');
   let raw;
   try {
@@ -188,6 +207,16 @@ function pemBodyToBytes(pem) {
   const buf = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i += 1) buf[i] = raw.charCodeAt(i);
   return buf;
+}
+
+async function resolveEnvSecret(value) {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value.get === 'function') {
+    const got = await value.get();
+    return got == null ? '' : String(got);
+  }
+  return String(value);
 }
 
 async function hmacHex(secret, message) {
@@ -224,6 +253,14 @@ async function subtleSignWithPkcs8(pkcs8Der, query, algorithms) {
   throw lastError || new Error('subtle import/sign failed');
 }
 
+/** 与华为云一致：Node createPrivateKey + sign（需 Worker 开启 nodejs_compat） */
+async function signPemWithNodeCrypto(query, pem) {
+  const nodeCrypto = await import('node:crypto');
+  const keyObject = nodeCrypto.createPrivateKey(pem);
+  const sig = nodeCrypto.sign(null, Buffer.from(query, 'ascii'), keyObject);
+  return Buffer.from(sig).toString('base64');
+}
+
 /**
  * HMAC → hex；Ed25519 / RSA PEM → base64（对齐币安自签 Key + 华为云 signBinanceQuery）
  * 兼容 BEGIN PRIVATE KEY（PKCS#8）与 BEGIN RSA PRIVATE KEY（PKCS#1，自动包一层 PKCS#8）
@@ -240,7 +277,26 @@ async function signBinanceQuery(query, secret) {
     throw new Error('不支持加密 PEM（ENCRYPTED PRIVATE KEY），请改用未加密私钥');
   }
 
+  const b64 = extractPemBase64(material);
+  const b64Prefix = b64.slice(0, 16);
+  const errors = [];
+
+  // 优先 Node 路径（与华为云 holdings.js 相同），避免 WebCrypto PKCS8 解析差异
+  try {
+    return await signPemWithNodeCrypto(query, material);
+  } catch (error) {
+    errors.push(
+      `node:${error && error.message ? error.message : String(error)}`,
+    );
+  }
+
   const der = pemBodyToBytes(material);
+  if (der.length && der[0] !== 0x30) {
+    throw new Error(
+      `BINANCE_API_SECRET 不是合法 PKCS#8/PEM（label=${label} derLen=${der.length} head=${bytesToHex(der.slice(0, 4))} b64Prefix=${b64Prefix}）。合法 Ed25519 私钥 Base64 通常以 MC4CAQAwBQYDK2Vw 开头。请从本地 .pem 文件整段重新粘贴到 Cloudflare Secret（不要从截断的控制台复制）。node错误: ${errors.join(' | ')}`,
+    );
+  }
+
   const rsaAlgos = [
     {
       name: 'RSASSA-PKCS1-v1_5',
@@ -253,7 +309,6 @@ async function signBinanceQuery(query, secret) {
     ...rsaAlgos,
   ];
 
-  const errors = [];
   const trySign = async (pkcs8Der, algorithms, tag) => {
     try {
       return await subtleSignWithPkcs8(pkcs8Der, query, algorithms);
@@ -265,23 +320,20 @@ async function signBinanceQuery(query, secret) {
     }
   };
 
-  // RSA PRIVATE KEY = PKCS#1，必须先包成 PKCS#8
   if (/RSA PRIVATE KEY/i.test(label)) {
     const wrapped = wrapRsaPkcs1ToPkcs8(der);
     const sig = await trySign(wrapped, rsaAlgos, 'pkcs1→pkcs8/rsa');
     if (sig) return sig;
   } else {
-    // PKCS#8：先试 Ed25519 再 RSA
     let sig = await trySign(der, bothAlgos, 'pkcs8');
     if (sig) return sig;
-    // 少数工具把 PKCS#1 误标成 PRIVATE KEY：再试包一层
     const wrapped = wrapRsaPkcs1ToPkcs8(der);
     sig = await trySign(wrapped, rsaAlgos, 'wrap/rsa');
     if (sig) return sig;
   }
 
   throw new Error(
-    `PEM 私钥无法用于签名（label=${label || '?'} derLen=${der.length} head=${bytesToHex(der.slice(0, 4))}）：${errors.join(' | ')}`,
+    `PEM 私钥无法用于签名（label=${label || '?'} derLen=${der.length} head=${bytesToHex(der.slice(0, 4))} b64Prefix=${b64Prefix}）：${errors.join(' | ')}`,
   );
 }
 
@@ -307,8 +359,8 @@ async function publicGet(env, path, params = {}) {
 }
 
 async function signedRequest(env, method, path, params = {}) {
-  const apiKey = String(env.BINANCE_API_KEY || '');
-  const apiSecret = String(env.BINANCE_API_SECRET || '');
+  const apiKey = String(await resolveEnvSecret(env.BINANCE_API_KEY) || '').trim();
+  const apiSecret = String(await resolveEnvSecret(env.BINANCE_API_SECRET) || '');
   if (!apiKey || !apiSecret) {
     throw new Error('未配置 BINANCE_API_KEY / BINANCE_API_SECRET（Workers Secrets）');
   }
@@ -512,7 +564,7 @@ export default {
       });
     }
 
-    if (!authorized(request, env)) {
+    if (!(await authorized(request, env))) {
       return fail('未授权：请设置 Authorization: Bearer <MANUAL_TRADE_TOKEN>', 401);
     }
 
