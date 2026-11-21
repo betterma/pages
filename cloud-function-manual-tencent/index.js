@@ -34,6 +34,7 @@ function normalizeSymbol(input) {
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '');
   if (!s) return '';
+  if (s === 'USDT' || s === 'USDTUSDT') return '';
   return s.endsWith('USDT') ? s : `${s}USDT`;
 }
 
@@ -119,10 +120,20 @@ function summarize(order, side) {
 async function handleBuy(body) {
   const symbol = normalizeSymbol(body.symbol);
   const quote = Number(body.quote);
-  if (!symbol) throw new Error('缺少 symbol');
+  if (!symbol) throw new Error('缺少 symbol（不能买入 USDT 本身）');
   if (!(quote > 0)) throw new Error('quote 必须是大于 0 的 USDT 金额');
   if (quote < 5) throw new Error('币安市价单最小名义金额约 5 USDT');
-  const spot = await binance.getPrice(symbol);
+  let spot = null;
+  try {
+    spot = await binance.getPrice(symbol);
+  } catch (error) {
+    const msg = error && error.message ? error.message : String(error);
+    if (/Invalid symbol|-1121/i.test(msg)) {
+      throw new Error(`交易对无效：${symbol}（币安无此现货对）`);
+    }
+    // 现价仅作参考，拉不到仍尝试下单
+    console.warn('[manual-tencent] getPrice skipped', msg);
+  }
   const order = await binance.marketBuyQuote(symbol, quote);
   return {
     ok: true,
