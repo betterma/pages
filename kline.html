@@ -15416,16 +15416,12 @@
           const isPinned = radarPinnedSet.has(
             String(symbol).trim().toUpperCase(),
           );
-          const unpinHtml = isPinned
-            ? `<button type="button" class="nail-radar-act is-danger" data-radar-unpin="${escapeHtml(symbol)}" title="取消置顶该币">取消置顶</button>`
-            : "";
-          const markHtml = `<button type="button" class="nail-radar-act${isMarked ? " is-fixed" : ""}" data-radar-fixed-toggle="${escapeHtml(symbol)}" title="${isMarked ? "不归集：去掉背景，顶部归集时也不再收录" : "归集：加背景色；打开顶部「归集」后提到列表顶部"}">${isMarked ? "不归集" : "归集"}</button>`;
-          const watchHtml = holdingsWatched.has(
-            String(symbol).trim().toUpperCase(),
-          )
-            ? `<span class="nail-radar-act is-on" title="已在持仓关注列表">已关注</span>`
-            : `<button type="button" class="nail-radar-act" data-radar-watch="${escapeHtml(symbol)}" title="加入持仓关注列表">持仓关注</button>`;
-          return `<tr class="${rowClass}"><td><span class="nail-radar-rank-mini">${rank ? `#${rank}` : "—"}</span><span class="nail-radar-sym-line"><button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></span></td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td>${markHtml}${unpinHtml}${watchHtml}</td></tr>`;
+          // 操作列只保留「置顶 / 已置顶」：复用钉子页置顶逻辑，和自动盯卡片一致。
+          // 归集状态仍由行高亮体现（is-radar-fixed），不再占操作列按钮。
+          const pinActHtml = isPinned
+            ? `<span class="nail-radar-act is-on" title="已在钉子页置顶">已置顶</span>`
+            : `<button type="button" class="nail-radar-act" data-radar-pin="${escapeHtml(symbol)}" title="置顶到钉子页">置顶</button>`;
+          return `<tr class="${rowClass}"><td><span class="nail-radar-rank-mini">${rank ? `#${rank}` : "—"}</span><span class="nail-radar-sym-line"><button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></span></td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td>${pinActHtml}</td></tr>`;
         };
         const fullRanking = ranking();
         const rankOf = (symbol) => {
@@ -36981,6 +36977,34 @@
       }
       if (nailRadarBody) {
         nailRadarBody.addEventListener("click", (event) => {
+          const pinBtn = event.target.closest("[data-radar-pin]");
+          if (pinBtn) {
+            if (pinBtn.disabled) return;
+            const key = String(pinBtn.getAttribute("data-radar-pin") || "")
+              .trim()
+              .toUpperCase();
+            pinBtn.disabled = true;
+            void pinNoticeSymbolsToNails([key], {
+              message: `Pin radar ${key} to nails`,
+              toastOk: (label) => `${label} 已置顶`,
+            }).then((ok) => {
+              if (!ok) {
+                pinBtn.disabled = false;
+                return;
+              }
+              // 只改这一格，不重画整表（K线画布已画好，重画会闪）
+              const span = document.createElement("span");
+              span.className = "nail-radar-act is-on";
+              span.title = "已在钉子页置顶";
+              span.textContent = "已置顶";
+              if (pinBtn.parentNode) pinBtn.parentNode.replaceChild(span, pinBtn);
+              // 钉子页状态变了：轻量同步钉子内存态（不整表重画雷达，避免 K 线闪烁）
+              if (typeof refreshNailDrawerState === "function") {
+                void refreshNailDrawerState();
+              }
+            });
+            return;
+          }
           const fixBtn = event.target.closest("[data-radar-fixed-toggle]");
           if (fixBtn) {
             void toggleRadarFixed(
