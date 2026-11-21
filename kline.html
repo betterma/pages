@@ -9161,14 +9161,14 @@
                 <button type="submit" id="nailHoldAddBtn">加入</button>
               </form>
               <form class="nail-hold-manual-trade" id="nailManualTradeForm">
-                <div class="nail-hold-manual-trade-title">现价交易 Worker（Cloudflare）</div>
+                <div class="nail-hold-manual-trade-title">现价交易（华为云 HTTP 函数）</div>
                 <label>
-                  Worker URL
+                  函数 URL
                   <input
                     id="nailManualTradeUrl"
                     name="url"
                     type="url"
-                    placeholder="https://manual-trade.xxx.workers.dev"
+                    placeholder="https://xxx.apig.region.huaweicloudapis.com/..."
                     autocomplete="off"
                   />
                 </label>
@@ -9202,7 +9202,7 @@
                 >
                   多选
                 </button>
-              <button type="button" class="nail-hold-refresh" id="nailHoldRefreshBtn" title="即时拉币安余额（需配置现价 Worker），并刷新现价与买卖任务">
+              <button type="button" class="nail-hold-refresh" id="nailHoldRefreshBtn" title="拉取余额、现价与买卖任务（余额来自云函数定时同步）">
                   <span class="nail-hold-refresh-spin" hidden aria-hidden="true"></span>
                   <span class="nail-hold-refresh-label">刷新</span>
               </button>
@@ -15480,17 +15480,31 @@
         if (next) syncNailManualTradeForm();
       }
 
-      const MANUAL_TRADE_CFG_KEY = "kline-manual-trade-worker-v1";
+      const MANUAL_TRADE_URL_KEY = "kline-manual-trade-url-v1";
+      const MANUAL_TRADE_TOKEN_KEY = "kline-manual-trade-token-v1";
+      const MANUAL_TRADE_CFG_LEGACY_KEY = "kline-manual-trade-worker-v1";
 
       function loadManualTradeConfig() {
         try {
-          const raw = localStorage.getItem(MANUAL_TRADE_CFG_KEY);
-          if (!raw) return { url: "", token: "" };
-          const parsed = JSON.parse(raw);
-          return {
-            url: String((parsed && parsed.url) || "").trim().replace(/\/+$/, ""),
-            token: String((parsed && parsed.token) || "").trim(),
-          };
+          let url = String(localStorage.getItem(MANUAL_TRADE_URL_KEY) || "")
+            .trim()
+            .replace(/\/+$/, "");
+          let token = String(localStorage.getItem(MANUAL_TRADE_TOKEN_KEY) || "").trim();
+          if (!url || !token) {
+            const raw = localStorage.getItem(MANUAL_TRADE_CFG_LEGACY_KEY);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (!url) {
+                url = String((parsed && parsed.url) || "")
+                  .trim()
+                  .replace(/\/+$/, "");
+              }
+              if (!token) {
+                token = String((parsed && parsed.token) || "").trim();
+              }
+            }
+          }
+          return { url, token };
         } catch (_) {
           return { url: "", token: "" };
         }
@@ -15501,7 +15515,13 @@
           url: String(url || "").trim().replace(/\/+$/, ""),
           token: String(token || "").trim(),
         };
-        localStorage.setItem(MANUAL_TRADE_CFG_KEY, JSON.stringify(next));
+        localStorage.setItem(MANUAL_TRADE_URL_KEY, next.url);
+        localStorage.setItem(MANUAL_TRADE_TOKEN_KEY, next.token);
+        try {
+          localStorage.removeItem(MANUAL_TRADE_CFG_LEGACY_KEY);
+        } catch (_) {
+          /* ignore */
+        }
         return next;
       }
 
@@ -15537,8 +15557,8 @@
             btn.title = ready
               ? btn.getAttribute("data-buy-market")
                 ? "按上方比例市价买入"
-                : "按上方比例市价卖出"
-              : "请先配置现价交易 Worker";
+                : "按数量市价卖出"
+              : "请先配置现价交易 HTTP 函数";
           });
       }
 
@@ -16749,9 +16769,14 @@
                     <div>本单数量<strong data-sell-plan-qty="${escapeHtml(symbol)}">${escapeHtml(formatHoldingsQty(sellPlanQty))}</strong></div>
                     <div>预计成交金额<strong data-sell-notional="${escapeHtml(symbol)}">${escapeHtml(sellNotional)} USDT</strong></div>
                 </div>
+                <div>
+                  <label>现价卖出数量（${escapeHtml(asset)}）</label>
+                  <input type="number" min="0" step="any" value="" placeholder="填该币数量" data-sell-market-qty="${escapeHtml(symbol)}" inputmode="decimal" />
+                  <div class="nail-hold-qty-hint">可用 ${escapeHtml(formatHoldingsQty(freeNum))} ${escapeHtml(asset)} · 不走上方比例</div>
+                </div>
                 <div class="nail-hold-panel-actions">
                   <button type="button" data-hold-cancel-panel="${escapeHtml(symbol)}">取消</button>
-                    <button type="button" class="is-instant" data-sell-market="${escapeHtml(symbol)}"${manualTradeReady ? "" : " disabled"} title="${manualTradeReady ? "按上方比例市价卖出" : "请先配置现价交易 Worker"}">现价卖出</button>
+                    <button type="button" class="is-instant" data-sell-market="${escapeHtml(symbol)}"${manualTradeReady ? "" : " disabled"} title="${manualTradeReady ? "按数量市价卖出" : "请先配置现价交易 HTTP 函数"}">现价卖出</button>
                     <button type="button" class="primary" data-sell-arm="${escapeHtml(symbol)}">限价卖出</button>
                 </div>
               </div>
@@ -16779,7 +16804,7 @@
                 </div>
                 <div class="nail-hold-panel-actions">
                   <button type="button" data-hold-cancel-panel="${escapeHtml(symbol)}">取消</button>
-                    <button type="button" class="is-instant" data-buy-market="${escapeHtml(symbol)}"${manualTradeReady ? "" : " disabled"} title="${manualTradeReady ? "按上方比例市价买入" : "请先配置现价交易 Worker"}">现价买入</button>
+                    <button type="button" class="is-instant" data-buy-market="${escapeHtml(symbol)}"${manualTradeReady ? "" : " disabled"} title="${manualTradeReady ? "按上方比例市价买入" : "请先配置现价交易 HTTP 函数"}">现价买入</button>
                     <button type="button" class="primary" data-buy-arm="${escapeHtml(symbol)}">限价买入</button>
                 </div>
               </div>
@@ -16938,34 +16963,8 @@
           return;
         }
         if (!silent) setNailHoldRefreshBusy(refreshBtn, true);
-        const liveReady = isManualTradeConfigured();
-        if (!silent) {
-          showToast(
-            liveReady
-              ? "正在即时拉取账户余额 / 现价 / 任务…"
-              : "正在拉取余额 / 现价 / 任务…",
-          );
-        }
+        if (!silent) showToast("正在拉取余额 / 现价 / 任务…");
         try {
-          let liveNote = "";
-          if (liveReady) {
-            try {
-              const live = await callManualTradeWorker("/balances", null, {
-                method: "GET",
-              });
-              await applyLiveBalancesToHoldings(live && live.balances, Date.now());
-              liveNote = " · 即时余额";
-            } catch (liveError) {
-              console.warn("live balances failed", liveError);
-              if (!silent) {
-                showToast(
-                  `即时余额失败：${(liveError && liveError.message) || "未知错误"}，改读缓存`,
-                );
-              }
-              liveNote = " · 缓存余额";
-            }
-          }
-
           const [raw, sellRaw, buyRaw] = await Promise.all([
             WatchFavorites.loadHoldingsRaw({
               repo: CONFIG.GITHUB_REPO,
@@ -16981,21 +16980,14 @@
                 })
               : Promise.resolve({ state: { updatedAt: 0, live: false, tasks: [] } }),
           ]);
-          // 即时写入后以 GitHub 为准再读一遍，保证跨端一致；读失败则保留刚写入的内存态。
-          if (raw && raw.state) {
-            nailHoldingsState = raw.state;
-          } else if (!(liveReady && nailHoldingsState)) {
-            nailHoldingsState = {
-              updatedAt: 0,
-              symbols: [],
-              balances: {},
-              lastError: null,
-            };
-          }
+          nailHoldingsState =
+            raw && raw.state
+              ? raw.state
+              : { updatedAt: 0, symbols: [], balances: {}, lastError: null };
           nailSellTasksState =
             sellRaw && sellRaw.state
               ? sellRaw.state
-              : nailSellTasksState || { updatedAt: 0, live: false, tasks: [] };
+              : { updatedAt: 0, live: false, tasks: [] };
           nailBuyTasksState =
             buyRaw && buyRaw.state
               ? buyRaw.state
@@ -17018,7 +17010,7 @@
           if (isNailDrawerOpen()) applyNailListOrder();
           if (!silent) {
             showToast(
-              `已刷新${liveNote} · ${symbols.length} 币 / 卖任务 ${(nailSellTasksState.tasks || []).length} / 买任务 ${(nailBuyTasksState.tasks || []).length}`,
+              `已刷新 · ${symbols.length} 币 / 卖任务 ${(nailSellTasksState.tasks || []).length} / 买任务 ${(nailBuyTasksState.tasks || []).length}`,
             );
           }
         } catch (error) {
@@ -17336,11 +17328,11 @@
         return price;
       }
 
-      async function callManualTradeWorker(path, body, options) {
+      async function callManualTradeHttp(path, body, options) {
         const opts = options || {};
         const cfg = loadManualTradeConfig();
         if (!cfg.url || !cfg.token) {
-          throw new Error("请先配置现价交易 Worker");
+          throw new Error("请先配置现价交易 HTTP 函数");
         }
         const method = String(opts.method || "POST").toUpperCase();
         const endpoint = `${cfg.url}${path.startsWith("/") ? path : `/${path}`}`;
@@ -17355,7 +17347,7 @@
           res = await fetch(endpoint, init);
         } catch (error) {
           throw new Error(
-            (error && error.message) || "Worker 不可达，请检查 URL / 网络",
+            (error && error.message) || "HTTP 函数不可达，请检查 URL / 网络",
           );
         }
         let data = null;
@@ -17372,83 +17364,10 @@
         if (!res.ok || !data || data.ok === false) {
           throw new Error(
             (data && data.error) ||
-              `Worker 错误 ${res.status}${res.statusText ? ` ${res.statusText}` : ""}`,
+              `HTTP 函数错误 ${res.status}${res.statusText ? ` ${res.statusText}` : ""}`,
           );
         }
         return data;
-      }
-
-      async function applyLiveBalancesToHoldings(liveBalances, now) {
-        const stamp = Number(now) || Date.now();
-        const byAsset =
-          liveBalances && typeof liveBalances === "object" ? liveBalances : {};
-        const flatSymbols = [];
-        const holdResult = await WatchFavorites.patchHoldings({
-          repo: CONFIG.GITHUB_REPO,
-          message: "Holdings live sync",
-          mutate: (state) => {
-            const symbols = Array.isArray(state.symbols)
-              ? state.symbols.slice()
-              : [];
-            const balances = { ...(state.balances || {}) };
-            const entryPrices = { ...(state.entryPrices || {}) };
-            const stopCancel = { ...(state.stopCancel || {}) };
-            symbols.forEach((symbol) => {
-              const key = String(symbol || "")
-                .trim()
-                .toUpperCase();
-              if (!key) return;
-              const asset = holdingsBaseAsset(key);
-              const row = byAsset[asset] || { free: 0, locked: 0 };
-              const free = Number(row.free) || 0;
-              const locked = Number(row.locked) || 0;
-              balances[asset] = { free, locked, at: stamp };
-              if (key !== "USDT" && free <= 0 && locked <= 0) {
-                if (entryPrices[key]) delete entryPrices[key];
-                if (stopCancel[key]) delete stopCancel[key];
-                flatSymbols.push(key);
-              }
-            });
-            const usdtRow = byAsset.USDT || { free: 0, locked: 0 };
-            balances.USDT = {
-              free: Number(usdtRow.free) || 0,
-              locked: Number(usdtRow.locked) || 0,
-              at: stamp,
-            };
-            return {
-              ...state,
-              symbols,
-              balances,
-              entryPrices,
-              stopCancel,
-              updatedAt: stamp,
-              lastError: null,
-            };
-          },
-        });
-        nailHoldingsState = holdResult.state || nailHoldingsState;
-
-        if (flatSymbols.length && typeof WatchFavorites.patchSellTasks === "function") {
-          const sellResult = await WatchFavorites.patchSellTasks({
-            repo: CONFIG.GITHUB_REPO,
-            message: `Drop stops after flat ${flatSymbols.join(",")}`,
-            mutate: (state) => {
-              const tasks = Array.isArray(state.tasks)
-                ? state.tasks.filter((t) => {
-                    if (!t) return false;
-                    const sym = String(t.symbol || "")
-                      .trim()
-                      .toUpperCase();
-                    if (!flatSymbols.includes(sym)) return true;
-                    return String(t.kind || "").toLowerCase() !== "stop";
-                  })
-                : [];
-              return { ...state, tasks, updatedAt: stamp };
-            },
-          });
-          nailSellTasksState = sellResult.state || nailSellTasksState;
-        }
-        return { flatSymbols };
       }
 
       async function executeNailMarketBuy(symbol) {
@@ -17460,7 +17379,7 @@
           return false;
         }
         if (!isManualTradeConfigured()) {
-          showToast("请先配置现价交易 Worker");
+          showToast("请先配置现价交易 HTTP 函数");
           return false;
         }
         const row = document.querySelector(
@@ -17492,7 +17411,7 @@
         }
         showToast(`现价买入 ${asset}…`);
         try {
-          const data = await callManualTradeWorker("/buy", {
+          const data = await callManualTradeHttp("/buy", {
             symbol: key,
             quote,
           });
@@ -17530,7 +17449,7 @@
           return false;
         }
         if (!isManualTradeConfigured()) {
-          showToast("请先配置现价交易 Worker");
+          showToast("请先配置现价交易 HTTP 函数");
           return false;
         }
         const row = document.querySelector(
@@ -17540,25 +17459,30 @@
           showToast("未找到持有行");
           return false;
         }
+        const qtyEl = row.querySelector(`[data-sell-market-qty="${key}"]`);
+        const quantity = Number(qtyEl && qtyEl.value);
+        if (!(quantity > 0)) {
+          showToast("请填写现价卖出数量");
+          return false;
+        }
         const free = Number(row.getAttribute("data-hold-free")) || 0;
-        const pctEl = row.querySelector(`[data-sell-pct="${key}"]`);
-        const pct = Number(pctEl && pctEl.value) || 0;
-        const quantity = free * (pct / 100);
-        if (!(free > 0) || !(quantity > 0)) {
-          showToast("卖出数量无效（检查可用数量与比例）");
+        if (free > 0 && quantity > free * 1.0000001) {
+          showToast(
+            `卖出数量 ${formatHoldingsQty(quantity)} 超过可用 ${formatHoldingsQty(free)}`,
+          );
           return false;
         }
         const asset = holdingsBaseAsset(key);
         if (
           !window.confirm(
-            `确认现价卖出 ${asset}？\n约 ${formatHoldingsQty(quantity)}（${pct}% 可用）`,
+            `确认现价卖出 ${asset}？\n数量 ${formatHoldingsQty(quantity)}`,
           )
         ) {
           return false;
         }
         showToast(`现价卖出 ${asset}…`);
         try {
-          const data = await callManualTradeWorker("/sell", {
+          const data = await callManualTradeHttp("/sell", {
             symbol: key,
             quantity,
           });
@@ -35814,7 +35738,7 @@
           const sellMarketBtn = event.target.closest("[data-sell-market]");
           if (sellMarketBtn) {
             if (sellMarketBtn.disabled) {
-              showToast("请先配置现价交易 Worker");
+              showToast("请先配置现价交易 HTTP 函数");
               return;
             }
             sellMarketBtn.disabled = true;
@@ -35843,7 +35767,7 @@
           const buyMarketBtn = event.target.closest("[data-buy-market]");
           if (buyMarketBtn) {
             if (buyMarketBtn.disabled) {
-              showToast("请先配置现价交易 Worker");
+              showToast("请先配置现价交易 HTTP 函数");
               return;
             }
             buyMarketBtn.disabled = true;
@@ -35954,9 +35878,9 @@
           syncNailManualTradeForm();
           syncNailMarketTradeButtons();
           if (cfg.url && cfg.token) {
-            showToast("现价 Worker 已保存");
+            showToast("现价 HTTP 函数已保存");
           } else {
-            showToast("已清空现价 Worker 配置");
+            showToast("已清空现价 HTTP 配置");
           }
         });
       }

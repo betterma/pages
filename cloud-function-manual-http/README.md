@@ -62,7 +62,10 @@ curl -X POST https://<apig-url>/sell \
 }
 ```
 
-前端拿到 `order.avgPrice` 后写成本价 P（`source:'market'`）并重挂 -3%/-5% 止损；拿到 `executedQty` 可更新余额展示。
+前端（持有页设置）填入 APIG 公网 URL + Token（本机 `kline-manual-trade-url-v1` / `kline-manual-trade-token-v1`）。
+拿到 `order.avgPrice` 后写成本价 P（`source:'market'`）并重挂 -3%/-5% 止损。
+
+**不要用** `cloud-function-manual-trade/`（Cloudflare Workers）：币安已封 CF 出口。
 
 ## 收费与限制
 
