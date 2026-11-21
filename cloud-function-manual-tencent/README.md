@@ -5,7 +5,7 @@
 
 ## 文件
 
-- `index.js` — `main_handler`（API 网关集成响应）
+- `index.js` — `main_handler`（函数 URL / 集成响应）
 - `binance.js` — 币安签名与下单
 
 ## 部署步骤（控制台）
@@ -22,8 +22,8 @@ Compress-Archive -Path index.js,binance.js -DestinationPath ..\manual-tencent.zi
 ### 2. 创建云函数
 
 1. 打开 [腾讯云 SCF](https://console.cloud.tencent.com/scf)
-2. 地域建议：**广州 / 上海 / 新加坡**（先测币安，不通再换）
-3. **新建** → 事件函数（不是 Web 函数也行）
+2. 地域：**新加坡**（广州出网打币安会超时）
+3. **新建** → 事件函数
 4. 运行环境：**Node.js 18**
 5. 提交方法：本地上传 zip
 6. 执行方法：`index.main_handler`
@@ -38,48 +38,51 @@ Compress-Archive -Path index.js,binance.js -DestinationPath ..\manual-tencent.zi
 | `BINANCE_API_SECRET` | Secret 或 PEM 私钥 |
 | `BINANCE_API_BASE` | 可选，默认 `https://api.binance.com` |
 
-### 4. 触发器（API 网关）
+### 4. 函数 URL
 
-函数 → 触发器 → 创建触发器 → **API 网关触发器**：
+函数 → 函数 URL → 新建：
 
-- 新建 API 服务（或选已有）
-- 请求方法：建议 **ANY**（或分别配 GET/POST）
-- 发布环境：`发布`
-- 鉴权方式：**免鉴权**（鉴权用函数内 Bearer Token）
-- **开启集成响应**（重要）
+- 公网访问 ✓
+- CORS ✓：`Allow-Origin=*`，Methods=`*` 或 `GET/POST/OPTIONS`，Headers=`Authorization,Content-Type`
+- 授权类型：**开放**
+- 参数兼容 ✓
 
-创建后复制访问路径，形如：
+复制 HTTPS 地址，形如：
 
-`https://service-xxxx-xxxxxx.gz.apigw.tencentcs.com/release/`
+`https://1305206018-xxxx.ap-singapore.tencentscf.com`
 
-持有页「函数 URL」填这个**去掉末尾路径后的可拼 `/ping` 的前缀**。  
-若触发器路径已是 `/release/ping`，则 URL 填到 `/release` 为止，前端会再拼 `/buy` `/sell`。
+持有页填这个前缀；前端会拼 `/ping` `/buy` `/sell`。路径按**最后一段**识别。
 
-更稳妥：在 API 网关里建三条路径 `/ping` `/buy` `/sell` 都指同一函数；或一条 `/` + 路径匹配。本函数按**路径最后一段**识别 `ping|buy|sell`。
+浏览器直接打开根路径会强制下载 / `ERR_INVALID_RESPONSE`，属正常；用 curl 测。
 
 ### 5. 先测币安出网
 
-```bash
-curl "https://你的网关前缀/ping" -H "Authorization: Bearer <TOKEN>"
+```powershell
+curl.exe -s "https://你的函数URL/ping" -H "Authorization: Bearer <TOKEN>"
+curl.exe -s "https://你的函数URL/balances" -H "Authorization: Bearer <TOKEN>"
 ```
 
 期望：
 
 ```json
 { "ok": true, "service": "manual-tencent-scf", "binanceOk": true, ... }
+{ "ok": true, "action": "balances", "balances": { "USDT": { "free": ..., "locked": ..., "at": ... }, ... } }
 ```
 
-- `binanceOk: false` 且报 403 HTML → 换地域再试  
-- `401` → Token / 环境变量问题  
+- `binanceOk: false` / 超时 → 确认地域是新加坡，或试 `BINANCE_API_BASE=https://api1.binance.com`
+- `401` → Token / 环境变量问题
+- `/balances` 失败 → 检查 `BINANCE_API_KEY` / `BINANCE_API_SECRET`（支持 HMAC 与 PEM）
 
 ### 6. 填持有页
 
 持有 → 齿轮 → 现价交易：
 
-- URL = 上一步网关前缀  
-- Token = `MANUAL_TRADE_TOKEN`  
+- URL = 上一步函数 URL 前缀  
+- Token = `MANUAL_TRADE_TOKEN`
 
-## 调用约定（与华为 HTTP 版相同）
+配置后，持有页「刷新」会先 `GET /balances` 写回 `watch-holdings.json`，再刷现价/任务（不必等华为云 5 分钟定时）。
+
+## 调用约定
 
 ```bash
 curl -X POST "https://.../buy" \
@@ -93,6 +96,5 @@ curl -X POST "https://.../sell" \
 
 ## 注意
 
-- 不要用 Cloudflare Workers 版（币安封 CF 出口）
-- 华为共享 APIG 已难新建；腾讯 API 网关个人用量通常够用
+- 只用本目录；已废弃 Cloudflare Workers / 华为 HTTP 手动交易包
 - 币安 Key 建议只开现货、关提现；可与华为定时器那套隔离

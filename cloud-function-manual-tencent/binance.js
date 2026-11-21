@@ -11,12 +11,65 @@ function binanceConfig() {
   };
 }
 
+function reformatPemSingleLine(text) {
+  const match = String(text || '').match(
+    /-----BEGIN ([A-Z0-9 ]+)-----([A-Za-z0-9+/=\s]+)-----END \1-----/,
+  );
+  if (!match) return text;
+  const label = match[1];
+  const body = match[2].replace(/\s+/g, '');
+  if (!body) return text;
+  const lines = [];
+  for (let i = 0; i < body.length; i += 64) {
+    lines.push(body.slice(i, i + 64));
+  }
+  return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----`;
+}
+
+function normalizeSecret(raw) {
+  let text = String(raw || '').trim();
+  if (!text) return '';
+  if (
+    (text.startsWith('"') && text.endsWith('"')) ||
+    (text.startsWith("'") && text.endsWith("'"))
+  ) {
+    text = text.slice(1, -1).trim();
+  }
+  if (text.includes('\\n')) text = text.replace(/\\n/g, '\n');
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+  if (text.includes('BEGIN') && !text.includes('\n')) {
+    text = reformatPemSingleLine(text);
+  }
+  return text.trim();
+}
+
+function isPemPrivateKey(secret) {
+  const text = normalizeSecret(secret);
+  return (
+    text.includes('BEGIN PRIVATE KEY') ||
+    text.includes('BEGIN RSA PRIVATE KEY') ||
+    text.includes('BEGIN ENCRYPTED PRIVATE KEY')
+  );
+}
+
+function signBinanceQuery(query, secret) {
+  const material = normalizeSecret(secret);
+  if (!material) throw new Error('Empty BINANCE_API_SECRET');
+  if (isPemPrivateKey(material)) {
+    const keyObject = crypto.createPrivateKey(material);
+    return crypto.sign(null, Buffer.from(query, 'ascii'), keyObject).toString('base64');
+  }
+  return crypto.createHmac('sha256', material).update(query).digest('hex');
+}
+
 function requestJson(url, options = {}) {
   return new Promise((resolve, reject) => {
     let settled = false;
+    const timeoutMs = options.timeout || 12000;
     const finish = (error, value) => {
       if (settled) return;
       settled = true;
+      clearTimeout(hardTimer);
       if (error) reject(error);
       else resolve(value);
     };
@@ -27,6 +80,7 @@ function requestJson(url, options = {}) {
       {
         method: options.method || 'GET',
         headers: options.headers || {},
+        timeout: timeoutMs,
       },
       (response) => {
         const chunks = [];
@@ -54,21 +108,37 @@ function requestJson(url, options = {}) {
         response.on('error', (error) => finish(error));
       },
     );
-    request.on('error', (error) => finish(error));
-    request.setTimeout(options.timeout || 20000, () => {
+
+    const hardTimer = setTimeout(() => {
       request.destroy();
-      finish(new Error(`Binance timeout: ${url}`));
+      finish(new Error(`Binance timeout after ${timeoutMs}ms: ${url}`));
+    }, timeoutMs);
+
+    request.on('timeout', () => {
+      request.destroy();
+      finish(new Error(`Binance socket timeout: ${url}`));
     });
+    request.on('socket', (socket) => {
+      socket.setTimeout(timeoutMs);
+      socket.on('timeout', () => {
+        request.destroy();
+        finish(new Error(`Binance connect timeout: ${url}`));
+      });
+    });
+    request.on('error', (error) => finish(error));
     if (options.body) request.write(options.body);
     request.end();
   });
 }
 
-async function publicGet(path, params = {}) {
+async function publicGet(path, params = {}, options = {}) {
   const { baseUrl } = binanceConfig();
   const query = new URLSearchParams(params).toString();
   const url = `${baseUrl}${path}${query ? `?${query}` : ''}`;
-  const response = await requestJson(url, { method: 'GET' });
+  const response = await requestJson(url, {
+    method: 'GET',
+    timeout: options.timeout,
+  });
   if (!response.ok) {
     throw new Error(
       `Binance GET ${path} failed: ${response.status} ${JSON.stringify(response.data).slice(0, 240)}`,
@@ -77,7 +147,7 @@ async function publicGet(path, params = {}) {
   return response.data;
 }
 
-async function signedRequest(method, path, params = {}) {
+async function signedRequest(method, path, params = {}, options = {}) {
   const { apiKey, apiSecret, baseUrl } = binanceConfig();
   if (!apiKey || !apiSecret) {
     throw new Error('Missing BINANCE_API_KEY / BINANCE_API_SECRET');
@@ -93,13 +163,11 @@ async function signedRequest(method, path, params = {}) {
       return map;
     }, {}),
   ).toString();
-  const signature = crypto
-    .createHmac('sha256', apiSecret)
-    .update(query)
-    .digest('hex');
-  const url = `${baseUrl}${path}?${query}&signature=${signature}`;
+  const signature = signBinanceQuery(query, apiSecret);
+  const url = `${baseUrl}${path}?${query}&signature=${encodeURIComponent(signature)}`;
   const response = await requestJson(url, {
     method,
+    timeout: options.timeout,
     headers: {
       'X-MBX-APIKEY': apiKey,
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -111,6 +179,24 @@ async function signedRequest(method, path, params = {}) {
     );
   }
   return response.data;
+}
+
+async function getAccountBalances(options = {}) {
+  const account = await signedRequest('GET', '/api/v3/account', {}, options);
+  const now = Date.now();
+  const balances = {};
+  (account.balances || []).forEach((row) => {
+    const asset = String((row && row.asset) || '').toUpperCase();
+    if (!asset) return;
+    const free = Number(row.free) || 0;
+    const locked = Number(row.locked) || 0;
+    if (asset !== 'USDT' && free <= 0 && locked <= 0) return;
+    balances[asset] = { free, locked, at: now };
+  });
+  if (!balances.USDT) {
+    balances.USDT = { free: 0, locked: 0, at: now };
+  }
+  return { at: now, balances };
 }
 
 async function getPrice(symbol) {
@@ -214,6 +300,7 @@ function avgPriceFromOrder(order) {
 
 module.exports = {
   publicGet,
+  getAccountBalances,
   getPrice,
   getKlineOpen,
   getSymbolFilters,

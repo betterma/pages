@@ -1,20 +1,21 @@
 'use strict';
 
 /**
- * 腾讯云 SCF（事件函数）+ API 网关触发器 —— 手动现价买/卖
+ * 腾讯云 SCF（事件函数）+ 函数 URL —— 手动现价买/卖
  *
  * 与华为云定时器 / cloud-function-trade 完全独立：
  *   - 不读写任何状态文件
  *   - 只下币安市价单，返回成交结果；成本与止损由前端写 GitHub
  *
- * 路由（API 路径结尾匹配即可）：
+ * 路由（路径最后一段匹配）：
  *   GET  /ping
+ *   GET  /balances   即时拉币安现货余额（供持有页刷新）
  *   POST /buy   {symbol, quote}
  *   POST /sell  {symbol, quantity}
  *
  * 鉴权：Authorization: Bearer <MANUAL_TRADE_TOKEN>
  * 执行方法：index.main_handler
- * 触发器：API 网关，开启「集成响应」，鉴权选「免鉴权」
+ * 触发器：函数 URL（公网 + CORS + 授权开放）；地域用新加坡
  */
 const binance = require('./binance');
 
@@ -68,7 +69,9 @@ function routePath(event) {
   path = path.split('?')[0].replace(/\/+$/, '') || '/';
   const parts = path.split('/').filter(Boolean);
   const last = parts[parts.length - 1] || '';
-  if (last === 'ping' || last === 'buy' || last === 'sell') return `/${last}`;
+  if (last === 'ping' || last === 'balances' || last === 'buy' || last === 'sell') {
+    return `/${last}`;
+  }
   return path.startsWith('/') ? path : `/${path}`;
 }
 
@@ -149,8 +152,10 @@ async function handleSell(body) {
 async function handlePing() {
   let binanceOk = false;
   let binanceError = null;
+  const base = process.env.BINANCE_API_BASE || 'https://api.binance.com';
   try {
-    await binance.publicGet('/api/v3/ping');
+    // short timeout so SCF 不会拖到平台 60s
+    await binance.publicGet('/api/v3/ping', {}, { timeout: 8000 });
     binanceOk = true;
   } catch (error) {
     binanceError = error && error.message ? error.message : String(error);
@@ -159,8 +164,19 @@ async function handlePing() {
     ok: true,
     service: 'manual-tencent-scf',
     at: Date.now(),
+    binanceBase: base,
     binanceOk,
     binanceError,
+  };
+}
+
+async function handleBalances() {
+  const live = await binance.getAccountBalances({ timeout: 15000 });
+  return {
+    ok: true,
+    action: 'balances',
+    at: live.at,
+    balances: live.balances,
   };
 }
 
@@ -192,6 +208,9 @@ exports.main_handler = async (event) => {
   try {
     if (path === '/ping' && method === 'GET') {
       return respond(200, await handlePing());
+    }
+    if (path === '/balances' && (method === 'GET' || method === 'POST')) {
+      return respond(200, await handleBalances());
     }
     if (path === '/buy' && method === 'POST') {
       return respond(200, await handleBuy(parseBody(event)));
