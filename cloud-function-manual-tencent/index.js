@@ -65,7 +65,15 @@ function respond(statusCode, data) {
 }
 
 function routePath(event) {
-  let path = String(event.path || (event.requestContext && event.requestContext.path) || '/');
+  const rc = event && event.requestContext;
+  const http = rc && rc.http;
+  let path = String(
+    (event && event.rawPath) ||
+      (event && event.path) ||
+      (http && http.path) ||
+      (rc && rc.path) ||
+      '/',
+  );
   path = path.split('?')[0].replace(/\/+$/, '') || '/';
   const parts = path.split('/').filter(Boolean);
   const last = parts[parts.length - 1] || '';
@@ -152,7 +160,11 @@ async function handleSell(body) {
 async function handlePing() {
   let binanceOk = false;
   let binanceError = null;
+  let accountOk = false;
+  let accountError = null;
   const base = process.env.BINANCE_API_BASE || 'https://api.binance.com';
+  const secretKind = binance.secretKindOf(process.env.BINANCE_API_SECRET);
+  const hasKey = !!String(process.env.BINANCE_API_KEY || '').trim();
   try {
     // short timeout so SCF 不会拖到平台 60s
     await binance.publicGet('/api/v3/ping', {}, { timeout: 8000 });
@@ -160,13 +172,26 @@ async function handlePing() {
   } catch (error) {
     binanceError = error && error.message ? error.message : String(error);
   }
+  if (hasKey && secretKind !== 'none' && secretKind !== 'pem-invalid') {
+    try {
+      await binance.getAccountBalances({ timeout: 12000 });
+      accountOk = true;
+    } catch (error) {
+      accountError = error && error.message ? error.message : String(error);
+    }
+  }
   return {
     ok: true,
     service: 'manual-tencent-scf',
+    version: 'balances-v2',
     at: Date.now(),
     binanceBase: base,
     binanceOk,
     binanceError,
+    hasApiKey: hasKey,
+    secretKind,
+    accountOk,
+    accountError,
   };
 }
 

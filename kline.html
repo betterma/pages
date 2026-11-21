@@ -6077,6 +6077,22 @@
         color: var(--down);
       }
       @media (max-width: 720px) {
+        html {
+          font-size: 14px;
+        }
+        body {
+          font-size: 13px;
+        }
+        .app-chrome,
+        .page,
+        .nail-panel,
+        .nail-hold-popover,
+        .card-focus-bar,
+        .quick-trade-sheet,
+        .float-tabs,
+        .notify-float {
+          font-size: 12px;
+        }
         .nail-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 6px;
@@ -6088,6 +6104,13 @@
           padding: 6px 6px 4px;
         }
         .nail-name {
+          font-size: 11px;
+        }
+        .quick-trade-sym {
+          font-size: 15px;
+        }
+        .quick-trade-actions button {
+          height: 34px;
           font-size: 12px;
         }
       }
@@ -6412,6 +6435,135 @@
         outline-offset: 2px;
         box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, #2f8f6e) 35%, transparent);
       }
+      .quick-trade-sheet {
+        position: fixed;
+        left: 50%;
+        bottom: calc(var(--float-dock-h, 48px) + 10px);
+        transform: translateX(-50%);
+        z-index: 160;
+        width: min(420px, calc(100vw - 16px));
+        max-width: calc(100vw - 16px);
+        padding: 12px 14px 12px;
+        border-radius: 14px;
+        border: 0.5px solid var(--separator, rgba(200, 208, 204, 0.85));
+        background: color-mix(in srgb, var(--elevated, #fbfcfa) 96%, transparent);
+        color: var(--label, #5a6a68);
+        box-shadow: 0 10px 28px rgba(40, 50, 48, 0.18);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        box-sizing: border-box;
+      }
+      .quick-trade-sheet[hidden] {
+        display: none !important;
+      }
+      .quick-trade-sheet.is-busy {
+        pointer-events: none;
+        opacity: 0.85;
+      }
+      .quick-trade-close {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        border: none;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--secondary, #8a9692);
+        font-size: 16px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .quick-trade-head {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        padding-right: 28px;
+        margin-bottom: 8px;
+      }
+      .quick-trade-side {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--accent, #2f8f6e);
+      }
+      .quick-trade-sheet.is-sell .quick-trade-side {
+        color: #c45c5c;
+      }
+      .quick-trade-sym {
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      .quick-trade-px-refresh {
+        margin-left: auto;
+        border: none;
+        background: transparent;
+        color: var(--secondary, #8a9692);
+        font-size: 12px;
+        cursor: pointer;
+        padding: 2px 4px;
+      }
+      .quick-trade-price {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px 12px;
+        margin-bottom: 10px;
+        font-size: 13px;
+      }
+      .quick-trade-price strong {
+        font-variant-numeric: tabular-nums;
+      }
+      .quick-trade-avail {
+        color: var(--secondary, #8a9692);
+        font-size: 12px;
+      }
+      .quick-trade-pct-line {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        margin-bottom: 4px;
+      }
+      .quick-trade-sheet input[type="range"] {
+        width: 100%;
+        margin: 0 0 6px;
+      }
+      .quick-trade-hint {
+        font-size: 12px;
+        color: var(--secondary, #8a9692);
+        margin-bottom: 10px;
+      }
+      .quick-trade-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .quick-trade-actions button {
+        flex: 1;
+        height: 36px;
+        border-radius: 10px;
+        border: 0.5px solid var(--separator);
+        background: var(--fill, rgba(90, 106, 104, 0.1));
+        color: var(--label);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .quick-trade-actions button.is-primary {
+        border-color: transparent;
+        background: var(--accent, #2f8f6e);
+        color: #fff;
+      }
+      .quick-trade-sheet.is-sell .quick-trade-actions button.is-primary {
+        background: #c45c5c;
+      }
+      .quick-trade-actions button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      body.has-quick-trade .card-focus-bar {
+        display: none !important;
+      }
       .card-focus-bar {
         --card-focus-bar-h: 52px;
         position: fixed;
@@ -6498,6 +6650,11 @@
         display: none;
       }
       .card-focus-bar:not(.is-overlook-scope):not(.is-pullback-scope) [data-focus-action="remove-overlook"] {
+        display: none;
+      }
+      /* 快捷买卖仅置顶分栏（nail scope）。 */
+      .card-focus-bar:not(.is-nail-scope) [data-focus-action="hold-buy"],
+      .card-focus-bar:not(.is-nail-scope) [data-focus-action="hold-sell"] {
         display: none;
       }
       .nail-notice-pullback-focus {
@@ -10171,6 +10328,20 @@
       <button type="button" data-focus-action="refresh">刷新</button>
       <button
         type="button"
+        data-focus-action="hold-buy"
+        title="打开持有并买入"
+      >
+        买入
+      </button>
+      <button
+        type="button"
+        data-focus-action="hold-sell"
+        title="打开持有并卖出"
+      >
+        卖出
+      </button>
+      <button
+        type="button"
         data-focus-action="review"
         title="浮窗对比：首次通知时 K 线 vs 当前 K 线"
       >
@@ -10188,6 +10359,50 @@
       <button type="button" class="is-primary" data-focus-action="more">
         更多
       </button>
+    </div>
+
+    <div id="quickTradeSheet" class="quick-trade-sheet" hidden>
+      <button
+        type="button"
+        class="quick-trade-close"
+        id="quickTradeClose"
+        title="关闭"
+        aria-label="关闭交易条"
+      >
+        ×
+      </button>
+      <div class="quick-trade-head">
+        <span class="quick-trade-side" id="quickTradeSide">买入</span>
+        <strong class="quick-trade-sym" id="quickTradeSym">—</strong>
+        <button type="button" class="quick-trade-px-refresh" id="quickTradePxRefresh">
+          刷新价
+        </button>
+      </div>
+      <div class="quick-trade-price">
+        现价 <strong id="quickTradePx">—</strong>
+        <span class="quick-trade-avail" id="quickTradeAvail"></span>
+      </div>
+      <div class="quick-trade-pct-line">
+        <span>比例</span>
+        <span id="quickTradePctLabel">50%</span>
+      </div>
+      <input
+        type="range"
+        id="quickTradePct"
+        min="1"
+        max="100"
+        step="1"
+        value="50"
+      />
+      <div class="quick-trade-hint" id="quickTradeHint">本单约 —</div>
+      <div class="quick-trade-actions">
+        <button type="button" id="quickTradeAdvanced" title="打开持有：限价 / 止损">
+          限价/止损
+        </button>
+        <button type="button" class="is-primary" id="quickTradeConfirm">
+          确认买入
+        </button>
+      </div>
     </div>
 
     <div
@@ -15951,6 +16166,20 @@
         return Number.isFinite(price) && price > 0 ? price : NaN;
       }
 
+      /** 持仓自动纳入门槛：名义价值低于此值视为灰尘。 */
+      const HOLDINGS_DUST_USDT = 0.1;
+
+      function normalizeHoldSymbol(raw) {
+        let symbol = String(raw || "")
+          .trim()
+          .toUpperCase()
+          .replace(/\s+/g, "");
+        if (!symbol) return "";
+        if (symbol === "USDT") return "USDT";
+        if (!symbol.endsWith("USDT")) symbol += "USDT";
+        return symbol;
+      }
+
       function holdingsFreeQty(symbol) {
         const asset = holdingsBaseAsset(symbol);
         const row =
@@ -15976,6 +16205,20 @@
         if (!Number.isFinite(price)) return NaN;
         const total = qty * price;
         return total < 0.01 ? 0 : total;
+      }
+
+      function holdingsHasActiveTradeTasks(symbol) {
+        const key = normalizeHoldSymbol(symbol);
+        if (!key || key === "USDT") return false;
+        const sellHit = (nailSellTasksState.tasks || []).some((task) => {
+          if (!task) return false;
+          return String(task.symbol || "").toUpperCase() === key;
+        });
+        if (sellHit) return true;
+        return (nailBuyTasksState.tasks || []).some((task) => {
+          if (!task) return false;
+          return String(task.symbol || "").toUpperCase() === key;
+        });
       }
 
       function holdTaskIsError(task) {
@@ -16422,8 +16665,8 @@
         if (!symbols.length) {
           list.innerHTML =
             KLINE_MODE === "bstock"
-              ? '<div class="nail-hold-empty">暂无 bStock 持仓 · 点设置加入关注后等云函数回填</div>'
-              : '<div class="nail-hold-empty">暂无关注币 · 点设置加入，等云函数回填余额</div>';
+              ? '<div class="nail-hold-empty">暂无 bStock 持仓 · 点刷新同步余额，或设置里手动加入</div>'
+              : '<div class="nail-hold-empty">暂无持仓 · 点刷新同步 ≥0.1 USDT 余额，或设置里手动加入</div>';
           setNailHoldSelectMode(false);
           syncNailHoldLiveSwitches();
           return;
@@ -16444,14 +16687,17 @@
           buyBySymbol.set(String(task.symbol).toUpperCase(), task);
         });
         const sortedSymbols = symbols.slice().sort((a, b) => {
-          const qa = holdingsFreeQty(a);
-          const qb = holdingsFreeQty(b);
-          if (qb !== qa) return qb - qa;
+          const na = Number(holdingsTotalUsdt(a)) || 0;
+          const nb = Number(holdingsTotalUsdt(b)) || 0;
+          const aLive = na >= HOLDINGS_DUST_USDT ? 1 : 0;
+          const bLive = nb >= HOLDINGS_DUST_USDT ? 1 : 0;
+          if (bLive !== aLive) return bLive - aLive;
+          if (nb !== na) return nb - na;
           return String(a).localeCompare(String(b));
         });
         const manualTradeReady = isManualTradeConfigured();
         list.innerHTML =
-          `<div class="nail-hold-usdt-banner">账户 USDT 可用 ${escapeHtml(usdtFree)} · 按数量从多到少</div>` +
+          `<div class="nail-hold-usdt-banner">账户 USDT 可用 ${escapeHtml(usdtFree)} · 有余额靠前</div>` +
           sortedSymbols
             .map((symbol) => {
               const asset = holdingsBaseAsset(symbol);
@@ -16955,41 +17201,90 @@
         const byAsset =
           liveBalances && typeof liveBalances === "object" ? liveBalances : {};
         const flatSymbols = [];
+        const beforeSymbols = new Set(
+          (Array.isArray(nailHoldingsState.symbols)
+            ? nailHoldingsState.symbols
+            : []
+          )
+            .map((s) => normalizeHoldSymbol(s))
+            .filter((s) => s && s !== "USDT"),
+        );
+
+        const liveAssets = Object.keys(byAsset)
+          .map((asset) => String(asset || "").trim().toUpperCase())
+          .filter((asset) => asset && asset !== "USDT");
+        await Promise.all(
+          liveAssets.map((asset) =>
+            fetchBinanceTickerForSymbol(`${asset}USDT`).catch(() => null),
+          ),
+        );
+
         const holdResult = await WatchFavorites.patchHoldings({
           repo: CONFIG.GITHUB_REPO,
           message: "Holdings live sync",
           mutate: (state) => {
-            const symbols = Array.isArray(state.symbols)
+            const prevSymbols = Array.isArray(state.symbols)
               ? state.symbols.slice()
               : [];
             const balances = { ...(state.balances || {}) };
             const entryPrices = { ...(state.entryPrices || {}) };
             const stopCancel = { ...(state.stopCancel || {}) };
-            symbols.forEach((symbol) => {
-              const key = String(symbol || "")
-                .trim()
-                .toUpperCase();
-              if (!key) return;
-              const asset = holdingsBaseAsset(key);
+            const seen = new Set();
+            const merged = [];
+
+            const pushSymbol = (raw) => {
+              const key = normalizeHoldSymbol(raw);
+              if (!key || key === "USDT" || seen.has(key)) return;
+              seen.add(key);
+              merged.push(key);
+            };
+
+            prevSymbols.forEach((symbol) => pushSymbol(symbol));
+
+            liveAssets.forEach((asset) => {
               const row = byAsset[asset] || { free: 0, locked: 0 };
               const free = Number(row.free) || 0;
               const locked = Number(row.locked) || 0;
               balances[asset] = { free, locked, at: stamp };
-              if (key !== "USDT" && free <= 0 && locked <= 0) {
-                if (entryPrices[key]) delete entryPrices[key];
-                if (stopCancel[key]) delete stopCancel[key];
-                flatSymbols.push(key);
-              }
+              const sym = `${asset}USDT`;
+              const px = holdingsSpotPrice(sym);
+              const notional =
+                Number.isFinite(px) && px > 0 ? (free + locked) * px : 0;
+              if (notional >= HOLDINGS_DUST_USDT) pushSymbol(sym);
             });
+
             const usdtRow = byAsset.USDT || { free: 0, locked: 0 };
             balances.USDT = {
               free: Number(usdtRow.free) || 0,
               locked: Number(usdtRow.locked) || 0,
               at: stamp,
             };
+
+            const nextSymbols = [];
+            merged.forEach((key) => {
+              const asset = holdingsBaseAsset(key);
+              const row = byAsset[asset] || { free: 0, locked: 0 };
+              const free = Number(row.free) || 0;
+              const locked = Number(row.locked) || 0;
+              balances[asset] = { free, locked, at: stamp };
+              if (free <= 0 && locked <= 0) {
+                if (entryPrices[key]) delete entryPrices[key];
+                if (stopCancel[key]) delete stopCancel[key];
+                flatSymbols.push(key);
+              }
+              const px = holdingsSpotPrice(key);
+              const notional =
+                Number.isFinite(px) && px > 0 ? (free + locked) * px : 0;
+              const keep =
+                !!(entryPrices[key] && Number(entryPrices[key].price) > 0) ||
+                holdingsHasActiveTradeTasks(key);
+              if (notional < HOLDINGS_DUST_USDT && !keep) return;
+              nextSymbols.push(key);
+            });
+
             return {
               ...state,
-              symbols,
+              symbols: nextSymbols,
               balances,
               entryPrices,
               stopCancel,
@@ -16999,6 +17294,22 @@
           },
         });
         nailHoldingsState = holdResult.state || nailHoldingsState;
+        const afterSymbols = new Set(
+          (Array.isArray(nailHoldingsState.symbols)
+            ? nailHoldingsState.symbols
+            : []
+          )
+            .map((s) => normalizeHoldSymbol(s))
+            .filter((s) => s && s !== "USDT"),
+        );
+        let added = 0;
+        afterSymbols.forEach((sym) => {
+          if (!beforeSymbols.has(sym)) added += 1;
+        });
+        let removed = 0;
+        beforeSymbols.forEach((sym) => {
+          if (!afterSymbols.has(sym)) removed += 1;
+        });
 
         if (
           flatSymbols.length &&
@@ -17023,7 +17334,7 @@
           });
           nailSellTasksState = sellResult.state || nailSellTasksState;
         }
-        return { flatSymbols };
+        return { flatSymbols, added, removed };
       }
 
       async function reloadNailHoldings(options) {
@@ -17049,8 +17360,14 @@
               const live = await callManualTradeHttp("/balances", null, {
                 method: "GET",
               });
-              await applyLiveBalancesToHoldings(live && live.balances, Date.now());
-              liveNote = " · 即时余额";
+              const sync = await applyLiveBalancesToHoldings(
+                live && live.balances,
+                Date.now(),
+              );
+              const bits = ["即时余额"];
+              if (sync && sync.added) bits.push(`+${sync.added} 新仓`);
+              if (sync && sync.removed) bits.push(`-${sync.removed} 灰尘`);
+              liveNote = ` · ${bits.join(" · ")}`;
             } catch (liveError) {
               console.warn("live balances failed", liveError);
               if (!silent) {
@@ -17958,7 +18275,308 @@
         }
       }
 
-      async function addNailHoldingSymbol(rawSymbol) {
+      async function ensureHoldSymbol(rawSymbol) {
+        const symbol = normalizeHoldSymbol(rawSymbol);
+        if (!symbol || symbol === "USDT") {
+          throw new Error("请选择具体币种");
+        }
+        const existing = Array.isArray(nailHoldingsState.symbols)
+          ? nailHoldingsState.symbols.map((s) => normalizeHoldSymbol(s))
+          : [];
+        if (existing.includes(symbol)) return { symbol, added: false };
+        const result = await WatchFavorites.patchHoldings({
+          repo: CONFIG.GITHUB_REPO,
+          message: `Ensure holdings watch ${symbol}`,
+          mutate: (state) => {
+            const symbols = Array.isArray(state.symbols)
+              ? state.symbols.slice()
+              : [];
+            const key = normalizeHoldSymbol(symbol);
+            if (key && !symbols.includes(key)) symbols.unshift(key);
+            return { ...state, symbols };
+          },
+        });
+        nailHoldingsState = result.state || nailHoldingsState;
+        return { symbol, added: true };
+      }
+
+      let quickTradeState = null;
+
+      function holdingsUsdtFree() {
+        const row =
+          (nailHoldingsState.balances && nailHoldingsState.balances.USDT) || {};
+        return Number(row.free) || 0;
+      }
+
+      function closeQuickTradeSheet() {
+        const sheet = document.getElementById("quickTradeSheet");
+        if (sheet) {
+          sheet.hidden = true;
+          sheet.classList.remove("is-busy", "is-sell");
+        }
+        document.body.classList.remove("has-quick-trade");
+        quickTradeState = null;
+      }
+
+      function syncQuickTradeSheet() {
+        const st = quickTradeState;
+        const sheet = document.getElementById("quickTradeSheet");
+        if (!st || !sheet || sheet.hidden) return;
+        const sideEl = document.getElementById("quickTradeSide");
+        const symEl = document.getElementById("quickTradeSym");
+        const pxEl = document.getElementById("quickTradePx");
+        const availEl = document.getElementById("quickTradeAvail");
+        const pctEl = document.getElementById("quickTradePct");
+        const pctLabel = document.getElementById("quickTradePctLabel");
+        const hintEl = document.getElementById("quickTradeHint");
+        const confirmBtn = document.getElementById("quickTradeConfirm");
+        const asset = holdingsBaseAsset(st.symbol);
+        const pct = Number(pctEl && pctEl.value) || 50;
+        const px = holdingsSpotPrice(st.symbol);
+        const isSell = st.mode === "sell";
+        sheet.classList.toggle("is-sell", isSell);
+        if (sideEl) sideEl.textContent = isSell ? "卖出" : "买入";
+        if (symEl) symEl.textContent = asset || st.symbol;
+        if (pxEl) {
+          pxEl.textContent =
+            Number.isFinite(px) && px > 0 ? formatHoldingsPriceInput(px) : "—";
+        }
+        if (pctLabel) pctLabel.textContent = `${pct}%`;
+        if (isSell) {
+          const free = holdingsFreeQty(st.symbol);
+          const qty = free * (pct / 100);
+          const notional =
+            Number.isFinite(px) && px > 0 ? qty * px : NaN;
+          if (availEl) {
+            availEl.textContent = `可用 ${formatHoldingsQty(free)} ${asset}`;
+          }
+          if (hintEl) {
+            hintEl.textContent = Number.isFinite(notional)
+              ? `本单约 ${formatHoldingsQty(qty)} · ${formatHoldingsUsdt(notional)} USDT`
+              : `本单约 ${formatHoldingsQty(qty)} ${asset}`;
+          }
+          if (confirmBtn) {
+            confirmBtn.textContent = "确认卖出";
+            confirmBtn.disabled = !(free > 0 && qty > 0);
+          }
+        } else {
+          const usdt = holdingsUsdtFree();
+          const quote = usdt * (pct / 100);
+          if (availEl) {
+            availEl.textContent = `可用 ${formatHoldingsUsdt(usdt)} USDT`;
+          }
+          if (hintEl) {
+            const getQty =
+              Number.isFinite(px) && px > 0 && quote > 0
+                ? formatHoldingsQty(quote / px)
+                : "—";
+            hintEl.textContent = `本单约 ${formatHoldingsUsdt(quote)} USDT · ≈ ${getQty} ${asset}`;
+          }
+          if (confirmBtn) {
+            confirmBtn.textContent = "确认买入";
+            confirmBtn.disabled = !(quote >= 5);
+          }
+        }
+      }
+
+      async function openQuickTradeSheet(rawSymbol, mode) {
+        const want = mode === "sell" ? "sell" : "buy";
+        const symbol = normalizeHoldSymbol(rawSymbol);
+        if (!symbol || symbol === "USDT") {
+          showToast("请选择具体币种");
+          return false;
+        }
+        if (!isManualTradeConfigured()) {
+          showToast("请先配置现价交易（腾讯云 SCF）");
+          return false;
+        }
+        const sheet = document.getElementById("quickTradeSheet");
+        if (!sheet) return false;
+        try {
+          await ensureHoldSymbol(symbol);
+          if (isManualTradeConfigured()) {
+            try {
+              const live = await callManualTradeHttp("/balances", null, {
+                method: "GET",
+              });
+              await applyLiveBalancesToHoldings(
+                live && live.balances,
+                Date.now(),
+              );
+            } catch (error) {
+              console.warn("quick trade balances failed", error);
+            }
+          }
+          await fetchBinanceTickerForSymbol(symbol).catch(() => null);
+          if (want === "sell" && !(holdingsFreeQty(symbol) > 0)) {
+            showToast(`${holdingsBaseAsset(symbol)} 可用数量为 0，无法卖出`);
+            return false;
+          }
+          quickTradeState = { symbol, mode: want };
+          const pctEl = document.getElementById("quickTradePct");
+          if (pctEl) pctEl.value = "50";
+          sheet.hidden = false;
+          document.body.classList.add("has-quick-trade");
+          syncQuickTradeSheet();
+          setFocusActionSymbol(null);
+          return true;
+        } catch (error) {
+          console.warn("openQuickTradeSheet failed", error);
+          showToast(error.message || "打开交易条失败");
+          return false;
+        }
+      }
+
+      async function confirmQuickTradeSheet() {
+        const st = quickTradeState;
+        if (!st) return false;
+        const sheet = document.getElementById("quickTradeSheet");
+        const pctEl = document.getElementById("quickTradePct");
+        const pct = Number(pctEl && pctEl.value) || 0;
+        const asset = holdingsBaseAsset(st.symbol);
+        if (sheet) sheet.classList.add("is-busy");
+        try {
+          if (st.mode === "sell") {
+            const free = holdingsFreeQty(st.symbol);
+            const quantity = free * (pct / 100);
+            if (!(quantity > 0)) {
+              showToast("卖出数量无效");
+              return false;
+            }
+            if (
+              !window.confirm(
+                `确认现价卖出 ${asset}？\n约 ${formatHoldingsQty(quantity)}（${pct}% 可用）`,
+              )
+            ) {
+              return false;
+            }
+            showToast(`现价卖出 ${asset}…`);
+            const data = await callManualTradeHttp("/sell", {
+              symbol: st.symbol,
+              quantity,
+            });
+            const order = (data && data.order) || {};
+            const filled = Number(order.executedQty) || quantity;
+            closeQuickTradeSheet();
+            if (isManualTradeConfigured()) {
+              try {
+                const live = await callManualTradeHttp("/balances", null, {
+                  method: "GET",
+                });
+                await applyLiveBalancesToHoldings(
+                  live && live.balances,
+                  Date.now(),
+                );
+              } catch (_) {
+                /* ignore */
+              }
+            }
+            showToast(
+              `${asset} 现价卖出成交 · ${formatHoldingsQty(filled)}${
+                order.avgPrice
+                  ? ` · 均价 ${formatHoldingsPriceInput(order.avgPrice)}`
+                  : ""
+              }`,
+            );
+            return true;
+          }
+
+          const usdt = holdingsUsdtFree();
+          const quote = usdt * (pct / 100);
+          if (!(quote > 0)) {
+            showToast("买入金额无效");
+            return false;
+          }
+          if (quote < 5) {
+            showToast(
+              `金额约 ${formatHoldingsUsdt(quote)} USDT，币安市价单通常 ≥ 5`,
+            );
+            return false;
+          }
+          if (
+            !window.confirm(
+              `确认现价买入 ${asset}？\n约花费 ${formatHoldingsUsdt(quote)} USDT（${pct}% 可用）`,
+            )
+          ) {
+            return false;
+          }
+          showToast(`现价买入 ${asset}…`);
+          const data = await callManualTradeHttp("/buy", {
+            symbol: st.symbol,
+            quote,
+          });
+          const order = (data && data.order) || {};
+          const avg =
+            Number(order.avgPrice) ||
+            (Number(order.cummulativeQuoteQty) > 0 &&
+            Number(order.executedQty) > 0
+              ? Number(order.cummulativeQuoteQty) / Number(order.executedQty)
+              : NaN);
+          closeQuickTradeSheet();
+          if (avg > 0) {
+            await applyMarketBuyCostAndStops(st.symbol, avg);
+            showToast(
+              `${asset} 现价买入成交 · 成本 ${formatHoldingsPriceInput(avg)} · 已重挂止损`,
+            );
+          } else {
+            showToast("已下单但均价缺失，请手动核对成本");
+          }
+          if (isManualTradeConfigured()) {
+            try {
+              const live = await callManualTradeHttp("/balances", null, {
+                method: "GET",
+              });
+              await applyLiveBalancesToHoldings(
+                live && live.balances,
+                Date.now(),
+              );
+            } catch (_) {
+              /* ignore */
+            }
+          }
+          return true;
+        } catch (error) {
+          console.warn("confirmQuickTradeSheet failed", error);
+          showToast(error.message || "下单失败");
+          return false;
+        } finally {
+          if (sheet) sheet.classList.remove("is-busy");
+        }
+      }
+
+      /** 打开持有浮层并展开限价/止损面板（交易条「限价/止损」）。 */
+      async function openHoldTradeForSymbol(rawSymbol, mode) {
+        const want = mode === "sell" ? "sell" : "buy";
+        const symbol = normalizeHoldSymbol(rawSymbol);
+        if (!symbol || symbol === "USDT") {
+          showToast("请选择具体币种");
+          return false;
+        }
+        try {
+          closeQuickTradeSheet();
+          await ensureHoldSymbol(symbol);
+          await setNailHoldPopoverOpen(true);
+          setNailHoldExpanded(symbol);
+          renderNailHoldList();
+          applyNailHoldCollapsedState();
+          const row = nailHoldRowBySymbol(symbol);
+          if (!row) {
+            showToast("持有列表未找到该币");
+            return false;
+          }
+          openNailHoldPanel(symbol, want);
+          row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          setFocusActionSymbol(null);
+          return true;
+        } catch (error) {
+          console.warn("openHoldTradeForSymbol failed", error);
+          showToast(error.message || "打开持有交易失败");
+          return false;
+        }
+      }
+
+      async function addNailHoldingSymbol(rawSymbol, options) {
+        const opts = options || {};
         let symbol = String(rawSymbol || "")
           .trim()
           .toUpperCase()
@@ -17982,10 +18600,21 @@
             },
           });
           nailHoldingsState = result.state || nailHoldingsState;
+          setNailHoldExpanded(symbol);
           renderNailHoldList();
-          showToast(
-            `已关注 ${holdingsBaseAsset(symbol)} · 等下次云扫描回填`,
-          );
+          applyNailHoldCollapsedState();
+          if (opts.openBuy !== false && symbol !== "USDT") {
+            openNailHoldPanel(symbol, "buy");
+            const row = nailHoldRowBySymbol(symbol);
+            if (row) {
+              row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            }
+            showToast(`已关注 ${holdingsBaseAsset(symbol)} · 可直接买入`);
+          } else {
+            showToast(
+              `已关注 ${holdingsBaseAsset(symbol)} · 等下次云扫描回填`,
+            );
+          }
         } catch (error) {
           console.warn("addNailHoldingSymbol failed", error);
           showToast("加入关注失败");
@@ -26614,6 +27243,20 @@
         if (action === "nail-calc") {
           if (focusActionScope !== "nail") return;
           void openNailStopCalc(symbol);
+          return;
+        }
+        if (action === "hold-buy" || action === "hold-sell") {
+          if (focusActionScope !== "nail" || nailSegment !== "pinned") {
+            showToast("快捷买卖仅在置顶分栏可用");
+            return;
+          }
+          const mode = action === "hold-sell" ? "sell" : "buy";
+          setFocusBarBusy(true, activeBtn, mode === "sell" ? "打开卖出" : "打开买入");
+          try {
+            await openQuickTradeSheet(symbol, mode);
+          } finally {
+            setFocusBarBusy(false);
+          }
         }
       }
 
@@ -30298,6 +30941,11 @@
         const token = ++nailSegSwitchToken;
         nailSegment = next;
         applyNailSegmentUi();
+        // 换分栏时收起旧分栏操作栏 / 交易条，避免底栏挂在新分栏上。
+        if (changed) {
+          setFocusActionSymbol(null);
+          closeQuickTradeSheet();
+        }
         // 进通知/自动盯/雷达分栏时立刻拉一次云端状态，保证角标与固定名单
         // 和另一台设备一致（雷达固定名单也在这份共享文件里）。
         if (next === "notice" || next === "autopin" || next === "radar") {
@@ -30306,12 +30954,6 @@
         // 四个面互斥：进哪个，其余三个的浮层状态全部收起。
         if (next !== "autopin") {
           await setNailAutoPinPopoverOpen(false);
-          if (
-            focusActionScope === "overlook" ||
-            focusActionScope === "autopin"
-          ) {
-            setFocusActionSymbol(null);
-          }
         }
         if (next !== "radar") await setNailRadarPopoverOpen(false);
         if (next !== "notice") closeNailNoticeDrawer();
@@ -36473,6 +37115,41 @@
           if (!btn) return;
           void runFocusBarAction(btn.getAttribute("data-focus-action"));
         });
+      }
+      const quickTradeSheet = document.getElementById("quickTradeSheet");
+      if (quickTradeSheet) {
+        const quickTradeClose = document.getElementById("quickTradeClose");
+        if (quickTradeClose) {
+          quickTradeClose.addEventListener("click", () => closeQuickTradeSheet());
+        }
+        const quickTradePct = document.getElementById("quickTradePct");
+        if (quickTradePct) {
+          quickTradePct.addEventListener("input", () => syncQuickTradeSheet());
+        }
+        const quickTradePxRefresh = document.getElementById("quickTradePxRefresh");
+        if (quickTradePxRefresh) {
+          quickTradePxRefresh.addEventListener("click", () => {
+            const st = quickTradeState;
+            if (!st) return;
+            void fetchBinanceTickerForSymbol(st.symbol)
+              .then(() => syncQuickTradeSheet())
+              .catch(() => showToast("刷新现价失败"));
+          });
+        }
+        const quickTradeAdvanced = document.getElementById("quickTradeAdvanced");
+        if (quickTradeAdvanced) {
+          quickTradeAdvanced.addEventListener("click", () => {
+            const st = quickTradeState;
+            if (!st) return;
+            void openHoldTradeForSymbol(st.symbol, st.mode);
+          });
+        }
+        const quickTradeConfirm = document.getElementById("quickTradeConfirm");
+        if (quickTradeConfirm) {
+          quickTradeConfirm.addEventListener("click", () => {
+            void confirmQuickTradeSheet();
+          });
+        }
       }
       document.addEventListener(
         "click",

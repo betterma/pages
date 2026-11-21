@@ -5,9 +5,11 @@ const crypto = require('crypto');
 
 function binanceConfig() {
   return {
-    apiKey: process.env.BINANCE_API_KEY || '',
-    apiSecret: process.env.BINANCE_API_SECRET || '',
-    baseUrl: process.env.BINANCE_API_BASE || 'https://api.binance.com',
+    apiKey: String(process.env.BINANCE_API_KEY || '').trim(),
+    apiSecret: String(process.env.BINANCE_API_SECRET || '').trim(),
+    baseUrl: String(
+      process.env.BINANCE_API_BASE || 'https://api.binance.com',
+    ).trim().replace(/\/+$/, ''),
   };
 }
 
@@ -57,9 +59,26 @@ function signBinanceQuery(query, secret) {
   if (!material) throw new Error('Empty BINANCE_API_SECRET');
   if (isPemPrivateKey(material)) {
     const keyObject = crypto.createPrivateKey(material);
-    return crypto.sign(null, Buffer.from(query, 'ascii'), keyObject).toString('base64');
+    return crypto
+      .sign(null, Buffer.from(query, 'ascii'), keyObject)
+      .toString('base64');
   }
   return crypto.createHmac('sha256', material).update(query).digest('hex');
+}
+
+function secretKindOf(secret) {
+  if (!secret) return 'none';
+  if (!isPemPrivateKey(secret)) return 'hmac';
+  const text = normalizeSecret(secret);
+  try {
+    const keyObject = crypto.createPrivateKey(text);
+    const type = keyObject.asymmetricKeyType || '';
+    if (type === 'ed25519') return 'ed25519';
+    if (type === 'rsa') return 'rsa';
+    return `pem:${type || 'unknown'}`;
+  } catch (error) {
+    return 'pem-invalid';
+  }
 }
 
 function requestJson(url, options = {}) {
@@ -75,9 +94,13 @@ function requestJson(url, options = {}) {
     };
 
     const target = new URL(url);
+    // 用 pathname+search 固定查询串，避免 URL 对象重编码导致签名不一致
     const request = https.request(
-      target,
       {
+        protocol: target.protocol,
+        hostname: target.hostname,
+        port: target.port || undefined,
+        path: `${target.pathname}${target.search}`,
         method: options.method || 'GET',
         headers: options.headers || {},
         timeout: timeoutMs,
@@ -170,7 +193,6 @@ async function signedRequest(method, path, params = {}, options = {}) {
     timeout: options.timeout,
     headers: {
       'X-MBX-APIKEY': apiKey,
-      'Content-Type': 'application/x-www-form-urlencoded',
     },
   });
   if (!response.ok) {
@@ -309,4 +331,6 @@ module.exports = {
   filledQtyFromOrder,
   avgPriceFromOrder,
   floorToStep,
+  secretKindOf,
+  normalizeSecret,
 };
