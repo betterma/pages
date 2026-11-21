@@ -19,10 +19,20 @@
  *   BINANCE_API_SECRET  HMAC Secret，或自行生成的 Ed25519/RSA PEM 私钥（与华为云 holdings 同格式）
  *   MANUAL_TRADE_TOKEN  自定义口令，用于鉴权
  *   BINANCE_API_BASE    可选，默认 https://api.binance.com
+ *   BINANCE_API_BASES   可选，逗号分隔备用域名（403 时轮询）
  */
 
 const DEFAULT_BASE = 'https://api.binance.com';
+const DEFAULT_BASES = [
+  'https://api.binance.com',
+  'https://api1.binance.com',
+  'https://api2.binance.com',
+  'https://api3.binance.com',
+  'https://api4.binance.com',
+];
 const RECV_WINDOW = 5000;
+const BINANCE_UA =
+  'Mozilla/5.0 (compatible; manual-trade-worker/1.0; +https://developers.binance.com)';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data, null, 2), {
@@ -51,6 +61,84 @@ function normalizeSymbol(input) {
 
 function baseUrl(env) {
   return String(env.BINANCE_API_BASE || DEFAULT_BASE).replace(/\/$/, '');
+}
+
+function apiBases(env) {
+  const raw = String(env.BINANCE_API_BASES || '').trim();
+  const list = raw
+    ? raw.split(/[,|\s]+/).map((s) => s.trim().replace(/\/$/, '')).filter(Boolean)
+    : DEFAULT_BASES.slice();
+  const preferred = baseUrl(env);
+  const out = [];
+  const seen = new Set();
+  for (const item of [preferred, ...list]) {
+    if (!item || seen.has(item)) continue;
+    seen.add(item);
+    out.push(item);
+  }
+  return out.length ? out : [DEFAULT_BASE];
+}
+
+function looksLikeHtml(text) {
+  const s = String(text || '').trim().slice(0, 80).toLowerCase();
+  return s.startsWith('<!doctype') || s.startsWith('<html') || s.includes('<html');
+}
+
+function binanceHttpError(status, text, base) {
+  const snippet = String(text || '').replace(/\s+/g, ' ').slice(0, 160);
+  if (status === 403 && looksLikeHtml(text)) {
+    return new Error(
+      `币安 403 HTML（疑似拦截 Cloudflare 出口 IP，base=${base}）。可设 BINANCE_API_BASE / BINANCE_API_BASES 换线路，或经自有代理转发。片段: ${snippet}`,
+    );
+  }
+  if (looksLikeHtml(text)) {
+    return new Error(`Binance 返回 HTML 而非 JSON：${status} base=${base} ${snippet}`);
+  }
+  return new Error(`Binance 返回非 JSON：${status} base=${base} ${snippet}`);
+}
+
+async function fetchBinance(env, method, pathWithQuery, headers = {}) {
+  const bases = apiBases(env);
+  let lastError = null;
+  for (const base of bases) {
+    const url = `${base}${pathWithQuery.startsWith('/') ? pathWithQuery : `/${pathWithQuery}`}`;
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'User-Agent': BINANCE_UA,
+          Accept: 'application/json',
+          ...headers,
+        },
+      });
+      const text = await res.text();
+      if (looksLikeHtml(text) || (res.status === 403 && !text.trim().startsWith('{'))) {
+        lastError = binanceHttpError(res.status, text, base);
+        continue;
+      }
+      let data = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch (_) {
+        lastError = binanceHttpError(res.status, text, base);
+        continue;
+      }
+      if (!res.ok) {
+        throw new Error(
+          `Binance ${res.status} base=${base}: ${JSON.stringify(data).slice(0, 250)}`,
+        );
+      }
+      return data;
+    } catch (error) {
+      lastError = error;
+      // 业务 JSON 错误（签名/权限）不要盲重试其它域名
+      const msg = error && error.message ? error.message : String(error);
+      if (/Binance \d{3} base=/.test(msg) && !/403 HTML|返回 HTML|非 JSON/.test(msg)) {
+        throw error;
+      }
+    }
+  }
+  throw lastError || new Error('Binance 请求失败');
 }
 
 async function authorized(request, env) {
@@ -343,19 +431,7 @@ async function publicGet(env, path, params = {}) {
       .filter(([, v]) => v !== undefined && v !== null && v !== '')
       .map(([k, v]) => [k, String(v)]),
   ).toString();
-  const url = `${baseUrl(env)}${path}${query ? `?${query}` : ''}`;
-  const res = await fetch(url, { method: 'GET' });
-  const text = await res.text();
-  let data;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch (_) {
-    throw new Error(`Binance 返回非 JSON：${res.status} ${text.slice(0, 160)}`);
-  }
-  if (!res.ok) {
-    throw new Error(`Binance ${res.status}: ${JSON.stringify(data).slice(0, 200)}`);
-  }
-  return data;
+  return fetchBinance(env, 'GET', `${path}${query ? `?${query}` : ''}`);
 }
 
 async function signedRequest(env, method, path, params = {}) {
@@ -379,24 +455,12 @@ async function signedRequest(env, method, path, params = {}) {
   if (method === 'POST') {
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
   }
-  const res = await fetch(
-    `${baseUrl(env)}${path}?${query}&signature=${encodeURIComponent(signature)}`,
-    {
-      method,
-      headers,
-    },
+  return fetchBinance(
+    env,
+    method,
+    `${path}?${query}&signature=${encodeURIComponent(signature)}`,
+    headers,
   );
-  const text = await res.text();
-  let data;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch (_) {
-    throw new Error(`Binance 返回非 JSON：${res.status} ${text.slice(0, 160)}`);
-  }
-  if (!res.ok) {
-    throw new Error(`Binance ${res.status}: ${JSON.stringify(data).slice(0, 250)}`);
-  }
-  return data;
 }
 
 async function signedGet(env, path, params = {}) {
