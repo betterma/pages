@@ -32875,7 +32875,10 @@
       }
 
       function nailSymbolIsHeld(symbol) {
-        return holdingsFreeQty(symbol) > 0;
+        // 与云函数 holdings.js 的 HOLDINGS_DUST_USDT 同口径：
+        // 名义金额 < 0.1 USDT 的残留算灰尘，不再归入「持有」段。
+        // 原来走 holdingsFreeQty（门槛 0.01），导致卖光后剩一点灰尘还留在持有顶部。
+        return holdingsTotalUsdt(symbol) >= HOLDINGS_DUST_USDT;
       }
 
       function nailDrawerVisibleItems() {
