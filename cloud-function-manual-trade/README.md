@@ -18,9 +18,11 @@
 
 | Secret | 值 |
 |---|---|
-| `BINANCE_API_KEY` | 手动单专用 Key |
-| `BINANCE_API_SECRET` | 对应 Secret |
+| `BINANCE_API_KEY` | 币安 API Key（可与华为云同一套） |
+| `BINANCE_API_SECRET` | HMAC Secret，**或**自行生成的 Ed25519/RSA **PEM 私钥全文**（含 `BEGIN/END`；与华为云相同） |
 | `MANUAL_TRADE_TOKEN` | 你自己设的口令，例如一串随机字母数字 |
+
+PEM 可多行粘贴进 Cloudflare Secret；若被收成一行，Worker 会按华为云同款逻辑还原换行。
 
 3. 记下 Worker 的 URL，如 `https://manual-trade.<你的子域>.workers.dev`。
 4. 在持有页设置里填入 Worker URL + Token（页面 localStorage `kline-manual-trade-worker-v1`）。

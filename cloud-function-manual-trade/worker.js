@@ -15,8 +15,8 @@
  * 鉴权：请求头 Authorization: Bearer <MANUAL_TRADE_TOKEN>
  *
  * 环境变量（Workers Secrets， Never commit）：
- *   BINANCE_API_KEY     手动单专用 Key（只开现货交易、关提现）
- *   BINANCE_API_SECRET  对应 Secret
+ *   BINANCE_API_KEY     币安 API Key（可与华为云同一套，或单独申请）
+ *   BINANCE_API_SECRET  HMAC Secret，或自行生成的 Ed25519/RSA PEM 私钥（与华为云 holdings 同格式）
  *   MANUAL_TRADE_TOKEN  自定义口令，用于鉴权
  *   BINANCE_API_BASE    可选，默认 https://api.binance.com
  */
@@ -61,7 +61,72 @@ function authorized(request, env) {
   return !!expected && !!supplied && supplied === expected;
 }
 
-/** HMAC-SHA256，等价于 Node 的 crypto.createHmac('sha256', secret).update(query).digest('hex') */
+function reformatPemSingleLine(text) {
+  const match = String(text || '').match(
+    /-----BEGIN ([A-Z0-9 ]+)-----([A-Za-z0-9+/=\s]+)-----END \1-----/,
+  );
+  if (!match) return text;
+  const label = match[1];
+  const body = match[2].replace(/\s+/g, '');
+  if (!body) return text;
+  const lines = [];
+  for (let i = 0; i < body.length; i += 64) {
+    lines.push(body.slice(i, i + 64));
+  }
+  return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----`;
+}
+
+/** 与华为云 holdings.js 同逻辑：还原 PEM / 字面 \\n */
+function normalizeSecret(raw) {
+  let text = String(raw || '').trim();
+  if (!text) return '';
+  if (
+    (text.startsWith('"') && text.endsWith('"')) ||
+    (text.startsWith("'") && text.endsWith("'"))
+  ) {
+    text = text.slice(1, -1).trim();
+  }
+  if (text.includes('\\n')) text = text.replace(/\\n/g, '\n');
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+  if (text.includes('BEGIN') && !text.includes('\n')) {
+    text = reformatPemSingleLine(text);
+  }
+  return text.trim();
+}
+
+function isPemPrivateKey(secret) {
+  const text = normalizeSecret(secret);
+  return (
+    text.includes('BEGIN PRIVATE KEY') ||
+    text.includes('BEGIN RSA PRIVATE KEY') ||
+    text.includes('BEGIN ENCRYPTED PRIVATE KEY')
+  );
+}
+
+function bytesToBase64(bytes) {
+  let s = '';
+  const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  for (let i = 0; i < arr.length; i += 1) s += String.fromCharCode(arr[i]);
+  return btoa(s);
+}
+
+function bytesToHex(bytes) {
+  return Array.from(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function pemToPkcs8Buffer(pem) {
+  const body = String(pem || '')
+    .replace(/-----BEGIN [^-]+-----/g, '')
+    .replace(/-----END [^-]+-----/g, '')
+    .replace(/\s+/g, '');
+  const raw = atob(body);
+  const buf = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) buf[i] = raw.charCodeAt(i);
+  return buf.buffer;
+}
+
 async function hmacHex(secret, message) {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -72,9 +137,50 @@ async function hmacHex(secret, message) {
     ['sign'],
   );
   const sig = await crypto.subtle.sign('HMAC', key, enc.encode(message));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+  return bytesToHex(sig);
+}
+
+/**
+ * HMAC → hex；Ed25519 / RSA PEM → base64（对齐币安自签 Key + 华为云 signBinanceQuery）
+ */
+async function signBinanceQuery(query, secret) {
+  const material = normalizeSecret(secret);
+  if (!material) throw new Error('Empty BINANCE_API_SECRET');
+  if (!isPemPrivateKey(material)) {
+    return hmacHex(material, query);
+  }
+
+  const keyData = pemToPkcs8Buffer(material);
+  const data = new TextEncoder().encode(query);
+  const attempts = [
+    { name: 'Ed25519', algorithm: { name: 'Ed25519' }, signAlgo: 'Ed25519' },
+    {
+      name: 'RSASSA-PKCS1-v1_5',
+      algorithm: { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+      signAlgo: { name: 'RSASSA-PKCS1-v1_5' },
+    },
+  ];
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      const key = await crypto.subtle.importKey(
+        'pkcs8',
+        keyData,
+        attempt.algorithm,
+        false,
+        ['sign'],
+      );
+      const sig = await crypto.subtle.sign(attempt.signAlgo, key, data);
+      return bytesToBase64(sig);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error(
+    `PEM 私钥无法用于 Ed25519/RSA 签名：${
+      lastError && lastError.message ? lastError.message : lastError
+    }`,
+  );
 }
 
 async function publicGet(env, path, params = {}) {
@@ -114,15 +220,18 @@ async function signedRequest(env, method, path, params = {}) {
       .filter(([, v]) => v !== undefined && v !== null && v !== '')
       .map(([k, v]) => [k, String(v)]),
   ).toString();
-  const signature = await hmacHex(apiSecret, query);
+  const signature = await signBinanceQuery(query, apiSecret);
   const headers = { 'X-MBX-APIKEY': apiKey };
   if (method === 'POST') {
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
   }
-  const res = await fetch(`${baseUrl(env)}${path}?${query}&signature=${signature}`, {
-    method,
-    headers,
-  });
+  const res = await fetch(
+    `${baseUrl(env)}${path}?${query}&signature=${encodeURIComponent(signature)}`,
+    {
+      method,
+      headers,
+    },
+  );
   const text = await res.text();
   let data;
   try {
