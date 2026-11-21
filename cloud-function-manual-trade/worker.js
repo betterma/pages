@@ -56,7 +56,7 @@ function authorized(request, env) {
   const header = request.headers.get('Authorization') || '';
   const supplied = header.replace(/^Bearer\s+/i, '').trim();
   const expected = String(env.MANUAL_TRADE_TOKEN || '');
-  //  tubing: 两边都必须非空，避免未配置 token 时任意请求都能下单
+  // 两边都必须非空，避免未配置 token 时任意请求都能下单
   return !!expected && !!supplied && supplied === expected;
 }
 

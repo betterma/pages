@@ -3398,6 +3398,63 @@
         cursor: pointer;
         white-space: nowrap;
       }
+      .nail-hold-manual-trade {
+        display: grid;
+        gap: 8px;
+        padding: 0 12px 12px;
+        border-top: 1px solid rgba(0, 0, 0, 0.06);
+        padding-top: 10px;
+      }
+      .nail-hold-manual-trade-title {
+        font-size: 11px;
+        font-weight: 700;
+        color: rgba(28, 28, 30, 0.7);
+      }
+      .nail-hold-manual-trade label {
+        display: grid;
+        gap: 4px;
+        color: rgba(28, 28, 30, 0.62);
+        font-size: 11px;
+        font-weight: 650;
+      }
+      .nail-hold-manual-trade input {
+        height: 32px;
+        border: 1px solid rgba(0, 0, 0, 0.1);
+        border-radius: 8px;
+        padding: 0 10px;
+        background: rgba(255, 255, 255, 0.9);
+        color: #1c1c1e;
+        font-size: 13px;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .nail-hold-manual-trade-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .nail-hold-manual-trade-actions button {
+        border: none;
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 28%, #fff);
+        color: #1c1c1e;
+        height: 32px;
+        padding: 0 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .nail-hold-manual-trade-hint {
+        margin: 0;
+        font-size: 11px;
+        color: rgba(28, 28, 30, 0.55);
+        line-height: 1.4;
+      }
+      .nail-hold-manual-trade-hint.is-ready {
+        color: #1a6b52;
+      }
       .nail-hold-list-head {
         display: flex;
         align-items: center;
@@ -4102,6 +4159,7 @@
       }
       .nail-hold-panel .nail-hold-panel-actions {
         display: flex;
+        flex-wrap: wrap;
         gap: 8px;
         justify-content: flex-end;
       }
@@ -4120,9 +4178,10 @@
         background: color-mix(in srgb, var(--accent, #2f8f6e) 26%, #fff);
         color: #1a6b52;
       }
-      .nail-hold-panel .nail-hold-panel-actions button.primary:disabled {
+      .nail-hold-panel .nail-hold-panel-actions button.primary:disabled,
+      .nail-hold-panel .nail-hold-panel-actions button.is-instant:disabled {
         opacity: 0.55;
-        cursor: wait;
+        cursor: not-allowed;
       }
       .nail-hold-panel .nail-hold-panel-actions button.is-instant {
         background: color-mix(in srgb, #c45c26 22%, #fff);
@@ -9100,6 +9159,35 @@
                   />
                 </label>
                 <button type="submit" id="nailHoldAddBtn">加入</button>
+              </form>
+              <form class="nail-hold-manual-trade" id="nailManualTradeForm">
+                <div class="nail-hold-manual-trade-title">现价交易 Worker（Cloudflare）</div>
+                <label>
+                  Worker URL
+                  <input
+                    id="nailManualTradeUrl"
+                    name="url"
+                    type="url"
+                    placeholder="https://manual-trade.xxx.workers.dev"
+                    autocomplete="off"
+                  />
+                </label>
+                <label>
+                  Token
+                  <input
+                    id="nailManualTradeToken"
+                    name="token"
+                    type="password"
+                    placeholder="MANUAL_TRADE_TOKEN"
+                    autocomplete="off"
+                  />
+                </label>
+                <div class="nail-hold-manual-trade-actions">
+                  <button type="submit" id="nailManualTradeSaveBtn">保存配置</button>
+                </div>
+                <p class="nail-hold-manual-trade-hint" id="nailManualTradeHint">
+                  未配置 · 现价买入/卖出不可用
+                </p>
               </form>
             </div>
             <div class="nail-hold-list-head">
@@ -15389,6 +15477,69 @@
           btn.setAttribute("aria-expanded", next ? "true" : "false");
           btn.classList.toggle("is-open", next);
         }
+        if (next) syncNailManualTradeForm();
+      }
+
+      const MANUAL_TRADE_CFG_KEY = "kline-manual-trade-worker-v1";
+
+      function loadManualTradeConfig() {
+        try {
+          const raw = localStorage.getItem(MANUAL_TRADE_CFG_KEY);
+          if (!raw) return { url: "", token: "" };
+          const parsed = JSON.parse(raw);
+          return {
+            url: String((parsed && parsed.url) || "").trim().replace(/\/+$/, ""),
+            token: String((parsed && parsed.token) || "").trim(),
+          };
+        } catch (_) {
+          return { url: "", token: "" };
+        }
+      }
+
+      function saveManualTradeConfig(url, token) {
+        const next = {
+          url: String(url || "").trim().replace(/\/+$/, ""),
+          token: String(token || "").trim(),
+        };
+        localStorage.setItem(MANUAL_TRADE_CFG_KEY, JSON.stringify(next));
+        return next;
+      }
+
+      function isManualTradeConfigured() {
+        const cfg = loadManualTradeConfig();
+        return !!(cfg.url && cfg.token);
+      }
+
+      function syncNailManualTradeForm() {
+        const cfg = loadManualTradeConfig();
+        const urlEl = document.getElementById("nailManualTradeUrl");
+        const tokenEl = document.getElementById("nailManualTradeToken");
+        const hint = document.getElementById("nailManualTradeHint");
+        if (urlEl && document.activeElement !== urlEl) urlEl.value = cfg.url || "";
+        if (tokenEl && document.activeElement !== tokenEl) {
+          tokenEl.value = cfg.token || "";
+        }
+        if (hint) {
+          const ready = !!(cfg.url && cfg.token);
+          hint.classList.toggle("is-ready", ready);
+          hint.textContent = ready
+            ? `已配置 · ${cfg.url}`
+            : "未配置 · 现价买入/卖出不可用";
+        }
+      }
+
+      function syncNailMarketTradeButtons() {
+        const ready = isManualTradeConfigured();
+        document
+          .querySelectorAll("[data-buy-market], [data-sell-market]")
+          .forEach((btn) => {
+            btn.disabled = !ready;
+            btn.title = ready
+              ? btn.getAttribute("data-buy-market")
+                ? "按上方比例市价买入"
+                : "按上方比例市价卖出"
+              : "请先配置现价交易 Worker";
+          });
       }
 
       function describeHoldTaskStatus(side, task) {
@@ -16278,6 +16429,7 @@
           if (qb !== qa) return qb - qa;
           return String(a).localeCompare(String(b));
         });
+        const manualTradeReady = isManualTradeConfigured();
         list.innerHTML =
           `<div class="nail-hold-usdt-banner">账户 USDT 可用 ${escapeHtml(usdtFree)} · 按数量从多到少</div>` +
           sortedSymbols
@@ -16599,7 +16751,8 @@
                 </div>
                 <div class="nail-hold-panel-actions">
                   <button type="button" data-hold-cancel-panel="${escapeHtml(symbol)}">取消</button>
-                    <button type="button" class="primary" data-sell-arm="${escapeHtml(symbol)}">创建卖出任务</button>
+                    <button type="button" class="is-instant" data-sell-market="${escapeHtml(symbol)}"${manualTradeReady ? "" : " disabled"} title="${manualTradeReady ? "按上方比例市价卖出" : "请先配置现价交易 Worker"}">现价卖出</button>
+                    <button type="button" class="primary" data-sell-arm="${escapeHtml(symbol)}">限价卖出</button>
                 </div>
               </div>
               <div class="nail-hold-panel" data-hold-panel="buy" hidden>
@@ -16626,7 +16779,8 @@
                 </div>
                 <div class="nail-hold-panel-actions">
                   <button type="button" data-hold-cancel-panel="${escapeHtml(symbol)}">取消</button>
-                    <button type="button" class="primary" data-buy-arm="${escapeHtml(symbol)}">创建买入任务</button>
+                    <button type="button" class="is-instant" data-buy-market="${escapeHtml(symbol)}"${manualTradeReady ? "" : " disabled"} title="${manualTradeReady ? "按上方比例市价买入" : "请先配置现价交易 Worker"}">现价买入</button>
+                    <button type="button" class="primary" data-buy-arm="${escapeHtml(symbol)}">限价买入</button>
                 </div>
               </div>
               </div>
@@ -17080,6 +17234,241 @@
         } catch (error) {
           console.warn("saveNailHoldEntryPrice failed", error);
           showToast(error.message || "保存买入价失败");
+          return false;
+        }
+      }
+
+      async function applyMarketBuyCostAndStops(symbol, avgPrice) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const price = Number(avgPrice);
+        if (!key || key === "USDT" || !(price > 0)) {
+          throw new Error("成交均价无效，无法更新成本");
+        }
+        const now = Date.now();
+        const holdResult = await WatchFavorites.patchHoldings({
+          repo: CONFIG.GITHUB_REPO,
+          message: `Market entry ${key} ${price}`,
+          mutate: (state) => {
+            const entryPrices = { ...(state.entryPrices || {}) };
+            const stopCancel = { ...(state.stopCancel || {}) };
+            entryPrices[key] = {
+              price,
+              at: now,
+              source: "market",
+            };
+            if (stopCancel[key]) delete stopCancel[key];
+            const symbols = Array.isArray(state.symbols)
+              ? state.symbols.slice()
+              : [];
+            if (!symbols.includes(key)) symbols.push(key);
+            return { ...state, symbols, entryPrices, stopCancel };
+          },
+        });
+        nailHoldingsState = holdResult.state || nailHoldingsState;
+
+        const stops = buildFixedStopTasks(key, price, now);
+        const sellResult = await WatchFavorites.patchSellTasks({
+          repo: CONFIG.GITHUB_REPO,
+          message: `Seed stop tasks ${key} market`,
+          mutate: (state) => {
+            const tasks = Array.isArray(state.tasks) ? state.tasks.slice() : [];
+            stops.forEach((stop) => {
+              const idx = tasks.findIndex((t) => String(t.id) === stop.id);
+              if (idx >= 0) {
+                const prev = tasks[idx];
+                if (
+                  prev.openOrderId ||
+                  prev.status === "order_open" ||
+                  prev.status === "partial" ||
+                  prev.status === "cancel_requested"
+                ) {
+                  return;
+                }
+                tasks[idx] = {
+                  ...prev,
+                  ...stop,
+                  createdAt: prev.createdAt || now,
+                  updatedAt: now,
+                };
+              } else {
+                tasks.unshift(stop);
+              }
+            });
+            return { ...state, tasks };
+          },
+        });
+        nailSellTasksState = sellResult.state || nailSellTasksState;
+        return price;
+      }
+
+      async function callManualTradeWorker(path, body) {
+        const cfg = loadManualTradeConfig();
+        if (!cfg.url || !cfg.token) {
+          throw new Error("请先配置现价交易 Worker");
+        }
+        const endpoint = `${cfg.url}${path.startsWith("/") ? path : `/${path}`}`;
+        let res;
+        try {
+          res = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${cfg.token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body || {}),
+          });
+        } catch (error) {
+          throw new Error(
+            (error && error.message) || "Worker 不可达，请检查 URL / 网络",
+          );
+        }
+        let data = null;
+        try {
+          data = await res.json();
+        } catch (_) {
+          data = null;
+        }
+        if (res.status === 401) {
+          throw new Error(
+            (data && data.error) || "鉴权失败（401）：请检查 Token",
+          );
+        }
+        if (!res.ok || !data || data.ok === false) {
+          throw new Error(
+            (data && data.error) ||
+              `Worker 错误 ${res.status}${res.statusText ? ` ${res.statusText}` : ""}`,
+          );
+        }
+        return data;
+      }
+
+      async function executeNailMarketBuy(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || key === "USDT") {
+          showToast("请选择具体币种");
+          return false;
+        }
+        if (!isManualTradeConfigured()) {
+          showToast("请先配置现价交易 Worker");
+          return false;
+        }
+        const row = document.querySelector(
+          `#nailHoldList .nail-hold-row[data-hold-symbol="${key}"]`,
+        );
+        if (!row) {
+          showToast("未找到持有行");
+          return false;
+        }
+        const usdt = Number(row.getAttribute("data-hold-usdt")) || 0;
+        const pctEl = row.querySelector(`[data-buy-pct="${key}"]`);
+        const pct = Number(pctEl && pctEl.value) || 0;
+        const quote = usdt * (pct / 100);
+        if (!(quote > 0)) {
+          showToast("买入金额无效（检查 USDT 可用与比例）");
+          return false;
+        }
+        if (quote < 5) {
+          showToast(`金额约 ${formatHoldingsUsdt(quote)} USDT，币安市价单通常 ≥ 5`);
+          return false;
+        }
+        const asset = holdingsBaseAsset(key);
+        if (
+          !window.confirm(
+            `确认现价买入 ${asset}？\n约花费 ${formatHoldingsUsdt(quote)} USDT（${pct}% 可用）`,
+          )
+        ) {
+          return false;
+        }
+        showToast(`现价买入 ${asset}…`);
+        try {
+          const data = await callManualTradeWorker("/buy", {
+            symbol: key,
+            quote,
+          });
+          const order = (data && data.order) || {};
+          const avg =
+            Number(order.avgPrice) ||
+            (Number(order.cummulativeQuoteQty) > 0 &&
+            Number(order.executedQty) > 0
+              ? Number(order.cummulativeQuoteQty) / Number(order.executedQty)
+              : NaN);
+          if (!(avg > 0)) {
+            showToast("已下单但均价缺失，请手动核对成本");
+            await reloadNailHoldings({ silent: true });
+            return false;
+          }
+          await applyMarketBuyCostAndStops(key, avg);
+          await reloadNailHoldings({ silent: true });
+          showToast(
+            `${asset} 现价买入成交 · 成本 ${formatHoldingsPriceInput(avg)} · 已重挂止损`,
+          );
+          return true;
+        } catch (error) {
+          console.warn("executeNailMarketBuy failed", error);
+          showToast(error.message || "现价买入失败");
+          return false;
+        }
+      }
+
+      async function executeNailMarketSell(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || key === "USDT") {
+          showToast("请选择具体币种");
+          return false;
+        }
+        if (!isManualTradeConfigured()) {
+          showToast("请先配置现价交易 Worker");
+          return false;
+        }
+        const row = document.querySelector(
+          `#nailHoldList .nail-hold-row[data-hold-symbol="${key}"]`,
+        );
+        if (!row) {
+          showToast("未找到持有行");
+          return false;
+        }
+        const free = Number(row.getAttribute("data-hold-free")) || 0;
+        const pctEl = row.querySelector(`[data-sell-pct="${key}"]`);
+        const pct = Number(pctEl && pctEl.value) || 0;
+        const quantity = free * (pct / 100);
+        if (!(free > 0) || !(quantity > 0)) {
+          showToast("卖出数量无效（检查可用数量与比例）");
+          return false;
+        }
+        const asset = holdingsBaseAsset(key);
+        if (
+          !window.confirm(
+            `确认现价卖出 ${asset}？\n约 ${formatHoldingsQty(quantity)}（${pct}% 可用）`,
+          )
+        ) {
+          return false;
+        }
+        showToast(`现价卖出 ${asset}…`);
+        try {
+          const data = await callManualTradeWorker("/sell", {
+            symbol: key,
+            quantity,
+          });
+          const order = (data && data.order) || {};
+          const filled = Number(order.executedQty) || quantity;
+          await reloadNailHoldings({ silent: true });
+          showToast(
+            `${asset} 现价卖出成交 · ${formatHoldingsQty(filled)}${
+              order.avgPrice
+                ? ` · 均价 ${formatHoldingsPriceInput(order.avgPrice)}`
+                : ""
+            }`,
+          );
+          return true;
+        } catch (error) {
+          console.warn("executeNailMarketSell failed", error);
+          showToast(error.message || "现价卖出失败");
           return false;
         }
       }
@@ -35315,6 +35704,24 @@
             });
             return;
           }
+          const sellMarketBtn = event.target.closest("[data-sell-market]");
+          if (sellMarketBtn) {
+            if (sellMarketBtn.disabled) {
+              showToast("请先配置现价交易 Worker");
+              return;
+            }
+            sellMarketBtn.disabled = true;
+            void Promise.resolve(
+              executeNailMarketSell(
+                sellMarketBtn.getAttribute("data-sell-market"),
+              ),
+            ).finally(() => {
+              if (sellMarketBtn.isConnected) {
+                sellMarketBtn.disabled = !isManualTradeConfigured();
+              }
+            });
+            return;
+          }
           const buyArmBtn = event.target.closest("[data-buy-arm]");
           if (buyArmBtn) {
             if (buyArmBtn.disabled) return;
@@ -35323,6 +35730,22 @@
               upsertNailBuyTask(buyArmBtn.getAttribute("data-buy-arm")),
             ).finally(() => {
               if (buyArmBtn.isConnected) buyArmBtn.disabled = false;
+            });
+            return;
+          }
+          const buyMarketBtn = event.target.closest("[data-buy-market]");
+          if (buyMarketBtn) {
+            if (buyMarketBtn.disabled) {
+              showToast("请先配置现价交易 Worker");
+              return;
+            }
+            buyMarketBtn.disabled = true;
+            void Promise.resolve(
+              executeNailMarketBuy(buyMarketBtn.getAttribute("data-buy-market")),
+            ).finally(() => {
+              if (buyMarketBtn.isConnected) {
+                buyMarketBtn.disabled = !isManualTradeConfigured();
+              }
             });
             return;
           }
@@ -35408,6 +35831,26 @@
         nailHoldSettingsBtn.addEventListener("click", () => {
           const panel = document.getElementById("nailHoldSettingsPanel");
           setNailHoldSettingsOpen(panel ? panel.hidden : true);
+        });
+      }
+      const nailManualTradeForm = document.getElementById("nailManualTradeForm");
+      if (nailManualTradeForm) {
+        syncNailManualTradeForm();
+        nailManualTradeForm.addEventListener("submit", (event) => {
+          event.preventDefault();
+          const urlEl = document.getElementById("nailManualTradeUrl");
+          const tokenEl = document.getElementById("nailManualTradeToken");
+          const cfg = saveManualTradeConfig(
+            urlEl && urlEl.value,
+            tokenEl && tokenEl.value,
+          );
+          syncNailManualTradeForm();
+          syncNailMarketTradeButtons();
+          if (cfg.url && cfg.token) {
+            showToast("现价 Worker 已保存");
+          } else {
+            showToast("已清空现价 Worker 配置");
+          }
         });
       }
       const nailSellLiveSwitch = document.getElementById("nailSellLiveSwitch");

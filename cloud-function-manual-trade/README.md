@@ -23,6 +23,7 @@
 | `MANUAL_TRADE_TOKEN` | 你自己设的口令，例如一串随机字母数字 |
 
 3. 记下 Worker 的 URL，如 `https://manual-trade.<你的子域>.workers.dev`。
+4. 在持有页设置里填入 Worker URL + Token（页面 localStorage `kline-manual-trade-worker-v1`）。
 
 免费额度：10 万请求/天、10ms CPU/次（fetch 等待不计），这个场景连零头都用不到，无需信用卡。
 
@@ -72,14 +73,14 @@ curl https://<你的worker域名>/ping -H "Authorization: Bearer <TOKEN>"
 }
 ```
 
-手机快捷方式：把 `/buy` 或 `/sell` 的 curl 存成 iOS 快捷指令 / Android Termux 脚本，即可一键下单。
+持有页「现价买入」成功后，会用返回的 `avgPrice` 写入成本价 P，并重挂 -3%/-5% 止损任务，随后由华为云定时器接管止损执行。Worker 本身仍不读写任何状态文件。
 
 ## 安全提醒
 
 - `MANUAL_TRADE_TOKEN` 别写进代码、别发聊天里；只放 Worker Secrets。
 - 币安 Key 只开现货交易、**关提现**；建议 IP 白名单先不设（Workers 出口 IP 不固定）。
 - 默认 `quoteOrderQty` 最小 5 USDT；卖出数量会按币安 `stepSize` 向下取整并校验 `minQty`。
-- 手动单和自动单**互不知晓仓位**：手动买完，华为云定时器不会给它设止损；手动卖的币如果同时是自动仓位的 symbol，两边会各自独立操作。若要避免冲突，手动单尽量用自动仓位之外的币，或先paring自动检测。
+- 手动卖的币如果同时挂着自动仓位任务，两边会各自独立操作；注意避免冲突。
 
 ## 与定时器的关系
 
@@ -88,4 +89,4 @@ curl https://<你的worker域名>/ping -H "Authorization: Bearer <TOKEN>"
 | 原自动买/卖 | 华为云 `cloud-function-trade` | 5min 定时 | `trade-bot-state.json` | **完全不动** |
 | 手动买/卖 | Cloudflare Workers（本目录） | HTTP 请求 | 无（只下单+返回） | 新增 |
 
-两者并行，互不干扰。
+两者并行；成本/止损由持有页在现价买入成功后写入 GitHub JSON，再交定时器执行。
