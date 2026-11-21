@@ -6494,6 +6494,10 @@
       .quick-trade-sheet.is-busy {
         pointer-events: none;
       }
+      /* 同步余额时仍可点「限价/止损」进持有页 */
+      .quick-trade-sheet.is-busy #quickTradeAdvanced {
+        pointer-events: auto;
+      }
       .quick-trade-sheet.is-busy input[type="range"] {
         opacity: 0.55;
       }
@@ -18517,7 +18521,12 @@
           layoutNailHoldPopover();
           syncNailHoldUpdatedUi();
           startNailHoldLive();
-          await reloadNailHoldings({ silent: true });
+          // 先露出浮层再拉数，避免长时间无反馈像卡住
+          try {
+            await reloadNailHoldings({ silent: true });
+          } catch (error) {
+            console.warn("hold popover reload failed", error);
+          }
           layoutNailHoldPopover();
         } else {
           setNailHoldSelectMode(false);
@@ -18581,11 +18590,10 @@
         const sheet = document.getElementById("quickTradeSheet");
         const confirmBtn = document.getElementById("quickTradeConfirm");
         const pctEl = document.getElementById("quickTradePct");
-        const advancedBtn = document.getElementById("quickTradeAdvanced");
         const pxRefresh = document.getElementById("quickTradePxRefresh");
         if (sheet) sheet.classList.toggle("is-busy", !!on);
         if (pctEl) pctEl.disabled = !!on;
-        if (advancedBtn) advancedBtn.disabled = !!on;
+        /* 限价/止损在 busy 时仍可点，不在此 disable */
         if (pxRefresh) pxRefresh.disabled = !!on;
         if (!confirmBtn) return;
         if (on) {
@@ -18905,8 +18913,12 @@
         }
         try {
           closeQuickTradeSheet();
-          await ensureHoldSymbol(symbol);
+          setFocusActionSymbol(null);
+          showToast("打开持有…");
+          // 先打开浮层并刷新；ensure 必须在刷新之后，
+          // 否则即时同步会把无仓币当灰尘清掉，导致「找不到该币」。
           await setNailHoldPopoverOpen(true);
+          await ensureHoldSymbol(symbol);
           setNailHoldExpanded(symbol);
           renderNailHoldList();
           applyNailHoldCollapsedState();
@@ -18917,7 +18929,6 @@
           }
           openNailHoldPanel(symbol, want);
           row.scrollIntoView({ block: "nearest", behavior: "smooth" });
-          setFocusActionSymbol(null);
           return true;
         } catch (error) {
           console.warn("openHoldTradeForSymbol failed", error);
