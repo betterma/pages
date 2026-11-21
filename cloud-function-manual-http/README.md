@@ -11,7 +11,8 @@
 ## 部署步骤（FunctionGraph 控制台）
 
 1. 创建函数 → **类型选「HTTP 函数」**（不是事件函数）→ Node.js 18+ → 区域随意（币安能通即可）。
-2. 代码上传方式选「**手动上传 ZIP**」或「 Oberon / 代码目录」，把本目录 **3 个文件**（`index.js`、`binance.js`、`bootstrap`）打包成 zip，**bootstrap 在根目录**。
+2. 代码上传方式选「**手动上传 ZIP**」，把本目录 **3 个文件**（`index.js`、`binance.js`、`bootstrap`）打包成 zip，**bootstrap 在 zip 根目录**（打开 zip 就能直接看到这三个文件，不要多套一层文件夹）。
+   - **Windows 注意**：`bootstrap` 必须是 Unix 换行（LF）。若用记事本改过，会变成 CRLF，运行时报 `cd: /opt/function/code\r: No such file`。用仓库里已修好的文件打包，或打包前确保 LF。
 3. 内存建议 256MB；超时 60s。
 4. 环境变量：
 
