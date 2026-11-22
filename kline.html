@@ -19072,6 +19072,39 @@
             });
             const order = (data && data.order) || {};
             const filled = Number(order.executedQty) || quantity;
+            // 与持有栏「现价卖出」一致：必须在余额同步之前抓成本，
+            // 卖光/灰尘时同步会清掉 entryPrices，之后再抓就拿不到了。
+            const entryPx = holdingsEntryPriceOf(st.symbol);
+            const sellAvg =
+              Number(order.avgPrice) ||
+              (Number(order.cummulativeQuoteQty) > 0 && filled > 0
+                ? Number(order.cummulativeQuoteQty) / filled
+                : NaN);
+            const feeGuess = Number(order.fee) || filled * sellAvg * 0.001;
+            if (
+              entryPx > 0 &&
+              filled > 0 &&
+              Number.isFinite(sellAvg) &&
+              sellAvg > 0
+            ) {
+              try {
+                const realized = await recordTradeRealizedPnl(
+                  st.symbol,
+                  filled,
+                  sellAvg,
+                  entryPx,
+                  feeGuess,
+                  "manual-market",
+                );
+                if (Number.isFinite(realized)) {
+                  console.log(
+                    `[trade-pnl] recorded ${st.symbol} ${realized.toFixed(4)} USDT`,
+                  );
+                }
+              } catch (pnlError) {
+                console.warn("recordTradeRealizedPnl failed", pnlError);
+              }
+            }
             setQuickTradeBusy(true, "同步中…");
             if (isManualTradeConfigured()) {
               try {
