@@ -5509,8 +5509,9 @@
         .nail-head-title-line .nail-digest-lights {
           display: flex;
         }
-        /* 有未读时占位；未展开时条本身仍隐藏，展开后才显示对应条。 */
-        .nail-digest-stack:has(.nail-digest:not([hidden])) {
+        /* 有未读或正在展开时占位；未展开时条本身仍隐藏。 */
+        .nail-digest-stack:has(.nail-digest:not([hidden])),
+        .nail-digest-stack[data-mobile-expand] {
           display: flex;
         }
         .nail-digest:not([hidden]) {
@@ -32145,6 +32146,26 @@
           });
         });
         const digestStack = document.getElementById("nailDigestStack");
+        const digestLights = document.getElementById("nailDigestLights");
+        // 红绿灯已挪到标题行，需单独绑定；摘要条仍在 stack 上。
+        if (digestLights && !digestLights.dataset.bound) {
+          digestLights.dataset.bound = "1";
+          digestLights.addEventListener("click", (event) => {
+            const lightBtn =
+              event.target &&
+              event.target.closest &&
+              event.target.closest("[data-digest-light]");
+            if (!lightBtn) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const mode = String(
+              lightBtn.getAttribute("data-digest-light") || "",
+            );
+            if (!lightBtn.classList.contains("is-on")) return;
+            if (getDigestMobileExpand() === mode) setDigestMobileExpand("");
+            else setDigestMobileExpand(mode);
+          });
+        }
         if (digestStack && !digestStack.dataset.bound) {
           digestStack.dataset.bound = "1";
           const flashJumpTargetCard = (card) => {
@@ -32262,21 +32283,6 @@
             }
           };
           digestStack.addEventListener("click", (event) => {
-            const lightBtn =
-              event.target &&
-              event.target.closest &&
-              event.target.closest("[data-digest-light]");
-            if (lightBtn) {
-              event.preventDefault();
-              event.stopPropagation();
-              const mode = String(
-                lightBtn.getAttribute("data-digest-light") || "",
-              );
-              if (!lightBtn.classList.contains("is-on")) return;
-              if (getDigestMobileExpand() === mode) setDigestMobileExpand("");
-              else setDigestMobileExpand(mode);
-              return;
-            }
             const dismiss =
               event.target &&
               event.target.closest &&
