@@ -18573,7 +18573,9 @@
 
           renderNailHoldList();
           syncNailHoldLiveSwitches();
-          if (isNailDrawerOpen()) applyNailListOrder();
+          // 须整表重渲：余额到账前「上涨过滤」可能已把持有币滤出 DOM，
+          // 仅 applyNailListOrder 挪不动不存在的卡，持有段会一直空。
+          if (isNailDrawerOpen()) renderNailDrawer();
           if (!silent) {
             showToast(
               `已刷新${liveNote} · ${symbols.length} 币 / 卖任务 ${(nailSellTasksState.tasks || []).length} / 买任务 ${(nailBuyTasksState.tasks || []).length}`,
@@ -19791,7 +19793,12 @@
                 /* ignore */
               }
             }
-            if (typeof applyNailListOrder === "function") applyNailListOrder();
+            // 持仓集合变了：上涨过滤下非涨持有可能进/出可见集，须整表重渲。
+            if (typeof isNailDrawerOpen === "function" && isNailDrawerOpen()) {
+              renderNailDrawer();
+            } else if (typeof applyNailListOrder === "function") {
+              applyNailListOrder();
+            }
             if (typeof syncNailHeldPnlUi === "function") syncNailHeldPnlUi();
             if (typeof renderNailHoldList === "function") renderNailHoldList();
             closeQuickTradeSheet();
@@ -19854,7 +19861,11 @@
               /* ignore */
             }
           }
-          if (typeof applyNailListOrder === "function") applyNailListOrder();
+          if (typeof isNailDrawerOpen === "function" && isNailDrawerOpen()) {
+            renderNailDrawer();
+          } else if (typeof applyNailListOrder === "function") {
+            applyNailListOrder();
+          }
           if (typeof syncNailHeldPnlUi === "function") syncNailHeldPnlUi();
           if (typeof renderNailHoldList === "function") renderNailHoldList();
           closeQuickTradeSheet();
@@ -21342,6 +21353,24 @@
             syncNailHeldRefreshUi();
             renderNailDrawer();
             syncNailInMarks();
+          }),
+          // 启动就灌余额缓存：否则首开置顶时上涨过滤还当「未持有」，持有段空白一帧。
+          soft("holdings", "持有余额", async () => {
+            if (
+              !WatchFavorites ||
+              typeof WatchFavorites.loadHoldingsRaw !== "function"
+            ) {
+              return;
+            }
+            try {
+              const raw = await WatchFavorites.loadHoldingsRaw({
+                repo: CONFIG.GITHUB_REPO,
+              });
+              if (raw && raw.state) nailHoldingsState = raw.state;
+              if (isNailDrawerOpen()) renderNailDrawer();
+            } catch (error) {
+              console.warn("boot holdings soft-load failed", error);
+            }
           }),
           soft("pos", "持仓", async () => {
             const posState = await WatchFavorites.loadPositionsRaw({
@@ -33615,15 +33644,33 @@
         // 与云函数 holdings.js 的 HOLDINGS_DUST_USDT 同口径：
         // 名义金额 < 0.1 USDT 的残留算灰尘，不再归入「持有」段。
         // 原来走 holdingsFreeQty（门槛 0.01），导致卖光后剩一点灰尘还留在持有顶部。
-        return holdingsTotalUsdt(symbol) >= HOLDINGS_DUST_USDT;
+        const total = holdingsTotalUsdt(symbol);
+        if (Number.isFinite(total)) return total >= HOLDINGS_DUST_USDT;
+        // 现价尚未进 marketMap 时 total 为 NaN：有余额先算持有，
+        // 避免刚开置顶分栏时上涨过滤把持有币滤掉、持有段空白。
+        const asset = holdingsBaseAsset(symbol);
+        if (!asset || asset === "USDT") return false;
+        const row =
+          (nailHoldingsState &&
+            nailHoldingsState.balances &&
+            nailHoldingsState.balances[asset]) ||
+          {};
+        const qty = (Number(row.free) || 0) + (Number(row.locked) || 0);
+        return qty > 0;
       }
 
       function nailDrawerVisibleItems() {
         const all = Array.isArray(nailItems) ? nailItems : [];
+        // 上涨过滤：持有币显式放行（与 nailSymbolPassesRisingFilter 双保险）。
         let items = nailRisingFilterOn
-          ? all.filter((item) => nailSymbolPassesRisingFilter(item.symbol))
+          ? all.filter(
+              (item) =>
+                nailSymbolIsHeld(item && item.symbol) ||
+                nailSymbolPassesRisingFilter(item && item.symbol),
+            )
           : all.slice();
         if (nailPinnedOnlyOn) {
+          // 「只看置顶」：未置顶的持有不进列表（设置文案约定）；置顶持有仍归持有段。
           items = items.filter((item) => !!(item && item.pinned));
         }
         if (nailSortMode === "alertGreen") {
@@ -33855,8 +33902,16 @@
       function applyNailListOrder() {
         const grid = document.querySelector("#nailList .nail-grid");
         if (!grid) return;
-        const sections = nailDrawerSectionParts(nailDrawerVisibleItems());
+        const visibleItems = nailDrawerVisibleItems();
+        const sections = nailDrawerSectionParts(visibleItems);
         const showLabels = nailDrawerShowSectionLabels(sections);
+        const visibleKeys = new Set(
+          visibleItems.map((item) =>
+            String((item && item.symbol) || "")
+              .trim()
+              .toUpperCase(),
+          ),
+        );
         grid
           .querySelectorAll(".nail-section-label")
           .forEach((el) => el.remove());
@@ -33868,15 +33923,23 @@
             if (labelEl) grid.appendChild(labelEl);
           }
           for (const item of section.items) {
-          const key = String(item.symbol || "").toUpperCase();
+            const key = String(item.symbol || "").toUpperCase();
             if (!key) continue;
             const sel = CSS.escape
               ? `.nail-kcard[data-nail-symbol="${CSS.escape(key)}"]`
               : `.nail-kcard[data-nail-symbol="${key}"]`;
             const card = grid.querySelector(sel);
-          if (card) grid.appendChild(card);
+            if (card) grid.appendChild(card);
           }
         }
+        // 卖光后不再持有、且非上涨：可见集已不含，把残留卡清掉。
+        // 注意：缺卡（新买入的非涨持有）仍须 renderNailDrawer 补画。
+        grid.querySelectorAll(".nail-kcard[data-nail-symbol]").forEach((card) => {
+          const key = String(card.getAttribute("data-nail-symbol") || "")
+            .trim()
+            .toUpperCase();
+          if (key && !visibleKeys.has(key)) card.remove();
+        });
       }
 
       function renderNailDrawer() {
