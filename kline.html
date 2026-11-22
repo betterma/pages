@@ -18624,30 +18624,14 @@
               });
               return added.holdings || state;
             }
-            // 无成交量时退回手填覆盖语义
-            if (
-              typeof WatchFavorites.replaceLotsWithSingleInHoldings ===
-              "function"
-            ) {
-              const replaced = WatchFavorites.replaceLotsWithSingleInHoldings(
-                state,
-                { symbol: key, price, at: now, source: "market" },
-              );
-              return replaced.holdings || state;
-            }
-            const entryPrices = { ...(state.entryPrices || {}) };
+            // 无成交量时绝不覆盖已有分笔成本，只保证关注列表与清 stopCancel
             const stopCancel = { ...(state.stopCancel || {}) };
-            entryPrices[key] = {
-              price,
-              at: now,
-              source: "market",
-            };
             if (stopCancel[key]) delete stopCancel[key];
             const symbols = Array.isArray(state.symbols)
               ? state.symbols.slice()
               : [];
             if (!symbols.includes(key)) symbols.push(key);
-            return { ...state, symbols, entryPrices, stopCancel };
+            return { ...state, symbols, stopCancel, updatedAt: now };
           },
         });
         nailHoldingsState = holdResult.state || nailHoldingsState;

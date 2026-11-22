@@ -509,6 +509,32 @@ async function runHoldingsSync(options) {
   const clearedSymbols = [];
   const priceMap = await fetchSpotPrices(state.symbols, context);
 
+  // 仍有挂单的卖出：暂留 lots/成本，供随后 FIFO 入账（避免先清后成交漏记）
+  const openSellSymbols = new Set();
+  try {
+    const sellFile = await loadJson(SELL_TASKS_PATH);
+    const tasks =
+      sellFile.data && Array.isArray(sellFile.data.tasks)
+        ? sellFile.data.tasks
+        : [];
+    tasks.forEach((task) => {
+      if (!task || typeof task !== 'object') return;
+      const sym = normalizeSymbol(task.symbol);
+      if (!sym) return;
+      const st = String(task.status || '').toLowerCase();
+      if (
+        task.openOrderId ||
+        st === 'order_open' ||
+        st === 'partial' ||
+        st === 'cancel_requested'
+      ) {
+        openSellSymbols.add(sym);
+      }
+    });
+  } catch (error) {
+    /* 读卖出任务失败则仍按原逻辑清成本 */
+  }
+
   const nextSymbols = [];
   state.symbols.forEach((symbol) => {
     const asset = baseAssetOf(symbol);
@@ -529,10 +555,12 @@ async function runHoldingsSync(options) {
     const notional = Number.isFinite(px) && px > 0 ? qty * px : NaN;
     const isDust =
       !isFlat && Number.isFinite(notional) && notional < HOLDINGS_DUST_USDT;
-    // 卖光 / 灰尘：清成本 P + lots，移出关注，并清全部买卖监控（见下方）
+    // 卖光 / 灰尘：移出关注并清监控；无未完成卖单时才清 lots/成本
     if (isFlat || isDust) {
-      if (entryPrices[symbol]) delete entryPrices[symbol];
-      if (entryLots[symbol]) delete entryLots[symbol];
+      if (!openSellSymbols.has(symbol)) {
+        if (entryPrices[symbol]) delete entryPrices[symbol];
+        if (entryLots[symbol]) delete entryLots[symbol];
+      }
       if (stopCancel[symbol]) delete stopCancel[symbol];
       clearedSymbols.push(symbol);
       return;

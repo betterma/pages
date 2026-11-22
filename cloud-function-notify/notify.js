@@ -2454,19 +2454,8 @@ async function main(event, context) {
     console.warn('nail-daily-reset failed', message);
   }
 
-  let holdings = { skipped: true, reason: 'not-run' };
-  try {
-    holdings = await runHoldingsSync({ now, context: context || null });
-    if (!holdings.skipped && holdings.reason === 'ok') {
-      sent.push(`holdings:${holdings.updated || 0}`);
-    }
-    console.log('holdings', JSON.stringify(holdings));
-  } catch (error) {
-    const message = error && error.message ? error.message : String(error);
-    sendErrors.push(`holdings:${message}`);
-    console.warn('holdings failed', message);
-  }
-
+  // 先买卖成交记账（FIFO / addBuyLot），再 holdings 同步清卖光成本。
+  // 若先 sync 清掉 entryLots，同轮或跨轮卖出成交会无法写入已实现盈亏。
   let sellTasks = { skipped: true, reason: 'not-run' };
   try {
     sellTasks = await runSellTasks({ now, context: context || null });
@@ -2501,6 +2490,19 @@ async function main(event, context) {
     const message = error && error.message ? error.message : String(error);
     sendErrors.push(`buy-tasks:${message}`);
     console.warn('buy-tasks failed', message);
+  }
+
+  let holdings = { skipped: true, reason: 'not-run' };
+  try {
+    holdings = await runHoldingsSync({ now, context: context || null });
+    if (!holdings.skipped && holdings.reason === 'ok') {
+      sent.push(`holdings:${holdings.updated || 0}`);
+    }
+    console.log('holdings', JSON.stringify(holdings));
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    sendErrors.push(`holdings:${message}`);
+    console.warn('holdings failed', message);
   }
 
   // nailGreenAlert / balanceAlert 已在空仓早退前跑过；此处只汇总到 sent。
