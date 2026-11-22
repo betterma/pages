@@ -2267,6 +2267,20 @@
         display: flex;
         align-items: center;
         gap: 6px;
+        min-width: 0;
+      }
+      /* 交通灯挂在标题行设置右侧；桌面隐藏，手机显示（省掉摘要栈一行）。 */
+      .nail-head-title-line .nail-digest-lights {
+        display: none;
+        align-items: center;
+        gap: 7px;
+        margin: 0 0 0 2px;
+        padding: 0;
+        flex: 0 0 auto;
+      }
+      .nail-head-title-line .nail-digest-light {
+        width: 11px;
+        height: 11px;
       }
       .nail-head h3 {
         margin: 0;
@@ -3648,23 +3662,28 @@
         align-items: center;
         gap: 4px;
       }
-      .nail-hold-pnl-item b {
-        font-weight: 700;
-      }
-      .nail-hold-pnl-item.is-up b {
-        color: var(--up, #16a66a);
-      }
-      .nail-hold-pnl-item.is-down b {
-        color: var(--down, #e0444a);
-      }
       .nail-hold-pnl-history {
         border: 0.5px solid var(--separator);
         border-radius: 999px;
         background: transparent;
-        color: var(--accent);
+        color: var(--secondary, #8e8e93);
         font-size: 11px;
+        font-weight: 650;
+        font-variant-numeric: tabular-nums;
         padding: 2px 8px;
         cursor: pointer;
+      }
+      .pnl-sign.is-up {
+        color: var(--up, #16a66a);
+      }
+      .pnl-sign.is-down {
+        color: var(--down, #e0444a);
+      }
+      .pnl-sign.is-flat {
+        color: var(--secondary, #8e8e93);
+      }
+      .pnl-num {
+        color: var(--secondary, #8e8e93);
       }
       .nail-pnl-modal {
         position: fixed;
@@ -3723,12 +3742,6 @@
         font-weight: 700;
         margin-left: 4px;
       }
-      .nail-pnl-summary .is-up b {
-        color: var(--up, #16a66a);
-      }
-      .nail-pnl-summary .is-down b {
-        color: var(--down, #e0444a);
-      }
       .nail-pnl-row {
         display: flex;
         align-items: baseline;
@@ -3778,12 +3791,7 @@
         flex: 0 0 auto;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
-      }
-      .nail-pnl-row-val.is-up {
-        color: var(--up, #16a66a);
-      }
-      .nail-pnl-row-val.is-down {
-        color: var(--down, #e0444a);
+        color: var(--secondary, #8e8e93);
       }
       .nail-pnl-empty {
         color: var(--secondary);
@@ -4116,15 +4124,7 @@
         font-variant-numeric: tabular-nums;
         line-height: 1.3;
         margin-top: 1px;
-      }
-      .nail-hold-pnl.is-up {
-        color: var(--up, #16a66a);
-      }
-      .nail-hold-pnl.is-down {
-        color: var(--down, #e0444a);
-      }
-      .nail-hold-pnl.is-flat {
-        color: rgba(28, 28, 30, 0.45);
+        color: var(--secondary, #8e8e93);
       }
       .nail-hold-meta {
         color: rgba(28, 28, 30, 0.62);
@@ -5316,14 +5316,9 @@
       .nail-digest-stack:not(:has(.nail-digest:not([hidden]))) {
         display: none;
       }
-      /* 桌面不用交通灯；手机见下方 @media。 */
+      /* 默认隐藏；手机在标题行展示（见 .nail-head-title-line / @media）。 */
       .nail-digest-lights {
         display: none;
-        align-items: center;
-        justify-content: flex-start;
-        gap: 10px;
-        padding: 2px 2px 0;
-        flex: 0 0 auto;
       }
       .nail-digest-light {
         width: 14px;
@@ -5509,13 +5504,13 @@
       .nail-digest.is-pullback .nail-digest-go {
         color: color-mix(in srgb, var(--accent, #2f8f6e) 82%, var(--label));
       }
-      /* 移动端：三条摘要收成交通灯；点亮的灯可展开/收起对应摘要条。 */
+      /* 移动端：摘要收成标题行交通灯；点亮的灯可展开/收起对应摘要条。 */
       @media (max-width: 720px) {
-        .nail-digest-stack,
-        .nail-digest-stack:not(:has(.nail-digest:not([hidden]))) {
+        .nail-head-title-line .nail-digest-lights {
           display: flex;
         }
-        .nail-digest-lights {
+        /* 有未读时占位；未展开时条本身仍隐藏，展开后才显示对应条。 */
+        .nail-digest-stack:has(.nail-digest:not([hidden])) {
           display: flex;
         }
         .nail-digest:not([hidden]) {
@@ -5860,17 +5855,6 @@
         font-variant-numeric: tabular-nums;
         font-weight: 700;
         letter-spacing: 0;
-      }
-      .nail-section-pnl.is-up,
-      .nail-pnl.is-up {
-        color: var(--up, #16a66a);
-      }
-      .nail-section-pnl.is-down,
-      .nail-pnl.is-down {
-        color: var(--down, #e0444a);
-      }
-      .nail-section-pnl.is-flat,
-      .nail-pnl.is-flat {
         color: var(--secondary, #9aa3a0);
       }
       .nail-pnl {
@@ -5879,6 +5863,7 @@
         font-weight: 700;
         font-variant-numeric: tabular-nums;
         line-height: 1.3;
+        color: var(--secondary, #9aa3a0);
       }
       .nail-pnl + .nail-note {
         margin-top: 2px;
@@ -9481,33 +9466,42 @@
                   <path d="M12 3.5v2.2M12 18.3v2.2M4.9 6.4l1.6 1.6M17.5 16l1.6 1.6M3.5 12h2.2M18.3 12h2.2M4.9 17.6l1.6-1.6M17.5 8l1.6-1.6" />
                 </svg>
               </button>
+              <div
+                class="nail-digest-lights"
+                id="nailDigestLights"
+                role="toolbar"
+                aria-label="通知指示灯：红俯瞰、绿回踩、黄通知"
+              >
+                <button
+                  type="button"
+                  class="nail-digest-light is-red"
+                  data-digest-light="overlook"
+                  title="俯瞰"
+                  aria-label="俯瞰"
+                  aria-pressed="false"
+                ></button>
+                <button
+                  type="button"
+                  class="nail-digest-light is-green"
+                  data-digest-light="pullback"
+                  title="回踩"
+                  aria-label="回踩"
+                  aria-pressed="false"
+                ></button>
+                <button
+                  type="button"
+                  class="nail-digest-light is-yellow"
+                  data-digest-light="notice"
+                  title="通知"
+                  aria-label="通知"
+                  aria-pressed="false"
+                ></button>
+              </div>
             </div>
             <p id="nailMeta">复制名称后新增 · 置顶 / 长按拖动排序</p>
           </div>
           <div class="nail-head-actions">
             <div class="nail-head-actions-right">
-              <button
-                type="button"
-                class="nail-notice-entry"
-                id="nailReloadBtn"
-                title="整页重载：等同浏览器刷新并绕过缓存（重新加载最新代码，会重置当前分栏与浮层）"
-                aria-label="整页重载"
-              >
-                <svg
-                  class="nail-notice-bell"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M20 12a8 8 0 1 1-2.34-5.66" />
-                  <path d="M20 4v5h-5" />
-                </svg>
-                重载
-              </button>
               <button
                 type="button"
                 class="nail-notice-entry"
@@ -10035,37 +10029,6 @@
           </button>
         </div>
         <div class="nail-digest-stack" id="nailDigestStack">
-          <div
-            class="nail-digest-lights"
-            id="nailDigestLights"
-            role="toolbar"
-            aria-label="通知指示灯：红俯瞰、绿回踩、黄通知"
-          >
-            <button
-              type="button"
-              class="nail-digest-light is-red"
-              data-digest-light="overlook"
-              title="俯瞰"
-              aria-label="俯瞰"
-              aria-pressed="false"
-            ></button>
-            <button
-              type="button"
-              class="nail-digest-light is-green"
-              data-digest-light="pullback"
-              title="回踩"
-              aria-label="回踩"
-              aria-pressed="false"
-            ></button>
-            <button
-              type="button"
-              class="nail-digest-light is-yellow"
-              data-digest-light="notice"
-              title="通知"
-              aria-label="通知"
-              aria-pressed="false"
-            ></button>
-          </div>
           <div
             class="nail-digest is-overlook"
             id="nailDigestOverlook"
@@ -16095,18 +16058,18 @@
         const summary = document.getElementById("nailTradePnlSummary");
         if (summary) {
           const bits = [
-            `<span class="${holdingsPnlTone(realized)}">已实现<b>${escapeHtml(formatHoldingsPnlUsdt(realized))}</b></span>`,
+            `<span>已实现 ${formatHoldingsPnlSignedHtml(realized, { unit: false })}</span>`,
           ];
           if (unrealized != null) {
             bits.push(
-              `<span class="${holdingsPnlTone(unrealized)}">未实现<b>${escapeHtml(formatHoldingsPnlUsdt(unrealized))}</b></span>`,
+              `<span>未实现 ${formatHoldingsPnlSignedHtml(unrealized, { unit: false })}</span>`,
             );
           } else {
-            bits.push(`<span>未实现<b>—</b></span>`);
+            bits.push(`<span>未实现 <span class="pnl-num">—</span></span>`);
           }
           if (combined) {
             bits.push(
-              `<span class="${holdingsPnlTone(combined.usdt)}">合计<b>${escapeHtml(formatHoldingsPnlUsdt(combined.usdt))}</b></span>`,
+              `<span>合计 ${formatHoldingsPnlSignedHtml(combined.usdt, { unit: false })}</span>`,
             );
           }
           summary.innerHTML = bits.join("");
@@ -16125,10 +16088,10 @@
               ? new Date(row.at).toLocaleString("zh-CN", { hour12: false })
               : "—";
             if (row.kind === "open") {
-              const tone =
-                row.pnl == null ? "is-flat" : holdingsPnlTone(row.pnl);
-              const pnlText =
-                row.pnl == null ? "—" : formatHoldingsPnlUsdt(row.pnl);
+              const pnlHtml =
+                row.pnl == null
+                  ? `<span class="pnl-num">—</span>`
+                  : formatHoldingsPnlSignedHtml(row.pnl, { unit: false });
               const spotBit =
                 row.spot != null
                   ? `现价 ${formatHoldingsPriceInput(row.spot)}`
@@ -16138,16 +16101,15 @@
                 <b>${escapeHtml(row.label)}</b> 持有 ${escapeHtml(formatHoldingsQty(row.quantity))}<span class="nail-pnl-tag is-open">持有</span>
                 <div class="nail-pnl-row-meta">成本 ${escapeHtml(formatHoldingsPriceInput(row.buyPrice))} · ${escapeHtml(spotBit)} · ${escapeHtml(when)}</div>
               </div>
-              <div class="nail-pnl-row-val ${tone}">${escapeHtml(pnlText)}</div>
+              <div class="nail-pnl-row-val">${pnlHtml}</div>
             </div>`;
             }
-            const tone = holdingsPnlTone(row.pnl);
             return `<div class="nail-pnl-row">
               <div class="nail-pnl-row-main">
                 <b>${escapeHtml(row.label || row.symbol)}</b> 卖出 ${escapeHtml(formatHoldingsQty(row.quantity))}<span class="nail-pnl-tag is-closed">已实现</span>
                 <div class="nail-pnl-row-meta">买 ${escapeHtml(formatHoldingsPriceInput(row.buyPrice))} → 卖 ${escapeHtml(formatHoldingsPriceInput(row.sellPrice))} · ${escapeHtml(when)} · ${escapeHtml(row.source || "manual")}</div>
               </div>
-              <div class="nail-pnl-row-val ${tone}">${escapeHtml(formatHoldingsPnlUsdt(row.pnl))}</div>
+              <div class="nail-pnl-row-val">${formatHoldingsPnlSignedHtml(row.pnl, { unit: false })}</div>
             </div>`;
           })
           .join("");
@@ -16683,6 +16645,26 @@
         if (!Number.isFinite(n)) return "";
         const sign = n > 0 ? "+" : "";
         return `${sign}${formatHoldingsUsdt(n)} USDT`;
+      }
+
+      /**
+       * 盈亏展示：数字灰色，仅 +/- 用红绿。
+       * @returns {string} HTML（数值已格式化，可直接拼进模板）
+       */
+      function formatHoldingsPnlSignedHtml(usdt, options) {
+        const opts = options || {};
+        const n = Number(usdt);
+        if (!Number.isFinite(n)) {
+          return `<span class="pnl-num">${opts.empty != null ? opts.empty : "—"}</span>`;
+        }
+        const tone = holdingsPnlTone(n);
+        const sign = n > 1e-8 ? "+" : n < -1e-8 ? "-" : "";
+        const absText = formatHoldingsUsdt(Math.abs(n));
+        const unit = opts.unit === false ? "" : opts.unit != null ? opts.unit : "";
+        const signHtml = sign
+          ? `<span class="pnl-sign ${tone}">${sign}</span>`
+          : "";
+        return `${signHtml}<span class="pnl-num">${escapeHtml(absText)}${escapeHtml(unit)}</span>`;
       }
 
       function holdingsHeldPnlTotal(items) {
@@ -17539,18 +17521,17 @@
             const u = holdingsHeldPnlTotal(symbols.map((s) => ({ symbol: s })));
             const unrealized = u ? u.usdt : null;
             const total =
-              u != null ? realized + unrealized : realized;
+              unrealized != null ? realized + unrealized : realized;
             const hasAny =
               ((nailTradePnlState && nailTradePnlState.entries) || []).length >
-                0 || u != null;
-            let html = `<span class="nail-hold-pnl-item"><span>已实现</span><button type="button" class="nail-hold-pnl-history" id="nailTradePnlHistoryBtn" title="盈亏明细：持有未实现 + 已卖出已实现">${escapeHtml(formatHoldingsPnlUsdt(realized))} · 明细 ↗</button></span>`;
-            if (unrealized != null) {
-              html += `<span class="nail-hold-pnl-item ${holdingsPnlTone(unrealized)}"><span>未实现</span><b>${escapeHtml(formatHoldingsPnlUsdt(unrealized))}</b></span>`;
-            }
-            if (hasAny) {
-              html += `<span class="nail-hold-pnl-item ${holdingsPnlTone(total)}"><span>合计</span><b>${escapeHtml(formatHoldingsPnlUsdt(total))}</b></span>`;
-            }
-            return html;
+                0 || unrealized != null;
+            if (!hasAny) return "";
+            const uHtml =
+              unrealized != null
+                ? formatHoldingsPnlSignedHtml(unrealized, { unit: false })
+                : `<span class="pnl-num">—</span>`;
+            const tHtml = formatHoldingsPnlSignedHtml(total, { unit: false });
+            return `<button type="button" class="nail-hold-pnl-history" id="nailTradePnlHistoryBtn" title="点击展开盈亏明细">未 ${uHtml}/总 ${tHtml}</button>`;
           })() +
           `</div>` +
           sortedSymbols
@@ -17668,15 +17649,22 @@
               if (!isDust && holdQtyForPnl > 0) {
                 const pnl = holdingsPnlOf(symbol);
                 if (pnl) {
-                  const tone = holdingsPnlTone(pnl.usdt);
-                  const usdtBit = `${pnl.usdt > 0 ? "+" : ""}${formatHoldingsUsdt(pnl.usdt)}`;
-                  const pctBit =
-                    Number.isFinite(pnl.pct)
-                      ? `${pnl.pct > 0 ? "+" : ""}${pnl.pct.toFixed(2)}%`
-                      : "";
+                  const pctTone = holdingsPnlTone(pnl.pct);
+                  const pctSign =
+                    Number.isFinite(pnl.pct) && pnl.pct > 1e-8
+                      ? "+"
+                      : Number.isFinite(pnl.pct) && pnl.pct < -1e-8
+                        ? "-"
+                        : "";
+                  const pctAbs = Number.isFinite(pnl.pct)
+                    ? Math.abs(pnl.pct).toFixed(2)
+                    : "";
+                  const pctHtml = pctAbs
+                    ? ` · ${pctSign ? `<span class="pnl-sign ${pctTone}">${pctSign}</span>` : ""}<span class="pnl-num">${pctAbs}%</span>`
+                    : "";
                   const lotsBit =
-                    lotCount > 1 ? ` · ${lotCount}笔` : "";
-                  pnlHtml = `<span class="nail-hold-pnl ${tone}" title="按剩余各笔成本汇总的浮动盈亏">${escapeHtml(usdtBit)}${pctBit ? ` · ${escapeHtml(pctBit)}` : ""}${escapeHtml(lotsBit)}</span>`;
+                    lotCount > 1 ? ` · <span class="pnl-num">${lotCount}笔</span>` : "";
+                  pnlHtml = `<span class="nail-hold-pnl" title="按剩余各笔成本汇总的浮动盈亏">${formatHoldingsPnlSignedHtml(pnl.usdt, { unit: false })}${pctHtml}${lotsBit}</span>`;
                 }
               }
               const stop3Px =
@@ -32730,8 +32718,10 @@
             else if (wrap) wrap.insertAdjacentElement("afterend", el);
             else card.appendChild(el);
           }
-          el.className = `nail-pnl ${holdingsPnlTone(pnl.usdt)}`;
-          el.textContent = formatHoldingsPnlUsdt(pnl.usdt);
+          el.className = "nail-pnl";
+          el.innerHTML = formatHoldingsPnlSignedHtml(pnl.usdt, {
+            unit: " USDT",
+          });
         });
         const heldLabel = list.querySelector(
           '.nail-section-label[data-nail-section="held"]',
@@ -32756,8 +32746,10 @@
           if (titleEl) titleEl.appendChild(totalEl);
           else heldLabel.appendChild(totalEl);
         }
-        totalEl.className = `nail-section-pnl ${holdingsPnlTone(total.usdt)}`;
-        totalEl.textContent = formatHoldingsPnlUsdt(total.usdt);
+        totalEl.className = "nail-section-pnl";
+        totalEl.innerHTML = formatHoldingsPnlSignedHtml(total.usdt, {
+          unit: " USDT",
+        });
       }
 
       function syncNailRisingFilterUi() {
@@ -33599,8 +33591,7 @@
         if (section.id === "held") {
           const total = holdingsHeldPnlTotal(section.items);
           if (total) {
-            const tone = holdingsPnlTone(total.usdt);
-            pnlBit = `<span class="nail-section-pnl ${tone}" data-nail-held-pnl title="持有合计浮动盈亏（相对成本价）">${escapeHtml(formatHoldingsPnlUsdt(total.usdt))}</span>`;
+            pnlBit = `<span class="nail-section-pnl" data-nail-held-pnl title="持有合计浮动盈亏（相对成本价）">${formatHoldingsPnlSignedHtml(total.usdt, { unit: " USDT" })}</span>`;
           }
         }
         return (
@@ -36585,7 +36576,7 @@
         ].some(Boolean);
       }
 
-      /** 整页重载：顶栏与钉子头部的按钮共用，绕过缓存但保留 ?view=notes。 */
+      /** 整页重载：顶栏按钮，绕过缓存但保留 ?view=notes。 */
       function reloadWholePage() {
         if (hasPendingWrites()) {
           showToast("正在保存到 GitHub，稍后再重载");
@@ -36603,10 +36594,10 @@
         }
       }
 
-      ["reloadPageBtn", "nailReloadBtn"].forEach((id) => {
-        const btn = document.getElementById(id);
+      {
+        const btn = document.getElementById("reloadPageBtn");
         if (btn) btn.addEventListener("click", reloadWholePage);
-      });
+      }
       document.addEventListener("click", (event) => {
         const open = document.querySelector("details.friend-links[open]");
         if (!open) return;
