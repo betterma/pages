@@ -134,18 +134,9 @@ async function fetchBinancePrices(symbols) {
   return map;
 }
 
-function rowIsBstock(row) {
-  const sets = row && Array.isArray(row.permissionSets) ? row.permissionSets : [];
-  for (let i = 0; i < sets.length; i += 1) {
-    const group = sets[i];
-    if (Array.isArray(group) && group.includes('TRD_GRP_261')) return true;
-  }
-  return false;
-}
-
 /**
- * USDT 现货 TRADING 集合；顺带识别 bStocks（TRD_GRP_261）。
- * @returns {{ trading: Set<string>, bstocks: Set<string> }}
+ * USDT 现货 TRADING 集合。
+ * @returns {{ trading: Set<string> }}
  */
 async function fetchBinanceUsdtTradingMeta() {
   const endpoints = [
@@ -162,15 +153,13 @@ async function fetchBinanceUsdtTradingMeta() {
       }
       const data = JSON.parse(response.text());
       const trading = new Set();
-      const bstocks = new Set();
       (data.symbols || []).forEach((row) => {
         if (!row || row.status !== 'TRADING' || row.quoteAsset !== 'USDT') return;
         const symbol = String(row.symbol || '').toUpperCase();
         if (!symbol) return;
         trading.add(symbol);
-        if (rowIsBstock(row)) bstocks.add(symbol);
       });
-      if (trading.size) return { trading, bstocks };
+      if (trading.size) return { trading };
       lastError = new Error('Binance exchangeInfo empty USDT TRADING set');
     } catch (error) {
       lastError = error;
@@ -189,16 +178,11 @@ async function fetchBinanceUsdtTradingSet() {
  * @param {string[]|null|undefined} symbols
  *   传入数组则只保留这些；传 null/undefined 表示全市场 **USDT TRADING** 交易对
  *   （用于 24h 真前 N 排名；非 USDT / 已 BREAK 一律丢弃）。
- * @param {{ universe?: 'crypto'|'bstock'|'all' }} [options]
- *   crypto（默认）全市场 USDT TRADING（含 bStocks）；bstock 仅 bStocks；all 不按类型滤。
+ * @param {{ universe?: 'crypto'|'all' }} [options]
+ *   crypto（默认）全市场 USDT TRADING；all 不按类型滤（仍卡 TRADING 若能拉到）。
  */
 async function fetchBinanceTickers(symbols, options) {
-  const universe =
-    options && options.universe
-      ? String(options.universe)
-      : symbols == null
-        ? 'crypto'
-        : 'all';
+  void options;
   const filter =
     symbols == null
       ? null
@@ -210,11 +194,9 @@ async function fetchBinanceTickers(symbols, options) {
   if (filter && !filter.size) return {};
   // 全市场排名时必须卡 TRADING；按符号取价时也尽量去掉已下架，避免脏钉回流。
   let trading = null;
-  let bstocks = null;
   try {
     const meta = await fetchBinanceUsdtTradingMeta();
     trading = meta.trading;
-    bstocks = meta.bstocks;
   } catch (error) {
     if (symbols == null) throw error;
     console.warn(
@@ -241,10 +223,6 @@ async function fetchBinanceTickers(symbols, options) {
         // 本项目只做 USDT 现货；全市场拉取时也必须过滤，否则 GBP/BNB/FDUSD 等会进自动盯。
         if (!symbol.endsWith('USDT')) return;
         if (trading && !trading.has(symbol)) return;
-        // bstock 宇宙仍只收 TRD_GRP_261；crypto 不再排除 bStocks（与网页池一致）。
-        if (universe === 'bstock') {
-          if (bstocks && !bstocks.has(symbol)) return;
-        }
         if (filter && !filter.has(symbol)) return;
         const price = Number(item.lastPrice);
         const change24h = Number(item.priceChangePercent);

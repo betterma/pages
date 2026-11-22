@@ -335,7 +335,7 @@ async function runNailGreenAlerts(options) {
   const statePath = String(opts.statePath || STATE_PATH).trim() || STATE_PATH;
   const noticesPath =
     String(opts.noticesPath || NOTICES_PATH).trim() || NOTICES_PATH;
-  // push=false：只写页面 notices，不发企微（bstock 必须关推送）。
+  // push=false：只写页面 notices，不发企微。
   const pushEnabled = opts.push !== false;
   const webhook = pushEnabled
     ? String(opts.webhook || resolveWebhook() || '').trim()

@@ -1,0 +1,39 @@
+---
+description: 减负任务 — 抛弃首页 UI，只留钉子页（保留共享数据）
+alwaysApply: true
+---
+
+# 减负任务（钉子优先）
+
+用户固定只看钉子页，目标是**减负**：弱化/去掉首页 UI，**不**另起一套钉子数据。
+
+## 目标
+
+1. 默认进钉子；可跳过 WAVE2 首页网格（pin/rising/fav）渲染。
+2. 中长期可收成「钉子壳」，但共享 loader 与云任务必须保留。
+3. **不要**误删钉子强依赖的数据与云链路。
+
+## 强依赖（砍首页时也必须留）
+
+- JSON：`watch-nails`、`watch-pins`、`watch-mom-notes`、`watch-data`、`watch-holdings`、`watch-notify-state`、`watch-action-log`、`watch-balance-notices`、`watch-overlook`、`watch-ui-read-state`（及可选 price-alerts / nail-daily-reset / notify-health）
+- 运行时：`marketMap`（ticker）、`history`→`hasWindowGain`（上涨过滤）、`fetchKlines` / `paintNailKlines`
+- 云：`monitor`→`watch-data`；`notify` 里 auto-pin、`saveAutoPinNails`、overlook、balance、pullback、holdings/买卖
+
+## 可安全丢掉（首页皮）
+
+- `#pinGrid` / `#risingGrid` / `#favGrid`、WAVE2 批量卡片 K 线
+- notes 排行视图、float-tabs 浮层 UI
+- `syncNailInMarks`、收藏主路径
+- 已下线的破点高 / 卡片彩蛋
+
+## 易误判
+
+- 砍「窗口上涨」首页段 ≠ 可砍 `watch-data`（钉子上涨过滤同源）。
+- 自动盯分栏读 action-log + 云 pins/nails，不读盯一下网格。
+- 通知分栏主要读 `watch-balance-notices`，与 `watch-nail-green-notices` 是另一条链路。
+
+## 建议落地顺序
+
+1. 默认钉子 + 跳过 WAVE2 首页网格（低风险减负）
+2. 观察稳定后再删首页 DOM / 死代码
+3. 整包部署 `cloud-function-notify` 时勿漏 `mom-notes-shared.js`

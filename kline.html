@@ -5531,7 +5531,7 @@
         > .nail-auto-pin-popover
         > .nail-auto-pin-popover-head
         > .nail-auto-pin-popover-title {
-        /* 分栏标签已经写着「自动盯」，重复标题省掉；保留 bStock 开关。 */
+        /* 分栏标签已经写着「自动盯」，重复标题省掉。 */
         display: none;
       }
       .nail-seg-panel > .nail-auto-pin-popover,
@@ -9803,16 +9803,7 @@
           </div>
           <div class="nail-auto-pin-popover" id="nailAutoPinPopover" hidden>
             <div class="nail-auto-pin-popover-head">
-            <div class="nail-auto-pin-popover-title">自动盯记录</div>
-              <button
-                type="button"
-                id="nailAutoPinBstockBtn"
-                class="nail-radar-toggle"
-                aria-pressed="true"
-                title="代币化美股（bStock / TRD_GRP_261）：开=显示，关=隐藏。仅本机。"
-              >
-                bStock
-              </button>
+              <div class="nail-auto-pin-popover-title">自动盯记录</div>
             </div>
             <div class="nail-auto-pin-list" id="nailAutoPinList"></div>
           </div>
@@ -10828,7 +10819,7 @@
           type="button"
           class="notify-float-refresh"
           id="momentumFloatRefresh"
-          title="重算左侧近2h/1h（破点高仍按10分钟间隔）"
+          title="重算左侧近2h/1h"
           aria-label="刷新动态"
         >
           刷新
@@ -11267,7 +11258,7 @@
         class="notify-float-tab"
         id="momentumFloatTab"
         data-float="momentum"
-        title="动态：近2h/1h + 破点高"
+        title="动态：近2h/1h"
       >
         动态
       </button>
@@ -11322,14 +11313,16 @@
       <button
         type="button"
         id="pinBatchClearEggFireBtn"
-        title="去掉选中项的礼花背景（无背景自动跳过）"
+        hidden
+        title="卡片彩蛋已下线"
       >
         去礼花
       </button>
       <button
         type="button"
         id="pinBatchClearEggNewBtn"
-        title="去掉选中项的 NEW 背景（无背景自动跳过）"
+        hidden
+        title="卡片彩蛋已下线"
       >
         去 NEW
       </button>
@@ -11374,9 +11367,10 @@
         MOM_NOTES_PATH: KLINE_PATHS.MOM_NOTES_PATH || "watch-mom-notes.json",
         ACTION_LOG_PATH: KLINE_PATHS.ACTION_LOG_PATH || "watch-action-log.json",
         TRADE_PNL_PATH: KLINE_PATHS.TRADE_PNL_PATH || "watch-trade-pnl.json",
-        CARD_EGGS_PATH: KLINE_PATHS.CARD_EGGS_PATH || "watch-card-eggs.json",
-        BREAK_HIGH_PATH: KLINE_PATHS.BREAK_HIGH_PATH || "watch-break-high.json",
         NAILS_PATH: KLINE_PATHS.NAILS_PATH || "watch-nails.json",
+        // 破点高已关（FEATURE_BREAK_HIGH=false）；路径保留给未删净的 gated 代码。
+        BREAK_HIGH_PATH:
+          KLINE_PATHS.BREAK_HIGH_PATH || "watch-break-high.json",
         POSITIONS_PATH: KLINE_PATHS.POSITIONS_PATH || "watch-positions.json",
         PRICE_ALERTS_PATH:
           KLINE_PATHS.PRICE_ALERTS_PATH || "watch-price-alerts.json",
@@ -11444,16 +11438,6 @@
         },
       };
 
-      if (KLINE_MODE === "bstock") {
-        document.title = KLINE_PROFILE.title || "bStock 观察池 K 线";
-        try {
-          if (!/bstock-kline/i.test(location.pathname || "")) {
-            history.replaceState(null, "", "./bstock-kline.html");
-          }
-        } catch (_) {
-          /* ignore */
-        }
-      }
       const DURATION_MS = {
         "15m": 15 * 60 * 1000,
         "30m": 30 * 60 * 1000,
@@ -11603,16 +11587,6 @@
         }
       } catch (_) {
         nailAutoPinViewMode = "card";
-      }
-      /** 自动盯是否显示 bStock（代币化美股）；仅本机，默认显示。 */
-      const NAIL_AUTOPIN_SHOW_BSTOCK_KEY = "kline-nail-autopin-show-bstock-v1";
-      let nailAutoPinShowBstock = true;
-      try {
-        const savedBstock = localStorage.getItem(NAIL_AUTOPIN_SHOW_BSTOCK_KEY);
-        if (savedBstock === "0") nailAutoPinShowBstock = false;
-        else if (savedBstock === "1") nailAutoPinShowBstock = true;
-      } catch (_) {
-        nailAutoPinShowBstock = true;
       }
       const NAIL_AUTO_REFRESH_TOP_MS = 5000;
       const NAIL_AUTO_REFRESH_ALL_MS = 15000;
@@ -12611,10 +12585,6 @@
         { id: "notes", label: "记一笔 watch-mom-notes", wave: 1 },
         { id: "notify", label: "通知状态 watch-notify-state", wave: 1 },
         { id: "log", label: "捕捉日志 watch-action-log", wave: 1 },
-        { id: "eggs", label: "彩蛋 watch-card-eggs", wave: 1 },
-        ...(FEATURE_BREAK_HIGH
-          ? [{ id: "break", label: "破点高 watch-break-high", wave: 1 }]
-          : []),
         { id: "alerts", label: "价格预警 watch-price-alerts", wave: 1 },
         { id: "rankPrefs", label: "排序偏好 watch-notes-rank-prefs", wave: 1 },
         { id: "homePrefs", label: "首页偏好 watch-home-prefs", wave: 1 },
@@ -13321,67 +13291,34 @@
           .toUpperCase();
       }
 
-      function schedulePersistCardEggs(message) {
-        if (cardEggPersistTimer) {
-          clearTimeout(cardEggPersistTimer);
-          cardEggPersistTimer = null;
-        }
-        cardEggPersistTimer = setTimeout(() => {
-          cardEggPersistTimer = null;
-          void persistCardEggs(message);
-        }, 400);
+      /** 卡片彩蛋已下线：不再写 watch-card-eggs.json。 */
+      function schedulePersistCardEggs(_message) {
+        /* no-op */
       }
 
-      async function persistCardEggs(message) {
-        if (cardEggSaving) {
-          schedulePersistCardEggs(message);
-          return;
-        }
-        cardEggSaving = true;
-        const snapshot = {
-          periodHigh: { ...(cardEggState.periodHigh || {}) },
-          periodHighDismiss: { ...(cardEggState.periodHighDismiss || {}) },
-          fromHidden: { ...(cardEggState.fromHidden || {}) },
-          fromHiddenDismiss: { ...(cardEggState.fromHiddenDismiss || {}) },
-          hiddenSnap: [...(cardEggState.hiddenSnap || [])],
-          hiddenSnapSeeded: !!cardEggState.hiddenSnapSeeded,
-        };
-        try {
-          const result = await WatchFavorites.patchCardEggs({
-            repo: CONFIG.GITHUB_REPO,
-            path: CONFIG.CARD_EGGS_PATH,
-            message: message || "Update card eggs",
-            mutate: () => snapshot,
-          });
-          cardEggState = result.eggs || snapshot;
-        } catch (error) {
-          console.warn("persist card eggs failed", error);
-        } finally {
-          cardEggSaving = false;
-        }
+      async function persistCardEggs(_message) {
+        /* no-op: card eggs removed */
       }
 
       async function loadSharedCardEggs() {
-        try {
-          const state = await WatchFavorites.loadCardEggsRaw({
-            repo: CONFIG.GITHUB_REPO,
-            path: CONFIG.CARD_EGGS_PATH,
-          });
-          cardEggState = state.eggs || WatchFavorites.emptyCardEggs();
-        } catch (error) {
-          console.warn("load card eggs failed", error);
-          cardEggState = WatchFavorites.emptyCardEggs();
-        }
+        cardEggState = WatchFavorites.emptyCardEggs
+          ? WatchFavorites.emptyCardEggs()
+          : {
+              periodHigh: {},
+              periodHighDismiss: {},
+              fromHidden: {},
+              fromHiddenDismiss: {},
+              hiddenSnap: [],
+              hiddenSnapSeeded: true,
+            };
       }
 
-      function hasPeriodHighEgg(symbol) {
-        const key = eggSymbolKey(symbol);
-        return !!(cardEggState.periodHigh && cardEggState.periodHigh[key]);
+      function hasPeriodHighEgg(_symbol) {
+        return false;
       }
 
-      function hasFromHiddenEgg(symbol) {
-        const key = eggSymbolKey(symbol);
-        return !!(cardEggState.fromHidden && cardEggState.fromHidden[key]);
+      function hasFromHiddenEgg(_symbol) {
+        return false;
       }
 
       function eggChromeSeen(egg) {
@@ -13393,189 +13330,39 @@
        * 下次刷新/重进不再画；离开条件或再次触发后 chromeSeen 重置，才会再画。
        */
       function eggChromePaintFlags(symbol) {
-        const key = eggSymbolKey(symbol);
-        const fireEgg =
-          key && cardEggState.periodHigh
-            ? cardEggState.periodHigh[key]
-            : null;
-        const newEgg =
-          key && cardEggState.fromHidden
-            ? cardEggState.fromHidden[key]
-            : null;
-        const hasFire = klineViewKey === "3d-4h" && !!fireEgg;
-        const hasNew = !!newEgg;
-        const showFireworks = !!(hasFire && !eggChromeSeen(fireEgg));
-        const showNew = !!(
-          !hasFire &&
-          hasNew &&
-          !eggChromeSeen(newEgg)
-        );
-        return { key, showFireworks, showNew };
+        return {
+          key: eggSymbolKey(symbol),
+          showFireworks: false,
+          showNew: false,
+        };
       }
 
       function markEggChromeSeenFromDom() {
-        let changed = false;
-        document
-          .querySelectorAll(".kline-card.is-egg-fireworks[data-symbol]")
-          .forEach((card) => {
-            const key = eggSymbolKey(card.dataset.symbol);
-            const egg =
-              key && cardEggState.periodHigh
-                ? cardEggState.periodHigh[key]
-                : null;
-            if (egg && !egg.chromeSeen) {
-              egg.chromeSeen = true;
-              changed = true;
-            }
-          });
-        document
-          .querySelectorAll(".kline-card.is-egg-new[data-symbol]")
-          .forEach((card) => {
-            const key = eggSymbolKey(card.dataset.symbol);
-            const egg =
-              key && cardEggState.fromHidden
-                ? cardEggState.fromHidden[key]
-                : null;
-            if (egg && !egg.chromeSeen) {
-              egg.chromeSeen = true;
-              changed = true;
-            }
-          });
-        if (changed) {
-          schedulePersistCardEggs("Mark card egg chrome seen");
-        }
+        /* no-op: card eggs removed */
       }
 
-      /**
-       * 区间新高礼花：
-       * - 进入时段新高 → 写入彩蛋（chromeSeen=false），本页可画一次背景
-       * - 画过后 chromeSeen=true，刷新/重进不再画；长按仍可取消彩蛋记录
-       * - 离开新高 → 清掉彩蛋；再次进入新高（或峰值抬高）→ 重新触发再画一次
-       */
-      function notePeriodHighEgg(symbol, atHigh, peak) {
-        const key = eggSymbolKey(symbol);
-        if (!key) return;
-        if (!cardEggState.periodHigh) cardEggState.periodHigh = {};
-        if (!cardEggState.periodHighDismiss) cardEggState.periodHighDismiss = {};
-        let changed = false;
-        if (!atHigh) {
-          if (cardEggState.periodHigh[key]) {
-            delete cardEggState.periodHigh[key];
-            changed = true;
-          }
-          if (cardEggState.periodHighDismiss[key]) {
-            delete cardEggState.periodHighDismiss[key];
-            changed = true;
-          }
-          if (changed) schedulePersistCardEggs(`Card egg leave high ${key}`);
-          return false;
-        }
-        if (cardEggState.periodHighDismiss[key]) return false;
-        const prev = cardEggState.periodHigh[key];
-        const prevPeak = Number(prev && prev.peak);
-        if (
-          prev &&
-          Number.isFinite(prevPeak) &&
-          Number.isFinite(peak) &&
-          peak <= prevPeak * 1.0000001
-        ) {
-          return false;
-        }
-        cardEggState.periodHigh[key] = {
-          at: Date.now(),
-          peak: Number.isFinite(peak) ? peak : prevPeak || null,
-          chromeSeen: false,
-        };
-        schedulePersistCardEggs(`Card egg period high ${key}`);
-        return true;
+      function notePeriodHighEgg(_symbol, _atHigh, _peak) {
+        return false;
       }
 
-      function dismissPeriodHighEgg(symbol, options) {
-        const key = eggSymbolKey(symbol);
-        if (!key) return false;
-        const had = !!(cardEggState.periodHigh && cardEggState.periodHigh[key]);
-        if (!had) return false;
-        delete cardEggState.periodHigh[key];
-        if (!cardEggState.periodHighDismiss) cardEggState.periodHighDismiss = {};
-        cardEggState.periodHighDismiss[key] = { at: Date.now() };
-        if (!(options && options.skipPersist)) {
-          schedulePersistCardEggs(`Dismiss period-high egg ${key}`);
-        }
-        return true;
+      function dismissPeriodHighEgg(_symbol, _options) {
+        return false;
       }
 
-      function activateFromHiddenEgg(symbol) {
-        const key = eggSymbolKey(symbol);
-        if (!key) return false;
-        if (cardEggState.fromHiddenDismiss && cardEggState.fromHiddenDismiss[key]) {
-          return false;
-        }
-        if (!cardEggState.fromHidden) cardEggState.fromHidden = {};
-        if (cardEggState.fromHidden[key]) return false;
-        cardEggState.fromHidden[key] = { at: Date.now(), chromeSeen: false };
-        schedulePersistCardEggs(`Card egg from-hidden ${key}`);
-        return true;
+      function activateFromHiddenEgg(_symbol) {
+        return false;
       }
 
-      function dismissFromHiddenEgg(symbol, options) {
-        const key = eggSymbolKey(symbol);
-        if (!key) return false;
-        const had = !!(cardEggState.fromHidden && cardEggState.fromHidden[key]);
-        if (!had) return false;
-        delete cardEggState.fromHidden[key];
-        if (!cardEggState.fromHiddenDismiss) cardEggState.fromHiddenDismiss = {};
-        cardEggState.fromHiddenDismiss[key] = Date.now();
-        if (!(options && options.skipPersist)) {
-          schedulePersistCardEggs(`Dismiss from-hidden egg ${key}`);
-        }
-        return true;
+      function dismissFromHiddenEgg(_symbol, _options) {
+        return false;
       }
 
-      function clearFromHiddenDismiss(symbol) {
-        const key = eggSymbolKey(symbol);
-        if (!key || !cardEggState.fromHiddenDismiss) return;
-        if (!cardEggState.fromHiddenDismiss[key]) return;
-        delete cardEggState.fromHiddenDismiss[key];
-        schedulePersistCardEggs(`Clear from-hidden dismiss ${key}`);
+      function clearFromHiddenDismiss(_symbol) {
+        /* no-op */
       }
 
-      /** Hidden → window-up 边沿触发 NEW；再次掉进隐藏会清掉 dismiss. */
-      function syncFromHiddenEggs(interval) {
-        const hidden = listHiddenPinSymbols(interval);
-        const up = new Set(listWindowUpPinSymbols(interval));
-        const seeded = !!cardEggState.hiddenSnapSeeded;
-        const prevHidden = new Set(
-          (cardEggState.hiddenSnap || []).map(String),
-        );
-        if (!seeded) {
-          cardEggState.hiddenSnap = hidden.slice();
-          cardEggState.hiddenSnapSeeded = true;
-          schedulePersistCardEggs("Seed hidden egg snap");
-          return;
-        }
-        let changed = false;
-        for (const symbol of hidden) {
-          if (cardEggState.fromHiddenDismiss && cardEggState.fromHiddenDismiss[symbol]) {
-            delete cardEggState.fromHiddenDismiss[symbol];
-            changed = true;
-          }
-          // 再次掉进隐藏：清掉旧回升彩蛋，之后再回升可重新触发一次背景
-          if (cardEggState.fromHidden && cardEggState.fromHidden[symbol]) {
-            delete cardEggState.fromHidden[symbol];
-            changed = true;
-          }
-        }
-        for (const symbol of up) {
-          if (prevHidden.has(symbol)) {
-            if (activateFromHiddenEgg(symbol)) changed = true;
-          }
-        }
-        const nextSnap = hidden.slice();
-        if (JSON.stringify(nextSnap) !== JSON.stringify(cardEggState.hiddenSnap || [])) {
-          cardEggState.hiddenSnap = nextSnap;
-          changed = true;
-        }
-        if (changed) schedulePersistCardEggs("Sync from-hidden eggs");
+      function syncFromHiddenEggs(_interval) {
+        /* no-op: card eggs removed */
       }
 
       function candlesPeriodPeak(candles) {
@@ -15020,18 +14807,6 @@
         }
       }
 
-      function isBstockSymbol(symbol) {
-        const key = String(symbol || "")
-          .trim()
-          .toUpperCase();
-        if (!key) return false;
-        return !!(
-          bstockSymbolSet &&
-          bstockSymbolSet.size &&
-          bstockSymbolSet.has(key)
-        );
-      }
-
       /** 设置里「当前窗口上涨」：置顶 / 通知 / 自动盯共用；持有币始终放行。 */
       function nailSymbolPassesRisingFilter(symbol) {
         if (!nailRisingFilterOn) return true;
@@ -15045,49 +14820,9 @@
         return hasWindowGain(key, CONFIG.KLINE_INTERVAL || "4h");
       }
 
-      /** 自动盯列表是否收录该币；bStock 页不过滤，crypto 页可关 bStock。 */
+      /** 自动盯列表是否收录该币。 */
       function autoPinSymbolVisible(symbol) {
-        if (!nailSymbolPassesRisingFilter(symbol)) return false;
-        if (KLINE_MODE === "bstock") return true;
-        if (nailAutoPinShowBstock) return true;
-        // 名单未拉到前先放行，避免整表空白；拉完后会再渲一次。
-        if (!(bstockSymbolSet && bstockSymbolSet.size)) return true;
-        return !isBstockSymbol(symbol);
-      }
-
-      function syncNailAutoPinBstockUi() {
-        const btn = document.getElementById("nailAutoPinBstockBtn");
-        if (!btn) return;
-        if (KLINE_MODE === "bstock") {
-          btn.hidden = true;
-          return;
-        }
-        btn.hidden = false;
-        btn.classList.toggle("is-active", nailAutoPinShowBstock);
-        btn.setAttribute(
-          "aria-pressed",
-          nailAutoPinShowBstock ? "true" : "false",
-        );
-        btn.title = nailAutoPinShowBstock
-          ? "bStock：开（显示代币化美股）。点一下隐藏。"
-          : "bStock：关（已隐藏代币化美股）。点一下显示。";
-      }
-
-      function setNailAutoPinShowBstock(on) {
-        nailAutoPinShowBstock = !!on;
-        try {
-          localStorage.setItem(
-            NAIL_AUTOPIN_SHOW_BSTOCK_KEY,
-            nailAutoPinShowBstock ? "1" : "0",
-          );
-        } catch (_) {
-          /* ignore */
-        }
-        syncNailAutoPinBstockUi();
-        if (nailSegment === "autopin") {
-          renderNailAutoPinList();
-          void paintNailAutoPinCharts();
-        }
+        return nailSymbolPassesRisingFilter(symbol);
       }
 
       function buildNailAutoPinCardHtml(symbol, at, repeatCount, opts) {
@@ -17919,15 +17654,6 @@
         let symbols = Array.isArray(nailHoldingsState.symbols)
           ? nailHoldingsState.symbols.slice()
           : [];
-        // 持仓跟同一币安账户；按宇宙过滤展示（USDT 行两边都留着方便买）。
-        if (bstockSymbolSet && bstockSymbolSet.size) {
-          symbols = symbols.filter((symbol) => {
-            const key = String(symbol || "").toUpperCase();
-            if (key === "USDT" || key === "USDTUSDT") return true;
-            const pair = key.endsWith("USDT") ? key : `${key}USDT`;
-            return symbolInActiveUniverse(pair);
-          });
-        }
         if (hint) {
           const err = String(nailHoldingsState.lastError || "").trim();
           const stamp = Number(nailHoldingsState.updatedAt) || 0;
@@ -17954,9 +17680,7 @@
         }
         if (!symbols.length) {
           list.innerHTML =
-            KLINE_MODE === "bstock"
-              ? '<div class="nail-hold-empty">暂无 bStock 持仓 · 点刷新同步余额，或设置里手动加入</div>'
-              : '<div class="nail-hold-empty">暂无持仓 · 点刷新同步 ≥0.1 USDT 余额，或设置里手动加入</div>';
+            '<div class="nail-hold-empty">暂无持仓 · 点刷新同步 ≥0.1 USDT 余额，或设置里手动加入</div>';
           setNailHoldSelectMode(false);
           syncNailHoldLiveSwitches();
           return;
@@ -20422,14 +20146,6 @@
         let symbols = Array.isArray(simHoldingsState.symbols)
           ? simHoldingsState.symbols.slice()
           : [];
-        if (bstockSymbolSet && bstockSymbolSet.size) {
-          symbols = symbols.filter((symbol) => {
-            const key = String(symbol || "").toUpperCase();
-            if (key === "USDT" || key === "USDTUSDT") return true;
-            const pair = key.endsWith("USDT") ? key : `${key}USDT`;
-            return symbolInActiveUniverse(pair);
-          });
-        }
         const stamp = Number(simHoldingsState.updatedAt) || 0;
         const when = stamp
           ? new Date(stamp).toLocaleString("zh-CN", { hour12: false })
@@ -21637,16 +21353,6 @@
           soft("log", "捕捉日志", async () => {
             await loadSharedActionLog();
           }),
-          soft("eggs", "彩蛋", async () => {
-            await loadSharedCardEggs();
-          }),
-          ...(FEATURE_BREAK_HIGH
-            ? [
-          soft("break", "破点高", async () => {
-            await loadSharedBreakHigh();
-          }),
-              ]
-            : []),
           soft("rankPrefs", "排序偏好", async () => {
             await loadNotesRankPrefsShared();
           }),
@@ -22357,36 +22063,13 @@
       /** 24hr 仍含 BREAK；只保留 exchangeInfo 里 TRADING 的 USDT。 */
       let usdtTradingSet = null;
       let usdtTradingSetAt = 0;
-      /** bStocks（代币化美股）：exchangeInfo permissionSets 含 TRD_GRP_261。 */
-      let bstockSymbolSet = null;
-      function bstockSymbols() {
-        return bstockSymbolSet instanceof Set ? bstockSymbolSet : new Set();
-      }
-      /**
-       * crypto / bstock：仅拉黑（crypto 不再排除 bStocks）
-       */
+      /** 仅拉黑。 */
       function poolBlockedSymbols() {
         return blacklistSymbols();
       }
       function symbolInActiveUniverse(symbol) {
         const key = String(symbol || "").toUpperCase();
-        if (!key.endsWith("USDT")) return false;
-        if (KLINE_MODE === "bstock") {
-          return !!(bstockSymbolSet && bstockSymbolSet.size && bstockSymbolSet.has(key));
-        }
-        return true;
-      }
-      function rowIsBstock(row) {
-        const sets = row && Array.isArray(row.permissionSets)
-          ? row.permissionSets
-          : [];
-        for (let i = 0; i < sets.length; i += 1) {
-          const group = sets[i];
-          if (Array.isArray(group) && group.includes("TRD_GRP_261")) {
-            return true;
-          }
-        }
-        return false;
+        return key.endsWith("USDT");
       }
       async function loadUsdtTradingSet() {
         const ttlMs = 30 * 60 * 1000;
@@ -22411,7 +22094,6 @@
             }
             const data = await response.json();
             const set = new Set();
-            const stocks = new Set();
             (data.symbols || []).forEach((row) => {
               if (
                 !row ||
@@ -22423,24 +22105,13 @@
               const symbol = String(row.symbol || "").toUpperCase();
               if (!symbol) return;
               set.add(symbol);
-              if (rowIsBstock(row)) stocks.add(symbol);
             });
             if (!set.size) {
               lastError = new Error("币安 TRADING USDT 列表为空");
               continue;
             }
             usdtTradingSet = set;
-            bstockSymbolSet = stocks;
             usdtTradingSetAt = Date.now();
-            // bStock 名单到位后，关着「显示 bStock」的自动盯要重渲一次。
-            if (
-              KLINE_MODE !== "bstock" &&
-              !nailAutoPinShowBstock &&
-              nailSegment === "autopin"
-            ) {
-              renderNailAutoPinList();
-              void paintNailAutoPinCharts();
-            }
             return set;
           } catch (error) {
             lastError =
@@ -25341,8 +25012,7 @@
       }
 
       function scheduleBreakHighTick() {
-        // bStock 不做破点高（云侧也不跑）；避免写 watch-bstock-break-high。
-        if (!FEATURE_BREAK_HIGH || KLINE_MODE === "bstock") {
+        if (!FEATURE_BREAK_HIGH) {
           if (breakHighTimer) {
             clearTimeout(breakHighTimer);
             breakHighTimer = 0;
@@ -25389,9 +25059,6 @@
         const force = !!(options && options.force);
         if (!FEATURE_BREAK_HIGH) {
           return { skipped: true, reason: "feature-disabled", hits: [] };
-        }
-        if (KLINE_MODE === "bstock") {
-          return { skipped: true, reason: "bstock-disabled", hits: [] };
         }
         if (breakHighChecking) {
           return { skipped: true, hits: breakHighState.hits || [] };
@@ -28051,12 +27718,6 @@
         const selectAllBtn = document.getElementById("pinBatchSelectAllBtn");
         const busy = pinSaving || nailSaving;
         const disabled = busy || selectedPinSymbols.size === 0;
-        const eggFireCount = [...selectedPinSymbols].filter((symbol) =>
-          hasPeriodHighEgg(symbol),
-        ).length;
-        const eggNewCount = [...selectedPinSymbols].filter((symbol) =>
-          hasFromHiddenEgg(symbol),
-        ).length;
         if (renewBtn) {
           renewBtn.hidden = false;
           renewBtn.disabled = disabled;
@@ -28075,20 +27736,12 @@
           unpinBtn.title = "取消盯住";
         }
         if (clearEggFireBtn) {
-          clearEggFireBtn.hidden = false;
-          clearEggFireBtn.disabled = busy || eggFireCount === 0;
-          clearEggFireBtn.title =
-            eggFireCount > 0
-              ? `去掉选中项中 ${eggFireCount} 个礼花背景`
-              : "去掉选中项的礼花背景（无背景自动跳过）";
+          clearEggFireBtn.hidden = true;
+          clearEggFireBtn.disabled = true;
         }
         if (clearEggNewBtn) {
-          clearEggNewBtn.hidden = false;
-          clearEggNewBtn.disabled = busy || eggNewCount === 0;
-          clearEggNewBtn.title =
-            eggNewCount > 0
-              ? `去掉选中项中 ${eggNewCount} 个 NEW 背景`
-              : "去掉选中项的 NEW 背景（无背景自动跳过）";
+          clearEggNewBtn.hidden = true;
+          clearEggNewBtn.disabled = true;
         }
         if (clearBtn) clearBtn.disabled = selectedPinSymbols.size === 0;
         if (selectAllBtn) {
@@ -29271,7 +28924,7 @@
       let homePrefSaving = false;
       let watchPoolRankSaving = false;
       const HOME_PREFS_LOCAL_KEY =
-        KLINE_MODE === "bstock" ? "kline-home-pref-bstock-v1" : "kline-home-pref-v1";
+        "kline-home-pref-v1";
       const WATCH_POOL_RANK_LOCAL_KEY = "kline-watch-pool-rank-v1";
 
       function watchPoolRankBounds() {
@@ -38213,15 +37866,6 @@
           if (!button) return;
           void setNailAutoPinPopoverOpen(false);
           openNailDrawerAtSymbol(button.getAttribute("data-nail-auto-symbol"));
-        });
-      }
-      const nailAutoPinBstockBtn = document.getElementById(
-        "nailAutoPinBstockBtn",
-      );
-      if (nailAutoPinBstockBtn) {
-        syncNailAutoPinBstockUi();
-        nailAutoPinBstockBtn.addEventListener("click", () => {
-          setNailAutoPinShowBstock(!nailAutoPinShowBstock);
         });
       }
       const nailRadarBtn = document.getElementById("nailRadarBtn");

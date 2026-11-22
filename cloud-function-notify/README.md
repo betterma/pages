@@ -29,8 +29,6 @@
 - `STALE_AUTO_PIN_NAILS`：默认 `1`；`0` 关闭
 - `STALE_NAIL_LIMIT`：默认 `18`；`STALE_NAIL_CHECK_MAX` 默认 `12`（防与天平/染绿叠超时；`0`=全查）；并发 `STALE_NAIL_CONCURRENCY`（默认 4）
 - 剩余时间不足 25s 时本轮跳过清退
-- 现货与 bStock 各跑一轮（各自 pins/nails 路径）
-
 ## 检测健康度（网页入口）
 
 每轮定时在天平 / 荧光绿跑完后写入 `watch-notify-health.json`（与业务状态分离，避免 `notify-state` 条件保存漏心跳）。  
@@ -113,12 +111,11 @@
 
 1. **持仓** → `lastPositionNotify`（企微浮窗右侧）
 2. **盯一下上涨文案** → `lastPinNotify`（企微浮窗左侧）
-3. **破点高** → `watch-break-high.json`（动态浮窗右侧；10 分钟冷却照旧）
 4. **排序动态** → 读 `watch-action-log.json`（由云函数写入）
 
 ## 部署
 
-1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `break-high.js` + `notes-rank-snap.js` + `nail-green-alert.js` + `balance-alert.js` + `prune-stale-auto-pin-nails.js` + `nail-daily-reset.js` + `holdings.js` + `runtime-env.js` + `binance-spot.js` + `sell-tasks.js` + `buy-tasks.js` + `trade-action-log.js`）。只更新 `index.js` 会出现 `main is not a function`。
+1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `mom-notes-shared.js` + `notes-rank-snap.js` + `nail-green-alert.js` + `balance-alert.js` + `prune-stale-auto-pin-nails.js` + `nail-daily-reset.js` + `holdings.js` + `runtime-env.js` + `binance-spot.js` + `sell-tasks.js` + `buy-tasks.js` + `trade-action-log.js`）。只更新 `index.js` 会出现 `main is not a function`。
 2. Handler：`index.handler`，Node.js 18+
 3. **超时建议 ≥ 60～120 秒**
 4. 定时触发器：`0 */5 * * * *`

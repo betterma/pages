@@ -23,22 +23,6 @@ const AUTO_PIN_PROFILES = {
     NOTIFY_STATE_PATH: 'watch-notify-state.json',
     MARKET_UNIVERSE: 'crypto',
   },
-  bstock: {
-    DATA_PATH: 'watch-bstock-data.json',
-    BLACKLIST_PATH: 'watch-bstock-blacklist.json',
-    PINS_PATH: 'watch-bstock-pins.json',
-    HOME_PREFS_PATH: 'watch-bstock-home-prefs.json',
-    NOTIFY_STATE_PATH: 'watch-bstock-notify-state.json',
-    POSITIONS_PATH: 'watch-bstock-positions.json',
-    PRICE_ALERTS_PATH: 'watch-bstock-price-alerts.json',
-    NAILS_PATH: 'watch-bstock-nails.json',
-    MOM_NOTES_PATH: 'watch-bstock-mom-notes.json',
-    ACTION_LOG_PATH: 'watch-bstock-action-log.json',
-    NAIL_GREEN_NOTICES_PATH: 'watch-bstock-nail-green-notices.json',
-    NAIL_GREEN_ALERT_PATH: 'watch-bstock-nail-green-alert.json',
-    NAIL_DAILY_RESET_PATH: 'watch-bstock-nail-daily-reset.json',
-    MARKET_UNIVERSE: 'bstock',
-  },
 };
 
 const CONFIG = {

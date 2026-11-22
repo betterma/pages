@@ -10,10 +10,10 @@ const { loadJson, saveJson } = require('./github-wecom');
 const { fetchKlines } = require('./kline-chart');
 const { loadBlacklistSet } = require('./auto-pin');
 const {
-  listBreakHighUniverse,
+  listNotesPinUniverse,
   loadMomNotes,
   normalizeMomNotes,
-} = require('./break-high');
+} = require('./mom-notes-shared');
 
 const CONFIG = {
   NOTES_RANK_SNAPS_PATH:
@@ -430,7 +430,7 @@ async function runNotesRankSnap(options) {
     );
   }
 
-  const universe = listBreakHighUniverse(pins, notes, blacklist);
+  const universe = listNotesPinUniverse(pins, notes, blacklist);
   if (!universe.length) {
     return { skipped: true, reason: 'empty-universe' };
   }
