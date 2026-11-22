@@ -16338,27 +16338,28 @@
 
       /**
        * 置顶卡片盈亏展示：浮 + 已落并排，明确两者性质，避免裸数字被误读为总收益。
-       * 返回可直接插入的 HTML；无浮动盈亏但有已落时，仍显示已落。
+       * 已落始终显示：该币无卖出记录时按 0 展示（如「浮 +6 · 已落 0」），保持格式统一。
        */
       function nailCardPnlHtml(symbol, floatingUsdt) {
         const floatPnl =
           Number.isFinite(Number(floatingUsdt)) ? Number(floatingUsdt) : null;
-        const realized = realizedPnlOf(symbol);
-        if (floatPnl == null && realized == null) return "";
+        const realizedRaw = realizedPnlOf(symbol);
+        // 既无浮动盈亏也无已落记录时，本就不该出现盈亏行
+        if (floatPnl == null && realizedRaw == null) return "";
         const parts = [];
         if (floatPnl != null) {
           parts.push(
             `<span class="pnl-label">浮</span> ${formatHoldingsPnlSignedHtml(floatPnl, { unit: "" })}`,
           );
         }
-        if (realized != null) {
-          const rTone = holdingsPnlTone(realized);
-          const rSign = realized > 1e-8 ? "+" : realized < -1e-8 ? "−" : "";
-          const rAbs = formatHoldingsUsdt(Math.abs(realized));
-          parts.push(
-            `<span class="pnl-label">已落</span> <span class="pnl-sign ${rTone}">${rSign}</span><span class="pnl-num">${escapeHtml(rAbs)}</span>`,
-          );
-        }
+        // 已落无记录按 0 处理，始终显示
+        const realized = realizedRaw == null ? 0 : realizedRaw;
+        const rTone = holdingsPnlTone(realized);
+        const rSign = realized > 1e-8 ? "+" : realized < -1e-8 ? "−" : "";
+        const rAbs = formatHoldingsUsdt(Math.abs(realized));
+        parts.push(
+          `<span class="pnl-label">已落</span> <span class="pnl-sign ${rTone}">${rSign}</span><span class="pnl-num">${escapeHtml(rAbs)}</span>`,
+        );
         return parts.join('<span class="pnl-sep"> · </span>');
       }
 
