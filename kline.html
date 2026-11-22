@@ -3708,6 +3708,27 @@
         padding: 4px 8px;
         cursor: pointer;
       }
+      .nail-pnl-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 14px;
+        margin: 0 0 10px;
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+      .nail-pnl-summary span {
+        color: var(--secondary);
+      }
+      .nail-pnl-summary b {
+        font-weight: 700;
+        margin-left: 4px;
+      }
+      .nail-pnl-summary .is-up b {
+        color: var(--up, #16a66a);
+      }
+      .nail-pnl-summary .is-down b {
+        color: var(--down, #e0444a);
+      }
       .nail-pnl-row {
         display: flex;
         align-items: baseline;
@@ -3717,11 +3738,36 @@
         border-bottom: 0.5px solid var(--separator);
         font-size: 12px;
       }
+      .nail-pnl-row.is-open {
+        background: rgba(90, 140, 255, 0.06);
+        margin: 0 -8px;
+        padding-left: 8px;
+        padding-right: 8px;
+        border-radius: 8px;
+        border-bottom-color: transparent;
+      }
       .nail-pnl-row-main {
         min-width: 0;
       }
       .nail-pnl-row-main b {
         font-weight: 700;
+      }
+      .nail-pnl-tag {
+        display: inline-block;
+        margin-left: 4px;
+        padding: 0 5px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+        vertical-align: 1px;
+      }
+      .nail-pnl-tag.is-open {
+        background: rgba(90, 140, 255, 0.16);
+        color: var(--accent, #3b6cff);
+      }
+      .nail-pnl-tag.is-closed {
+        background: rgba(0, 0, 0, 0.06);
+        color: var(--secondary);
       }
       .nail-pnl-row-meta {
         color: var(--secondary);
@@ -3732,6 +3778,12 @@
         flex: 0 0 auto;
         font-weight: 700;
         font-variant-numeric: tabular-nums;
+      }
+      .nail-pnl-row-val.is-up {
+        color: var(--up, #16a66a);
+      }
+      .nail-pnl-row-val.is-down {
+        color: var(--down, #e0444a);
       }
       .nail-pnl-empty {
         color: var(--secondary);
@@ -9703,11 +9755,12 @@
             </div>
           </div>
           <div class="nail-pnl-modal" id="nailTradePnlModal" hidden>
-            <div class="nail-pnl-panel" role="dialog" aria-label="历史成交盈亏">
+            <div class="nail-pnl-panel" role="dialog" aria-label="盈亏明细">
               <div class="nail-pnl-panel-head">
-                <h3>历史成交盈亏 <span id="nailTradePnlTotalText"></span></h3>
-                <button type="button" class="nail-pnl-clear" id="nailTradePnlClearBtn" title="清空全部历史记录，从零重新记">清空记录</button>
+                <h3>盈亏明细</h3>
+                <button type="button" class="nail-pnl-clear" id="nailTradePnlClearBtn" title="只清空已实现记录，持仓与未实现不受影响">清空已实现</button>
               </div>
+              <div class="nail-pnl-summary" id="nailTradePnlSummary"></div>
               <div id="nailTradePnlList"></div>
             </div>
           </div>
@@ -15963,30 +16016,135 @@
         return rows.reduce((sum, row) => sum + (Number(row.pnl) || 0), 0);
       }
 
+      /** 未实现合计（持仓栏关注币）；无持仓成本则 null。 */
+      function unrealizedPnlTotal() {
+        const symbols =
+          nailHoldingsState && Array.isArray(nailHoldingsState.symbols)
+            ? nailHoldingsState.symbols
+            : [];
+        return holdingsHeldPnlTotal(symbols.map((s) => ({ symbol: s })));
+      }
+
+      function combinedPnlTotal() {
+        const realized = tradePnlTotal();
+        const u = unrealizedPnlTotal();
+        const unrealized = u ? u.usdt : 0;
+        const anyUnrealized = !!u;
+        const anyRealized =
+          ((nailTradePnlState && nailTradePnlState.entries) || []).length > 0;
+        if (!anyRealized && !anyUnrealized) return null;
+        return { usdt: realized + unrealized, realized, unrealized };
+      }
+
+      /** 明细行：已实现卖出 + 未卖出 lots，按时间新→旧（上新下旧）。 */
+      function buildTradePnlLedgerRows() {
+        const rows = [];
+        ((nailTradePnlState && nailTradePnlState.entries) || []).forEach((row) => {
+          if (!row) return;
+          rows.push({
+            kind: "closed",
+            at: Number(row.at) || 0,
+            symbol: row.symbol,
+            label: row.label || String(row.symbol || "").replace(/USDT$/i, ""),
+            quantity: Number(row.quantity) || 0,
+            buyPrice: Number(row.buyPrice) || 0,
+            sellPrice: Number(row.sellPrice) || 0,
+            pnl: Number(row.pnl) || 0,
+            source: row.source || "manual",
+          });
+        });
+        const lotsMap =
+          (nailHoldingsState && nailHoldingsState.entryLots) || {};
+        Object.keys(lotsMap).forEach((symbol) => {
+          const key = String(symbol || "")
+            .trim()
+            .toUpperCase();
+          if (!key || key === "USDT") return;
+          const lots = Array.isArray(lotsMap[key]) ? lotsMap[key] : [];
+          const spot = holdingsSpotPrice(key);
+          lots.forEach((lot) => {
+            const qty = Number(lot && lot.qty);
+            const buy = Number(lot && lot.price);
+            if (!(qty > 0) || !(buy > 0)) return;
+            const pnl =
+              Number.isFinite(spot) && spot > 0 ? (spot - buy) * qty : null;
+            rows.push({
+              kind: "open",
+              at: Number(lot.at) || 0,
+              symbol: key,
+              label: key.replace(/USDT$/i, ""),
+              quantity: qty,
+              buyPrice: buy,
+              spot: Number.isFinite(spot) && spot > 0 ? spot : null,
+              pnl,
+              source: (lot && lot.source) || "lot",
+            });
+          });
+        });
+        rows.sort((a, b) => (b.at || 0) - (a.at || 0));
+        return rows;
+      }
+
       function renderTradePnlModal() {
         const modal = document.getElementById("nailTradePnlModal");
         if (!modal) return;
-        const totalEl = document.getElementById("nailTradePnlTotalText");
-        if (totalEl) {
-          totalEl.className = `nail-section-pnl ${holdingsPnlTone(tradePnlTotal())}`;
-          totalEl.textContent = formatHoldingsPnlUsdt(tradePnlTotal());
+        const realized = tradePnlTotal();
+        const u = unrealizedPnlTotal();
+        const unrealized = u ? u.usdt : null;
+        const combined = combinedPnlTotal();
+        const summary = document.getElementById("nailTradePnlSummary");
+        if (summary) {
+          const bits = [
+            `<span class="${holdingsPnlTone(realized)}">已实现<b>${escapeHtml(formatHoldingsPnlUsdt(realized))}</b></span>`,
+          ];
+          if (unrealized != null) {
+            bits.push(
+              `<span class="${holdingsPnlTone(unrealized)}">未实现<b>${escapeHtml(formatHoldingsPnlUsdt(unrealized))}</b></span>`,
+            );
+          } else {
+            bits.push(`<span>未实现<b>—</b></span>`);
+          }
+          if (combined) {
+            bits.push(
+              `<span class="${holdingsPnlTone(combined.usdt)}">合计<b>${escapeHtml(formatHoldingsPnlUsdt(combined.usdt))}</b></span>`,
+            );
+          }
+          summary.innerHTML = bits.join("");
         }
         const list = document.getElementById("nailTradePnlList");
         if (!list) return;
-        const rows = (nailTradePnlState && nailTradePnlState.entries) || [];
+        const rows = buildTradePnlLedgerRows();
         if (!rows.length) {
-          list.innerHTML = '<div class="nail-pnl-empty">暂无历史成交记录</div>';
+          list.innerHTML =
+            '<div class="nail-pnl-empty">暂无记录（卖出后记已实现，持仓 lots 显示未实现）</div>';
           return;
         }
         list.innerHTML = rows
           .map((row) => {
-            const tone = holdingsPnlTone(row.pnl);
             const when = row.at
               ? new Date(row.at).toLocaleString("zh-CN", { hour12: false })
               : "—";
+            if (row.kind === "open") {
+              const tone =
+                row.pnl == null ? "is-flat" : holdingsPnlTone(row.pnl);
+              const pnlText =
+                row.pnl == null ? "—" : formatHoldingsPnlUsdt(row.pnl);
+              const spotBit =
+                row.spot != null
+                  ? `现价 ${formatHoldingsPriceInput(row.spot)}`
+                  : "现价 —";
+              return `<div class="nail-pnl-row is-open">
+              <div class="nail-pnl-row-main">
+                <b>${escapeHtml(row.label)}</b> 持有 ${escapeHtml(formatHoldingsQty(row.quantity))}<span class="nail-pnl-tag is-open">持有</span>
+                <div class="nail-pnl-row-meta">成本 ${escapeHtml(formatHoldingsPriceInput(row.buyPrice))} · ${escapeHtml(spotBit)} · ${escapeHtml(when)}</div>
+              </div>
+              <div class="nail-pnl-row-val ${tone}">${escapeHtml(pnlText)}</div>
+            </div>`;
+            }
+            const tone = holdingsPnlTone(row.pnl);
             return `<div class="nail-pnl-row">
               <div class="nail-pnl-row-main">
-                <b>${escapeHtml(row.label || row.symbol)}</b> 卖出 ${escapeHtml(formatHoldingsQty(row.quantity))}
+                <b>${escapeHtml(row.label || row.symbol)}</b> 卖出 ${escapeHtml(formatHoldingsQty(row.quantity))}<span class="nail-pnl-tag is-closed">已实现</span>
                 <div class="nail-pnl-row-meta">买 ${escapeHtml(formatHoldingsPriceInput(row.buyPrice))} → 卖 ${escapeHtml(formatHoldingsPriceInput(row.sellPrice))} · ${escapeHtml(when)} · ${escapeHtml(row.source || "manual")}</div>
               </div>
               <div class="nail-pnl-row-val ${tone}">${escapeHtml(formatHoldingsPnlUsdt(row.pnl))}</div>
@@ -16003,7 +16161,13 @@
       }
 
       async function clearTradePnlRecords() {
-        if (!window.confirm("清空全部历史盈亏记录？此操作不可撤销，将从零重新记录。")) return;
+        if (
+          !window.confirm(
+            "清空全部已实现盈亏记录？持仓与未实现不受影响，之后卖出将从零重新记。",
+          )
+        ) {
+          return;
+        }
         if (!WatchFavorites || typeof WatchFavorites.patchTradePnl !== "function") return;
         try {
           const res = await WatchFavorites.patchTradePnl({
@@ -16014,7 +16178,7 @@
           if (res && res.state) nailTradePnlState = res.state;
           renderTradePnlModal();
           renderNailHoldList();
-          showToast("历史盈亏记录已清空");
+          showToast("已实现记录已清空");
         } catch (error) {
           showToast(error.message || "清空失败");
         }
@@ -17370,12 +17534,23 @@
         list.innerHTML =
           `<div class="nail-hold-usdt-banner">账户 USDT 可用 ${escapeHtml(usdtFree)} · 有余额靠前</div>` +
           `<div class="nail-hold-pnl-bar">` +
-          `<span class="nail-hold-pnl-item"><span>历史盈亏</span><button type="button" class="nail-hold-pnl-history" id="nailTradePnlHistoryBtn" title="查看每笔已实现盈亏明细，可清空">${escapeHtml(formatHoldingsPnlUsdt(tradePnlTotal()))} · 明细 ↗</button></span>` +
           (() => {
-            const cur = holdingsHeldPnlTotal(symbols.map((s) => ({ symbol: s })));
-            return cur
-              ? `<span class="nail-hold-pnl-item ${holdingsPnlTone(cur.usdt)}"><span>当前盈亏</span><b>${escapeHtml(formatHoldingsPnlUsdt(cur.usdt))}</b></span>`
-              : "";
+            const realized = tradePnlTotal();
+            const u = holdingsHeldPnlTotal(symbols.map((s) => ({ symbol: s })));
+            const unrealized = u ? u.usdt : null;
+            const total =
+              u != null ? realized + unrealized : realized;
+            const hasAny =
+              ((nailTradePnlState && nailTradePnlState.entries) || []).length >
+                0 || u != null;
+            let html = `<span class="nail-hold-pnl-item"><span>已实现</span><button type="button" class="nail-hold-pnl-history" id="nailTradePnlHistoryBtn" title="盈亏明细：持有未实现 + 已卖出已实现">${escapeHtml(formatHoldingsPnlUsdt(realized))} · 明细 ↗</button></span>`;
+            if (unrealized != null) {
+              html += `<span class="nail-hold-pnl-item ${holdingsPnlTone(unrealized)}"><span>未实现</span><b>${escapeHtml(formatHoldingsPnlUsdt(unrealized))}</b></span>`;
+            }
+            if (hasAny) {
+              html += `<span class="nail-hold-pnl-item ${holdingsPnlTone(total)}"><span>合计</span><b>${escapeHtml(formatHoldingsPnlUsdt(total))}</b></span>`;
+            }
+            return html;
           })() +
           `</div>` +
           sortedSymbols
