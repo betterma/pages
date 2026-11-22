@@ -10021,7 +10021,7 @@
                 id="nailRisingFilter"
                 role="switch"
                 aria-checked="true"
-                title="只显示当前窗口上涨：对置顶 / 通知 / 自动盯三个分栏生效"
+                title="只显示当前窗口上涨：对置顶 / 通知 / 自动盯生效；持有币始终显示"
                 aria-label="当前窗口上涨"
               ></button>
             </div>
@@ -14864,13 +14864,16 @@
         );
       }
 
-      /** 设置里「当前窗口上涨」：置顶 / 通知 / 自动盯共用。 */
+      /** 设置里「当前窗口上涨」：置顶 / 通知 / 自动盯共用；持有币始终放行。 */
       function nailSymbolPassesRisingFilter(symbol) {
         if (!nailRisingFilterOn) return true;
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
         if (!key || key === "USDT") return false;
+        if (typeof nailSymbolIsHeld === "function" && nailSymbolIsHeld(key)) {
+          return true;
+        }
         return hasWindowGain(key, CONFIG.KLINE_INTERVAL || "4h");
       }
 
@@ -32991,7 +32994,7 @@
         if (!sw) return;
         sw.setAttribute("aria-checked", nailRisingFilterOn ? "true" : "false");
         sw.title = nailRisingFilterOn
-          ? "只显示当前窗口上涨（置顶 / 通知 / 自动盯）"
+          ? "只显示当前窗口上涨（置顶 / 通知 / 自动盯；持有始终显示）"
           : "显示全部（置顶 / 通知 / 自动盯）";
       }
 
