@@ -3793,6 +3793,80 @@
         font-variant-numeric: tabular-nums;
         color: var(--secondary, #8e8e93);
       }
+      .nail-pnl-section {
+        border: 0.5px solid var(--separator);
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 12px;
+      }
+      .nail-pnl-section-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        padding: 10px 12px;
+        background: var(--grouped, rgba(0, 0, 0, 0.04));
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .nail-pnl-section-head span {
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 400;
+      }
+      .nail-pnl-group {
+        border-top: 0.5px solid var(--separator);
+      }
+      .nail-pnl-group-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        width: 100%;
+        padding: 10px 12px;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font-size: 13px;
+        text-align: left;
+        cursor: pointer;
+      }
+      .nail-pnl-group-row:hover {
+        background: rgba(90, 140, 255, 0.06);
+      }
+      .nail-pnl-group-main b {
+        font-weight: 700;
+      }
+      .nail-pnl-group-meta {
+        color: var(--secondary);
+        font-size: 11px;
+        margin-left: 6px;
+      }
+      .nail-pnl-group-val {
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        flex: 0 0 auto;
+      }
+      .nail-pnl-lots {
+        display: none;
+        padding: 0 12px 8px;
+      }
+      .nail-pnl-group.is-open .nail-pnl-lots {
+        display: block;
+      }
+      .nail-pnl-lot {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 0 6px 10px;
+        border-left: 2px solid var(--separator);
+        font-size: 11.5px;
+        color: var(--secondary);
+      }
+      .nail-pnl-lot b {
+        font-weight: 500;
+        color: inherit;
+      }
       .nail-pnl-empty {
         color: var(--secondary);
         font-size: 12px;
@@ -16089,37 +16163,86 @@
             '<div class="nail-pnl-empty">暂无记录（卖出后记已实现，持仓 lots 显示未实现）</div>';
           return;
         }
-        list.innerHTML = rows
-          .map((row) => {
-            const when = row.at
-              ? new Date(row.at).toLocaleString("zh-CN", { hour12: false })
-              : "—";
-            if (row.kind === "open") {
-              const pnlHtml =
-                row.pnl == null
-                  ? `<span class="pnl-num">—</span>`
-                  : formatHoldingsPnlSignedHtml(row.pnl, { unit: false });
-              const spotBit =
-                row.spot != null
-                  ? `现价 ${formatHoldingsPriceInput(row.spot)}`
-                  : "现价 —";
-              return `<div class="nail-pnl-row is-open">
-              <div class="nail-pnl-row-main">
-                <b>${escapeHtml(row.label)}</b> 持有 ${escapeHtml(formatHoldingsQty(row.quantity))}<span class="nail-pnl-tag is-open">持有</span>
-                <div class="nail-pnl-row-meta">成本 ${escapeHtml(formatHoldingsPriceInput(row.buyPrice))} · ${escapeHtml(spotBit)} · ${escapeHtml(when)}</div>
-              </div>
-              <div class="nail-pnl-row-val">${pnlHtml}</div>
-            </div>`;
-            }
-            return `<div class="nail-pnl-row">
-              <div class="nail-pnl-row-main">
-                <b>${escapeHtml(row.label || row.symbol)}</b> 卖出 ${escapeHtml(formatHoldingsQty(row.quantity))}<span class="nail-pnl-tag is-closed">已实现</span>
-                <div class="nail-pnl-row-meta">买 ${escapeHtml(formatHoldingsPriceInput(row.buyPrice))} → 卖 ${escapeHtml(formatHoldingsPriceInput(row.sellPrice))} · ${escapeHtml(when)} · ${escapeHtml(row.source || "manual")}</div>
-              </div>
-              <div class="nail-pnl-row-val">${formatHoldingsPnlSignedHtml(row.pnl, { unit: false })}</div>
-            </div>`;
-          })
-          .join("");
+        // 按币聚合：一行一个币，逐笔明细折叠在该行下
+        const groups = new Map();
+        rows.forEach((row) => {
+          const sym = String(row.symbol || "").toUpperCase();
+          const kind = row.kind; // 持仓中 / 已落袋 分开聚合
+          if (!sym) return;
+          const gid = `${kind}:${sym}`;
+          if (!groups.has(gid)) {
+            groups.set(gid, {
+              symbol: sym,
+              label: row.label || sym.replace(/USDT$/i, ""),
+              kind,
+              total: 0,
+              count: 0,
+              qty: 0,
+              spot: null,
+              lots: [],
+            });
+          }
+          const g = groups.get(gid);
+          g.total += Number(row.pnl) || 0;
+          g.count += 1;
+          g.qty += Number(row.quantity) || 0;
+          if (row.spot != null) g.spot = row.spot;
+          g.lots.push(row);
+        });
+        const renderGroup = (g) => {
+          const tone = holdingsPnlTone(g.total);
+          const cls = tone === "is-up" ? "pnl-up" : tone === "is-down" ? "pnl-down" : "";
+          const metaBits = [`${g.count} 笔`];
+          if (g.qty > 0) metaBits.push(`共 ${formatHoldingsQty(g.qty)}`);
+          if (g.spot != null) metaBits.push(`现价 ${formatHoldingsPriceInput(g.spot)}`);
+          const lotsHtml = g.lots
+            .slice()
+            .sort((a, b) => (b.at || 0) - (a.at || 0))
+            .map((lot) => {
+              const when = lot.at
+                ? new Date(lot.at).toLocaleString("zh-CN", { hour12: false })
+                : "—";
+              const lotTone = holdingsPnlTone(lot.pnl);
+              const lotColor =
+                lotTone === "is-up"
+                  ? "color:#A32D2D"
+                  : lotTone === "is-down"
+                    ? "color:#0F6E56"
+                    : "";
+              if (lot.kind === "open") {
+                return `<div class="nail-pnl-lot"><span>持有 ${escapeHtml(formatHoldingsQty(lot.quantity))} · 成本 ${escapeHtml(formatHoldingsPriceInput(lot.buyPrice))} · ${escapeHtml(when)}</span><b style="${lotColor}">${escapeHtml(formatHoldingsPnlSignedHtml(lot.pnl, { unit: false }))}</b></div>`;
+              }
+              return `<div class="nail-pnl-lot"><span>卖出 ${escapeHtml(formatHoldingsQty(lot.quantity))} · 买 ${escapeHtml(formatHoldingsPriceInput(lot.buyPrice))} → 卖 ${escapeHtml(formatHoldingsPriceInput(lot.sellPrice))} · ${escapeHtml(when)}</span><b style="${lotColor}">${escapeHtml(formatHoldingsPnlSignedHtml(lot.pnl, { unit: false }))}</b></div>`;
+            })
+            .join("");
+          return `<div class="nail-pnl-group">
+            <button type="button" class="nail-pnl-group-row" data-pnl-group title="展开/收起逐笔明细">
+              <span class="nail-pnl-group-main"><b>${escapeHtml(g.label)}</b><span class="nail-pnl-group-meta">${escapeHtml(metaBits.join(" · "))}</span></span>
+              <span class="nail-pnl-group-val ${cls}">${escapeHtml(formatHoldingsPnlSignedHtml(g.total, { unit: false }))}</span>
+            </button>
+            <div class="nail-pnl-lots">${lotsHtml}</div>
+          </div>`;
+        };
+        const openGroups = [...groups.values()]
+          .filter((g) => g.kind === "open")
+          .sort((a, b) => a.total - b.total); // 亏最多在前
+        const closedGroups = [...groups.values()]
+          .filter((g) => g.kind === "closed")
+          .sort((a, b) => b.total - a.total); // 赚最多在前
+        const parts = [];
+        if (openGroups.length) {
+          parts.push(`<div class="nail-pnl-section">
+            <div class="nail-pnl-section-head">持仓中 <span>未实现 · 亏最多在前</span></div>
+            ${openGroups.map(renderGroup).join("")}
+          </div>`);
+        }
+        if (closedGroups.length) {
+          parts.push(`<div class="nail-pnl-section">
+            <div class="nail-pnl-section-head">已落袋 <span>已实现 · 赚最多在前</span></div>
+            ${closedGroups.map(renderGroup).join("")}
+          </div>`);
+        }
+        list.innerHTML = parts.join("");
       }
 
       function setTradePnlModalOpen(open) {
@@ -37799,6 +37922,14 @@
         }
         if (event.target.id === "nailTradePnlModal") {
           setTradePnlModalOpen(false);
+          return;
+        }
+        const pnlGroup = event.target.closest("[data-pnl-group]");
+        if (pnlGroup) {
+          const box = pnlGroup.parentElement;
+          if (box && box.classList.contains("nail-pnl-group")) {
+            box.classList.toggle("is-open");
+          }
           return;
         }
         if (event.target.closest(".nail-pnl-panel")) return;
