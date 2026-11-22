@@ -3728,19 +3728,48 @@
         cursor: pointer;
       }
       .nail-pnl-summary {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px 14px;
-        margin: 0 0 10px;
-        font-size: 11px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin: 0 0 12px;
         font-variant-numeric: tabular-nums;
       }
-      .nail-pnl-summary span {
-        color: var(--secondary);
+      .nail-pnl-summary-card {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 10px 10px 9px;
+        border-radius: 10px;
+        border: 0.5px solid var(--separator);
+        background: var(--grouped, rgba(0, 0, 0, 0.03));
+        min-width: 0;
       }
-      .nail-pnl-summary b {
+      .nail-pnl-summary-card .lbl {
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 500;
+      }
+      .nail-pnl-summary-card .val {
+        font-size: 16px;
         font-weight: 700;
-        margin-left: 4px;
+        letter-spacing: -0.02em;
+        color: var(--label, #1c1c1e);
+      }
+      .nail-pnl-summary-card .val.pnl-up,
+      .nail-pnl-group-val.pnl-up,
+      .nail-pnl-lot .pnl-up {
+        color: var(--up, #c62828);
+      }
+      .nail-pnl-summary-card .val.pnl-down,
+      .nail-pnl-group-val.pnl-down,
+      .nail-pnl-lot .pnl-down {
+        color: var(--down, #0f6e56);
+      }
+      .nail-pnl-foot {
+        margin: 2px 2px 0;
+        color: var(--secondary);
+        font-size: 11px;
+        line-height: 1.45;
       }
       .nail-pnl-row {
         display: flex;
@@ -3833,18 +3862,27 @@
       .nail-pnl-group-row:hover {
         background: rgba(90, 140, 255, 0.06);
       }
+      .nail-pnl-group-main {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        min-width: 0;
+      }
       .nail-pnl-group-main b {
         font-weight: 700;
+        font-size: 14px;
       }
       .nail-pnl-group-meta {
         color: var(--secondary);
         font-size: 11px;
-        margin-left: 6px;
+        margin-left: 0;
       }
       .nail-pnl-group-val {
         font-weight: 700;
         font-variant-numeric: tabular-nums;
         flex: 0 0 auto;
+        font-size: 14px;
       }
       .nail-pnl-lots {
         display: none;
@@ -16138,22 +16176,19 @@
         const combined = combinedPnlTotal();
         const summary = document.getElementById("nailTradePnlSummary");
         if (summary) {
-          const bits = [
-            `<span>已实现 ${formatHoldingsPnlSignedHtml(realized, { unit: false })}</span>`,
-          ];
-          if (unrealized != null) {
-            bits.push(
-              `<span>未实现 ${formatHoldingsPnlSignedHtml(unrealized, { unit: false })}</span>`,
-            );
-          } else {
-            bits.push(`<span>未实现 <span class="pnl-num">—</span></span>`);
-          }
-          if (combined) {
-            bits.push(
-              `<span>合计 ${formatHoldingsPnlSignedHtml(combined.usdt, { unit: false })}</span>`,
-            );
-          }
-          summary.innerHTML = bits.join("");
+          const card = (label, value) => {
+            const cls = holdingsPnlColorClass(value);
+            const text =
+              value == null || !Number.isFinite(Number(value))
+                ? "—"
+                : formatHoldingsPnlPlain(value);
+            return `<div class="nail-pnl-summary-card"><span class="lbl">${escapeHtml(label)}</span><span class="val ${cls}">${escapeHtml(text)}</span></div>`;
+          };
+          summary.innerHTML = [
+            card("已实现", realized),
+            card("未实现", unrealized),
+            card("合计", combined ? combined.usdt : realized),
+          ].join("");
         }
         const list = document.getElementById("nailTradePnlList");
         if (!list) return;
@@ -16167,7 +16202,7 @@
         const groups = new Map();
         rows.forEach((row) => {
           const sym = String(row.symbol || "").toUpperCase();
-          const kind = row.kind; // 持仓中 / 已落袋 分开聚合
+          const kind = row.kind;
           if (!sym) return;
           const gid = `${kind}:${sym}`;
           if (!groups.has(gid)) {
@@ -16179,22 +16214,30 @@
               count: 0,
               qty: 0,
               spot: null,
+              lastSell: null,
               lots: [],
             });
           }
           const g = groups.get(gid);
-          g.total += Number(row.pnl) || 0;
+          if (Number.isFinite(Number(row.pnl))) g.total += Number(row.pnl);
           g.count += 1;
           g.qty += Number(row.quantity) || 0;
           if (row.spot != null) g.spot = row.spot;
+          if (row.kind === "closed" && Number(row.sellPrice) > 0) {
+            g.lastSell = Number(row.sellPrice);
+          }
           g.lots.push(row);
         });
         const renderGroup = (g) => {
-          const tone = holdingsPnlTone(g.total);
-          const cls = tone === "is-up" ? "pnl-up" : tone === "is-down" ? "pnl-down" : "";
-          const metaBits = [`${g.count} 笔`];
-          if (g.qty > 0) metaBits.push(`共 ${formatHoldingsQty(g.qty)}`);
-          if (g.spot != null) metaBits.push(`现价 ${formatHoldingsPriceInput(g.spot)}`);
+          const cls = holdingsPnlColorClass(g.total);
+          const metaBits = [];
+          if (g.count > 1) metaBits.push(`${g.count} 笔合并`);
+          else metaBits.push(`${g.count} 笔`);
+          if (g.kind === "open" && g.spot != null) {
+            metaBits.push(`现价 ${formatHoldingsPriceInput(g.spot)}`);
+          } else if (g.kind === "closed" && g.lastSell != null) {
+            metaBits.push(`卖 ${formatHoldingsPriceInput(g.lastSell)}`);
+          }
           const lotsHtml = g.lots
             .slice()
             .sort((a, b) => (b.at || 0) - (a.at || 0))
@@ -16202,46 +16245,44 @@
               const when = lot.at
                 ? new Date(lot.at).toLocaleString("zh-CN", { hour12: false })
                 : "—";
-              const lotTone = holdingsPnlTone(lot.pnl);
-              const lotColor =
-                lotTone === "is-up"
-                  ? "color:#A32D2D"
-                  : lotTone === "is-down"
-                    ? "color:#0F6E56"
-                    : "";
+              const lotCls = holdingsPnlColorClass(lot.pnl);
+              const lotText = formatHoldingsPnlPlain(lot.pnl);
               if (lot.kind === "open") {
-                return `<div class="nail-pnl-lot"><span>持有 ${escapeHtml(formatHoldingsQty(lot.quantity))} · 成本 ${escapeHtml(formatHoldingsPriceInput(lot.buyPrice))} · ${escapeHtml(when)}</span><b style="${lotColor}">${escapeHtml(formatHoldingsPnlSignedHtml(lot.pnl, { unit: false }))}</b></div>`;
+                return `<div class="nail-pnl-lot"><span>持有 ${escapeHtml(formatHoldingsQty(lot.quantity))} · 成本 ${escapeHtml(formatHoldingsPriceInput(lot.buyPrice))} · ${escapeHtml(when)}</span><b class="${lotCls}">${escapeHtml(lotText)}</b></div>`;
               }
-              return `<div class="nail-pnl-lot"><span>卖出 ${escapeHtml(formatHoldingsQty(lot.quantity))} · 买 ${escapeHtml(formatHoldingsPriceInput(lot.buyPrice))} → 卖 ${escapeHtml(formatHoldingsPriceInput(lot.sellPrice))} · ${escapeHtml(when)}</span><b style="${lotColor}">${escapeHtml(formatHoldingsPnlSignedHtml(lot.pnl, { unit: false }))}</b></div>`;
+              return `<div class="nail-pnl-lot"><span>卖出 ${escapeHtml(formatHoldingsQty(lot.quantity))} · 买 ${escapeHtml(formatHoldingsPriceInput(lot.buyPrice))} → 卖 ${escapeHtml(formatHoldingsPriceInput(lot.sellPrice))} · ${escapeHtml(when)}</span><b class="${lotCls}">${escapeHtml(lotText)}</b></div>`;
             })
             .join("");
           return `<div class="nail-pnl-group">
             <button type="button" class="nail-pnl-group-row" data-pnl-group title="展开/收起逐笔明细">
               <span class="nail-pnl-group-main"><b>${escapeHtml(g.label)}</b><span class="nail-pnl-group-meta">${escapeHtml(metaBits.join(" · "))}</span></span>
-              <span class="nail-pnl-group-val ${cls}">${escapeHtml(formatHoldingsPnlSignedHtml(g.total, { unit: false }))}</span>
+              <span class="nail-pnl-group-val ${cls}">${escapeHtml(formatHoldingsPnlPlain(g.total))}</span>
             </button>
             <div class="nail-pnl-lots">${lotsHtml}</div>
           </div>`;
         };
         const openGroups = [...groups.values()]
           .filter((g) => g.kind === "open")
-          .sort((a, b) => a.total - b.total); // 亏最多在前
+          .sort((a, b) => a.total - b.total);
         const closedGroups = [...groups.values()]
           .filter((g) => g.kind === "closed")
-          .sort((a, b) => b.total - a.total); // 赚最多在前
+          .sort((a, b) => b.total - a.total);
         const parts = [];
         if (openGroups.length) {
           parts.push(`<div class="nail-pnl-section">
-            <div class="nail-pnl-section-head">持仓中 <span>未实现 · 亏最多在前</span></div>
+            <div class="nail-pnl-section-head">持仓中 <span>按亏损从大到小</span></div>
             ${openGroups.map(renderGroup).join("")}
           </div>`);
         }
         if (closedGroups.length) {
           parts.push(`<div class="nail-pnl-section">
-            <div class="nail-pnl-section-head">已落袋 <span>已实现 · 赚最多在前</span></div>
+            <div class="nail-pnl-section-head">已落袋 <span>按盈利从大到小</span></div>
             ${closedGroups.map(renderGroup).join("")}
           </div>`);
         }
+        parts.push(
+          `<div class="nail-pnl-foot">点每个币展开逐笔明细 · 内部字段名不外露</div>`,
+        );
         list.innerHTML = parts.join("");
       }
 
@@ -16775,6 +16816,21 @@
         if (!Number.isFinite(n)) return "";
         const sign = n > 0 ? "+" : "";
         return `${sign}${formatHoldingsUsdt(n)} USDT`;
+      }
+
+      /** 明细浮窗用：纯文本 +/− 金额（不带 HTML，避免再被 escape）。 */
+      function formatHoldingsPnlPlain(usdt) {
+        const n = Number(usdt);
+        if (!Number.isFinite(n)) return "—";
+        const sign = n > 1e-8 ? "+" : "";
+        return `${sign}${formatHoldingsUsdt(n)}`;
+      }
+
+      function holdingsPnlColorClass(usdt) {
+        const tone = holdingsPnlTone(usdt);
+        if (tone === "is-up") return "pnl-up";
+        if (tone === "is-down") return "pnl-down";
+        return "";
       }
 
       /**
