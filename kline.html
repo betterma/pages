@@ -2917,6 +2917,10 @@
       }
       .nail-radar-table {
         width: 100%;
+        /* 窄屏（如安卓手机 360px）下若只按 100% 铺满，4 列会被压进屏幕、
+           完全没有横向溢出，overflow:auto 就无从滚动，操作列也被挤成窄条。
+           给一个最小宽度强制超出容器，才能横滑看列（前两列 sticky 冻结）。 */
+        min-width: 520px;
         border-collapse: collapse;
         font-size: 12px;
         font-variant-numeric: tabular-nums;
