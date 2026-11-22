@@ -115,7 +115,7 @@
 
 ## 部署
 
-1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `mom-notes-shared.js` + `notes-rank-snap.js` + `nail-green-alert.js` + `balance-alert.js` + `prune-stale-auto-pin-nails.js` + `nail-daily-reset.js` + `holdings.js` + `runtime-env.js` + `binance-spot.js` + `sell-tasks.js` + `buy-tasks.js` + `trade-action-log.js`）。只更新 `index.js` 会出现 `main is not a function`。
+1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `mom-notes-shared.js` + `notes-rank-snap.js` + `nail-green-alert.js` + `balance-alert.js` + `overlook-pin.js` + `pullback-volume.js` + `prune-stale-auto-pin-nails.js` + `nail-daily-reset.js` + `holdings.js` + `runtime-env.js` + `binance-spot.js` + `sell-tasks.js` + `buy-tasks.js` + `trade-action-log.js`）。只更新 `index.js` 会出现 `main is not a function`。漏传 `overlook-pin.js` / `pullback-volume.js` 时定时任务仍能跑，但俯瞰/回踩会静默跳过；漏传 `mom-notes-shared.js` 时记一笔/排行会降级（见 `notify.js` 软加载）。
 2. Handler：`index.handler`，Node.js 18+
 3. **超时建议 ≥ 60～120 秒**
 4. 定时触发器：`0 */5 * * * *`

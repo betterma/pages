@@ -10,17 +10,45 @@ const {
 } = require('./github-wecom');
 const { buildTopChartsCollage, fetchKlines } = require('./kline-chart');
 const { runAutoPin, savePinsFile, normalizePinList } = require('./auto-pin');
-const {
-  loadMomNotes,
-  listNotesPinUniverse,
-} = require('./mom-notes-shared');
+
+// mom-notes-shared：软加载。漏传时不拖垮整包；记一笔为空、宇宙退回 pins∪notes。
+let loadMomNotes = async () => [];
+let listNotesPinUniverse = (pins, notes, blacklist) => {
+  const blocked = blacklist instanceof Set ? blacklist : new Set();
+  const set = new Set();
+  for (const item of pins || []) {
+    const symbol = item && item.symbol;
+    if (symbol && !blocked.has(symbol)) set.add(symbol);
+  }
+  for (const note of notes || []) {
+    const symbol = note && note.symbol;
+    if (symbol && !blocked.has(symbol)) set.add(symbol);
+  }
+  return [...set];
+};
+try {
+  const momNotesShared = require('./mom-notes-shared');
+  if (typeof momNotesShared.loadMomNotes === 'function') {
+    loadMomNotes = momNotesShared.loadMomNotes;
+  }
+  if (typeof momNotesShared.listNotesPinUniverse === 'function') {
+    listNotesPinUniverse = momNotesShared.listNotesPinUniverse;
+  } else if (typeof momNotesShared.listBreakHighUniverse === 'function') {
+    listNotesPinUniverse = momNotesShared.listBreakHighUniverse;
+  }
+} catch (error) {
+  console.warn(
+    'mom-notes-shared module missing — 请整包上传 cloud-function-notify',
+    error && error.message ? error.message : error,
+  );
+}
 
 let runNotesRankSnap = async () => ({
   skipped: true,
   reason: 'module-missing',
 });
 try {
-  // 必须与 notes-rank-snap.js 整包上传；缺文件时不拖垮自动盯。
+  // 必须与 notes-rank-snap.js（及其依赖 mom-notes-shared）整包上传；缺文件时不拖垮自动盯。
   runNotesRankSnap = require('./notes-rank-snap').runNotesRankSnap;
 } catch (error) {
   console.warn(
