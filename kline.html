@@ -6117,6 +6117,15 @@
         line-height: 1.3;
         color: var(--secondary, #9aa3a0);
       }
+      /* 置顶卡片盈亏：浮/已落标签弱化，数字沿用红绿。 */
+      .nail-pnl .pnl-label {
+        font-weight: 500;
+        opacity: 0.62;
+      }
+      .nail-pnl .pnl-sep {
+        font-weight: 400;
+        opacity: 0.4;
+      }
       .nail-pnl + .nail-note {
         margin-top: 2px;
       }
@@ -16303,6 +16312,54 @@
       function tradePnlTotal() {
         const rows = (nailTradePnlState && nailTradePnlState.entries) || [];
         return rows.reduce((sum, row) => sum + (Number(row.pnl) || 0), 0);
+      }
+
+      /** 单个币的已落袋盈亏合计（按 symbol 归一，含历史补录）。无记录返回 null。 */
+      function realizedPnlOf(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return null;
+        const rows = (nailTradePnlState && nailTradePnlState.entries) || [];
+        let sum = 0;
+        let any = false;
+        rows.forEach((row) => {
+          const s = String((row && row.symbol) || "")
+            .trim()
+            .toUpperCase();
+          if (s !== key) return;
+          const pnl = Number(row && row.pnl);
+          if (!Number.isFinite(pnl)) return;
+          any = true;
+          sum += pnl;
+        });
+        return any ? sum : null;
+      }
+
+      /**
+       * 置顶卡片盈亏展示：浮 + 已落并排，明确两者性质，避免裸数字被误读为总收益。
+       * 返回可直接插入的 HTML；无浮动盈亏但有已落时，仍显示已落。
+       */
+      function nailCardPnlHtml(symbol, floatingUsdt) {
+        const floatPnl =
+          Number.isFinite(Number(floatingUsdt)) ? Number(floatingUsdt) : null;
+        const realized = realizedPnlOf(symbol);
+        if (floatPnl == null && realized == null) return "";
+        const parts = [];
+        if (floatPnl != null) {
+          parts.push(
+            `<span class="pnl-label">浮</span> ${formatHoldingsPnlSignedHtml(floatPnl, { unit: "" })}`,
+          );
+        }
+        if (realized != null) {
+          const rTone = holdingsPnlTone(realized);
+          const rSign = realized > 1e-8 ? "+" : realized < -1e-8 ? "−" : "";
+          const rAbs = formatHoldingsUsdt(Math.abs(realized));
+          parts.push(
+            `<span class="pnl-label">已落</span> <span class="pnl-sign ${rTone}">${rSign}</span><span class="pnl-num">${escapeHtml(rAbs)}</span>`,
+          );
+        }
+        return parts.join('<span class="pnl-sep"> · </span>');
       }
 
       /** 未实现合计（持仓栏关注币）；无持仓成本则 null。 */
@@ -33205,15 +33262,16 @@
             .toUpperCase();
           if (!key) return;
           const pnl = holdingsPnlOf(key);
+          const pnlInner = nailCardPnlHtml(key, pnl ? pnl.usdt : null);
           let el = card.querySelector("[data-nail-pnl]");
-          if (!pnl) {
+          if (!pnlInner) {
             if (el) el.remove();
             return;
           }
           if (!el) {
             el = document.createElement("p");
             el.setAttribute("data-nail-pnl", key);
-            el.title = "相对成本价浮动盈亏";
+            el.title = "浮=持仓浮动盈亏(随现价变动)、已落=该币卖出已实现盈亏";
             const note = card.querySelector("[data-nail-note-display]");
             const wrap = card.querySelector(".nail-kline-wrap");
             if (note) card.insertBefore(el, note);
@@ -33221,9 +33279,7 @@
             else card.appendChild(el);
           }
           el.className = "nail-pnl";
-          el.innerHTML = formatHoldingsPnlSignedHtml(pnl.usdt, {
-            unit: " USDT",
-          });
+          el.innerHTML = pnlInner;
         });
         const heldLabel = list.querySelector(
           '.nail-section-label[data-nail-section="held"]',
@@ -34275,8 +34331,9 @@
               ? `<div class="nail-kline-veil" data-nail-unveil="${symbol}">双击查看</div>`
               : "";
             const pnl = holdingsPnlOf(item.symbol);
-            const pnlHtml = pnl
-              ? `<p class="nail-pnl ${holdingsPnlTone(pnl.usdt)}" data-nail-pnl="${symbol}" title="相对成本价浮动盈亏">${escapeHtml(formatHoldingsPnlUsdt(pnl.usdt))}</p>`
+            const pnlInner = nailCardPnlHtml(item.symbol, pnl ? pnl.usdt : null);
+            const pnlHtml = pnlInner
+              ? `<p class="nail-pnl" data-nail-pnl="${symbol}" title="浮=持仓浮动盈亏(随现价变动)、已落=该币卖出已实现盈亏">${pnlInner}</p>`
               : "";
             const noteHtml = note
               ? `<p class="nail-note" data-nail-note-display="${symbol}">${formatNailNoteHtml(note)}</p>`
