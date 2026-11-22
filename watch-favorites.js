@@ -3043,6 +3043,7 @@
         pnl,
         at: Number.isFinite(at) && at > 0 ? at : 0,
         source: String(row.source || "manual"),
+        ...(row.lotId ? { lotId: String(row.lotId) } : {}),
       });
     });
     entries.sort((a, b) => b.at - a.at);
@@ -3411,6 +3412,7 @@
       symbols: [],
       balances: {},
       entryPrices: {},
+      entryLots: {},
       stopCancel: {},
       lastError: null,
     };
@@ -3426,6 +3428,358 @@
     if (symbol === "USDT") return "USDT";
     if (!symbol.endsWith("USDT")) symbol += "USDT";
     return symbol;
+  }
+
+  function newHoldingsLotId(symbol, at) {
+    const ts = Number(at) || Date.now();
+    return `${symbol}:${ts}:${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function normalizeHoldingsEntryLots(raw) {
+    const out = {};
+    const src = raw && typeof raw === "object" ? raw : {};
+    Object.keys(src).forEach((key) => {
+      const symbol = normalizeHoldingsSymbol(key);
+      if (!symbol || symbol === "USDT") return;
+      const list = Array.isArray(src[key]) ? src[key] : [];
+      const lots = [];
+      list.forEach((row) => {
+        if (!row || typeof row !== "object") return;
+        const qty = Number(row.qty);
+        const price = Number(row.price);
+        if (!(qty > 0) || !(price > 0)) return;
+        lots.push({
+          id: String(row.id || newHoldingsLotId(symbol, row.at)),
+          qty,
+          price,
+          at: Number(row.at) || 0,
+          source: String(row.source || "manual"),
+        });
+      });
+      lots.sort((a, b) => (a.at || 0) - (b.at || 0));
+      if (lots.length) out[symbol] = lots;
+    });
+    return out;
+  }
+
+  function lotsVwapOf(lots) {
+    let qty = 0;
+    let cost = 0;
+    (Array.isArray(lots) ? lots : []).forEach((lot) => {
+      const q = Number(lot && lot.qty);
+      const p = Number(lot && lot.price);
+      if (!(q > 0) || !(p > 0)) return;
+      qty += q;
+      cost += q * p;
+    });
+    if (!(qty > 0)) return null;
+    return cost / qty;
+  }
+
+  function lotsTotalQtyOf(lots) {
+    return (Array.isArray(lots) ? lots : []).reduce((sum, lot) => {
+      const q = Number(lot && lot.qty);
+      return sum + (q > 0 ? q : 0);
+    }, 0);
+  }
+
+  function unrealizedPnlOfLots(lots, spot) {
+    const px = Number(spot);
+    if (!(px > 0)) return null;
+    let usdt = 0;
+    let cost = 0;
+    let any = false;
+    (Array.isArray(lots) ? lots : []).forEach((lot) => {
+      const q = Number(lot && lot.qty);
+      const p = Number(lot && lot.price);
+      if (!(q > 0) || !(p > 0)) return;
+      any = true;
+      usdt += (px - p) * q;
+      cost += p * q;
+    });
+    if (!any) return null;
+    const pct = cost > 0 ? (usdt / cost) * 100 : null;
+    return { usdt, pct };
+  }
+
+  function migrateEntryLotsFromPrices(entryLots, entryPrices, balances) {
+    const next = { ...(entryLots || {}) };
+    const prices = entryPrices && typeof entryPrices === "object" ? entryPrices : {};
+    const bals = balances && typeof balances === "object" ? balances : {};
+    Object.keys(prices).forEach((key) => {
+      const symbol = normalizeHoldingsSymbol(key);
+      if (!symbol || symbol === "USDT") return;
+      if (next[symbol] && next[symbol].length) return;
+      const row = prices[key];
+      const price =
+        row && typeof row === "object" ? Number(row.price) : Number(row);
+      if (!(price > 0)) return;
+      const asset = symbol.replace(/USDT$/i, "");
+      const bal = bals[asset] || {};
+      const qty = (Number(bal.free) || 0) + (Number(bal.locked) || 0);
+      if (!(qty > 0)) return;
+      const at =
+        row && typeof row === "object" && Number(row.at) > 0
+          ? Number(row.at)
+          : Date.now();
+      next[symbol] = [
+        {
+          id: newHoldingsLotId(symbol, at),
+          qty,
+          price,
+          at,
+          source:
+            row && typeof row === "object" && row.source
+              ? String(row.source)
+              : "migrate",
+        },
+      ];
+    });
+    return next;
+  }
+
+  function syncEntryPriceFromLotsMap(entryPrices, symbol, lots, at, source) {
+    const next = { ...(entryPrices || {}) };
+    const vwap = lotsVwapOf(lots);
+    if (!(vwap > 0)) {
+      delete next[symbol];
+      return next;
+    }
+    next[symbol] = {
+      price: vwap,
+      at: Number(at) || Date.now(),
+      source: String(source || "lots-vwap"),
+    };
+    return next;
+  }
+
+  /** 买入加一笔 open lot，并回写 VWAP 到 entryPrices。 */
+  function addBuyLotToHoldings(holdings, options) {
+    const opts = options || {};
+    const symbol = normalizeHoldingsSymbol(opts.symbol);
+    const qty = Number(opts.qty);
+    const price = Number(opts.price);
+    const at = Number(opts.at) || Date.now();
+    const source = String(opts.source || "buy");
+    if (!symbol || symbol === "USDT" || !(qty > 0) || !(price > 0)) {
+      return { holdings, lot: null, error: "bad-args" };
+    }
+    const base = holdings && typeof holdings === "object" ? { ...holdings } : emptyHoldings();
+    const entryLots = normalizeHoldingsEntryLots(base.entryLots);
+    const list = Array.isArray(entryLots[symbol])
+      ? entryLots[symbol].slice()
+      : [];
+    const lot = {
+      id: String(opts.id || newHoldingsLotId(symbol, at)),
+      qty,
+      price,
+      at,
+      source,
+    };
+    list.push(lot);
+    list.sort((a, b) => (a.at || 0) - (b.at || 0));
+    entryLots[symbol] = list;
+    const entryPrices = syncEntryPriceFromLotsMap(
+      base.entryPrices,
+      symbol,
+      list,
+      at,
+      source,
+    );
+    const symbols = Array.isArray(base.symbols) ? base.symbols.slice() : [];
+    if (!symbols.includes(symbol)) symbols.push(symbol);
+    const stopCancel =
+      base.stopCancel && typeof base.stopCancel === "object"
+        ? { ...base.stopCancel }
+        : {};
+    if (stopCancel[symbol]) delete stopCancel[symbol];
+    return {
+      holdings: {
+        ...base,
+        symbols,
+        entryLots,
+        entryPrices,
+        stopCancel,
+        updatedAt: at,
+      },
+      lot,
+      error: null,
+    };
+  }
+
+  /** FIFO 卖出；返回 realizedEntries 供 patchTradePnl。 */
+  function consumeSellFifoFromHoldings(holdings, options) {
+    const opts = options || {};
+    const symbol = normalizeHoldingsSymbol(opts.symbol);
+    let remain = Number(opts.qty);
+    const sellPrice = Number(opts.sellPrice);
+    const feeTotal = Number(opts.fee) || 0;
+    const at = Number(opts.at) || Date.now();
+    const source = String(opts.source || "sell");
+    if (!symbol || symbol === "USDT" || !(remain > 0) || !(sellPrice > 0)) {
+      return {
+        holdings,
+        realizedEntries: [],
+        vwap: null,
+        error: "bad-args",
+      };
+    }
+    const base = holdings && typeof holdings === "object" ? { ...holdings } : emptyHoldings();
+    const entryLots = normalizeHoldingsEntryLots(base.entryLots);
+    let list = Array.isArray(entryLots[symbol])
+      ? entryLots[symbol].slice()
+      : [];
+    if (!list.length) {
+      const row =
+        base.entryPrices && typeof base.entryPrices === "object"
+          ? base.entryPrices[symbol]
+          : null;
+      const price = row && Number(row.price);
+      if (price > 0) {
+        list = [
+          {
+            id: newHoldingsLotId(symbol, row.at || at),
+            qty: remain,
+            price,
+            at: Number(row.at) || at,
+            source: String((row && row.source) || "entry"),
+          },
+        ];
+      }
+    }
+    const sellQtyTotal = remain;
+    const realizedEntries = [];
+    const nextLots = [];
+    for (let i = 0; i < list.length; i += 1) {
+      const lot = list[i];
+      if (!(remain > 0)) {
+        nextLots.push(lot);
+        continue;
+      }
+      const lotQty = Number(lot.qty);
+      if (!(lotQty > 0)) continue;
+      const take = Math.min(lotQty, remain);
+      const feeSlice = sellQtyTotal > 0 ? (feeTotal * take) / sellQtyTotal : 0;
+      const pnl = (sellPrice - lot.price) * take - feeSlice;
+      realizedEntries.push({
+        id: `${symbol}:${at}:${lot.id}:${Math.random().toString(36).slice(2, 6)}`,
+        symbol,
+        label: symbol.replace(/USDT$/i, ""),
+        side: "sell",
+        quantity: take,
+        buyPrice: lot.price,
+        sellPrice,
+        fee: feeSlice,
+        pnl,
+        at,
+        source,
+        lotId: lot.id,
+      });
+      remain -= take;
+      const left = lotQty - take;
+      if (left > 1e-12) nextLots.push({ ...lot, qty: left });
+    }
+    if (nextLots.length) entryLots[symbol] = nextLots;
+    else delete entryLots[symbol];
+    const entryPrices = syncEntryPriceFromLotsMap(
+      base.entryPrices,
+      symbol,
+      nextLots,
+      at,
+      "lots-vwap",
+    );
+    return {
+      holdings: {
+        ...base,
+        entryLots,
+        entryPrices,
+        updatedAt: at,
+      },
+      realizedEntries,
+      vwap: lotsVwapOf(nextLots),
+      error: null,
+    };
+  }
+
+  /** 手填成本：该币收成单笔 lot。 */
+  function replaceLotsWithSingleInHoldings(holdings, options) {
+    const opts = options || {};
+    const symbol = normalizeHoldingsSymbol(opts.symbol);
+    const price = Number(opts.price);
+    const at = Number(opts.at) || Date.now();
+    const source = String(opts.source || "manual");
+    if (!symbol || symbol === "USDT" || !(price > 0)) {
+      return { holdings, error: "bad-args" };
+    }
+    const base = holdings && typeof holdings === "object" ? { ...holdings } : emptyHoldings();
+    const entryLots = normalizeHoldingsEntryLots(base.entryLots);
+    const asset = symbol.replace(/USDT$/i, "");
+    const bal =
+      base.balances && typeof base.balances === "object"
+        ? base.balances[asset]
+        : null;
+    let qty = Number(opts.qty);
+    if (!(qty > 0)) {
+      qty = (Number(bal && bal.free) || 0) + (Number(bal && bal.locked) || 0);
+    }
+    const stopCancel = { ...(base.stopCancel || {}) };
+    if (stopCancel[symbol]) delete stopCancel[symbol];
+    const symbols = Array.isArray(base.symbols) ? base.symbols.slice() : [];
+    if (!symbols.includes(symbol)) symbols.push(symbol);
+    if (!(qty > 0)) {
+      delete entryLots[symbol];
+      const entryPrices = { ...(base.entryPrices || {}) };
+      entryPrices[symbol] = { price, at, source };
+      return {
+        holdings: {
+          ...base,
+          symbols,
+          entryLots,
+          entryPrices,
+          stopCancel,
+          updatedAt: at,
+        },
+        error: null,
+      };
+    }
+    entryLots[symbol] = [
+      {
+        id: newHoldingsLotId(symbol, at),
+        qty,
+        price,
+        at,
+        source,
+      },
+    ];
+    const entryPrices = syncEntryPriceFromLotsMap(
+      base.entryPrices,
+      symbol,
+      entryLots[symbol],
+      at,
+      source,
+    );
+    return {
+      holdings: {
+        ...base,
+        symbols,
+        entryLots,
+        entryPrices,
+        stopCancel,
+        updatedAt: at,
+      },
+      error: null,
+    };
+  }
+
+  function clearSymbolLotsInHoldings(holdings, symbol) {
+    const key = normalizeHoldingsSymbol(symbol);
+    if (!key) return holdings;
+    const base = holdings && typeof holdings === "object" ? { ...holdings } : emptyHoldings();
+    const entryLots = normalizeHoldingsEntryLots(base.entryLots);
+    delete entryLots[key];
+    const entryPrices = { ...(base.entryPrices || {}) };
+    delete entryPrices[key];
+    return { ...base, entryLots, entryPrices };
   }
 
   function normalizeHoldingsEntryPrices(raw) {
@@ -3493,11 +3847,26 @@
         at: Number(row.at) || 0,
       };
     });
+    let entryPrices = normalizeHoldingsEntryPrices(data.entryPrices);
+    let entryLots = normalizeHoldingsEntryLots(data.entryLots);
+    entryLots = migrateEntryLotsFromPrices(entryLots, entryPrices, balances);
+    // 有 lots 时用 VWAP 回写 entryPrices（供止损 / 展示）
+    Object.keys(entryLots).forEach((symbol) => {
+      const vwap = lotsVwapOf(entryLots[symbol]);
+      if (!(vwap > 0)) return;
+      const prev = entryPrices[symbol];
+      entryPrices[symbol] = {
+        price: vwap,
+        at: (prev && prev.at) || Date.now(),
+        source: (prev && prev.source) || "lots-vwap",
+      };
+    });
     return {
       updatedAt: Number(data.updatedAt) || 0,
       symbols,
       balances,
-      entryPrices: normalizeHoldingsEntryPrices(data.entryPrices),
+      entryPrices,
+      entryLots,
       stopCancel: normalizeHoldingsStopCancel(data.stopCancel),
       lastError: data.lastError ? String(data.lastError) : null,
     };
@@ -5195,6 +5564,14 @@
     HOLDINGS_PATH,
     emptyHoldings,
     normalizeHoldings,
+    normalizeHoldingsEntryLots,
+    lotsVwapOf,
+    lotsTotalQtyOf,
+    unrealizedPnlOfLots,
+    addBuyLotToHoldings,
+    consumeSellFifoFromHoldings,
+    replaceLotsWithSingleInHoldings,
+    clearSymbolLotsInHoldings,
     loadHoldingsRaw,
     patchHoldings,
     SIM_HOLDINGS_PATH,

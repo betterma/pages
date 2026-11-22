@@ -11031,7 +11031,7 @@
     </div>
 
     <script src="./github-token-vault.js"></script>
-    <script src="./watch-favorites.js?v=20261113b"></script>
+    <script src="./watch-favorites.js?v=20261122lots"></script>
     <script src="./kline-mode.js"></script>
     <script>
       "use strict";
@@ -16033,44 +16033,88 @@
           });
       }
 
-      /** 卖出成交后记录一笔已实现盈亏：均价法 (卖价-成本)*数量 - 手续费。 */
-      function recordTradeRealizedPnl(symbol, quantity, sellPrice, buyPrice, fee, source) {
+      /** 批量写入 FIFO 已实现片段。 */
+      function recordTradeRealizedEntries(realizedEntries, message) {
         if (!WatchFavorites || typeof WatchFavorites.patchTradePnl !== "function") {
           return Promise.resolve(null);
         }
-        const key = String(symbol || "").trim().toUpperCase();
-        const qty = Number(quantity);
-        const sell = Number(sellPrice);
-        const buy = Number(buyPrice);
-        if (!key || key === "USDT" || !(qty > 0) || !(sell > 0) || !(buy > 0)) {
-          return Promise.resolve(null);
-        }
-        const feeNum = Number(fee) || 0;
-        const pnl = (sell - buy) * qty - feeNum;
-        const at = Date.now();
+        const list = Array.isArray(realizedEntries)
+          ? realizedEntries.filter((row) => row && Number.isFinite(Number(row.pnl)))
+          : [];
+        if (!list.length) return Promise.resolve(null);
+        const total = list.reduce((sum, row) => sum + Number(row.pnl), 0);
+        const first = list[0];
+        const key = String((first && first.symbol) || "").toUpperCase();
         return WatchFavorites.patchTradePnl({
           repo: CONFIG.GITHUB_REPO,
-          message: `Realized PnL ${key} ${pnl.toFixed(4)} USDT`,
+          message:
+            message ||
+            `Realized PnL ${key || "?"} ${total.toFixed(4)} USDT x${list.length}`,
           mutate: (entries) => {
-            entries.push({
-              id: `${key}:${at}:${Math.random().toString(36).slice(2, 8)}`,
-              symbol: key,
-              label: key.replace(/USDT$/i, ""),
-              side: "sell",
-              quantity: qty,
-              buyPrice: buy,
-              sellPrice: sell,
-              fee: feeNum,
-              pnl,
-              at,
-              source: String(source || "manual"),
-            });
+            list.forEach((row) => entries.push(row));
             return entries;
           },
         }).then((res) => {
           if (res && res.state) nailTradePnlState = res.state;
-          return pnl;
+          return total;
         });
+      }
+
+      /**
+       * FIFO 卖出：扣 lots、写历史盈亏。须在清仓同步前调用。
+       * @returns {Promise<number|null>} 已实现合计 USDT
+       */
+      async function applyMarketSellFifoPnl(symbol, quantity, sellPrice, fee, source) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const qty = Number(quantity);
+        const sell = Number(sellPrice);
+        if (
+          !key ||
+          key === "USDT" ||
+          !(qty > 0) ||
+          !(sell > 0) ||
+          !WatchFavorites ||
+          typeof WatchFavorites.consumeSellFifoFromHoldings !== "function"
+        ) {
+          return null;
+        }
+        const feeNum = Number(fee) || 0;
+        const at = Date.now();
+        let realizedEntries = [];
+        try {
+          const holdResult = await WatchFavorites.patchHoldings({
+            repo: CONFIG.GITHUB_REPO,
+            message: `FIFO sell lots ${key}`,
+            mutate: (state) => {
+              const result = WatchFavorites.consumeSellFifoFromHoldings(state, {
+                symbol: key,
+                qty,
+                sellPrice: sell,
+                fee: feeNum,
+                source: String(source || "manual-market"),
+                at,
+              });
+              realizedEntries = (result && result.realizedEntries) || [];
+              return (result && result.holdings) || state;
+            },
+          });
+          nailHoldingsState = holdResult.state || nailHoldingsState;
+        } catch (error) {
+          console.warn("consumeSellFifo failed", error);
+          return null;
+        }
+        if (!realizedEntries.length) return null;
+        try {
+          return await recordTradeRealizedEntries(
+            realizedEntries,
+            `Realized PnL ${key} FIFO`,
+          );
+        } catch (pnlError) {
+          console.warn("recordTradeRealizedEntries failed", pnlError);
+          return null;
+        }
       }
       /** 余额由云函数约 5 分钟同步一次，超过 10 分钟就标「偏旧」。 */
       const NAIL_HOLD_STALE_MS = 10 * 60 * 1000;
@@ -16386,10 +16430,30 @@
         return bits.join(" · ");
       }
 
+      function holdingsEntryLotsOf(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const lots =
+          nailHoldingsState &&
+          nailHoldingsState.entryLots &&
+          nailHoldingsState.entryLots[key];
+        return Array.isArray(lots) ? lots : [];
+      }
+
       function holdingsEntryPriceOf(symbol) {
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
+        const lots = holdingsEntryLotsOf(key);
+        if (
+          lots.length &&
+          WatchFavorites &&
+          typeof WatchFavorites.lotsVwapOf === "function"
+        ) {
+          const vwap = WatchFavorites.lotsVwapOf(lots);
+          if (vwap > 0) return vwap;
+        }
         const row =
           nailHoldingsState &&
           nailHoldingsState.entryPrices &&
@@ -16398,12 +16462,10 @@
         return Number.isFinite(price) && price > 0 ? price : null;
       }
 
-      /** 相对成本价 P 的浮动盈亏（USDT）；无成本 / 无仓 / 无现价则 null。 */
+      /** 按剩余各笔 lot 汇总浮动盈亏；无 lot 时回退旧单点成本。 */
       function holdingsPnlOf(symbol) {
         const key = normalizeHoldSymbol(symbol);
         if (!key || key === "USDT") return null;
-        const entryPx = holdingsEntryPriceOf(key);
-        if (!(entryPx > 0)) return null;
         const px = holdingsSpotPrice(key);
         if (!(Number.isFinite(px) && px > 0)) return null;
         const asset = holdingsBaseAsset(key);
@@ -16416,9 +16478,32 @@
         if (!(qty > 0)) return null;
         const notional = qty * px;
         if (!(notional >= HOLDINGS_DUST_USDT)) return null;
+        const lots = holdingsEntryLotsOf(key);
+        if (
+          lots.length &&
+          WatchFavorites &&
+          typeof WatchFavorites.unrealizedPnlOfLots === "function"
+        ) {
+          const u = WatchFavorites.unrealizedPnlOfLots(lots, px);
+          if (!u) return null;
+          const entryPx =
+            typeof WatchFavorites.lotsVwapOf === "function"
+              ? WatchFavorites.lotsVwapOf(lots)
+              : holdingsEntryPriceOf(key);
+          return {
+            usdt: u.usdt,
+            pct: u.pct,
+            entryPx: entryPx > 0 ? entryPx : null,
+            px,
+            qty,
+            lotCount: lots.length,
+          };
+        }
+        const entryPx = holdingsEntryPriceOf(key);
+        if (!(entryPx > 0)) return null;
         const usdt = (px - entryPx) * qty;
         const pct = ((px - entryPx) / entryPx) * 100;
-        return { usdt, pct, entryPx, px, qty };
+        return { usdt, pct, entryPx, px, qty, lotCount: 0 };
       }
 
       function holdingsPnlTone(usdt) {
@@ -17402,22 +17487,22 @@
               const buySpendHint = usdtFreeNum * (buyPct / 100);
               const entryPx = holdingsEntryPriceOf(symbol);
               const entryInput = entryPx != null ? String(entryPx) : "";
+              const lotCount = holdingsEntryLotsOf(symbol).length;
               const holdQtyForPnl = isDust ? 0 : rawTotalQty;
               let pnlHtml = "";
-              if (
-                entryPx != null &&
-                entryPx > 0 &&
-                Number.isFinite(px) &&
-                px > 0 &&
-                holdQtyForPnl > 0
-              ) {
-                const pnlUsdt = (px - entryPx) * holdQtyForPnl;
-                const pnlPct = ((px - entryPx) / entryPx) * 100;
-                const tone =
-                  pnlUsdt > 1e-8 ? "is-up" : pnlUsdt < -1e-8 ? "is-down" : "is-flat";
-                const usdtBit = `${pnlUsdt > 0 ? "+" : ""}${formatHoldingsUsdt(pnlUsdt)}`;
-                const pctBit = `${pnlPct > 0 ? "+" : ""}${pnlPct.toFixed(2)}%`;
-                pnlHtml = `<span class="nail-hold-pnl ${tone}" title="相对成本价 P 的浮动盈亏">${escapeHtml(usdtBit)} · ${escapeHtml(pctBit)}</span>`;
+              if (!isDust && holdQtyForPnl > 0) {
+                const pnl = holdingsPnlOf(symbol);
+                if (pnl) {
+                  const tone = holdingsPnlTone(pnl.usdt);
+                  const usdtBit = `${pnl.usdt > 0 ? "+" : ""}${formatHoldingsUsdt(pnl.usdt)}`;
+                  const pctBit =
+                    Number.isFinite(pnl.pct)
+                      ? `${pnl.pct > 0 ? "+" : ""}${pnl.pct.toFixed(2)}%`
+                      : "";
+                  const lotsBit =
+                    lotCount > 1 ? ` · ${lotCount}笔` : "";
+                  pnlHtml = `<span class="nail-hold-pnl ${tone}" title="按剩余各笔成本汇总的浮动盈亏">${escapeHtml(usdtBit)}${pctBit ? ` · ${escapeHtml(pctBit)}` : ""}${escapeHtml(lotsBit)}</span>`;
+                }
               }
               const stop3Px =
                 entryPx != null
@@ -17551,7 +17636,7 @@
                   <div class="nail-hold-cost-main">
                     ${
                       costConfigured
-                        ? `<div><div class="nail-hold-sec-label">买入成本价 P</div><div class="nail-hold-cost-price">${escapeHtml(formatHoldingsPriceInput(entryPx))}</div></div>`
+                        ? `<div><div class="nail-hold-sec-label">买入成本价 P${lotCount > 1 ? ` · ${lotCount}笔均价` : ""}</div><div class="nail-hold-cost-price">${escapeHtml(formatHoldingsPriceInput(entryPx))}</div></div>`
                         : `<div class="nail-hold-cost-empty">未设置成本</div>`
                     }
                     <button type="button" class="nail-hold-cost-edit-btn" data-hold-entry-edit="${escapeHtml(symbol)}">编辑成本 ↗</button>
@@ -17855,6 +17940,7 @@
               : [];
             const balances = { ...(state.balances || {}) };
             const entryPrices = { ...(state.entryPrices || {}) };
+            const entryLots = { ...(state.entryLots || {}) };
             const stopCancel = { ...(state.stopCancel || {}) };
             const seen = new Set();
             const merged = [];
@@ -17872,6 +17958,7 @@
               clearedSeen.add(key);
               clearedSymbols.push(key);
               if (entryPrices[key]) delete entryPrices[key];
+              if (entryLots[key]) delete entryLots[key];
               if (stopCancel[key]) delete stopCancel[key];
             };
 
@@ -17926,6 +18013,7 @@
               symbols: nextSymbols,
               balances,
               entryPrices,
+              entryLots,
               stopCancel,
               updatedAt: stamp,
               lastError: null,
@@ -18274,6 +18362,17 @@
             repo: CONFIG.GITHUB_REPO,
             message: `Entry price ${key} ${price}`,
             mutate: (state) => {
+              // 手填成本 = 该币 lots 收成一笔（覆盖语义保留）
+              if (
+                typeof WatchFavorites.replaceLotsWithSingleInHoldings ===
+                "function"
+              ) {
+                const replaced = WatchFavorites.replaceLotsWithSingleInHoldings(
+                  state,
+                  { symbol: key, price, at: now, source: "manual" },
+                );
+                return replaced.holdings || state;
+              }
               const entryPrices = { ...(state.entryPrices || {}) };
               const stopCancel = { ...(state.stopCancel || {}) };
               entryPrices[key] = {
@@ -18281,7 +18380,6 @@
                 at: now,
                 source: "manual",
               };
-              // 改 P = 重新确认成本：清取消标记，两档固定止损按新 P 重挂
               if (stopCancel[key]) delete stopCancel[key];
               const symbols = Array.isArray(state.symbols)
                 ? state.symbols.slice()
@@ -18336,19 +18434,44 @@
         }
       }
 
-      async function applyMarketBuyCostAndStops(symbol, avgPrice) {
+      async function applyMarketBuyCostAndStops(symbol, avgPrice, fillQty) {
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
         const price = Number(avgPrice);
+        const qty = Number(fillQty);
         if (!key || key === "USDT" || !(price > 0)) {
           throw new Error("成交均价无效，无法更新成本");
         }
         const now = Date.now();
         const holdResult = await WatchFavorites.patchHoldings({
           repo: CONFIG.GITHUB_REPO,
-          message: `Market entry ${key} ${price}`,
+          message: `Market lot ${key} ${price}`,
           mutate: (state) => {
+            if (
+              qty > 0 &&
+              typeof WatchFavorites.addBuyLotToHoldings === "function"
+            ) {
+              const added = WatchFavorites.addBuyLotToHoldings(state, {
+                symbol: key,
+                qty,
+                price,
+                at: now,
+                source: "market",
+              });
+              return added.holdings || state;
+            }
+            // 无成交量时退回手填覆盖语义
+            if (
+              typeof WatchFavorites.replaceLotsWithSingleInHoldings ===
+              "function"
+            ) {
+              const replaced = WatchFavorites.replaceLotsWithSingleInHoldings(
+                state,
+                { symbol: key, price, at: now, source: "market" },
+              );
+              return replaced.holdings || state;
+            }
             const entryPrices = { ...(state.entryPrices || {}) };
             const stopCancel = { ...(state.stopCancel || {}) };
             entryPrices[key] = {
@@ -18365,8 +18488,9 @@
           },
         });
         nailHoldingsState = holdResult.state || nailHoldingsState;
+        const seedPx = holdingsEntryPriceOf(key) || price;
 
-        const stops = buildFixedStopTasks(key, price, now);
+        const stops = buildFixedStopTasks(key, seedPx, now);
         const sellResult = await WatchFavorites.patchSellTasks({
           repo: CONFIG.GITHUB_REPO,
           message: `Seed stop tasks ${key} market`,
@@ -18501,7 +18625,8 @@
             await reloadNailHoldings({ silent: true });
             return false;
           }
-          await applyMarketBuyCostAndStops(key, avg);
+          const filledQty = Number(order.executedQty) || 0;
+          await applyMarketBuyCostAndStops(key, avg, filledQty);
           await reloadNailHoldings({ silent: true });
           showTradeToast(
             `${asset} 现价买入成交 · 成本 ${formatHoldingsPriceInput(avg)} · 已重挂止损`,
@@ -18566,21 +18691,19 @@
           });
           const order = (data && data.order) || {};
           const filled = Number(order.executedQty) || quantity;
-          // 必须在 reloadNailHoldings 之前抓成本：卖光/灰尘会清掉 entryPrices
-          const entryPx = holdingsEntryPriceOf(key);
+          // 必须在 reload / 清仓同步之前 FIFO 扣 lots 并写历史
           const sellAvg =
             Number(order.avgPrice) ||
             (Number(order.cummulativeQuoteQty) > 0 && filled > 0
               ? Number(order.cummulativeQuoteQty) / filled
               : NaN);
           const feeGuess = Number(order.fee) || filled * sellAvg * 0.001;
-          if (entryPx > 0 && filled > 0 && Number.isFinite(sellAvg) && sellAvg > 0) {
+          if (filled > 0 && Number.isFinite(sellAvg) && sellAvg > 0) {
             try {
-              const realized = await recordTradeRealizedPnl(
+              const realized = await applyMarketSellFifoPnl(
                 key,
                 filled,
                 sellAvg,
-                entryPx,
                 feeGuess,
                 "manual-market",
               );
@@ -18588,7 +18711,7 @@
                 console.log(`[trade-pnl] recorded ${key} ${realized.toFixed(4)} USDT`);
               }
             } catch (pnlError) {
-              console.warn("recordTradeRealizedPnl failed", pnlError);
+              console.warn("applyMarketSellFifoPnl failed", pnlError);
             }
           }
           await reloadNailHoldings({ silent: true });
@@ -19240,27 +19363,19 @@
             });
             const order = (data && data.order) || {};
             const filled = Number(order.executedQty) || quantity;
-            // 与持有栏「现价卖出」一致：必须在余额同步之前抓成本，
-            // 卖光/灰尘时同步会清掉 entryPrices，之后再抓就拿不到了。
-            const entryPx = holdingsEntryPriceOf(st.symbol);
+            // 与持有栏「现价卖出」一致：余额同步 / 清仓前先 FIFO 入账
             const sellAvg =
               Number(order.avgPrice) ||
               (Number(order.cummulativeQuoteQty) > 0 && filled > 0
                 ? Number(order.cummulativeQuoteQty) / filled
                 : NaN);
             const feeGuess = Number(order.fee) || filled * sellAvg * 0.001;
-            if (
-              entryPx > 0 &&
-              filled > 0 &&
-              Number.isFinite(sellAvg) &&
-              sellAvg > 0
-            ) {
+            if (filled > 0 && Number.isFinite(sellAvg) && sellAvg > 0) {
               try {
-                const realized = await recordTradeRealizedPnl(
+                const realized = await applyMarketSellFifoPnl(
                   st.symbol,
                   filled,
                   sellAvg,
-                  entryPx,
                   feeGuess,
                   "manual-market",
                 );
@@ -19270,7 +19385,7 @@
                   );
                 }
               } catch (pnlError) {
-                console.warn("recordTradeRealizedPnl failed", pnlError);
+                console.warn("applyMarketSellFifoPnl failed", pnlError);
               }
             }
             setQuickTradeBusy(true, "同步中…");
@@ -19334,7 +19449,8 @@
               : NaN);
           setQuickTradeBusy(true, "同步中…");
           if (avg > 0) {
-            await applyMarketBuyCostAndStops(st.symbol, avg);
+            const filledQty = Number(order.executedQty) || 0;
+            await applyMarketBuyCostAndStops(st.symbol, avg, filledQty);
           }
           if (isManualTradeConfigured()) {
             try {
@@ -19492,15 +19608,24 @@
               );
               const balances = { ...(state.balances || {}) };
               const entryPrices = { ...(state.entryPrices || {}) };
+              const entryLots = { ...(state.entryLots || {}) };
               const stopCancel = { ...(state.stopCancel || {}) };
               keys.forEach((symbol) => {
                 const asset = holdingsBaseAsset(symbol);
                 // 账户 USDT 余额由云同步，不随「移除关注」清掉
                 if (asset && asset !== "USDT") delete balances[asset];
                 delete entryPrices[symbol];
-              delete stopCancel[symbol];
+                delete entryLots[symbol];
+                delete stopCancel[symbol];
               });
-              return { ...state, symbols, balances, entryPrices, stopCancel };
+              return {
+                ...state,
+                symbols,
+                balances,
+                entryPrices,
+                entryLots,
+                stopCancel,
+              };
             },
           });
           nailHoldingsState = result.state || nailHoldingsState;

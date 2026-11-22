@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 /**
  * 闄愪环鍗栧嚭浠诲姟锛氱綉椤靛啓鍏?watch-sell-tasks.json锛屾湰妯″潡鍦?notify 瀹氭椂閲屾墽琛屻€?
@@ -9,8 +9,93 @@
 const { loadJson, saveJson } = require('./github-wecom');
 const spot = require('./binance-spot');
 const { appendTradeActionLog } = require('./trade-action-log');
+const {
+  TRADE_PNL_PATH,
+  consumeSellFifo,
+  migrateEntryLotsFromPrices,
+  normalizeTradePnlState,
+} = require('./trade-pnl');
 
 const SELL_TASKS_PATH = process.env.SELL_TASKS_PATH || 'watch-sell-tasks.json';
+const HOLDINGS_PATH = process.env.HOLDINGS_PATH || 'watch-holdings.json';
+
+/**
+ * 限价/止损成交后：FIFO 扣 lots，追加 watch-trade-pnl。
+ */
+async function recordSellFillFifo(task) {
+  const symbol = normalizeSymbol(task && task.symbol);
+  const qty = Number(task && task.lastQty);
+  const sellPrice = Number(task && task.lastPrice);
+  if (!symbol || !(qty > 0) || !(sellPrice > 0)) return null;
+  const isStop = String(task.kind || '') === 'stop';
+  const source = isStop ? 'stop' : 'limit-sell';
+  const at = Date.now();
+  const feeGuess = qty * sellPrice * 0.001;
+
+  let holdingsFile;
+  try {
+    holdingsFile = await loadJson(HOLDINGS_PATH);
+  } catch (error) {
+    console.warn('sell fifo holdings load failed', error && error.message);
+    return null;
+  }
+  let holdings =
+    holdingsFile.data && typeof holdingsFile.data === 'object'
+      ? { ...holdingsFile.data }
+      : {};
+  holdings.entryLots = migrateEntryLotsFromPrices(holdings);
+  const consumed = consumeSellFifo(holdings, {
+    symbol,
+    qty,
+    sellPrice,
+    fee: feeGuess,
+    source,
+    at,
+  });
+  const realized = (consumed && consumed.realizedEntries) || [];
+  if (!realized.length) return null;
+  try {
+    await saveJson(
+      HOLDINGS_PATH,
+      consumed.holdings,
+      holdingsFile.sha,
+      `FIFO sell lots ${symbol}`,
+    );
+  } catch (error) {
+    console.warn('sell fifo holdings save failed', error && error.message);
+    return null;
+  }
+
+  let pnlFile;
+  try {
+    pnlFile = await loadJson(TRADE_PNL_PATH);
+  } catch (error) {
+    pnlFile = { data: { entries: [], updatedAt: 0 }, sha: null };
+  }
+  const base = normalizeTradePnlState(pnlFile.data);
+  const nextEntries = base.entries.concat(realized);
+  const nextState = {
+    entries: nextEntries,
+    updatedAt: at,
+  };
+  try {
+    await saveJson(
+      TRADE_PNL_PATH,
+      nextState,
+      pnlFile.sha,
+      `Realized PnL ${symbol} ${source}`,
+    );
+  } catch (error) {
+    console.warn('sell fifo trade-pnl save failed', error && error.message);
+    return null;
+  }
+  const total = realized.reduce((sum, row) => sum + Number(row.pnl), 0);
+  console.log(
+    'sell fifo pnl',
+    JSON.stringify({ symbol, source, pieces: realized.length, total }),
+  );
+  return { total, pieces: realized.length, source };
+}
 
 function baseAssetOf(symbol) {
   const key = String(symbol || '')
@@ -146,6 +231,11 @@ async function pollOpenOrder(task, context) {
     } catch (error) {
       console.warn('sell fill log failed', error && error.message);
     }
+    try {
+      await recordSellFillFifo(task);
+    } catch (error) {
+      console.warn('sell fill fifo failed', error && error.message);
+    }
     return 'filled';
   }
   if (status === 'CANCELED' || status === 'REJECTED' || status === 'EXPIRED') {
@@ -259,6 +349,11 @@ async function planAndMaybePlace(task, context, live) {
       } catch (error) {
         console.warn('sell fill log failed', error && error.message);
       }
+      try {
+        await recordSellFillFifo(task);
+      } catch (error) {
+        console.warn('sell fill fifo failed', error && error.message);
+      }
       return 'filled';
     }
     task.status = 'order_open';
@@ -344,6 +439,11 @@ async function planAndMaybePlace(task, context, live) {
       );
     } catch (error) {
       console.warn('sell fill log failed', error && error.message);
+    }
+    try {
+      await recordSellFillFifo(task);
+    } catch (error) {
+      console.warn('sell fill fifo failed', error && error.message);
     }
     return 'filled';
   }

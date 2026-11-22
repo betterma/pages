@@ -3,11 +3,17 @@
 /**
  * 持仓买入价 P → 固定止损任务（-3% 卖一半 / -5% 卖剩余，市价）。
  * 与限价「设置卖出」并存；取消记在 holdings.stopCancel。
- * 买入成交：加仓时按加权均价更新 P；页面手填 P 仍为覆盖。
+ * 买入成交：加一笔 open lot，entryPrices 写剩余 VWAP 供止损；页面手填 P 仍为覆盖成单笔。
  * 成交 / 保存 P 都会清 stopCancel 并按新 P 重挂两档。
  */
 
 const { loadJson, saveJson } = require('./github-wecom');
+const {
+  addBuyLot,
+  replaceLotsWithSingle,
+  lotsVwap,
+  migrateEntryLotsFromPrices,
+} = require('./trade-pnl');
 
 const HOLDINGS_PATH = process.env.HOLDINGS_PATH || 'watch-holdings.json';
 const SELL_TASKS_PATH = process.env.SELL_TASKS_PATH || 'watch-sell-tasks.json';
@@ -159,9 +165,8 @@ function computeWeightedEntryPrice(prevPrice, prevQty, fillPrice, fillQty) {
 }
 
 /**
- * 买入成交后：写 holdings.entryPrices，清空该币 stopCancel，种固定止损。
- * source=buy-fill 且提供 fillQty+prevQty（或 average:true）时做加权均价；
- * 页面手填 P 走 kline 自己的 patch，语义仍为覆盖。
+ * 买入成交后：加 open lot（或无 qty 时覆盖成单笔），清空 stopCancel，种固定止损。
+ * source=buy-fill 且提供 fillQty 时走 addBuyLot；页面手填 P 走 kline 自己的 patch。
  */
 async function applyEntryPriceAndSeedStops(options) {
   const opts = options || {};
@@ -169,7 +174,7 @@ async function applyEntryPriceAndSeedStops(options) {
   const fillPrice = Number(opts.price);
   const now = Number(opts.now) || Date.now();
   const source = opts.source ? String(opts.source) : 'manual';
-  const wantAverage = opts.average === true || source === 'buy-fill';
+  const fillQty = Number(opts.fillQty);
   const result = {
     ok: false,
     reason: null,
@@ -178,8 +183,9 @@ async function applyEntryPriceAndSeedStops(options) {
     fillPrice,
     prevPrice: null,
     prevQty: null,
-    fillQty: null,
+    fillQty: Number.isFinite(fillQty) && fillQty > 0 ? fillQty : null,
     averaged: false,
+    lotAdded: false,
     seeded: false,
   };
   if (!symbol || !(fillPrice > 0)) {
@@ -194,89 +200,63 @@ async function applyEntryPriceAndSeedStops(options) {
     result.reason = `holdings-load:${error.message || error}`;
     return result;
   }
-  const holdings =
+  let holdings =
     holdingsFile.data && typeof holdingsFile.data === 'object'
       ? { ...holdingsFile.data }
       : {};
-  const entryPrices =
-    holdings.entryPrices && typeof holdings.entryPrices === 'object'
-      ? { ...holdings.entryPrices }
-      : {};
-  const stopCancel =
-    holdings.stopCancel && typeof holdings.stopCancel === 'object'
-      ? { ...holdings.stopCancel }
-      : {};
+  // 旧数据仅有 entryPrices：先迁移出 lots，再加仓
+  holdings.entryLots = migrateEntryLotsFromPrices(holdings);
 
-  let nextPrice = fillPrice;
-  if (wantAverage) {
-    const prevRow = entryPrices[symbol];
-    const prevPrice = Number(prevRow && prevRow.price);
-    const fillQty = Number(opts.fillQty);
-    let prevQty = Number(opts.prevQty);
-    if (!(prevQty > 0) && Number.isFinite(fillQty) && fillQty > 0) {
-      // 未显式传旧仓时：用 holdings 余额（可能已含本笔）反推
-      const asset = symbol.replace(/USDT$/i, '');
-      const bal =
-        holdings.balances && typeof holdings.balances === 'object'
-          ? holdings.balances[asset]
-          : null;
-      const free = Number(bal && bal.free) || 0;
-      const locked = Number(bal && bal.locked) || 0;
-      const total = free + locked;
-      if (total > 0) prevQty = Math.max(0, total - fillQty);
-    }
-    result.prevPrice = Number.isFinite(prevPrice) && prevPrice > 0 ? prevPrice : null;
-    result.prevQty = Number.isFinite(prevQty) && prevQty > 0 ? prevQty : null;
-    result.fillQty = Number.isFinite(fillQty) && fillQty > 0 ? fillQty : null;
-    const averaged = computeWeightedEntryPrice(
-      prevPrice,
-      prevQty,
-      fillPrice,
-      fillQty,
+  let nextHoldings;
+  if (result.fillQty > 0) {
+    const prevLots =
+      holdings.entryLots && holdings.entryLots[symbol]
+        ? holdings.entryLots[symbol]
+        : [];
+    result.prevQty = prevLots.reduce(
+      (sum, lot) => sum + (Number(lot.qty) || 0),
+      0,
     );
-    if (averaged > 0) {
-      nextPrice = averaged;
-      result.averaged = !!(
-        prevPrice > 0 &&
-        prevQty > 0 &&
-        fillQty > 0
-      );
-    }
+    result.prevPrice = lotsVwap(prevLots);
+    const added = addBuyLot(holdings, {
+      symbol,
+      qty: result.fillQty,
+      price: fillPrice,
+      at: now,
+      source,
+    });
+    nextHoldings = added.holdings;
+    result.lotAdded = !!added.lot;
+    result.averaged = !!(result.prevQty > 0);
+  } else {
+    const replaced = replaceLotsWithSingle(holdings, {
+      symbol,
+      price: fillPrice,
+      at: now,
+      source,
+    });
+    nextHoldings = replaced.holdings;
   }
 
+  const stopCancel =
+    nextHoldings.stopCancel && typeof nextHoldings.stopCancel === 'object'
+      ? nextHoldings.stopCancel
+      : {};
+  const nextPrice =
+    Number(
+      nextHoldings.entryPrices &&
+        nextHoldings.entryPrices[symbol] &&
+        nextHoldings.entryPrices[symbol].price,
+    ) || fillPrice;
   result.price = nextPrice;
-  entryPrices[symbol] = {
-    price: nextPrice,
-    at: now,
-    source,
-    ...(result.averaged
-      ? {
-          avgFrom: {
-            prevPrice: result.prevPrice,
-            prevQty: result.prevQty,
-            fillPrice,
-            fillQty: result.fillQty,
-          },
-        }
-      : {}),
-  };
-  if (stopCancel[symbol]) delete stopCancel[symbol];
-  const symbols = Array.isArray(holdings.symbols) ? holdings.symbols.slice() : [];
-  if (!symbols.includes(symbol)) symbols.push(symbol);
-  const nextHoldings = {
-    ...holdings,
-    symbols,
-    entryPrices,
-    stopCancel,
-    updatedAt: now,
-  };
+
   try {
     await saveJson(
       HOLDINGS_PATH,
       nextHoldings,
       holdingsFile.sha,
-      result.averaged
-        ? `Entry VWAP ${symbol} ${nextPrice}`
+      result.lotAdded
+        ? `Entry lot ${symbol} ${fillPrice} → VWAP ${nextPrice}`
         : `Entry price ${symbol} ${nextPrice}`,
     );
   } catch (error) {

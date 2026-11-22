@@ -15,6 +15,11 @@ const {
   diagSources,
 } = require('./runtime-env');
 const { dropAllSymbolTradeTasks } = require('./entry-stop');
+const {
+  cloneLotsMap,
+  migrateEntryLotsFromPrices,
+  lotsVwap,
+} = require('./trade-pnl');
 
 const HOLDINGS_PATH = process.env.HOLDINGS_PATH || 'watch-holdings.json';
 const SELL_TASKS_PATH = process.env.SELL_TASKS_PATH || 'watch-sell-tasks.json';
@@ -372,11 +377,29 @@ function normalizeState(raw) {
       at: Number(row.at) || 0,
     };
   });
+  const entryPrices = normalizeEntryPrices(data.entryPrices);
+  let entryLots = cloneLotsMap(data.entryLots);
+  entryLots = migrateEntryLotsFromPrices({
+    entryLots,
+    entryPrices,
+    balances,
+  });
+  Object.keys(entryLots).forEach((symbol) => {
+    const vwap = lotsVwap(entryLots[symbol]);
+    if (!(vwap > 0)) return;
+    const prev = entryPrices[symbol];
+    entryPrices[symbol] = {
+      price: vwap,
+      at: (prev && prev.at) || Date.now(),
+      source: (prev && prev.source) || 'lots-vwap',
+    };
+  });
   return {
     updatedAt: Number(data.updatedAt) || 0,
     symbols,
     balances,
-    entryPrices: normalizeEntryPrices(data.entryPrices),
+    entryPrices,
+    entryLots,
     stopCancel: normalizeStopCancel(data.stopCancel),
     lastError: data.lastError ? String(data.lastError) : null,
   };
@@ -481,6 +504,7 @@ async function runHoldingsSync(options) {
 
   const balances = { ...(state.balances || {}) };
   const entryPrices = { ...(state.entryPrices || {}) };
+  const entryLots = cloneLotsMap(state.entryLots);
   const stopCancel = { ...(state.stopCancel || {}) };
   const clearedSymbols = [];
   const priceMap = await fetchSpotPrices(state.symbols, context);
@@ -505,9 +529,10 @@ async function runHoldingsSync(options) {
     const notional = Number.isFinite(px) && px > 0 ? qty * px : NaN;
     const isDust =
       !isFlat && Number.isFinite(notional) && notional < HOLDINGS_DUST_USDT;
-    // 卖光 / 灰尘：清成本 P，移出关注，并清全部买卖监控（见下方）
+    // 卖光 / 灰尘：清成本 P + lots，移出关注，并清全部买卖监控（见下方）
     if (isFlat || isDust) {
       if (entryPrices[symbol]) delete entryPrices[symbol];
+      if (entryLots[symbol]) delete entryLots[symbol];
       if (stopCancel[symbol]) delete stopCancel[symbol];
       clearedSymbols.push(symbol);
       return;
@@ -530,6 +555,7 @@ async function runHoldingsSync(options) {
     symbols: nextSymbols,
     balances,
     entryPrices,
+    entryLots,
     stopCancel,
     lastError: null,
   };
