@@ -3832,6 +3832,7 @@
         display: none;
       }
       .nail-pnl-panel {
+        position: relative;
         width: min(460px, 100%);
         max-height: 80vh;
         overflow: auto;
@@ -3859,6 +3860,56 @@
         font-size: 11px;
         padding: 4px 8px;
         cursor: pointer;
+      }
+      .nail-pnl-confirm {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+        background: color-mix(in srgb, var(--elevated, #fff) 88%, transparent);
+        border-radius: 14px;
+      }
+      .nail-pnl-confirm[hidden] {
+        display: none;
+      }
+      .nail-pnl-confirm-box {
+        width: 100%;
+        padding: 16px;
+        border: 0.5px solid var(--separator);
+        border-radius: 12px;
+        background: var(--elevated, #fff);
+      }
+      .nail-pnl-confirm-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 6px;
+      }
+      .nail-pnl-confirm-text {
+        font-size: 12px;
+        color: var(--secondary);
+        line-height: 1.6;
+        margin-bottom: 14px;
+      }
+      .nail-pnl-confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .nail-pnl-confirm-actions button {
+        border: 0.5px solid var(--separator);
+        border-radius: 8px;
+        background: transparent;
+        color: var(--label);
+        font-size: 12px;
+        padding: 6px 14px;
+        cursor: pointer;
+      }
+      .nail-pnl-confirm-actions button.is-danger {
+        border-color: var(--down, #e0444a);
+        color: var(--down, #e0444a);
       }
       .nail-pnl-summary {
         display: grid;
@@ -10037,6 +10088,16 @@
               </div>
               <div class="nail-pnl-summary" id="nailTradePnlSummary"></div>
               <div id="nailTradePnlList"></div>
+              <div class="nail-pnl-confirm" id="nailTradePnlConfirm" hidden>
+                <div class="nail-pnl-confirm-box" role="alertdialog" aria-label="确认清空已实现记录">
+                  <div class="nail-pnl-confirm-title">清空已实现记录？</div>
+                  <div class="nail-pnl-confirm-text" id="nailTradePnlConfirmText"></div>
+                  <div class="nail-pnl-confirm-actions">
+                    <button type="button" id="nailTradePnlConfirmCancel">取消</button>
+                    <button type="button" class="is-danger" id="nailTradePnlConfirmOk">确认清空</button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           <div class="nail-hold-popover" id="simHoldFloat" hidden>
@@ -16319,17 +16380,31 @@
         const modal = document.getElementById("nailTradePnlModal");
         if (!modal) return;
         modal.hidden = !open;
+        if (!open) closeTradePnlClearConfirm();
         if (open) renderTradePnlModal();
       }
 
-      async function clearTradePnlRecords() {
-        if (
-          !window.confirm(
-            "清空全部已实现盈亏记录？持仓与未实现不受影响，之后卖出将从零重新记。",
-          )
-        ) {
-          return;
+      /** 二次确认：应用内确认层，替代原生 confirm；带待清空条数，防误触。 */
+      function openTradePnlClearConfirm() {
+        const box = document.getElementById("nailTradePnlConfirm");
+        if (!box) return;
+        const n = ((nailTradePnlState && nailTradePnlState.entries) || []).length;
+        const text = document.getElementById("nailTradePnlConfirmText");
+        if (text) {
+          text.textContent =
+            `将清空 ${n} 条已实现记录，清空后从零重新记。` +
+            `持仓与未实现盈亏不受影响。此操作不可撤销。`;
         }
+        box.hidden = false;
+      }
+
+      function closeTradePnlClearConfirm() {
+        const box = document.getElementById("nailTradePnlConfirm");
+        if (box) box.hidden = true;
+      }
+
+      async function clearTradePnlRecords() {
+        closeTradePnlClearConfirm();
         if (!WatchFavorites || typeof WatchFavorites.patchTradePnl !== "function") return;
         try {
           const res = await WatchFavorites.patchTradePnl({
@@ -38284,9 +38359,21 @@
         });
       }
       document.addEventListener("click", (event) => {
-        // 历史盈亏：明细浮窗 / 清空 / 点遮罩关闭
+        // 历史盈亏：明细浮窗 / 清空（二次确认） / 点遮罩关闭
         if (event.target.closest("#nailTradePnlClearBtn")) {
+          openTradePnlClearConfirm();
+          return;
+        }
+        if (event.target.closest("#nailTradePnlConfirmCancel")) {
+          closeTradePnlClearConfirm();
+          return;
+        }
+        if (event.target.closest("#nailTradePnlConfirmOk")) {
           void clearTradePnlRecords();
+          return;
+        }
+        if (event.target.id === "nailTradePnlConfirm") {
+          closeTradePnlClearConfirm();
           return;
         }
         if (
