@@ -5170,6 +5170,35 @@
         grid-template-columns: 1fr 1fr;
         gap: 8px;
       }
+      /* 形态聚合：组头可点展开/收起；用 class 而非 hidden，避免与筛选的 batch.hidden 冲突 */
+      .nail-notice-batch-head.is-group-toggle {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        user-select: none;
+      }
+      .nail-notice-group-caret {
+        display: inline-block;
+        font-size: 10px;
+        color: var(--secondary);
+        transition: transform 0.15s ease;
+      }
+      .nail-notice-batch.is-collapsed .nail-notice-group-caret {
+        transform: rotate(-90deg);
+      }
+      .nail-notice-batch.is-collapsed .nail-notice-batch-list {
+        display: none;
+      }
+      .nail-notice-group-tag {
+        margin-left: auto;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--secondary);
+      }
+      .nail-notice-group-tag.is-strong {
+        color: var(--up, #2f8f6e);
+      }
       .nail-notice-card {
         border: 0.5px solid var(--separator);
         border-radius: 10px;
@@ -29292,27 +29321,49 @@
         return buildNailNoticeCardHtml(item, { pullbackFocus: true });
       }
 
-      /** 按 batchAt 分组：新批次在上；币被新批次带走后旧批次自动变少，空则不展示。 */
-      function groupNailNoticesByBatch(items) {
-        const map = new Map();
-        const unbatched = [];
+      /** 形态 × 时间窗 聚合：把平铺的通知按信号强弱分组，弱化项默认折叠。 */
+      function groupNailNoticesByKind(items) {
+        const now = Date.now();
+        const buckets = new Map();
+        const classify = (item) => {
+          const kinds = Array.isArray(item && item.kinds)
+            ? item.kinds.map(String)
+            : [];
+          const bal = kinds.includes("天平");
+          const straight = kinds.includes("直拉");
+          const pullback =
+            kinds.includes("回踩观察") || kinds.includes("回踩放量");
+          let kind;
+          if (bal && straight) kind = "双命中";
+          else if (bal) kind = "天平";
+          else if (straight) kind = "直拉";
+          else if (pullback) kind = "回踩";
+          else kind = "其他";
+          const age = now - (Number(item && item.at) || now);
+          let window;
+          if (age <= 60 * 60 * 1000) window = "近1h";
+          else if (age <= 6 * 60 * 60 * 1000) window = "近6h";
+          else window = "更早";
+          return { kind, window };
+        };
         (Array.isArray(items) ? items : []).forEach((item) => {
-          const bat = Number(item && item.batchAt) || 0;
-          if (!(bat > 0)) {
-            unbatched.push(item);
-            return;
-          }
-          if (!map.has(bat)) map.set(bat, []);
-          map.get(bat).push(item);
+          const { kind, window } = classify(item);
+          const key = `${kind}|${window}`;
+          if (!buckets.has(key)) buckets.set(key, { kind, window, items: [] });
+          buckets.get(key).items.push(item);
         });
-        const batches = [...map.entries()]
-          .map(([at, rows]) => ({
-            at: Number(at),
-            items: rows.slice().sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0)),
+        const kindOrder = { 双命中: 0, 天平: 1, 直拉: 2, 回踩: 3, 其他: 4 };
+        const winOrder = { 近1h: 0, 近6h: 1, 更早: 2 };
+        return [...buckets.values()]
+          .map((g) => ({
+            ...g,
+            items: g.items.slice().sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0)),
           }))
-          .filter((row) => row.items.length > 0)
-          .sort((a, b) => b.at - a.at);
-        return { batches, unbatched };
+          .sort(
+            (a, b) =>
+              (kindOrder[a.kind] ?? 9) - (kindOrder[b.kind] ?? 9) ||
+              (winOrder[a.window] ?? 9) - (winOrder[b.window] ?? 9),
+          );
       }
 
       /** 切走通知分栏时记住滚动位置，等下次重渲恢复。 */
@@ -29384,6 +29435,13 @@
         updateNailNoticeScrollPct({ flash: false });
       }
 
+      /** 形态分组的展开状态：双命中默认展开，其余默认折叠；跨重渲保留。 */
+      const nailNoticeGroupOpen = new Map();
+      function isNoticeGroupOpen(key, kind) {
+        if (!nailNoticeGroupOpen.has(key)) nailNoticeGroupOpen.set(key, kind === "双命中");
+        return nailNoticeGroupOpen.get(key);
+      }
+
       function renderNailNoticeList() {
         const listEl = document.getElementById("nailNoticeList");
         const metaEl = document.getElementById("nailNoticeMeta");
@@ -29416,13 +29474,10 @@
                 ),
             )
           : items;
-        const grouped = groupNailNoticesByBatch(listItems);
         if (metaEl) {
           const bits = [];
           if (items.length) {
-            bits.push(
-              `${items.length} 条命中 · ${grouped.batches.length} 个企微批次`,
-            );
+            bits.push(`${items.length} 条命中 · 按形态聚合`);
           }
           if (alerts.length) bits.push(`${alerts.length} 条价格提醒`);
           if (pullbackFocusRows.length) {
@@ -29465,27 +29520,38 @@
             `</div></section>`,
           );
         }
-        grouped.batches.forEach((batch) => {
+        // 形态 × 时间窗 聚合：双命中默认展开，弱信号默认折叠，点组头切换。
+        const kindGroups = groupNailNoticesByKind(listItems);
+        kindGroups.forEach((g) => {
+          const key = `${g.kind}|${g.window}`;
+          const open = isNoticeGroupOpen(key, g.kind);
+          const strongest = g.kind === "双命中";
           parts.push(
-            `<section class="nail-notice-batch" data-notice-batch-at="${batch.at}">`,
-            `<h4 class="nail-notice-batch-head">${escapeHtml(formatNoticeBatchStamp(batch.at))}<span class="nail-notice-batch-count">${batch.items.length}个</span></h4>`,
+            `<section class="nail-notice-batch${open ? "" : " is-collapsed"}" data-notice-kind-group="${escapeHtml(key)}">`,
+            `<h4 class="nail-notice-batch-head is-group-toggle" data-notice-group-toggle="${escapeHtml(key)}" title="点击展开/收起">`,
+            `<span class="nail-notice-group-caret">▾</span>`,
+            `<span>${escapeHtml(g.kind)} · ${escapeHtml(g.window)}</span>`,
+            `<span class="nail-notice-group-tag${strongest ? " is-strong" : ""}">${strongest ? "强信号" : ""}</span>`,
+            `<span class="nail-notice-batch-count">${g.items.length}个</span>`,
+            `</h4>`,
             `<div class="nail-notice-batch-list">`,
-            batch.items.map((item) => buildNailNoticeCardHtml(item)).join(""),
+            g.items.map((item) => buildNailNoticeCardHtml(item)).join(""),
             `</div></section>`,
           );
         });
-        if (grouped.unbatched.length) {
-          parts.push(
-            `<section class="nail-notice-batch" data-notice-batch-at="0">`,
-            `<h4 class="nail-notice-batch-head">尚未进企微批次<span class="nail-notice-batch-count">${grouped.unbatched.length}个</span></h4>`,
-            `<div class="nail-notice-batch-list">`,
-            grouped.unbatched
-              .map((item) => buildNailNoticeCardHtml(item))
-              .join(""),
-            `</div></section>`,
-          );
-        }
         listEl.innerHTML = parts.join("");
+        // 形态分组头点击：只切 class（不碰 hidden，避免与筛选的 batch.hidden 冲突）
+        listEl.querySelectorAll("[data-notice-group-toggle]").forEach((head) => {
+          head.addEventListener("click", (event) => {
+            event.preventDefault();
+            const key = head.getAttribute("data-notice-group-toggle");
+            const section = head.closest(".nail-notice-batch");
+            if (!key || !section) return;
+            const nextOpen = section.classList.contains("is-collapsed");
+            section.classList.toggle("is-collapsed", !nextOpen);
+            nailNoticeGroupOpen.set(key, nextOpen);
+          });
+        });
         listEl.querySelectorAll("[data-notice-jump]").forEach((btn) => {
           btn.addEventListener("click", (event) => {
             event.preventDefault();
