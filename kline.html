@@ -10021,7 +10021,7 @@
                 id="nailRisingFilter"
                 role="switch"
                 aria-checked="true"
-                title="只显示当前窗口上涨的钉子"
+                title="只显示当前窗口上涨：对置顶 / 通知 / 自动盯三个分栏生效"
                 aria-label="当前窗口上涨"
               ></button>
             </div>
@@ -10094,6 +10094,21 @@
               >
                 下次刷新还有 — 秒
               </p>
+            </div>
+            <div class="nail-rising-row">
+              <div class="nail-auto-refresh-label">
+                <span>持有区刷新</span>
+                <small>每 8 秒刷持有现价与盈亏</small>
+              </div>
+              <button
+                type="button"
+                class="nail-switch"
+                id="nailHeldRefresh"
+                role="switch"
+                aria-checked="false"
+                title="开启后每 8 秒刷新钉子页「持有」段现价与未实现盈亏"
+                aria-label="持有区定时刷新"
+              ></button>
             </div>
           </div>
         </div>
@@ -11391,6 +11406,17 @@
       } catch (_) {
         nailAutoRefreshEnabled = false;
       }
+      const NAIL_HELD_REFRESH_KEY = "kline-nail-held-refresh-v1";
+      const NAIL_HELD_REFRESH_MS = 8000;
+      let nailHeldRefreshEnabled = false;
+      try {
+        nailHeldRefreshEnabled =
+          localStorage.getItem(NAIL_HELD_REFRESH_KEY) === "1";
+      } catch (_) {
+        nailHeldRefreshEnabled = false;
+      }
+      let nailHeldRefreshTimer = null;
+      let nailHeldRefreshBusy = false;
       const NAIL_DEFAULT_NOTICE_ON_ENTER_KEY = "kline-nail-default-notice-on-enter-v1";
       let nailDefaultNoticeOnEnter = false;
       try {
@@ -14838,8 +14864,19 @@
         );
       }
 
+      /** 设置里「当前窗口上涨」：置顶 / 通知 / 自动盯共用。 */
+      function nailSymbolPassesRisingFilter(symbol) {
+        if (!nailRisingFilterOn) return true;
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || key === "USDT") return false;
+        return hasWindowGain(key, CONFIG.KLINE_INTERVAL || "4h");
+      }
+
       /** 自动盯列表是否收录该币；bStock 页不过滤，crypto 页可关 bStock。 */
       function autoPinSymbolVisible(symbol) {
+        if (!nailSymbolPassesRisingFilter(symbol)) return false;
         if (KLINE_MODE === "bstock") return true;
         if (nailAutoPinShowBstock) return true;
         // 名单未拉到前先放行，避免整表空白；拉完后会再渲一次。
@@ -21299,6 +21336,7 @@
               nailItems = [];
             }
             syncNailAutoRefreshUi();
+            syncNailHeldRefreshUi();
             renderNailDrawer();
             syncNailInMarks();
           }),
@@ -29376,9 +29414,16 @@
         const metaEl = document.getElementById("nailNoticeMeta");
         if (!listEl) return;
         const scrollSnap = captureNailNoticeScroll(listEl);
-        const items = Array.isArray(nailGreenNotices) ? nailGreenNotices : [];
-        const alerts = priceAlertNoticeItems();
-        const pullbackFocusRows = visiblePullbackFocusRows();
+        const risingOk = (symbol) => nailSymbolPassesRisingFilter(symbol);
+        const items = (Array.isArray(nailGreenNotices) ? nailGreenNotices : []).filter(
+          (item) => risingOk(item && item.symbol),
+        );
+        const alerts = priceAlertNoticeItems().filter((item) =>
+          risingOk(item && item.symbol),
+        );
+        const pullbackFocusRows = visiblePullbackFocusRows().filter((row) =>
+          risingOk(row && row.symbol),
+        );
         const pullbackFocusSet = new Set(
           pullbackFocusRows.map((row) =>
             String((row && row.symbol) || "")
@@ -31287,6 +31332,7 @@
           nailBrowseMaskSession = false;
           renderNailDrawer();
           startNailAutoRefresh();
+          startNailHeldRefresh();
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               void paintNailKlines();
@@ -31302,6 +31348,7 @@
         beginNailBrowseMaskSessionIfDue();
         renderNailDrawer();
         startNailAutoRefresh();
+        startNailHeldRefresh();
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             void paintNailKlines();
@@ -31710,6 +31757,7 @@
           } else {
             renderNailDrawer();
             startNailAutoRefresh();
+            startNailHeldRefresh();
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
                 void paintNailKlines();
@@ -31719,6 +31767,7 @@
         } else if (leaving) {
           abortNailKlines();
           stopNailAutoRefresh();
+          stopNailHeldRefresh();
           stopNailReminderPoll();
           clearNailFocusSelection();
           setNailSelectMode(false);
@@ -32299,16 +32348,12 @@
         syncNailSegBadges();
       }
 
-      /** 左右滑切分栏：越过两端回行情；雷达分栏例外，左滑越界不再退出。 */
+      /** 左右滑切分栏；越过两端不退出回行情（避免置顶右滑 / 雷达左滑误触）。 */
       function nailSwipeSegment(dir) {
         const idx = NAIL_SEGMENTS.indexOf(nailSegment);
         const next = idx + (dir > 0 ? 1 : -1);
         if (next < 0 || next >= NAIL_SEGMENTS.length) {
-          // 雷达是最后一栏，左滑越界原先会关掉抽屉回行情。该分栏以表格
-          // 横滑看列为主，很容易误触，这里不再消费手势、也不关闭抽屉。
-          if (nailSegment === "radar") return false;
-          setNailDrawerOpen(false);
-          return true;
+          return false;
         }
         void setNailSegment(NAIL_SEGMENTS[next]);
         return true;
@@ -32569,8 +32614,8 @@
 
       /**
        * 手机手势：
-       * - 行情屏右滑 → 钉子屏；钉子屏左滑 → 行情屏（拖排序中不切）
-       * - 钉子屏右滑 → 通知页；通知页左滑 → 回钉子屏
+       * - 行情屏右滑 → 钉子屏
+       * - 钉子屏内左右滑切分栏（置顶右滑 / 末栏左滑不再回行情）
        * - 右侧隐藏抽屉打开时右滑关闭
        */
       function bindNailDrawerSwipeGestures() {
@@ -32635,7 +32680,7 @@
             setNailDrawerOpen(true);
             return true;
           }
-          // 钉子屏：左右滑切换分栏；首栏右滑 / 末栏左滑回行情
+          // 钉子屏：左右滑切换分栏（两端越界不关抽屉）
           if (mode === "nail" && canSwipeNailActions()) {
             if (dx < 0) {
               tracking = null;
@@ -32946,8 +32991,8 @@
         if (!sw) return;
         sw.setAttribute("aria-checked", nailRisingFilterOn ? "true" : "false");
         sw.title = nailRisingFilterOn
-          ? "只显示当前窗口上涨的钉子"
-          : "显示全部钉子";
+          ? "只显示当前窗口上涨（置顶 / 通知 / 自动盯）"
+          : "显示全部（置顶 / 通知 / 自动盯）";
       }
 
       function syncNailSelectUi() {
@@ -33524,6 +33569,17 @@
         }
         syncNailRisingFilterUi();
         renderNailDrawer();
+        // 前三个分栏共用：置顶（上）、通知、自动盯一并刷新。
+        if (typeof renderNailNoticeList === "function") renderNailNoticeList();
+        if (typeof renderNailAutoPinList === "function") {
+          renderNailAutoPinList();
+          if (
+            nailSegment === "autopin" &&
+            typeof paintNailAutoPinCharts === "function"
+          ) {
+            void paintNailAutoPinCharts();
+          }
+        }
       }
 
       function syncNailPinnedOnlyUi() {
@@ -33561,9 +33617,8 @@
 
       function nailDrawerVisibleItems() {
         const all = Array.isArray(nailItems) ? nailItems : [];
-        const interval = CONFIG.KLINE_INTERVAL || "4h";
         let items = nailRisingFilterOn
-          ? all.filter((item) => hasWindowGain(item.symbol, interval))
+          ? all.filter((item) => nailSymbolPassesRisingFilter(item.symbol))
           : all.slice();
         if (nailPinnedOnlyOn) {
           items = items.filter((item) => !!(item && item.pinned));
@@ -34248,6 +34303,118 @@
         syncNailAutoRefreshUi();
         if (nailAutoRefreshEnabled) startNailAutoRefresh();
         else stopNailAutoRefresh();
+      }
+
+      function syncNailHeldRefreshUi() {
+        const toggle = document.getElementById("nailHeldRefresh");
+        if (toggle) {
+          toggle.setAttribute(
+            "aria-checked",
+            nailHeldRefreshEnabled ? "true" : "false",
+          );
+        }
+      }
+
+      function collectNailHeldRefreshSymbols() {
+        const keys = new Set();
+        const push = (sym) => {
+          const key = normalizeHoldSymbol(sym);
+          if (!key || key === "USDT") return;
+          if (!nailSymbolIsHeld(key)) return;
+          keys.add(key);
+        };
+        if (Array.isArray(nailItems)) {
+          nailItems.forEach((item) => push(item && item.symbol));
+        }
+        const holdSyms =
+          nailHoldingsState && Array.isArray(nailHoldingsState.symbols)
+            ? nailHoldingsState.symbols
+            : [];
+        holdSyms.forEach((sym) => push(sym));
+        return Array.from(keys);
+      }
+
+      async function refreshNailHeldPrices() {
+        if (
+          !nailHeldRefreshEnabled ||
+          !isNailDrawerOpen() ||
+          document.visibilityState === "hidden" ||
+          nailHeldRefreshBusy
+        ) {
+          return;
+        }
+        nailHeldRefreshBusy = true;
+        try {
+          const symbols = collectNailHeldRefreshSymbols();
+          if (!symbols.length) return;
+          const errors = [];
+          let cursor = 0;
+          const workers = Array.from(
+            { length: Math.min(4, symbols.length) },
+            async () => {
+              while (cursor < symbols.length) {
+                const symbol = symbols[cursor];
+                cursor += 1;
+                try {
+                  await fetchBinanceTickerForSymbol(symbol);
+                } catch (error) {
+                  errors.push({ symbol, error });
+                }
+              }
+            },
+          );
+          await Promise.all(workers);
+          if (
+            !nailHeldRefreshEnabled ||
+            !isNailDrawerOpen() ||
+            document.visibilityState === "hidden"
+          ) {
+            return;
+          }
+          syncNailPriceRows();
+          if (errors.length) {
+            console.warn("持有区定时刷新失败", errors);
+          }
+        } finally {
+          nailHeldRefreshBusy = false;
+        }
+      }
+
+      function stopNailHeldRefresh() {
+        if (nailHeldRefreshTimer) {
+          window.clearInterval(nailHeldRefreshTimer);
+          nailHeldRefreshTimer = null;
+        }
+      }
+
+      function startNailHeldRefresh() {
+        if (
+          !nailHeldRefreshEnabled ||
+          !isNailDrawerOpen() ||
+          document.visibilityState === "hidden" ||
+          nailHeldRefreshTimer
+        ) {
+          return;
+        }
+        void refreshNailHeldPrices();
+        nailHeldRefreshTimer = window.setInterval(() => {
+          void refreshNailHeldPrices();
+        }, NAIL_HELD_REFRESH_MS);
+      }
+
+      function setNailHeldRefreshEnabled(enabled) {
+        nailHeldRefreshEnabled = !!enabled;
+        try {
+          localStorage.setItem(
+            NAIL_HELD_REFRESH_KEY,
+            nailHeldRefreshEnabled ? "1" : "0",
+          );
+        } catch (_) {
+          /* ignore */
+        }
+        syncNailHeldRefreshUi();
+        if (nailHeldRefreshEnabled) startNailHeldRefresh();
+        else stopNailHeldRefresh();
       }
 
       function syncNailDefaultNoticeSwitch() {
@@ -36957,6 +37124,7 @@
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "hidden") {
           stopNailAutoRefresh();
+          stopNailHeldRefresh();
           stopNailNoticeAutoRefresh();
           stopNailReminderPoll();
           markEggChromeSeenFromDom();
@@ -36964,6 +37132,7 @@
         }
         if (document.visibilityState === "visible") {
           startNailAutoRefresh();
+          startNailHeldRefresh();
           startNailNoticeAutoRefresh();
           startNailReminderPoll();
           void pollNailRemindersOnce();
@@ -38461,6 +38630,13 @@
       if (nailAutoRefresh) {
         nailAutoRefresh.addEventListener("click", () => {
           setNailAutoRefreshEnabled(!nailAutoRefreshEnabled);
+        });
+      }
+      const nailHeldRefresh = document.getElementById("nailHeldRefresh");
+      if (nailHeldRefresh) {
+        syncNailHeldRefreshUi();
+        nailHeldRefresh.addEventListener("click", () => {
+          setNailHeldRefreshEnabled(!nailHeldRefreshEnabled);
         });
       }
       const nailAddBtn = document.getElementById("nailAddBtn");
