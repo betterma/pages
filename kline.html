@@ -2338,6 +2338,139 @@
       .nail-settings-popover .nail-auto-refresh-block:last-child .nail-rising-row {
         border-bottom: none;
       }
+      /*
+       * 钉子护眼换肤：仅 data-active-view=nails + data-nail-skin=calm。
+       * 离开钉子页选择器失效，首页仍红绿。
+       */
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-drawer,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-trade-dock,
+      body[data-active-view="nails"][data-nail-skin="calm"] .quick-trade-sheet,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-pnl-modal,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-pin-review,
+      body[data-active-view="nails"][data-nail-skin="calm"] .card-focus-bar {
+        --up: #6e7a80;
+        --down: #6e7a80;
+        --ios-green: #6e7a80;
+        --ios-red: #6e7a80;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-auto-pin-card-live.is-up,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-auto-pin-chg.is-up,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-notice-delta.is-up {
+        color: #5c6b74;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-auto-pin-card-live.is-down,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-auto-pin-chg.is-down,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-notice-delta.is-down {
+        color: #7a848c;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-hold-ops button.is-buy,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-trade-dock button.is-buy {
+        background: var(--accent, #4c9aff);
+        color: #fff;
+        border: 0.5px solid transparent;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-hold-ops button.is-sell,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-trade-dock button.is-sell {
+        background: transparent;
+        color: var(--label, #17181a);
+        border: 0.5px solid var(--separator, #d5d8dd);
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"]
+        .quick-trade-sheet.is-sell
+        .quick-trade-actions
+        button.is-primary {
+        background: transparent;
+        color: var(--label, #17181a);
+        border: 0.5px solid var(--separator, #d5d8dd);
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"]
+        .quick-trade-sheet:not(.is-sell)
+        .quick-trade-actions
+        button.is-primary {
+        background: var(--accent, #4c9aff);
+        color: #fff;
+        border-color: transparent;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-pnl-summary-card .val.pnl-up,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-pnl-group-val.pnl-up,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-pnl-lot .pnl-up,
+      body[data-active-view="nails"][data-nail-skin="calm"] .pnl-sign.is-up,
+      body[data-active-view="nails"][data-nail-skin="calm"] .action-log-pnl .is-up {
+        color: #5c6b74;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-pnl-summary-card .val.pnl-down,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-pnl-group-val.pnl-down,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-pnl-lot .pnl-down,
+      body[data-active-view="nails"][data-nail-skin="calm"] .pnl-sign.is-down,
+      body[data-active-view="nails"][data-nail-skin="calm"] .action-log-pnl .is-down {
+        color: #7a848c;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-hold-sell-status button.is-danger,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-hold-status-chip.is-danger {
+        background: color-mix(in srgb, #6e7a80 16%, transparent);
+        color: #5c6b74;
+        border-color: color-mix(in srgb, #6e7a80 35%, var(--separator, #d5d8dd));
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-hold-batch-bar button.is-danger,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-batch-bar button.is-danger {
+        background: #6e7a80;
+        color: #fff;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-hold-status-chip.is-held {
+        color: #5c6b74;
+        background: color-mix(in srgb, #6e7a80 14%, #fff);
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-hold-status-chip.is-err {
+        color: #5c6b74;
+        background: color-mix(in srgb, #6e7a80 14%, transparent);
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .quick-trade-sheet.is-sell .quick-trade-side {
+        color: #6e7a80;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-notice-health-dot[data-level="ok"] {
+        background: #6e7a80;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-notice-health-dot[data-level="bad"],
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-notice-health-dot[data-level="dead"] {
+        background: #8a9298;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-notice-health-panel .nh-status[data-level="ok"] {
+        color: #5c6b74;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-notice-health-panel .nh-status[data-level="bad"],
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-notice-health-panel .nh-status[data-level="dead"] {
+        color: #7a848c;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-pin-review-hint.is-left,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-pin-review-hint.is-right {
+        color: #6e7a80;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-pin-review-chg.is-up,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-price.is-up .nail-chg {
+        color: #5c6b74;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-pin-review-chg.is-down,
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-price.is-down .nail-chg {
+        color: #7a848c;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"]
+        .nail-notice-delta-filter
+        button[data-notice-delta-filter="up"].is-active,
+      body[data-active-view="nails"][data-nail-skin="calm"]
+        .nail-notice-delta-filter
+        button[data-notice-delta-filter="down"].is-active {
+        color: #5c6b74;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-notice-deblue.is-on {
+        background: color-mix(in srgb, #6e7a80 22%, var(--fill));
+        color: #5c6b74;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-notice-filter-status.is-loading {
+        color: #5c6b74;
+      }
+      body[data-active-view="nails"][data-nail-skin="calm"] .nail-notice-filter-status.is-error {
+        color: #7a848c;
+      }
       .nail-pool-rank-edit {
         display: inline-flex;
         align-items: center;
@@ -10110,6 +10243,21 @@
                 aria-label="持有区定时刷新"
               ></button>
             </div>
+            <div class="nail-rising-row nail-sort-row">
+              <span title="仅钉子页：正常为现状；护眼去掉涨跌红绿与买卖红绿，K 线涨实心跌空心">换肤</span>
+              <div
+                class="mode-switch pin-sort-switch"
+                id="nailSkinSwitch"
+                role="group"
+                aria-label="钉子换肤"
+                title="正常：现状红绿；护眼：仅钉子页去行情色，K 线涨实心跌空心"
+              >
+                <button type="button" data-nail-skin="normal" class="is-active">
+                  正常
+                </button>
+                <button type="button" data-nail-skin="calm">护眼</button>
+              </div>
+            </div>
           </div>
         </div>
         <div
@@ -11417,6 +11565,17 @@
       }
       let nailHeldRefreshTimer = null;
       let nailHeldRefreshBusy = false;
+      /** 钉子页换肤：normal 现状 / calm 护眼（去红绿，K 线实心/空心）。仅钉子页生效。 */
+      const NAIL_SKIN_KEY = "kline-nail-skin-v1";
+      let nailSkinMode = "normal";
+      try {
+        const savedSkin = localStorage.getItem(NAIL_SKIN_KEY);
+        if (savedSkin === "calm" || savedSkin === "normal") {
+          nailSkinMode = savedSkin;
+        }
+      } catch (_) {
+        nailSkinMode = "normal";
+      }
       const NAIL_DEFAULT_NOTICE_ON_ENTER_KEY = "kline-nail-default-notice-on-enter-v1";
       let nailDefaultNoticeOnEnter = false;
       try {
@@ -15228,7 +15387,11 @@
             [],
             null,
             null,
-            { symbol: key, pinSplitGreen: true, pinSplitGreenUpOnly: true },
+            nailCalmKlineOptions({
+              symbol: key,
+              pinSplitGreen: true,
+              pinSplitGreenUpOnly: true,
+            }),
           );
           return true;
         } catch (error) {
@@ -15292,7 +15455,11 @@
               [],
               null,
               null,
-              { symbol, pinSplitGreen: true, pinSplitGreenUpOnly: true },
+              nailCalmKlineOptions({
+                symbol,
+                pinSplitGreen: true,
+                pinSplitGreenUpOnly: true,
+              }),
             );
           } catch (error) {
             console.warn("auto-pin kline failed", symbol, error);
@@ -15773,12 +15940,12 @@
               [],
               null,
               null,
-              {
+              nailCalmKlineOptions({
                 symbol,
                 pinSplitGreen: true,
                 pinSplitGreenUpOnly: true,
                 priceLabel: true,
-              },
+              }),
             );
           } catch (error) {
             console.warn("radar kline failed", symbol, error);
@@ -26096,6 +26263,45 @@
         ctx.fillRect(x - bodyW / 2, yHi, bodyW, Math.max(1, yA - yHi));
       }
 
+      /** 空心实体（护眼跌柱）：与 fillCandleBody 同几何，描边不填。 */
+      function strokeCandleBody(ctx, x, bodyW, open, close, alertPrice, yOf, below, above) {
+        const lo = Math.min(open, close);
+        const hi = Math.max(open, close);
+        const yOpen = yOf(open);
+        const yClose = yOf(close);
+        const left = x - bodyW / 2;
+        const top = Math.min(yOpen, yClose);
+        const h = Math.max(1, Math.abs(yClose - yOpen));
+        ctx.lineWidth = 1;
+        if (!Number.isFinite(alertPrice) || hi <= alertPrice) {
+          ctx.strokeStyle = below;
+          ctx.strokeRect(left + 0.5, top + 0.5, Math.max(1, bodyW - 1), h);
+          return;
+        }
+        if (lo >= alertPrice) {
+          ctx.strokeStyle = above;
+          ctx.strokeRect(left + 0.5, top + 0.5, Math.max(1, bodyW - 1), h);
+          return;
+        }
+        const yA = yOf(alertPrice);
+        const yLo = yOf(lo);
+        const yHi = yOf(hi);
+        ctx.strokeStyle = below;
+        ctx.strokeRect(
+          left + 0.5,
+          yA + 0.5,
+          Math.max(1, bodyW - 1),
+          Math.max(1, yLo - yA),
+        );
+        ctx.strokeStyle = above;
+        ctx.strokeRect(
+          left + 0.5,
+          yHi + 0.5,
+          Math.max(1, bodyW - 1),
+          Math.max(1, yA - yHi),
+        );
+      }
+
       function drawKline(
         canvas,
         candles,
@@ -26204,11 +26410,23 @@
         const splitFrom =
           options && options.pinSplitGreen && hasPin ? pinIndex : -1;
 
+        // 护眼：同色墨线 + 涨实心 / 跌空心；告警染柱也改青灰，避免行情绿。
+        const hollowDown = !!(options && options.hollowDown);
+        const calmInk =
+          (options && options.calmInk) || (hollowDown ? "#6e7a80" : "");
+        const alertFill = hollowDown
+          ? (options && options.calmAlert) || "#7a8a92"
+          : NAIL_ALERT_GREEN;
+
         candles.forEach((candle, index) => {
           if (index > maxIndex) return;
           const x = pad.left + slot * index + slot / 2;
           const up = candle.close >= candle.open;
-          const base = up ? "#8a9a96" : "#9a8e88";
+          const base = hollowDown
+            ? calmInk
+            : up
+              ? "#8a9a96"
+              : "#9a8e88";
           // options.pinSplitGreenUpOnly：只给上涨柱（收盘 ≥ 开盘）染绿。
           // 下跌柱即使整根站在水线之上也保持原色，避免把「冲高回落」误读成强势；
           // 最后一根未收盘的柱子按现价判断，正在上涨时同样会染绿。
@@ -26218,7 +26436,7 @@
             (!(options && options.pinSplitGreenUpOnly) || up)
               ? pin
               : NaN;
-          const aboveTone = Number.isFinite(splitAt) ? NAIL_ALERT_GREEN : base;
+          const aboveTone = Number.isFinite(splitAt) ? alertFill : base;
           const useAlert =
             hasAlert &&
             up &&
@@ -26236,22 +26454,36 @@
             base,
             aboveTone,
           );
-          fillCandleBody(
-            ctx,
-            x,
-            bodyW,
-            candle.open,
-            candle.close,
-            splitAt,
-            yOf,
-            base,
-            aboveTone,
-          );
+          if (hollowDown && !up) {
+            strokeCandleBody(
+              ctx,
+              x,
+              bodyW,
+              candle.open,
+              candle.close,
+              splitAt,
+              yOf,
+              base,
+              aboveTone,
+            );
+          } else {
+            fillCandleBody(
+              ctx,
+              x,
+              bodyW,
+              candle.open,
+              candle.close,
+              splitAt,
+              yOf,
+              base,
+              aboveTone,
+            );
+          }
 
           if (useAlert) {
             if (candle.high > alertPrice) {
               ctx.save();
-              ctx.strokeStyle = NAIL_ALERT_GREEN;
+              ctx.strokeStyle = alertFill;
               ctx.lineWidth = 1;
               ctx.beginPath();
               ctx.moveTo(x, yOf(candle.high));
@@ -26265,7 +26497,7 @@
               const yTop = yOf(bodyHi);
               const yBot = yOf(Math.max(bodyLo, alertPrice));
               ctx.save();
-              ctx.fillStyle = NAIL_ALERT_GREEN;
+              ctx.fillStyle = alertFill;
               ctx.fillRect(
                 x - bodyW / 2,
                 yTop,
@@ -26333,7 +26565,7 @@
           const x = pad.left + slot * idx + slot / 2;
           const y = yOf(price);
           ctx.save();
-          ctx.fillStyle = "#c45c5c";
+          ctx.fillStyle = hollowDown ? calmInk || "#6e7a80" : "#c45c5c";
           ctx.beginPath();
           ctx.arc(x, y, noteRadius, 0, Math.PI * 2);
           ctx.fill();
@@ -30496,6 +30728,7 @@
                     }
                   : null,
                 null,
+                nailCalmKlineOptions(),
               );
             } catch (error) {
               console.warn("notice chart failed", symbol, error);
@@ -30596,14 +30829,15 @@
         const maxIndex = Number.isInteger(opts && opts.maxIndex)
           ? opts.maxIndex
           : -1;
-        const drawOptions =
+        const drawOptions = nailCalmKlineOptions(
           reviewAt > 0 || maxIndex >= 0
             ? Object.assign(
                 {},
                 reviewAt > 0 ? { reviewAt } : {},
                 maxIndex >= 0 ? { maxIndex } : {},
               )
-            : null;
+            : null,
+        );
         drawKline(
           canvas,
           candles,
@@ -33318,7 +33552,7 @@
             notes,
             alertMark,
             null,
-            { symbol: key },
+            nailCalmKlineOptions({ symbol: key }),
           );
         } catch (error) {
           if (error && error.name === "AbortError") return;
@@ -34124,6 +34358,8 @@
           pin ? pin.pinnedAt : null,
           notes,
           alertMark,
+          null,
+          nailCalmKlineOptions(),
         );
         if (nailSortMode !== "order") applyNailListOrder();
         return true;
@@ -34483,6 +34719,85 @@
         else stopNailHeldRefresh();
       }
 
+      function isNailCalmSkin() {
+        return nailSkinMode === "calm";
+      }
+
+      /** 钉子 canvas 共用：护眼时涨实心跌空心 + 同色墨线。 */
+      function nailCalmKlineOptions(extra) {
+        const base = extra && typeof extra === "object" ? { ...extra } : {};
+        if (!isNailCalmSkin()) return Object.keys(base).length ? base : null;
+        base.hollowDown = true;
+        base.calmInk = base.calmInk || "#6e7a80";
+        base.calmAlert = base.calmAlert || "#7a8a92";
+        return base;
+      }
+
+      function applyNailSkinAttr() {
+        try {
+          document.body.setAttribute(
+            "data-nail-skin",
+            nailSkinMode === "calm" ? "calm" : "normal",
+          );
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
+      function syncNailSkinUi() {
+        const root = document.getElementById("nailSkinSwitch");
+        if (!root) return;
+        root.querySelectorAll("button[data-nail-skin]").forEach((btn) => {
+          const mode = btn.getAttribute("data-nail-skin");
+          btn.classList.toggle("is-active", mode === nailSkinMode);
+        });
+      }
+
+      function repaintNailCalmCanvases() {
+        if (!isNailDrawerOpen()) return;
+        void paintNailKlines();
+        if (typeof paintNailAutoPinCharts === "function") {
+          void paintNailAutoPinCharts();
+        }
+        if (typeof paintNailRadarKlines === "function") {
+          void paintNailRadarKlines();
+        }
+        if (typeof renderNailNoticeList === "function") {
+          // 通知列表重渲会再拉 K；仅在通知分栏时值得做。
+          if (nailSegment === "notice") renderNailNoticeList();
+        }
+        const review = document.getElementById("nailPinReview");
+        if (
+          review &&
+          !review.hidden &&
+          typeof paintNailPinReviewKline === "function" &&
+          Array.isArray(nailPinReviewQueue) &&
+          nailPinReviewQueue[nailPinReviewIndex]
+        ) {
+          void paintNailPinReviewKline(
+            nailPinReviewQueue[nailPinReviewIndex],
+          );
+        }
+      }
+
+      function setNailSkinMode(mode) {
+        const next = mode === "calm" ? "calm" : "normal";
+        if (next === nailSkinMode) {
+          syncNailSkinUi();
+          applyNailSkinAttr();
+          return;
+        }
+        nailSkinMode = next;
+        try {
+          localStorage.setItem(NAIL_SKIN_KEY, nailSkinMode);
+        } catch (_) {
+          /* ignore */
+        }
+        applyNailSkinAttr();
+        syncNailSkinUi();
+        repaintNailCalmCanvases();
+      }
+
       function syncNailDefaultNoticeSwitch() {
         const toggle = document.getElementById("nailDefaultNoticeOnEnter");
         if (toggle) {
@@ -34802,6 +35117,8 @@
               pin ? pin.pinnedAt : null,
               notes,
               alertMark,
+              null,
+              nailCalmKlineOptions(),
             );
           } catch (error) {
             if (error && error.name === "AbortError") return;
@@ -38704,6 +39021,18 @@
         nailHeldRefresh.addEventListener("click", () => {
           setNailHeldRefreshEnabled(!nailHeldRefreshEnabled);
         });
+      }
+      const nailSkinSwitch = document.getElementById("nailSkinSwitch");
+      if (nailSkinSwitch) {
+        applyNailSkinAttr();
+        syncNailSkinUi();
+        nailSkinSwitch.addEventListener("click", (event) => {
+          const btn = event.target.closest("button[data-nail-skin]");
+          if (!btn) return;
+          setNailSkinMode(btn.getAttribute("data-nail-skin"));
+        });
+      } else {
+        applyNailSkinAttr();
       }
       const nailAddBtn = document.getElementById("nailAddBtn");
       if (nailAddBtn) {
