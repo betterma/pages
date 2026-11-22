@@ -5857,6 +5857,12 @@
         letter-spacing: 0;
         color: var(--secondary, #9aa3a0);
       }
+      .nail-section-label-title .nail-hold-pnl-history {
+        margin: 0;
+        padding: 1px 7px;
+        font-size: 10.5px;
+        line-height: 1.35;
+      }
       .nail-pnl {
         margin: 4px 0 0;
         font-size: 11px;
@@ -16667,6 +16673,33 @@
         return `${signHtml}<span class="pnl-num">${escapeHtml(absText)}${escapeHtml(unit)}</span>`;
       }
 
+      /**
+       * 「未 x/总 y」可点摘要（持仓栏 / 置顶持有行共用）。
+       * @param {number|null|undefined} unrealizedUsdt
+       * @param {{ id?: string }} [options]
+       */
+      function formatHoldPnlSummaryButtonHtml(unrealizedUsdt, options) {
+        const opts = options || {};
+        const realized = tradePnlTotal();
+        const unrealized =
+          unrealizedUsdt != null && Number.isFinite(Number(unrealizedUsdt))
+            ? Number(unrealizedUsdt)
+            : null;
+        const total =
+          unrealized != null ? realized + unrealized : realized;
+        const hasAny =
+          ((nailTradePnlState && nailTradePnlState.entries) || []).length > 0 ||
+          unrealized != null;
+        if (!hasAny) return "";
+        const uHtml =
+          unrealized != null
+            ? formatHoldingsPnlSignedHtml(unrealized, { unit: false })
+            : `<span class="pnl-num">—</span>`;
+        const tHtml = formatHoldingsPnlSignedHtml(total, { unit: false });
+        const idAttr = opts.id ? ` id="${escapeHtml(opts.id)}"` : "";
+        return `<button type="button" class="nail-hold-pnl-history"${idAttr} data-trade-pnl-open title="点击展开盈亏明细">未 ${uHtml}/总 ${tHtml}</button>`;
+      }
+
       function holdingsHeldPnlTotal(items) {
         let sum = 0;
         let any = false;
@@ -17517,21 +17550,10 @@
           `<div class="nail-hold-usdt-banner">账户 USDT 可用 ${escapeHtml(usdtFree)} · 有余额靠前</div>` +
           `<div class="nail-hold-pnl-bar">` +
           (() => {
-            const realized = tradePnlTotal();
             const u = holdingsHeldPnlTotal(symbols.map((s) => ({ symbol: s })));
-            const unrealized = u ? u.usdt : null;
-            const total =
-              unrealized != null ? realized + unrealized : realized;
-            const hasAny =
-              ((nailTradePnlState && nailTradePnlState.entries) || []).length >
-                0 || unrealized != null;
-            if (!hasAny) return "";
-            const uHtml =
-              unrealized != null
-                ? formatHoldingsPnlSignedHtml(unrealized, { unit: false })
-                : `<span class="pnl-num">—</span>`;
-            const tHtml = formatHoldingsPnlSignedHtml(total, { unit: false });
-            return `<button type="button" class="nail-hold-pnl-history" id="nailTradePnlHistoryBtn" title="点击展开盈亏明细">未 ${uHtml}/总 ${tHtml}</button>`;
+            return formatHoldPnlSummaryButtonHtml(u ? u.usdt : null, {
+              id: "nailTradePnlHistoryBtn",
+            });
           })() +
           `</div>` +
           sortedSymbols
@@ -32714,26 +32736,24 @@
         const heldSection = nailDrawerSectionParts(
           nailDrawerVisibleItems(),
         ).find((section) => section.id === "held");
-        const total = heldSection
+        const u = heldSection
           ? holdingsHeldPnlTotal(heldSection.items)
           : null;
+        const summaryHtml = formatHoldPnlSummaryButtonHtml(u ? u.usdt : null);
         let totalEl = heldLabel.querySelector("[data-nail-held-pnl]");
         const titleEl = heldLabel.querySelector(".nail-section-label-title");
-        if (!total) {
+        if (!summaryHtml) {
           if (totalEl) totalEl.remove();
           return;
         }
         if (!totalEl) {
           totalEl = document.createElement("span");
           totalEl.setAttribute("data-nail-held-pnl", "");
-          totalEl.title = "持有合计浮动盈亏（相对成本价）";
           if (titleEl) titleEl.appendChild(totalEl);
           else heldLabel.appendChild(totalEl);
         }
         totalEl.className = "nail-section-pnl";
-        totalEl.innerHTML = formatHoldingsPnlSignedHtml(total.usdt, {
-          unit: " USDT",
-        });
+        totalEl.innerHTML = summaryHtml;
       }
 
       function syncNailRisingFilterUi() {
@@ -33573,9 +33593,12 @@
             : "";
         let pnlBit = "";
         if (section.id === "held") {
-          const total = holdingsHeldPnlTotal(section.items);
-          if (total) {
-            pnlBit = `<span class="nail-section-pnl" data-nail-held-pnl title="持有合计浮动盈亏（相对成本价）">${formatHoldingsPnlSignedHtml(total.usdt, { unit: " USDT" })}</span>`;
+          const u = holdingsHeldPnlTotal(section.items);
+          const summaryHtml = formatHoldPnlSummaryButtonHtml(
+            u ? u.usdt : null,
+          );
+          if (summaryHtml) {
+            pnlBit = `<span class="nail-section-pnl" data-nail-held-pnl>${summaryHtml}</span>`;
           }
         }
         return (
@@ -37761,7 +37784,10 @@
           void clearTradePnlRecords();
           return;
         }
-        if (event.target.closest("#nailTradePnlHistoryBtn")) {
+        if (
+          event.target.closest("#nailTradePnlHistoryBtn") ||
+          event.target.closest("[data-trade-pnl-open]")
+        ) {
           setTradePnlModalOpen(true);
           return;
         }
