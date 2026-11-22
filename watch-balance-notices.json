@@ -3,23 +3,24 @@
   "readAt": 1795340804115,
   "items": [
     {
-      "id": "GPROBUSDT:1795334400000:1795344300695",
-      "symbol": "GPROBUSDT",
-      "label": "GPROB",
+      "id": "CYPHBUSDT:1795334400000:1795344300695",
+      "symbol": "CYPHBUSDT",
+      "label": "CYPHB",
       "kinds": [
-        "天平"
+        "天平",
+        "直拉"
       ],
       "at": 1795344300695,
-      "firstSeenAt": 1795298101019,
+      "firstSeenAt": 1795296000629,
       "openTime": 1795334400000,
-      "pinPrice": 0.52,
-      "pinnedAt": 1795250100626,
-      "alertPrice": 0.52,
-      "notifyPrice": 0.52,
-      "noteAt": 1795276800648,
+      "pinPrice": 1.47,
+      "pinnedAt": 1795278900689,
+      "alertPrice": 1.47,
+      "notifyPrice": 1.55,
+      "noteAt": 1795278900689,
       "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1795298101019
+      "windowUp": true,
+      "batchAt": 1795344300695
     },
     {
       "id": "KGSTUSDT:1795334400000:1795344300695",
@@ -39,7 +40,46 @@
       "noteAt": 1795276800648,
       "interval": "4h",
       "windowUp": true,
-      "batchAt": 1795341900649
+      "batchAt": 1795344300695
+    },
+    {
+      "id": "BARDUSDT:1795334400000:1795344300695",
+      "symbol": "BARDUSDT",
+      "label": "BARD",
+      "kinds": [
+        "天平",
+        "直拉"
+      ],
+      "at": 1795344300695,
+      "firstSeenAt": 1795147200688,
+      "openTime": 1795334400000,
+      "pinPrice": 0.0871,
+      "pinnedAt": 1795137900493,
+      "alertPrice": 0.0928,
+      "notifyPrice": 0.0933,
+      "noteAt": 1795276800648,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795344300695
+    },
+    {
+      "id": "GPROBUSDT:1795334400000:1795344300695",
+      "symbol": "GPROBUSDT",
+      "label": "GPROB",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1795344300695,
+      "firstSeenAt": 1795298101019,
+      "openTime": 1795334400000,
+      "pinPrice": 0.52,
+      "pinnedAt": 1795250100626,
+      "alertPrice": 0.52,
+      "notifyPrice": 0.52,
+      "noteAt": 1795276800648,
+      "interval": "4h",
+      "windowUp": false,
+      "batchAt": 1795298101019
     },
     {
       "id": "CRVUSDT:1795334400000:1795344000628",
@@ -976,26 +1016,6 @@
       "batchAt": 1795344000628
     },
     {
-      "id": "BARDUSDT:1795334400000:1795344000628",
-      "symbol": "BARDUSDT",
-      "label": "BARD",
-      "kinds": [
-        "天平",
-        "直拉"
-      ],
-      "at": 1795344000628,
-      "firstSeenAt": 1795147200688,
-      "openTime": 1795334400000,
-      "pinPrice": 0.0871,
-      "pinnedAt": 1795137900493,
-      "alertPrice": 0.0928,
-      "notifyPrice": 0.0931,
-      "noteAt": 1795276800648,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1795342200601
-    },
-    {
       "id": "KERNELUSDT:1795334400000:1795344000628",
       "symbol": "KERNELUSDT",
       "label": "KERNEL",
@@ -1736,26 +1756,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1795333200690
-    },
-    {
-      "id": "CYPHBUSDT:1795334400000:1795343100494",
-      "symbol": "CYPHBUSDT",
-      "label": "CYPHB",
-      "kinds": [
-        "天平",
-        "直拉"
-      ],
-      "at": 1795343100494,
-      "firstSeenAt": 1795296000629,
-      "openTime": 1795334400000,
-      "pinPrice": 1.47,
-      "pinnedAt": 1795278900689,
-      "alertPrice": 1.47,
-      "notifyPrice": 1.52,
-      "noteAt": 1795278900689,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1795341000814
     },
     {
       "id": "ORCAUSDT:1795334400000:1795343100494",
@@ -3105,6 +3105,15 @@
   ],
   "batches": [
     {
+      "at": 1795344300695,
+      "count": 3,
+      "symbols": [
+        "BARDUSDT",
+        "CYPHBUSDT",
+        "KGSTUSDT"
+      ]
+    },
+    {
       "at": 1795344000628,
       "count": 48,
       "symbols": [
@@ -3234,9 +3243,8 @@
     },
     {
       "at": 1795342200601,
-      "count": 6,
+      "count": 5,
       "symbols": [
-        "BARDUSDT",
         "FDUSDUSDT",
         "GIGGLEUSDT",
         "KERNELUSDT",
@@ -3246,10 +3254,9 @@
     },
     {
       "at": 1795341900649,
-      "count": 3,
+      "count": 2,
       "symbols": [
         "GPSUSDT",
-        "KGSTUSDT",
         "XNOUSDT"
       ]
     },
@@ -3273,10 +3280,9 @@
     },
     {
       "at": 1795341000814,
-      "count": 5,
+      "count": 4,
       "symbols": [
         "APTUSDT",
-        "CYPHBUSDT",
         "PYTHUSDT",
         "YBUSDT",
         "ZENUSDT"
