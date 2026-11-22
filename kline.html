@@ -3104,24 +3104,9 @@
         border-color: var(--accent, #2f8f6e);
         color: var(--accent, #2f8f6e);
       }
-      /* 多选模式：每行复选框 + 底部批量操作栏（复用持有页范式）。 */
-      .nail-radar-pick-line {
-        display: flex;
-        align-items: center;
-        min-height: 14px;
-      }
-      .nail-radar-check {
-        flex: 0 0 auto;
-        width: 15px;
-        height: 15px;
-        margin: 0 3px 0 0;
-        accent-color: var(--accent, #2f8f6e);
-        vertical-align: middle;
+      /* 焦点选中（复刻自动盯分栏）：点行高亮成「选中框」+ 底部操作栏。 */
+      .nail-radar-table tbody tr:not(.is-radar-sep) {
         cursor: pointer;
-      }
-      /* 非多选模式隐藏复选框，币名次保持原样；仅多选模式显示。 */
-      .nail-radar-table:not(.is-select-mode) .nail-radar-check {
-        display: none;
       }
       .nail-radar-table tr.is-radar-selected td {
         background: color-mix(
@@ -3129,6 +3114,11 @@
           var(--accent, #2f8f6e) 22%,
           var(--elevated, #fff)
         ) !important;
+        border-top: 1px solid var(--accent, #2f8f6e);
+        border-bottom: 1px solid var(--accent, #2f8f6e);
+      }
+      .nail-radar-table tr.is-radar-selected td:nth-child(1) {
+        box-shadow: inset 3px 0 0 var(--accent, #2f8f6e);
       }
       .nail-radar-table tr.is-radar-selected td:nth-child(-n + 2) {
         background: color-mix(
@@ -3149,22 +3139,26 @@
       .nail-radar-batch-bar[hidden] {
         display: none !important;
       }
-      .nail-radar-batch-count {
+      .nail-radar-batch-label {
         margin-right: auto;
-        font-size: 12px;
-        font-weight: 700;
-        color: rgba(28, 28, 30, 0.72);
+        font-size: 13px;
+        font-weight: 750;
+        color: var(--accent, #2f8f6e);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .nail-radar-batch-bar button {
         border: none;
         background: rgba(0, 0, 0, 0.05);
         color: rgba(28, 28, 30, 0.78);
         height: 30px;
-        padding: 0 10px;
+        padding: 0 12px;
         border-radius: 8px;
         font-size: 12px;
         font-weight: 650;
         cursor: pointer;
+        white-space: nowrap;
       }
       .nail-radar-batch-bar button.is-primary {
         color: #fff;
@@ -3173,6 +3167,10 @@
       .nail-radar-batch-bar button:disabled {
         opacity: 0.5;
         cursor: default;
+      }
+      .nail-radar-batch-bar button.is-already-pinned {
+        color: var(--secondary);
+        background: rgba(0, 0, 0, 0.05);
       }
       /* 前 100 之后的置顶补位：分组条 + 与主榜区分的淡底。 */
       .nail-radar-table tr.is-radar-sep td {
@@ -9517,15 +9515,6 @@
               <span id="nailRadarUpdated" class="nail-radar-updated"></span>
               <button
                 type="button"
-                id="nailRadarSelectBtn"
-                class="nail-radar-toggle"
-                aria-pressed="false"
-                title="勾选多个币后，从底部操作栏批量置顶"
-              >
-                多选
-              </button>
-              <button
-                type="button"
                 id="nailRadarAllKlineBtn"
                 class="nail-radar-toggle"
                 aria-pressed="false"
@@ -9571,14 +9560,13 @@
               </table>
             </div>
             <div class="nail-radar-batch-bar" id="nailRadarBatchBar" hidden>
-              <span class="nail-radar-batch-count" id="nailRadarBatchCount">已选 0</span>
-              <button type="button" id="nailRadarBatchSelectAllBtn">全选</button>
-              <button type="button" id="nailRadarBatchClearBtn">清空</button>
+              <span class="nail-radar-batch-label" id="nailRadarBatchLabel">—</span>
+              <button type="button" id="nailRadarBatchCancelBtn" title="取消选中">取消</button>
               <button
                 type="button"
                 class="is-primary"
                 id="nailRadarBatchPinBtn"
-                title="把勾选的币批量置顶到钉子页；已置顶的会跳过"
+                title="置顶到钉子页；已置顶的显示「已置顶」"
               >
                 置顶
               </button>
@@ -12059,9 +12047,8 @@
       } catch (_) {
         nailRadarGroupOn = false;
       }
-      /** 雷达多选模式：勾选后从底部操作栏批量置顶，关闭浮窗时自动清空。 */
-      let nailRadarSelectMode = false;
-      const selectedRadarSymbols = new Set();
+      /** 雷达焦点选中：点一下某行即选中（复刻自动盯分栏的焦点操作栏），点别处切换，关闭浮窗清空。 */
+      let focusedRadarSymbol = null;
       let nailAutoPinPaintToken = 0;
       let nailAutoPinChartObserver = null;
       /** 冲榜雷达迷你 K 线的绘制令牌：重渲/关闭即作废。 */
@@ -15498,12 +15485,13 @@
                   ? "nail-radar-down"
                   : "";
             const keyUpper = String(symbol).trim().toUpperCase();
+            const isFocused = focusedRadarSymbol === keyUpper;
             const rowClass = [
               pool.has(symbol) ? "is-pool" : "",
             rank && rank <= 20 ? "is-top20" : "",
             opts.extra ? "is-radar-extra" : "",
             isMarked ? "is-radar-fixed" : "",
-            selectedRadarSymbols.has(keyUpper) ? "is-radar-selected" : "",
+            isFocused ? "is-radar-selected" : "",
             ]
               .filter(Boolean)
               .join(" ");
@@ -15515,9 +15503,7 @@
             ? `<canvas class="nail-radar-kline is-loading" data-kline="${escapeHtml(symbol)}" data-radar-chart="${escapeHtml(symbol)}"></canvas>`
             : "";
           const isPinned = radarPinnedSet.has(keyUpper);
-          // 多选列：勾选框与名次同一行，仅多选模式可见（CSS 控制）。
-          const checkHtml = `<input type="checkbox" class="nail-radar-check" data-radar-check="${escapeHtml(symbol)}" aria-label="选择 ${escapeHtml(label)}"${selectedRadarSymbols.has(keyUpper) ? " checked" : ""}>`;
-          // 操作列：恢复原有「归集 / 取消置顶 / 持仓关注」；置顶改由底部多选操作栏负责。
+          // 操作列：恢复原有「归集 / 取消置顶 / 持仓关注」；置顶由底部焦点操作栏负责。
           const unpinHtml = isPinned
             ? `<button type="button" class="nail-radar-act is-danger" data-radar-unpin="${escapeHtml(symbol)}" title="取消置顶该币">取消置顶</button>`
             : "";
@@ -15525,7 +15511,7 @@
           const watchHtml = holdingsWatched.has(keyUpper)
             ? `<span class="nail-radar-act is-on" title="已在持仓关注列表">已关注</span>`
             : `<button type="button" class="nail-radar-act" data-radar-watch="${escapeHtml(symbol)}" title="加入持仓关注列表">持仓关注</button>`;
-          return `<tr class="${rowClass}" data-radar-symbol="${escapeHtml(symbol)}"><td><span class="nail-radar-pick-line">${checkHtml}<span class="nail-radar-rank-mini">${rank ? `#${rank}` : "—"}</span></span><span class="nail-radar-sym-line"><button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></span></td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td>${markHtml}${unpinHtml}${watchHtml}</td></tr>`;
+          return `<tr class="${rowClass}" data-radar-symbol="${escapeHtml(symbol)}"><td><span class="nail-radar-rank-mini">${rank ? `#${rank}` : "—"}</span><span class="nail-radar-sym-line"><button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></span></td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td>${markHtml}${unpinHtml}${watchHtml}</td></tr>`;
         };
         const fullRanking = ranking();
         const rankOf = (symbol) => {
@@ -15579,7 +15565,7 @@
         }
         body.innerHTML = rows.join("");
         syncNailRadarStickyColumns();
-        syncNailRadarSelectUi();
+        syncNailRadarFocusUi();
       }
 
       /** 给雷达里置顶币的迷你 K 线补图；弹层关闭或重渲时自动作废。 */
@@ -15800,100 +15786,70 @@
         void paintNailRadarKlines();
       }
 
-      /** 雷达多选：同步「多选」按钮、底部批量栏与每行复选框的视觉状态。 */
-      function syncNailRadarSelectUi() {
-        const table = document.querySelector(
-          "#nailRadarTableWrap .nail-radar-table",
-        );
-        const btn = document.getElementById("nailRadarSelectBtn");
+      /** 雷达焦点选中：同步选中行高亮 + 底部操作栏（币名 / 置顶·已置顶）。 */
+      function syncNailRadarFocusUi() {
         const bar = document.getElementById("nailRadarBatchBar");
-        const countEl = document.getElementById("nailRadarBatchCount");
+        const labelEl = document.getElementById("nailRadarBatchLabel");
         const pinBtn = document.getElementById("nailRadarBatchPinBtn");
-        const on = !!nailRadarSelectMode;
-        if (table) table.classList.toggle("is-select-mode", on);
-        if (btn) {
-          btn.classList.toggle("is-active", on);
-          btn.setAttribute("aria-pressed", on ? "true" : "false");
-          btn.textContent = on ? "多选·开" : "多选";
-        }
-        if (bar) bar.hidden = !on;
-        if (countEl) countEl.textContent = `已选 ${selectedRadarSymbols.size}`;
-        // 勾选的币若全部已置顶，按钮显示「已置顶」并禁用；否则显示「置顶(N)」。
-        if (pinBtn) {
-          const pinned = new Set(radarPinnedSymbols());
-          const pending = [...selectedRadarSymbols].filter(
-            (key) => !pinned.has(key),
-          );
-          pinBtn.disabled = !selectedRadarSymbols.size || pending.length === 0;
-          pinBtn.textContent =
-            pending.length === 0 && selectedRadarSymbols.size
-              ? "已置顶"
-              : `置顶${pending.length ? `(${pending.length})` : ""}`;
-        }
+        const key = focusedRadarSymbol
+          ? String(focusedRadarSymbol).trim().toUpperCase()
+          : "";
         document
           .querySelectorAll("#nailRadarBody tr[data-radar-symbol]")
           .forEach((tr) => {
-            const key = String(tr.getAttribute("data-radar-symbol") || "")
+            const rowKey = String(tr.getAttribute("data-radar-symbol") || "")
               .trim()
               .toUpperCase();
-            const selected = on && selectedRadarSymbols.has(key);
-            tr.classList.toggle("is-radar-selected", selected);
-            const check = tr.querySelector(".nail-radar-check");
-            if (check) {
-              check.hidden = !on;
-              check.checked = selected;
-            }
+            tr.classList.toggle("is-radar-selected", !!key && rowKey === key);
           });
+        if (!bar) return;
+        if (!key) {
+          bar.hidden = true;
+          return;
+        }
+        bar.hidden = false;
+        if (labelEl) labelEl.textContent = key.replace(/USDT$/i, "");
+        if (pinBtn) {
+          const alreadyPinned = radarPinnedSymbols().includes(key);
+          pinBtn.textContent = alreadyPinned ? "已置顶" : "置顶";
+          pinBtn.disabled = alreadyPinned;
+          pinBtn.classList.toggle("is-already-pinned", alreadyPinned);
+          pinBtn.classList.toggle("is-primary", !alreadyPinned);
+        }
       }
 
-      /** 切换雷达多选模式；关闭时清空勾选。 */
-      function setNailRadarSelectMode(on) {
-        nailRadarSelectMode = !!on;
-        if (!nailRadarSelectMode) selectedRadarSymbols.clear();
-        syncNailRadarSelectUi();
-      }
-
-      function toggleRadarSymbolSelected(rawSymbol) {
-        if (!nailRadarSelectMode) return;
+      /** 点行切换焦点：点同一行取消，点别的行切换；空符号或 clear 则清除。 */
+      function toggleRadarFocus(rawSymbol) {
         const key = String(rawSymbol || "")
           .trim()
           .toUpperCase();
+        if (!key) {
+          focusedRadarSymbol = null;
+        } else if (focusedRadarSymbol === key) {
+          focusedRadarSymbol = null;
+        } else {
+          focusedRadarSymbol = key;
+        }
+        syncNailRadarFocusUi();
+      }
+
+      /** 底部操作栏：把当前焦点币置顶到钉子页。 */
+      async function pinFocusedRadarSymbol() {
+        const key = focusedRadarSymbol
+          ? String(focusedRadarSymbol).trim().toUpperCase()
+          : "";
         if (!key) return;
-        if (selectedRadarSymbols.has(key)) selectedRadarSymbols.delete(key);
-        else selectedRadarSymbols.add(key);
-        syncNailRadarSelectUi();
-      }
-
-      function selectAllRadarSymbols() {
-        document
-          .querySelectorAll("#nailRadarBody tr[data-radar-symbol]")
-          .forEach((tr) => {
-            const key = String(tr.getAttribute("data-radar-symbol") || "")
-              .trim()
-              .toUpperCase();
-            if (key) selectedRadarSymbols.add(key);
-          });
-        syncNailRadarSelectUi();
-      }
-
-      /** 底部操作栏：把勾选的币（跳过已置顶）批量置顶到钉子页。 */
-      async function pinSelectedRadarSymbols() {
-        if (!selectedRadarSymbols.size) return;
-        const pinned = new Set(radarPinnedSymbols());
-        const pending = [...selectedRadarSymbols].filter(
-          (key) => !pinned.has(key),
-        );
-        if (!pending.length) return;
+        if (radarPinnedSymbols().includes(key)) return;
         const btn = document.getElementById("nailRadarBatchPinBtn");
         if (btn) btn.disabled = true;
-        const ok = await pinNoticeSymbolsToNails(pending, {
-          message: `Pin radar batch ${pending.join(",")} to nails`,
-          toastOk: (label) => `${label} 等 ${pending.length} 个已置顶`,
+        const ok = await pinNoticeSymbolsToNails([key], {
+          message: `Pin radar ${key} to nails`,
+          toastOk: (label) => `${label} 已置顶`,
         });
         if (btn) btn.disabled = false;
         if (!ok) return;
-        // 置顶成功后退出多选模式并刷新，行内「取消置顶」按钮随之出现。
-        setNailRadarSelectMode(false);
+        // 置顶成功后清除焦点，行内「取消置顶」按钮随之出现。
+        focusedRadarSymbol = null;
         const popover = document.getElementById("nailRadarPopover");
         if (popover && !popover.hidden) {
           renderNailRadarTable();
@@ -15985,7 +15941,8 @@
         } else {
           stopNailRadarLive();
           nailRadarPaintToken += 1;
-          setNailRadarSelectMode(false);
+          focusedRadarSymbol = null;
+          syncNailRadarFocusUi();
           popover.style.top = "";
         }
       }
@@ -37200,28 +37157,12 @@
           setNailRadarGroup(!nailRadarGroupOn);
         });
       }
-      const nailRadarSelectBtn = document.getElementById("nailRadarSelectBtn");
-      if (nailRadarSelectBtn) {
-        syncNailRadarSelectUi();
-        nailRadarSelectBtn.addEventListener("click", () => {
-          setNailRadarSelectMode(!nailRadarSelectMode);
-        });
-      }
-      const nailRadarBatchSelectAllBtn = document.getElementById(
-        "nailRadarBatchSelectAllBtn",
+      const nailRadarBatchCancelBtn = document.getElementById(
+        "nailRadarBatchCancelBtn",
       );
-      if (nailRadarBatchSelectAllBtn) {
-        nailRadarBatchSelectAllBtn.addEventListener("click", () => {
-          selectAllRadarSymbols();
-        });
-      }
-      const nailRadarBatchClearBtn = document.getElementById(
-        "nailRadarBatchClearBtn",
-      );
-      if (nailRadarBatchClearBtn) {
-        nailRadarBatchClearBtn.addEventListener("click", () => {
-          selectedRadarSymbols.clear();
-          syncNailRadarSelectUi();
+      if (nailRadarBatchCancelBtn) {
+        nailRadarBatchCancelBtn.addEventListener("click", () => {
+          toggleRadarFocus(null);
         });
       }
       const nailRadarBatchPinBtn = document.getElementById(
@@ -37229,7 +37170,7 @@
       );
       if (nailRadarBatchPinBtn) {
         nailRadarBatchPinBtn.addEventListener("click", () => {
-          void pinSelectedRadarSymbols();
+          void pinFocusedRadarSymbol();
         });
       }
       const nailRadarRefreshBtn = document.getElementById(
@@ -37252,21 +37193,8 @@
         });
       }
       if (nailRadarBody) {
-        // 多选模式下点复选框或整行都可勾选（手机点按更宽松）。
-        nailRadarBody.addEventListener("change", (event) => {
-          const check = event.target.closest("[data-radar-check]");
-          if (check) toggleRadarSymbolSelected(check.getAttribute("data-radar-check"));
-        });
         nailRadarBody.addEventListener("click", (event) => {
-          if (nailRadarSelectMode) {
-            const row = event.target.closest("tr[data-radar-symbol]");
-            if (row) {
-              // 点复选框交给你自己的 change 事件；点行内其它空白则切换勾选。
-              if (event.target.closest("[data-radar-check]")) return;
-              toggleRadarSymbolSelected(row.getAttribute("data-radar-symbol"));
-              return;
-            }
-          }
+          // 操作列的三个按钮各走原逻辑，不触发焦点选中。
           const fixBtn = event.target.closest("[data-radar-fixed-toggle]");
           if (fixBtn) {
             void toggleRadarFixed(
@@ -37288,10 +37216,9 @@
             );
             return;
           }
-          const button = event.target.closest("[data-nail-radar-symbol]");
-          if (!button) return;
-          void setNailRadarPopoverOpen(false);
-          openNailDrawerAtSymbol(button.getAttribute("data-nail-radar-symbol"));
+          // 点行主体（名次 / 币名 / K线 / 24h）切换焦点选中；复刻自动盯分栏的点击体验。
+          const row = event.target.closest("tr[data-radar-symbol]");
+          if (row) toggleRadarFocus(row.getAttribute("data-radar-symbol"));
         });
       }
       const nailHoldBtn = document.getElementById("nailHoldBtn");
