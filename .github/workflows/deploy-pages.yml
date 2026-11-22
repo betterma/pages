@@ -26,10 +26,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  # 官方推荐：upload 与 deploy 分 job，避免同 job 内偶发
+  # 「No artifacts named github-pages were found」。
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -45,6 +44,13 @@ jobs:
           # 只是 JSON-only 的 commit 不再触发本工作流。
           path: .
 
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
