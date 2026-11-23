@@ -2871,10 +2871,8 @@
         vertical-align: middle;
       }
       .nail-auto-pin-table th {
-        position: sticky;
-        top: 0;
-        z-index: 1;
-        background: var(--elevated, var(--grouped));
+        position: static;
+        background: transparent;
         color: var(--secondary);
         font-size: 11px;
         font-weight: 650;
@@ -3087,10 +3085,11 @@
         white-space: nowrap;
       }
       .nail-radar-table th {
-        position: sticky;
-        top: 0;
+        /* 纵向跟表一起滚；横向冻结仍由下面 left sticky 负责 */
+        position: static;
+        top: auto;
         z-index: 1;
-        background: var(--elevated, var(--grouped));
+        background: transparent;
         color: var(--secondary);
         font-size: 11px;
         font-weight: 650;
@@ -5283,10 +5282,8 @@
         font-variant-numeric: tabular-nums;
       }
       .nail-notice-table thead th {
-        position: sticky;
-        top: 0;
-        z-index: 1;
-        background: var(--elevated, var(--grouped));
+        position: static;
+        background: transparent;
         color: var(--secondary);
         font-size: 11px;
         font-weight: 600;
@@ -5980,10 +5977,9 @@
         font-variant-numeric: tabular-nums;
       }
       .nail-prow-table thead th {
-        position: sticky;
-        top: 0;
-        z-index: 1;
-        background: var(--elevated, var(--grouped));
+        /* 跟表格一起滚，不做吸顶分离 */
+        position: static;
+        background: transparent;
         color: var(--secondary);
         font-size: 11px;
         font-weight: 600;
@@ -6345,6 +6341,51 @@
         font-weight: 700;
         letter-spacing: 0;
         color: var(--secondary, #9aa3a0);
+      }
+      /* 持有区 8s 刷新进度环：跟在盈亏摘要后，转满一圈再刷 */
+      .nail-held-refresh-ring {
+        display: none;
+        width: 12px;
+        height: 12px;
+        flex: 0 0 auto;
+        align-self: center;
+        color: color-mix(in srgb, var(--accent, #2f8f6e) 70%, var(--secondary));
+      }
+      .nail-held-refresh-ring.is-on {
+        display: inline-flex;
+      }
+      .nail-held-refresh-ring svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .nail-held-refresh-ring .track {
+        fill: none;
+        stroke: color-mix(in srgb, var(--label) 14%, transparent);
+        stroke-width: 2;
+      }
+      .nail-held-refresh-ring .prog {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-dasharray: 37.699;
+        stroke-dashoffset: 37.699;
+        transform-origin: 8px 8px;
+        transform: rotate(-90deg);
+      }
+      .nail-held-refresh-ring.is-running .prog {
+        animation-name: nail-held-ring-fill;
+        animation-timing-function: linear;
+        animation-fill-mode: forwards;
+      }
+      @keyframes nail-held-ring-fill {
+        from {
+          stroke-dashoffset: 37.699;
+        }
+        to {
+          stroke-dashoffset: 0;
+        }
       }
       .nail-section-label-title .nail-hold-pnl-history {
         margin: 0;
@@ -7399,11 +7440,12 @@
         opacity: 0.45;
         cursor: not-allowed;
       }
-      /* 置顶分栏贴行操作条：刷新 / 买入 / 卖出 / 便签 */
+      /* 置顶贴行条：右对齐；右→左 刷新/卖出/买入/便签；plain 无色底 */
       .nail-row-action-bar {
         display: flex;
         align-items: center;
-        gap: 6px;
+        justify-content: flex-end;
+        gap: 2px;
         flex-wrap: wrap;
         padding: 2px 0;
         min-width: 0;
@@ -7415,52 +7457,46 @@
         padding: 2px 8px 8px;
         border-bottom: 0.5px solid
           color-mix(in srgb, var(--separator) 70%, transparent);
-        background: color-mix(in srgb, var(--accent, #2f8f6e) 6%, transparent);
+        background: transparent;
       }
       .nail-row-action-bar button {
-        border: 0.5px solid color-mix(in srgb, var(--label) 18%, transparent);
-        background: color-mix(in srgb, var(--fill) 70%, transparent);
+        border: none;
+        background: transparent;
         color: var(--label);
         height: 28px;
-        padding: 0 10px;
-        border-radius: 8px;
+        padding: 0 8px;
+        border-radius: 6px;
         font-size: 12px;
-        font-weight: 650;
+        font-weight: 600;
         cursor: pointer;
         white-space: nowrap;
       }
+      .nail-row-action-bar button:hover {
+        background: color-mix(in srgb, var(--fill) 55%, transparent);
+      }
       .nail-row-action-bar button.is-buy {
-        border-color: transparent;
-        background: var(--accent, #2f8f6e);
-        color: #fff;
+        color: var(--accent, #2f8f6e);
       }
       .nail-row-action-bar button.is-sell {
-        border-color: transparent;
-        background: #c45c5c;
-        color: #fff;
+        color: #c45c5c;
       }
       .nail-row-action-bar button:disabled {
         opacity: 0.45;
         cursor: not-allowed;
       }
       .nail-row-action-bar .nail-row-action-close {
-        margin-left: auto;
         min-width: 28px;
-        padding: 0 8px;
+        padding: 0 6px;
         font-size: 16px;
         font-weight: 500;
         color: var(--secondary);
-        background: transparent;
-        border-color: transparent;
       }
       .nail-grid > .nail-row-action-bar {
         margin: -2px 0 10px;
-        padding: 6px 8px;
+        padding: 4px 8px;
         border-radius: 0 0 10px 10px;
-        border: 0.5px solid
-          color-mix(in srgb, var(--accent, #2f8f6e) 28%, var(--separator));
-        border-top: none;
-        background: color-mix(in srgb, var(--accent, #2f8f6e) 6%, var(--elevated, #fff));
+        border: none;
+        background: transparent;
       }
       /* 有买卖栏时：操作栏紧贴其上方，无空隙 */
       body.has-nail-trade-dock .card-focus-bar {
@@ -11320,12 +11356,8 @@
       <button type="button" class="is-sell" data-nail-trade="sell">卖出</button>
     </div>
 
-    <!-- 仅置顶分栏：贴在选中行下方，顺序 刷新 / 买入 / 卖出 / 便签 -->
+    <!-- 仅置顶分栏贴行条：右对齐，右→左为 刷新 / 卖出 / 买入 / 便签 -->
     <div id="nailRowActionBar" class="nail-row-action-bar" hidden>
-      <button type="button" data-focus-action="refresh">刷新</button>
-      <button type="button" class="is-buy" data-nail-trade="buy">买入</button>
-      <button type="button" class="is-sell" data-nail-trade="sell">卖出</button>
-      <button type="button" data-focus-action="nail-note">便签</button>
       <button
         type="button"
         class="nail-row-action-close"
@@ -11335,6 +11367,10 @@
       >
         ×
       </button>
+      <button type="button" data-focus-action="nail-note">便签</button>
+      <button type="button" class="is-buy" data-nail-trade="buy">买入</button>
+      <button type="button" class="is-sell" data-nail-trade="sell">卖出</button>
+      <button type="button" data-focus-action="refresh">刷新</button>
     </div>
 
     <div id="quickTradeSheet" class="quick-trade-sheet" hidden>
@@ -11913,6 +11949,8 @@
       }
       let nailHeldRefreshTimer = null;
       let nailHeldRefreshBusy = false;
+      /** 当前 8s 环进度起点；重绘时用负 delay 续上。 */
+      let nailHeldCycleStartedAt = 0;
       /** 钉子页换肤：normal 现状 / calm 护眼（去红绿，K 线实心/空心）。仅钉子页生效。 */
       const NAIL_SKIN_KEY = "kline-nail-skin-v1";
       let nailSkinMode = "normal";
@@ -33768,11 +33806,15 @@
         if (!totalEl) {
           totalEl = document.createElement("span");
           totalEl.setAttribute("data-nail-held-pnl", "");
-          if (titleEl) titleEl.appendChild(totalEl);
+          const ring = heldLabel.querySelector("[data-nail-held-ring]");
+          if (titleEl && ring) titleEl.insertBefore(totalEl, ring);
+          else if (titleEl) titleEl.appendChild(totalEl);
           else heldLabel.appendChild(totalEl);
         }
         totalEl.className = "nail-section-pnl";
         totalEl.innerHTML = summaryHtml;
+        // 盈亏节点可能新建；环是兄弟节点，补一次显隐/进度
+        syncNailHeldRefreshRing();
       }
 
       function syncNailRisingFilterUi() {
@@ -34654,6 +34696,13 @@
           if (summaryHtml) {
             pnlBit = `<span class="nail-section-pnl" data-nail-held-pnl>${summaryHtml}</span>`;
           }
+          // 进度环始终占位；是否显示由 syncNailHeldRefreshRing 根据开关决定
+          pnlBit +=
+            `<span class="nail-held-refresh-ring" data-nail-held-ring title="持有区 8 秒刷新进度" aria-hidden="true">` +
+            `<svg viewBox="0 0 16 16" focusable="false">` +
+            `<circle class="track" cx="8" cy="8" r="6"></circle>` +
+            `<circle class="prog" cx="8" cy="8" r="6"></circle>` +
+            `</svg></span>`;
         }
         return (
           `<div class="nail-section-label ${section.className}" data-nail-section="${section.id}">` +
@@ -34958,6 +35007,7 @@
         bindNailFocusSelect(listEl);
         applyFocusActionChrome();
         syncNailSelectUi();
+        syncNailHeldRefreshRing();
         if (isNailDrawerOpen()) {
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
@@ -35264,6 +35314,39 @@
             nailHeldRefreshEnabled ? "true" : "false",
           );
         }
+        syncNailHeldRefreshRing();
+      }
+
+      /** 持有盈亏旁的 8s 进度环；重绘时用负 delay 续上当前圈。 */
+      function syncNailHeldRefreshRing() {
+        const ring = document.querySelector("#nailList [data-nail-held-ring]");
+        if (!ring) return;
+        const on =
+          nailHeldRefreshEnabled &&
+          isNailDrawerOpen() &&
+          nailSegment === "pinned" &&
+          nailShowHeldSection;
+        ring.classList.toggle("is-on", on);
+        const prog = ring.querySelector(".prog");
+        if (!on || !prog) {
+          ring.classList.remove("is-running");
+          if (prog) {
+            prog.style.animation = "";
+            prog.style.animationDelay = "";
+          }
+          return;
+        }
+        if (!nailHeldCycleStartedAt) {
+          nailHeldCycleStartedAt = Date.now();
+        }
+        const elapsed = Math.max(0, Date.now() - nailHeldCycleStartedAt);
+        const delayMs = -Math.min(elapsed, NAIL_HELD_REFRESH_MS);
+        ring.classList.add("is-running");
+        prog.style.animation = "none";
+        // 强制重排后再挂动画，避免同帧去掉/加上无效
+        void prog.getBoundingClientRect();
+        prog.style.animation = `nail-held-ring-fill ${NAIL_HELD_REFRESH_MS}ms linear forwards`;
+        prog.style.animationDelay = `${delayMs}ms`;
       }
 
       function collectNailHeldRefreshSymbols() {
@@ -35333,9 +35416,40 @@
 
       function stopNailHeldRefresh() {
         if (nailHeldRefreshTimer) {
-          window.clearInterval(nailHeldRefreshTimer);
+          window.clearTimeout(nailHeldRefreshTimer);
           nailHeldRefreshTimer = null;
         }
+        nailHeldCycleStartedAt = 0;
+        syncNailHeldRefreshRing();
+      }
+
+      /** 开一轮：先画满 8s 环，圈满再刷价，然后进入下一轮。 */
+      function scheduleNailHeldRefreshCycle() {
+        if (
+          !nailHeldRefreshEnabled ||
+          !isNailDrawerOpen() ||
+          document.visibilityState === "hidden"
+        ) {
+          return;
+        }
+        if (nailHeldRefreshTimer) {
+          window.clearTimeout(nailHeldRefreshTimer);
+          nailHeldRefreshTimer = null;
+        }
+        nailHeldCycleStartedAt = Date.now();
+        syncNailHeldRefreshRing();
+        nailHeldRefreshTimer = window.setTimeout(() => {
+          nailHeldRefreshTimer = null;
+          void refreshNailHeldPrices().finally(() => {
+            if (
+              nailHeldRefreshEnabled &&
+              isNailDrawerOpen() &&
+              document.visibilityState !== "hidden"
+            ) {
+              scheduleNailHeldRefreshCycle();
+            }
+          });
+        }, NAIL_HELD_REFRESH_MS);
       }
 
       function startNailHeldRefresh() {
@@ -35347,10 +35461,17 @@
         ) {
           return;
         }
-        void refreshNailHeldPrices();
-        nailHeldRefreshTimer = window.setInterval(() => {
-          void refreshNailHeldPrices();
-        }, NAIL_HELD_REFRESH_MS);
+        // 打开时先刷一枪，再进入「滚满一圈 → 再刷」节奏
+        void refreshNailHeldPrices().finally(() => {
+          if (
+            nailHeldRefreshEnabled &&
+            isNailDrawerOpen() &&
+            document.visibilityState !== "hidden" &&
+            !nailHeldRefreshTimer
+          ) {
+            scheduleNailHeldRefreshCycle();
+          }
+        });
       }
 
       function setNailHeldRefreshEnabled(enabled) {
