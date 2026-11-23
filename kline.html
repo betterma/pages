@@ -5267,37 +5267,46 @@
         padding: 6px 8px 8px;
         min-width: 0;
       }
-      /* 通知列表模式：雷达式两行；币名独立行，K线168x62+标签在下行 */
-      .nail-notice-batch-list.is-list-view { grid-template-columns: 1fr; gap: 6px; }
-      .nail-notice-row.nail-notice-card {
-        display: grid;
-        grid-template-columns: minmax(56px, auto) 176px minmax(52px, 0.7fr);
-        align-items: start;
-        gap: 8px;
-        padding: 6px 8px;
-        border: 0.5px solid var(--separator);
-        border-radius: 8px;
-        background: color-mix(in srgb, var(--elevated) 88%, transparent);
+      /* 通知列表模式：真正的 table；表头 币|K线|24h，第二列起上下打通 */
+      .nail-notice-table {
+        width: 100%;
+        border-collapse: collapse;
         font-size: 12px;
-        min-width: 0;
-        position: relative;
+        font-variant-numeric: tabular-nums;
       }
-      .nail-notice-row.is-first { border-color: var(--up); }
-      .nail-notice-row.is-selected { outline: 2px solid var(--accent); }
-      .nail-notice-row.is-pullback-focus { background: color-mix(in srgb, var(--info) 12%, transparent); }
-      .nail-notice-row > .nail-notice-check { position: absolute; left: -2px; top: 2px; }
-      .nail-notice-row-name {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 3px;
-        min-width: 0;
-        padding-top: 1px;
+      .nail-notice-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: var(--elevated, var(--grouped));
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 600;
+        text-align: left;
+        padding: 5px 6px;
+        border-bottom: 0.5px solid var(--separator);
       }
-      .nail-notice-name { padding: 0; font-weight: 600; text-align: left; }
-      .nail-notice-row-name .nail-notice-name { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .nail-notice-row-time { color: var(--secondary); font-size: 10.5px; }
-      .nail-notice-row-kline-cell { min-width: 0; }
+      .nail-notice-table thead th:nth-child(3) { text-align: right; }
+      .nail-notice-tbody { border-bottom: 0.5px solid var(--separator); }
+      .nail-notice-tbody.is-delta-filtered { display: none; }
+      .nail-notice-tbody.is-pullback-focus { background: color-mix(in srgb, var(--info) 10%, transparent); }
+      .nail-notice-table tr.nail-notice-card.nail-notice-row {
+        display: table-row;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+      }
+      .nail-notice-table .nail-notice-row.is-selected,
+      .nail-notice-table .nail-notice-row.is-focus {
+        background: color-mix(in srgb, var(--accent) 12%, transparent);
+        outline: none;
+      }
+      .nail-notice-table .nail-notice-row.is-first { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+      .nail-notice-table td { padding: 4px 6px; vertical-align: middle; }
+      .nail-notice-row-name { white-space: nowrap; }
+      .nail-notice-name { padding: 0; font-weight: 600; }
+      .nail-notice-row-time { color: var(--secondary); font-size: 10.5px; margin-left: 6px; }
       .nail-notice-row canvas[data-notice-chart] {
         display: block;
         width: 168px;
@@ -5305,24 +5314,16 @@
         border-radius: 4px;
         background: color-mix(in srgb, var(--label, #808080) 4%, transparent);
       }
-      .nail-notice-row-tags {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 3px;
-        min-height: 14px;
-        padding-top: 2px;
-      }
+      .nail-notice-row-tags { display: flex; flex-wrap: wrap; gap: 3px; }
       .nail-notice-kind { font-size: 10px; padding: 0 5px; border-radius: 999px; background: var(--fill); }
       .nail-notice-kind.is-bal { color: var(--warn); }
       .nail-notice-kind.is-straight { color: var(--accent); }
       .nail-notice-kind.is-vol { color: var(--down); }
       .nail-notice-kind.is-observe { color: var(--secondary); }
-      .nail-notice-row-chg { font-variant-numeric: tabular-nums; font-size: 10.5px; text-align: right; padding-top: 2px; }
+      .nail-notice-row-chg { text-align: right; }
       .nail-notice-row-chg.is-up { color: var(--up); }
       .nail-notice-row-chg.is-down { color: var(--down); }
-      @media (max-width: 720px) {
-        .nail-notice-row.nail-notice-card { grid-template-columns: minmax(48px, auto) 176px minmax(44px, 0.7fr); }
-      }
+      .nail-notice-sub td { padding-top: 0; padding-bottom: 5px; }
       /* 第一次进通知的卡（区别于被新命中顶上来的）：淡绿底 + 绿边。 */
       .nail-notice-card.is-first {
         background: color-mix(
@@ -5956,44 +5957,45 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
       }
-      /* 置顶列表模式：雷达式两行；币名独立行，K线168x62+信息下行 */
-      .nail-prow-list { display: grid; gap: 6px; }
-      .nail-prow.nail-kcard {
-        display: grid;
-        grid-template-columns: minmax(56px, auto) 176px minmax(52px, 0.7fr) auto;
-        align-items: start;
-        gap: 8px;
-        padding: 6px 8px;
-        border: 0.5px solid var(--separator);
-        border-radius: 10px;
-        background: color-mix(in srgb, var(--elevated) 88%, transparent);
-        min-width: 0;
+      /* 置顶列表模式：真正的 table；表头 币|K线|24h|操作，第二列起上下打通 */
+      .nail-prow-table {
+        width: 100%;
+        border-collapse: collapse;
         font-size: 12px;
-        cursor: default;
-        position: relative;
+        font-variant-numeric: tabular-nums;
       }
-      .nail-prow.is-selected { outline: 2px solid var(--accent); }
-      .nail-prow.is-exited { opacity: 0.7; }
-      .nail-prow > .nail-check { position: absolute; left: -2px; top: 2px; }
-      .nail-prow-name {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 3px;
-        min-width: 0;
-        padding-top: 1px;
-      }
-      .nail-prow-name .nail-name {
+      .nail-prow-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: var(--elevated, var(--grouped));
+        color: var(--secondary);
+        font-size: 11px;
         font-weight: 600;
-        min-width: 0;
-        max-width: 100%;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        padding: 0;
+        text-align: left;
+        padding: 5px 6px;
+        border-bottom: 0.5px solid var(--separator);
       }
+      .nail-prow-table thead th:nth-child(3) { text-align: right; }
+      .nail-prow-tbody { border-bottom: 0.5px solid var(--separator); }
+      .nail-prow-tbody.is-exited { opacity: 0.7; }
+      .nail-prow-table tr.nail-kcard.nail-prow-row {
+        display: table-row;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        cursor: default;
+      }
+      .nail-prow-table .nail-prow-row.is-selected,
+      .nail-prow-table .nail-prow-row.is-focus {
+        background: color-mix(in srgb, var(--accent) 12%, transparent);
+        outline: none;
+      }
+      .nail-prow-table td { padding: 4px 6px; vertical-align: middle; }
+      .nail-prow-name { white-space: nowrap; }
       .nail-prow-name .nail-pin { padding: 1px 6px; }
-      .nail-prow-kline-cell { min-width: 0; }
+      .nail-prow-name .nail-name { font-weight: 600; padding: 0; }
       .nail-prow-kline-cell canvas.nail-kline {
         display: block;
         width: 168px;
@@ -6001,30 +6003,26 @@
         border-radius: 4px;
         background: color-mix(in srgb, var(--label, #808080) 4%, transparent);
       }
-      .nail-prow-info {
-        font-size: 10.5px;
-        color: var(--secondary);
-        line-height: 1.35;
-        min-height: 14px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 2px 8px;
-        padding-top: 2px;
-      }
-      .nail-prow-info-pnl { font-variant-numeric: tabular-nums; }
-      .nail-prow-chg {
-        font-variant-numeric: tabular-nums;
-        font-size: 10.5px;
-        text-align: right;
-        padding-top: 2px;
-      }
+      .nail-prow-chg { text-align: right; }
       .nail-prow-chg.is-up { color: var(--up); }
       .nail-prow-chg.is-down { color: var(--down); }
-      .nail-prow-ops { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+      .nail-prow-ops { white-space: nowrap; text-align: right; }
       .nail-prow-ops button { padding: 2px 6px; font-size: 11px; }
+      .nail-prow-sub td { padding-top: 0; padding-bottom: 5px; }
+      .nail-prow-info {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px 10px;
+        font-size: 10.5px;
+        color: var(--secondary);
+        line-height: 1.4;
+      }
+      .nail-prow-info-pnl { font-variant-numeric: tabular-nums; }
+      .nail-prow-table .nail-check { vertical-align: middle; margin-right: 2px; }
       @media (max-width: 720px) {
-        .nail-prow.nail-kcard { grid-template-columns: minmax(48px, auto) 176px minmax(44px, 0.7fr); }
         .nail-prow-ops { display: none; }
+        .nail-prow-table thead th:nth-child(4) { display: none; }
       }
       .nail-section-label {
         grid-column: 1 / -1;
@@ -29584,19 +29582,22 @@
         if (!pullbackFocus && isNew) tagBits.push('<span class="nail-notice-new">新</span>');
         const change = Number(marketMap[key] && marketMap[key].change24h);
         const chCls = Number.isFinite(change) && change !== 0 ? (change > 0 ? "is-up" : "is-down") : "";
+        const dataAttrs = `data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-batch="${batchAt}" data-notice-first="${firstSeenAt}" data-notice-balance="${hitBal ? "1" : "0"}" data-notice-straight="${hitStraight ? "1" : "0"}" data-notice-pullback="${hitPullbackObserve || hitPullbackVolume || pullbackFocus ? "1" : "0"}"${pullbackFocus ? ' data-pullback-focus="1"' : ""}`;
         return [
-          `<div class="nail-notice-card nail-notice-row${isFirstEntry ? " is-first" : ""}${selected}${pullbackFocus ? " is-pullback-focus" : ""}" data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-batch="${batchAt}" data-notice-first="${firstSeenAt}" data-notice-balance="${hitBal ? "1" : "0"}" data-notice-straight="${hitStraight ? "1" : "0"}" data-notice-pullback="${hitPullbackObserve || hitPullbackVolume || pullbackFocus ? "1" : "0"}"${pullbackFocus ? ' data-pullback-focus="1"' : ""}>`,
-          `<div class="nail-notice-row-name">`,
+          `<tbody class="nail-notice-tbody${selected}${pullbackFocus ? " is-pullback-focus" : ""}" ${dataAttrs}>`,
+          `<tr class="nail-notice-card nail-notice-row${isFirstEntry ? " is-first" : ""}" ${dataAttrs}>`,
+          `<td class="nail-notice-row-name">`,
           check,
           `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}</button>`,
           `<span class="nail-notice-row-time">${escapeHtml(formatNoticeTime(item.at))}</span>`,
-          `</div>`,
-          `<div class="nail-notice-row-kline-cell">`,
+          `</td>`,
+          `<td class="nail-notice-row-kline-cell">`,
           `<canvas data-notice-chart="${symbol}" data-price-label="1" data-notice-at="${Number(item.at) || 0}" data-notice-first="${firstSeenAt}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${notePrice > 0 ? notePrice : 0}" data-notice-pin-price="${pinPrice > 0 ? pinPrice : 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
-          `<div class="nail-notice-row-tags">${tagBits.join("")}</div>`,
-          `</div>`,
-          `<div class="nail-notice-row-chg ${chCls}">${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</div>`,
-          `</div>`,
+          `</td>`,
+          `<td class="nail-notice-row-chg ${chCls}">${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</td>`,
+          `</tr>`,
+          `<tr class="nail-notice-sub"><td></td><td colspan="2"><span class="nail-notice-row-tags">${tagBits.join("")}</span></td></tr>`,
+          `</tbody>`,
         ].join("");
       }
 
@@ -29822,11 +29823,12 @@
         }
         const parts = [];
         if (pullbackFocusRows.length) {
+          const pbList = nailNoticeViewMode === "list";
           parts.push(
             `<section class="nail-notice-pullback-focus" id="nailNoticePullbackFocusSection">`,
             `<h4 class="nail-notice-pullback-focus-head">回踩置顶 · ${pullbackFocusRows.length} 个</h4>`,
-            `<div class="nail-notice-batch-list${nailNoticeViewMode === "list" ? " is-list-view" : ""}">`,
-            pullbackFocusRows.map((row) => nailNoticeViewMode === "list"
+            pbList ? `<table class="nail-notice-table"><thead><tr><th>币</th><th>K线</th><th>24h</th></tr></thead>` : `<div class="nail-notice-batch-list">`,
+            pullbackFocusRows.map((row) => pbList
               ? buildNailNoticeRowHtml(
                   findPullbackNoticeItem(row.symbol, row.at) || {
                     symbol: row.symbol,
@@ -29838,7 +29840,8 @@
                   { pullbackFocus: true },
                 )
               : buildPullbackFocusCardHtml(row)).join(""),
-            `</div></section>`,
+            pbList ? `</table>` : `</div>`,
+            `</section>`,
           );
         }
         if (alerts.length) {
@@ -29864,11 +29867,14 @@
             `<span class="nail-notice-group-tag${strongest ? " is-strong" : ""}">${strongest ? "强信号" : ""}</span>`,
             `<span class="nail-notice-batch-count">${g.items.length}个</span>`,
             `</h4>`,
-            `<div class="nail-notice-batch-list${nailNoticeViewMode === "list" ? " is-list-view" : ""}">`,
+            nailNoticeViewMode === "list"
+              ? `<table class="nail-notice-table"><thead><tr><th>币</th><th>K线</th><th>24h</th></tr></thead>`
+              : `<div class="nail-notice-batch-list">`,
             g.items.map((item) => nailNoticeViewMode === "list"
               ? buildNailNoticeRowHtml(item)
               : buildNailNoticeCardHtml(item)).join(""),
-            `</div></section>`,
+            nailNoticeViewMode === "list" ? `</table>` : `</div>`,
+            `</section>`,
           );
         });
         listEl.innerHTML = parts.join("");
@@ -30377,6 +30383,10 @@
           const filtered =
             hide || pending || patternHide || patternPending;
           card.classList.toggle("is-delta-filtered", filtered);
+          // 列表模式：主 tr 与信息子行同属一个 tbody，一起隐藏避免留空行。
+          if (card.parentElement && card.parentElement.classList.contains("nail-notice-tbody")) {
+            card.parentElement.classList.toggle("is-delta-filtered", filtered);
+          }
           if (!filtered) visible += 1;
         });
         // 批次内卡片全被筛掉时，整段时间头也藏掉。
@@ -33317,24 +33327,24 @@
             .trim()
             .toUpperCase();
           if (!key) return;
+          // 列表模式：盈亏在相邻 tbody 的信息行，用 tbody 作为查找根。
+          const root = card.closest(".nail-prow-tbody") || card;
           const pnl = holdingsPnlOf(key);
           const pnlInner = nailCardPnlHtml(key, pnl ? pnl.usdt : null);
-          let el = card.querySelector("[data-nail-pnl]");
+          let el = root.querySelector("[data-nail-pnl]");
           if (!pnlInner) {
             if (el) el.remove();
             return;
           }
           if (!el) {
-            el = document.createElement("p");
+            el = document.createElement("span");
+            el.className = "nail-prow-info-pnl";
             el.setAttribute("data-nail-pnl", key);
             el.title = "浮=持仓浮动盈亏(随现价变动)、已落=该币卖出已实现盈亏";
-            const note = card.querySelector("[data-nail-note-display]");
-            const wrap = card.querySelector(".nail-kline-wrap");
-            if (note) card.insertBefore(el, note);
-            else if (wrap) wrap.insertAdjacentElement("afterend", el);
+            const info = root.querySelector(".nail-prow-info");
+            if (info) info.prepend(el);
             else card.appendChild(el);
           }
-          el.className = "nail-pnl";
           el.innerHTML = pnlInner;
         });
         const heldLabel = list.querySelector(
@@ -34443,40 +34453,45 @@
           const check = nailSelectMode
             ? `<input type="checkbox" class="nail-check" data-nail-select="${symbol}" ${selectedNailSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
             : "";
-          // 币名独立一行：置顶符号在前且可点，之后是币名。
-          const nameRow = [
+          // 币名列：置顶图标 + 币名 左右排列
+          const nameCell = [
             check,
             nailSelectMode ? "" : `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "置顶选项" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
             `<button type="button" class="nail-name" data-nail-copy-name="${label}" data-copy="${label}" title="点击复制名称">${label}${exited ? '<span class="nail-exit-tag">退出</span>' : ""}</button>`,
           ].join("");
-          // 下行信息：盯幅 / 便签 / 盈亏（放 K 线单元格下方）
+          // 打通的信息行：盈亏在前，其次盯幅、便签（一行显示）
           const infoBits = [];
+          if (pnlInner) infoBits.push(`<span class="nail-prow-info-pnl" data-nail-pnl="${symbol}" title="浮=持仓浮动盈亏、已落=卖出已实现盈亏">${pnlInner}</span>`);
           if (pinItem) infoBits.push(`<span class="nail-prow-info-pin">盯幅 ${escapeHtml(formatPercent(pinChangePercent(pinItem)))}</span>`);
           if (noteText) infoBits.push(`<span class="nail-prow-info-note">${noteText}</span>`);
-          if (pnlInner) infoBits.push(`<span class="nail-prow-info-pnl" data-nail-pnl="${symbol}" title="浮=持仓浮动盈亏、已落=卖出已实现盈亏">${pnlInner}</span>`);
-          const infoHtml = infoBits.length
-            ? `<div class="nail-prow-info" data-nail-pnl-slot="${symbol}" data-nail-note-display="${symbol}">${infoBits.join("")}</div>`
-            : `<div class="nail-prow-info" data-nail-pnl-slot="${symbol}" data-nail-note-display="${symbol}"></div>`;
+          const infoCell = infoBits.length
+            ? `<span class="nail-prow-info" data-nail-pnl-slot="${symbol}" data-nail-note-display="${symbol}">${infoBits.join("")}</span>`
+            : `<span class="nail-prow-info" data-nail-pnl-slot="${symbol}" data-nail-note-display="${symbol}"></span>`;
           return [
-            `<div class="nail-kcard nail-prow${selected}${exited ? " is-exited" : ""}" data-nail-symbol="${symbol}">`,
-            `<div class="nail-prow-name">${nameRow}</div>`,
-            `<div class="nail-prow-kline-cell">`,
-            `<canvas class="nail-kline" data-kline="${symbol}" data-price-label="1"></canvas>`,
-            infoHtml,
-            `</div>`,
-            `<div class="nail-prow-chg ${chCls}">${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</div>`,
-            nailSelectMode ? "" : `<div class="nail-prow-ops"><button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button><button type="button" class="nail-del" data-nail-del="${symbol}">删</button></div>`,
-            `</div>`,
+            `<tbody class="nail-prow-tbody${selected}${exited ? " is-exited" : ""}" data-nail-symbol="${symbol}">`,
+            `<tr class="nail-kcard nail-prow-row" data-nail-symbol="${symbol}">`,
+            `<td class="nail-prow-name">${nameCell}</td>`,
+            `<td class="nail-prow-kline-cell"><canvas class="nail-kline" data-kline="${symbol}" data-price-label="1"></canvas></td>`,
+            `<td class="nail-prow-chg ${chCls}">${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</td>`,
+            nailSelectMode ? "" : `<td class="nail-prow-ops"><button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button><button type="button" class="nail-del" data-nail-del="${symbol}">删</button></td>`,
+            `</tr>`,
+            `<tr class="nail-prow-sub"><td></td><td colspan="3">${infoCell}</td></tr>`,
+            `</tbody>`,
           ].join("");
         };
-        const cellHtml = listMode ? rowHtml : cardHtml;
-        listEl.innerHTML = `<div class="${listMode ? "nail-prow-list" : "nail-grid"}">${sections
-          .map(
-            (section) =>
-              (showLabels ? nailSectionLabelHtml(section) : "") +
-              section.items.map(cellHtml).join(""),
-          )
-          .join("")}</div>`;
+        if (listMode) {
+          listEl.innerHTML = `<table class="nail-prow-table"><thead><tr><th>币</th><th>K线</th><th>24h</th><th>操作</th></tr></thead>${sections
+            .map((section) => section.items.map(rowHtml).join(""))
+            .join("")}</table>`;
+        } else {
+          listEl.innerHTML = `<div class="nail-grid">${sections
+            .map(
+              (section) =>
+                (showLabels ? nailSectionLabelHtml(section) : "") +
+                section.items.map(cardHtml).join(""),
+            )
+            .join("")}</div>`;
+        }
         bindNailDrag(listEl);
         bindNailFocusSelect(listEl);
         applyFocusActionChrome();
@@ -34521,7 +34536,11 @@
           notes,
           alertMark,
           null,
-          nailCalmKlineOptions(),
+          nailCalmKlineOptions(
+            canvas.getAttribute("data-price-label") === "1"
+              ? { symbol: key, priceLabel: true }
+              : undefined,
+          ),
         );
         if (nailSortMode !== "order") applyNailListOrder();
         return true;
@@ -34560,6 +34579,7 @@
           (event) => {
             if (event.pointerType === "mouse" && event.button !== 0) return;
             if (event.target.closest("button, a, input, label")) return;
+            if (listEl.querySelector(".nail-prow-table")) return;
             const card = event.target.closest(".nail-kcard[data-nail-symbol]");
             if (!card) return;
             startX = event.clientX;
@@ -35636,6 +35656,8 @@
       function bindNailDrag(root) {
         const listEl = root || document.getElementById("nailList");
         if (!listEl || listEl.dataset.nailDragBound === "1") return;
+        // 列表模式是 table 结构，拖拽排序会打乱 tbody，禁用（顺序仍按钉子数据渲染）。
+        if (listEl.querySelector(".nail-prow-table")) return;
         listEl.dataset.nailDragBound = "1";
         const longMs = 480;
         // 手指一滑动就取消长按，优先保证列表滚动
