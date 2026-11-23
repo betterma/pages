@@ -3,26 +3,6 @@
   "readAt": 1795392051443,
   "items": [
     {
-      "id": "ETCUSDT:1795392000000:1795397400730",
-      "symbol": "ETCUSDT",
-      "label": "ETC",
-      "kinds": [
-        "直拉",
-        "天平"
-      ],
-      "at": 1795397400730,
-      "firstSeenAt": 1795392900962,
-      "openTime": 1795392000000,
-      "pinPrice": 5.7,
-      "pinnedAt": 1795382400407,
-      "alertPrice": 5.71,
-      "notifyPrice": 5.71,
-      "noteAt": 1795382400407,
-      "interval": "4h",
-      "windowUp": true,
-      "batchAt": 1795394101115
-    },
-    {
       "id": "JUPUSDT:1795392000000:1795397400730",
       "symbol": "JUPUSDT",
       "label": "JUP",
@@ -40,7 +20,65 @@
       "noteAt": 1795376700641,
       "interval": "4h",
       "windowUp": true,
-      "batchAt": 0
+      "batchAt": 1795397400730
+    },
+    {
+      "id": "CRMBUSDT:1795392000000:1795397400730",
+      "symbol": "CRMBUSDT",
+      "label": "CRMB",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1795397400730,
+      "firstSeenAt": 1795265400462,
+      "openTime": 1795392000000,
+      "pinPrice": 183.06,
+      "pinnedAt": 1795245900555,
+      "alertPrice": 183.03,
+      "notifyPrice": 184.2,
+      "noteAt": 1795363200800,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795397400730
+    },
+    {
+      "id": "ETCUSDT:1795392000000:1795397400730",
+      "symbol": "ETCUSDT",
+      "label": "ETC",
+      "kinds": [
+        "直拉",
+        "天平"
+      ],
+      "at": 1795397400730,
+      "firstSeenAt": 1795392900962,
+      "openTime": 1795392000000,
+      "pinPrice": 5.7,
+      "pinnedAt": 1795382400407,
+      "alertPrice": 5.71,
+      "notifyPrice": 5.71,
+      "noteAt": 1795382400407,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795397400730
+    },
+    {
+      "id": "SKHYBUSDT:1795392000000:1795397400730",
+      "symbol": "SKHYBUSDT",
+      "label": "SKHYB",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1795397400730,
+      "firstSeenAt": 1795390500421,
+      "openTime": 1795392000000,
+      "pinPrice": 110.3,
+      "pinnedAt": 1795357500900,
+      "alertPrice": 109.63,
+      "notifyPrice": 111.86,
+      "noteAt": 1795363200800,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795397400730
     },
     {
       "id": "LISTAUSDT:1795392000000:1795397100662",
@@ -825,25 +863,6 @@
       "batchAt": 1795390200574
     },
     {
-      "id": "CRMBUSDT:1795392000000:1795396200623",
-      "symbol": "CRMBUSDT",
-      "label": "CRMB",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1795396200623,
-      "firstSeenAt": 1795265400462,
-      "openTime": 1795392000000,
-      "pinPrice": 183.06,
-      "pinnedAt": 1795245900555,
-      "alertPrice": 183.03,
-      "notifyPrice": 183.39,
-      "noteAt": 1795363200800,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1795394101115
-    },
-    {
       "id": "ETHFIUSDT:1795392000000:1795396200623",
       "symbol": "ETHFIUSDT",
       "label": "ETHFI",
@@ -981,25 +1000,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1795392300616
-    },
-    {
-      "id": "SKHYBUSDT:1795392000000:1795396200623",
-      "symbol": "SKHYBUSDT",
-      "label": "SKHYB",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1795396200623,
-      "firstSeenAt": 1795390500421,
-      "openTime": 1795392000000,
-      "pinPrice": 110.3,
-      "pinnedAt": 1795357500900,
-      "alertPrice": 109.63,
-      "notifyPrice": 110.81,
-      "noteAt": 1795363200800,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1795394101115
     },
     {
       "id": "SNXXBUSDT:1795392000000:1795396200623",
@@ -3700,6 +3700,16 @@
   ],
   "batches": [
     {
+      "at": 1795397400730,
+      "count": 4,
+      "symbols": [
+        "CRMBUSDT",
+        "ETCUSDT",
+        "JUPUSDT",
+        "SKHYBUSDT"
+      ]
+    },
+    {
       "at": 1795397100662,
       "count": 4,
       "symbols": [
@@ -3782,21 +3792,18 @@
     },
     {
       "at": 1795394101115,
-      "count": 18,
+      "count": 15,
       "symbols": [
         "1000CHEEMSUSDT",
         "BEBUSDT",
         "BMNRBUSDT",
         "BOMEUSDT",
-        "CRMBUSDT",
         "EIGENUSDT",
-        "ETCUSDT",
         "GIGGLEUSDT",
         "INTWBUSDT",
         "JTOUSDT",
         "LSKUSDT",
         "NEARUSDT",
-        "SKHYBUSDT",
         "SNXXBUSDT",
         "STRKUSDT",
         "TURBOUSDT",
