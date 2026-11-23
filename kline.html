@@ -2539,17 +2539,24 @@
         height: 16px;
         display: block;
       }
-      /* 置顶栏工具条：新增 / 多选 / 刷新，只作用于钉子列表，故收进分栏内容区。 */
+      /* 置顶栏工具条：左新增/多选，右持有开关/刷新。 */
       .nail-pin-toolbar {
         flex: 0 0 auto;
         display: flex;
         align-items: center;
-        justify-content: flex-end;
-        gap: 6px;
+        justify-content: space-between;
+        gap: 8px;
         padding: 8px 12px 6px;
         border-bottom: 0.5px solid var(--separator);
       }
-      .nail-pin-toolbar button.is-active {
+      .nail-pin-toolbar-left,
+      .nail-pin-toolbar-right {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .nail-pin-toolbar button.is-active,
+      .nail-pin-toolbar button[aria-pressed="true"] {
         border-color: color-mix(in srgb, var(--label) 38%, transparent);
         background: color-mix(in srgb, var(--accent) 14%, transparent);
         color: var(--accent);
@@ -3210,10 +3217,10 @@
         font-size: 12px;
         text-align: center;
       }
-      /* 操作列：取消置顶 / 关注（写持仓新增关注）两个小胶囊按钮。 */
+      /* 操作列：归集 / 取消置顶；左对齐。 */
       .nail-radar-table th:nth-child(4),
       .nail-radar-table td:nth-child(4) {
-        text-align: right;
+        text-align: left;
         padding-left: 4px;
         padding-right: 4px;
       }
@@ -5248,7 +5255,8 @@
       .nail-notice-batch.is-collapsed .nail-notice-group-caret {
         transform: rotate(-90deg);
       }
-      .nail-notice-batch.is-collapsed .nail-notice-batch-list {
+      .nail-notice-batch.is-collapsed .nail-notice-batch-list,
+      .nail-notice-batch.is-collapsed .nail-notice-table {
         display: none;
       }
       .nail-notice-group-tag {
@@ -6022,8 +6030,17 @@
       .nail-prow-chg { text-align: right; }
       .nail-prow-chg.is-up { color: var(--up); }
       .nail-prow-chg.is-down { color: var(--down); }
-      .nail-prow-ops { white-space: nowrap; text-align: right; }
-      .nail-prow-ops button { padding: 2px 6px; font-size: 11px; }
+      .nail-prow-ops {
+        white-space: nowrap;
+        text-align: right;
+      }
+      .nail-prow-ops button {
+        padding: 2px 6px;
+        font-size: 11px;
+      }
+      .nail-prow-ops button + button {
+        margin-left: 8px;
+      }
       .nail-prow-sub td { padding-top: 0; padding-bottom: 5px; }
       .nail-prow-info {
         display: flex;
@@ -7334,6 +7351,7 @@
         z-index: 131;
         display: flex;
         align-items: center;
+        justify-content: flex-end;
         gap: 8px;
         width: 100%;
         max-width: none;
@@ -7354,16 +7372,9 @@
       .nail-trade-dock[hidden] {
         display: none !important;
       }
+      /* 底栏第二行只留买卖；名称已在第一行 label */
       .nail-trade-dock-sym {
-        flex: 1 1 auto;
-        min-width: 0;
-        font-size: 14px;
-        font-weight: 700;
-        letter-spacing: 0.02em;
-        color: var(--label, #5a6a68);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        display: none;
       }
       .nail-trade-dock button {
         flex: 0 0 auto;
@@ -7527,8 +7538,11 @@
       .card-focus-bar.is-nail-scope [data-focus-action="more"] {
         display: none;
       }
-      .card-focus-bar:not(.is-nail-scope) [data-focus-action="nail-note"],
-      .card-focus-bar:not(.is-nail-scope) [data-focus-action="nail-calc"] {
+      .card-focus-bar:not(.is-nail-scope) [data-focus-action="nail-note"] {
+        display: none;
+      }
+      /* 置顶选中底栏：不再提供计算入口 */
+      .card-focus-bar [data-focus-action="nail-calc"] {
         display: none;
       }
       .card-focus-bar .card-focus-label {
@@ -10635,24 +10649,36 @@
             data-nail-seg-panel="pinned"
           >
             <div class="nail-pin-toolbar" id="nailPinToolbar">
-              <button type="button" id="nailAddBtn" title="钉一个新币种">
-                新增
-              </button>
-              <button
-                type="button"
-                id="nailSelectBtn"
-                title="多选后批量置顶 / 写便签 / 删除"
-                aria-pressed="false"
-              >
-                多选
-              </button>
-              <button
-                type="button"
-                id="nailRefreshBtn"
-                title="重新拉取钉子列表、K 线与通知"
-              >
-                刷新
-              </button>
+              <div class="nail-pin-toolbar-left">
+                <button type="button" id="nailAddBtn" title="钉一个新币种">
+                  新增
+                </button>
+                <button
+                  type="button"
+                  id="nailSelectBtn"
+                  title="多选后批量置顶 / 写便签 / 删除"
+                  aria-pressed="false"
+                >
+                  多选
+                </button>
+              </div>
+              <div class="nail-pin-toolbar-right">
+                <button
+                  type="button"
+                  id="nailHeldToggleBtn"
+                  title="显示 / 隐藏「持有」分段（含盈亏）"
+                  aria-pressed="true"
+                >
+                  持有
+                </button>
+                <button
+                  type="button"
+                  id="nailRefreshBtn"
+                  title="重新拉取钉子列表、K 线与通知"
+                >
+                  刷新
+                </button>
+              </div>
             </div>
           </div>
           <div
@@ -11220,7 +11246,6 @@
         移出
       </button>
       <button type="button" data-focus-action="nail-note">便签</button>
-      <button type="button" data-focus-action="nail-calc">计算</button>
       <button type="button" class="is-primary" data-focus-action="more">
         更多
       </button>
@@ -11851,6 +11876,40 @@
       }
       let nailPinViewMode = readNailViewMode(NAIL_PIN_VIEW_KEY);
       let nailNoticeViewMode = readNailViewMode(NAIL_NOTICE_VIEW_KEY);
+      /** 置顶分栏是否显示「持有」分段（含盈亏）；仅本机。默认开。 */
+      const NAIL_SHOW_HELD_KEY = "kline-nail-show-held-v1";
+      let nailShowHeldSection = true;
+      try {
+        const savedHeld = localStorage.getItem(NAIL_SHOW_HELD_KEY);
+        if (savedHeld === "0") nailShowHeldSection = false;
+        else if (savedHeld === "1") nailShowHeldSection = true;
+      } catch (_) {
+        nailShowHeldSection = true;
+      }
+      function syncNailHeldToggleUi() {
+        const btn = document.getElementById("nailHeldToggleBtn");
+        if (!btn) return;
+        btn.setAttribute(
+          "aria-pressed",
+          nailShowHeldSection ? "true" : "false",
+        );
+        btn.classList.toggle("is-active", nailShowHeldSection);
+      }
+      function setNailShowHeldSection(on) {
+        const next = !!on;
+        if (next === nailShowHeldSection) {
+          syncNailHeldToggleUi();
+          return;
+        }
+        nailShowHeldSection = next;
+        try {
+          localStorage.setItem(NAIL_SHOW_HELD_KEY, next ? "1" : "0");
+        } catch (_) {
+          /* ignore */
+        }
+        syncNailHeldToggleUi();
+        renderNailDrawer();
+      }
       function setNailViewMode(which, mode) {
         const next = mode === "list" ? "list" : "card";
         if (which === "pin") {
@@ -15881,15 +15940,12 @@
             ? `<canvas class="nail-radar-kline is-loading" data-kline="${escapeHtml(symbol)}" data-radar-chart="${escapeHtml(symbol)}"></canvas>`
             : "";
           const isPinned = radarPinnedSet.has(keyUpper);
-          // 操作列：恢复原有「归集 / 取消置顶 / 持仓关注」；置顶由底部焦点操作栏负责。
+          // 操作列：归集 / 取消置顶；置顶由底部焦点操作栏负责（不再放持仓关注）。
           const unpinHtml = isPinned
             ? `<button type="button" class="nail-radar-act is-danger" data-radar-unpin="${escapeHtml(symbol)}" title="取消置顶该币">取消置顶</button>`
             : "";
           const markHtml = `<button type="button" class="nail-radar-act${isMarked ? " is-fixed" : ""}" data-radar-fixed-toggle="${escapeHtml(symbol)}" title="${isMarked ? "不归集：去掉背景，顶部归集时也不再收录" : "归集：加背景色；打开顶部「归集」后提到列表顶部"}">${isMarked ? "不归集" : "归集"}</button>`;
-          const watchHtml = holdingsWatched.has(keyUpper)
-            ? `<span class="nail-radar-act is-on" title="已在持仓关注列表">已关注</span>`
-            : `<button type="button" class="nail-radar-act" data-radar-watch="${escapeHtml(symbol)}" title="加入持仓关注列表">持仓关注</button>`;
-          return `<tr class="${rowClass}" data-radar-symbol="${escapeHtml(symbol)}"><td><span class="nail-radar-rank-mini">${rank ? `#${rank}` : "—"}</span><span class="nail-radar-sym-line"><button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></span></td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td>${markHtml}${unpinHtml}${watchHtml}</td></tr>`;
+          return `<tr class="${rowClass}" data-radar-symbol="${escapeHtml(symbol)}"><td><span class="nail-radar-rank-mini">${rank ? `#${rank}` : "—"}</span><span class="nail-radar-sym-line"><button type="button" class="nail-radar-symbol" data-nail-radar-symbol="${escapeHtml(symbol)}">${escapeHtml(label)}</button></span></td><td class="nail-radar-kline-cell">${klineHtml}</td><td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td><td>${markHtml}${unpinHtml}</td></tr>`;
         };
         const fullRanking = ranking();
         const rankOf = (symbol) => {
@@ -29554,7 +29610,7 @@
               check,
               `<div class="nail-notice-card-top">`,
           `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}</button>`,
-              `<span class="nail-notice-card-stamps">${tierTag}${!pullbackFocus && isNew ? '<span class="nail-notice-new">新</span>' : ""}<span class="nail-notice-time">${escapeHtml(formatNoticeTime(item.at))}</span></span>`,
+              `<span class="nail-notice-card-stamps">${tierTag}${!pullbackFocus && isNew ? '<span class="nail-notice-new">新</span>' : ""}</span>`,
               `</div>`,
               `<div class="nail-notice-meta">`,
           `<span class="nail-notice-line"><span class="nail-notice-key">便签</span><span>${notePrice > 0 ? escapeHtml(formatPinPrice(notePrice)) : "—"}</span><span class="nail-notice-iv">${escapeHtml(item.interval || "4h")}</span></span>`,
@@ -29590,30 +29646,30 @@
         const check = !pullbackFocus && nailNoticeSelectMode
           ? `<input type="checkbox" class="nail-notice-check" data-notice-select="${symbol}" ${selectedNoticeSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
           : "";
-        // 标签放下行：放量/观察/天平/直拉 + 新
+        // 标签放下行：只留回踩放量/观察 + 新（天平/直拉不再标）
         const tagBits = [];
         if (pullbackFocus || hitPullbackVolume) tagBits.push('<span class="nail-notice-kind is-vol">放量</span>');
         if (hitPullbackObserve) tagBits.push('<span class="nail-notice-kind is-observe">观察</span>');
-        if (hitBal) tagBits.push('<span class="nail-notice-kind is-bal">天平</span>');
-        if (hitStraight) tagBits.push('<span class="nail-notice-kind is-straight">直拉</span>');
         if (!pullbackFocus && isNew) tagBits.push('<span class="nail-notice-new">新</span>');
         const change = Number(marketMap[key] && marketMap[key].change24h);
         const chCls = Number.isFinite(change) && change !== 0 ? (change > 0 ? "is-up" : "is-down") : "";
         const dataAttrs = `data-notice-id="${id}" data-notice-symbol="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-batch="${batchAt}" data-notice-first="${firstSeenAt}" data-notice-balance="${hitBal ? "1" : "0"}" data-notice-straight="${hitStraight ? "1" : "0"}" data-notice-pullback="${hitPullbackObserve || hitPullbackVolume || pullbackFocus ? "1" : "0"}"${pullbackFocus ? ' data-pullback-focus="1"' : ""}`;
+        const subRow = tagBits.length
+          ? `<tr class="nail-notice-sub"><td></td><td colspan="2"><span class="nail-notice-row-tags">${tagBits.join("")}</span></td></tr>`
+          : "";
         return [
           `<tbody class="nail-notice-tbody${selected}${pullbackFocus ? " is-pullback-focus" : ""}" ${dataAttrs}>`,
           `<tr class="nail-notice-card nail-notice-row${isFirstEntry ? " is-first" : ""}" ${dataAttrs}>`,
           `<td class="nail-notice-row-name">`,
           check,
           `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}</button>`,
-          `<span class="nail-notice-row-time">${escapeHtml(formatNoticeTime(item.at))}</span>`,
           `</td>`,
           `<td class="nail-notice-row-kline-cell">`,
           `<canvas data-notice-chart="${symbol}" data-price-label="1" data-notice-at="${Number(item.at) || 0}" data-notice-first="${firstSeenAt}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${notePrice > 0 ? notePrice : 0}" data-notice-pin-price="${pinPrice > 0 ? pinPrice : 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
           `</td>`,
           `<td class="nail-notice-row-chg ${chCls}" data-notice-delta>${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</td>`,
           `</tr>`,
-          `<tr class="nail-notice-sub"><td></td><td colspan="2"><span class="nail-notice-row-tags">${tagBits.join("")}</span></td></tr>`,
+          subRow,
           `</tbody>`,
         ].join("");
       }
@@ -33130,17 +33186,7 @@
             setNailDrawerOpen(true);
             return true;
           }
-          // 钉子屏：左右滑切换分栏（两端越界不关抽屉）
-          if (mode === "nail" && canSwipeNailActions()) {
-            if (dx < 0) {
-              tracking = null;
-              return nailSwipeSegment(1);
-            }
-            if (dx > 0) {
-              tracking = null;
-              return nailSwipeSegment(-1);
-            }
-          }
+          // 置顶列表会左右滚，与切分栏手势冲突；分栏改点顶栏切换，不再左右滑。
           if (mode === "close-notice" && dx < 0 && isNailNoticeOpen()) {
             tracking = null;
             closeNailNoticeDrawer();
@@ -34314,8 +34360,10 @@
         const pinned = [];
         const rest = [];
         for (const item of items || []) {
-          if (nailSymbolIsHeld(item && item.symbol)) held.push(item);
-          else if (item && item.pinned) pinned.push(item);
+          // 关闭「持有」开关：不单独成段，按置顶/其余归入，币仍可见。
+          if (nailShowHeldSection && nailSymbolIsHeld(item && item.symbol)) {
+            held.push(item);
+          } else if (item && item.pinned) pinned.push(item);
           else rest.push(item);
         }
         return [
@@ -38483,6 +38531,13 @@
       if (nailRefreshBtn) {
         nailRefreshBtn.addEventListener("click", () => {
           void refreshNailDrawer();
+        });
+      }
+      const nailHeldToggleBtn = document.getElementById("nailHeldToggleBtn");
+      if (nailHeldToggleBtn) {
+        syncNailHeldToggleUi();
+        nailHeldToggleBtn.addEventListener("click", () => {
+          setNailShowHeldSection(!nailShowHeldSection);
         });
       }
       const nailNoticeEntry = document.getElementById("nailNoticeEntry");
