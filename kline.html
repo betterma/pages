@@ -4053,9 +4053,19 @@
         gap: 2px;
         min-width: 0;
       }
-      .nail-pnl-group-main b {
+      .nail-pnl-group-main b,
+      .nail-pnl-jump {
         font-weight: 700;
         font-size: 14px;
+      }
+      .nail-pnl-jump {
+        color: var(--accent);
+        cursor: pointer;
+        text-decoration: underline dotted;
+        text-underline-offset: 3px;
+      }
+      .nail-pnl-jump:hover {
+        text-decoration: underline solid;
       }
       .nail-pnl-group-meta {
         color: var(--secondary);
@@ -16166,6 +16176,9 @@
        * 已落始终显示：该币无卖出记录时按 0 展示（如「浮 +6 · 已落 0」），保持格式统一。
        */
       function nailCardPnlHtml(symbol, floatingUsdt) {
+        // 盈亏只给「持有」段的币显示；非持仓（纯置顶/上涨）不显示浮/已落。
+        // 与 nailDrawerSectionParts 的 held 判定同源，避免分段与内容不一致。
+        if (!nailSymbolIsHeld(symbol)) return "";
         const floatPnl =
           Number.isFinite(Number(floatingUsdt)) ? Number(floatingUsdt) : null;
         const realizedRaw = realizedPnlOf(symbol);
@@ -16344,8 +16357,8 @@
             })
             .join("");
           return `<div class="nail-pnl-group">
-            <button type="button" class="nail-pnl-group-row" data-pnl-group title="展开/收起逐笔明细">
-              <span class="nail-pnl-group-main"><b>${escapeHtml(g.label)}</b><span class="nail-pnl-group-meta">${escapeHtml(metaBits.join(" · "))}</span></span>
+            <button type="button" class="nail-pnl-group-row" data-pnl-group title="点币名跳置顶K线 · 点其余展开逐笔">
+              <span class="nail-pnl-group-main"><span class="nail-pnl-jump" data-pnl-jump="${escapeHtml(g.symbol)}" title="跳到置顶页 K 线">${escapeHtml(g.label)}</span><span class="nail-pnl-group-meta">${escapeHtml(metaBits.join(" · "))}</span></span>
               <span class="nail-pnl-group-val ${cls}">${escapeHtml(formatHoldingsPnlPlain(g.total))}</span>
             </button>
             <div class="nail-pnl-lots">${lotsHtml}</div>
@@ -38385,6 +38398,23 @@
         }
         if (event.target.id === "nailTradePnlModal") {
           setTradePnlModalOpen(false);
+          return;
+        }
+        const pnlJump = event.target.closest("[data-pnl-jump]");
+        if (pnlJump) {
+          const key = String(pnlJump.getAttribute("data-pnl-jump") || "")
+            .trim()
+            .toUpperCase();
+          setTradePnlModalOpen(false);
+          // 只跳已在钉子页的币；不在则提示，不自动加钉（避免误操作）。
+          const inNails = (Array.isArray(nailItems) ? nailItems : []).some(
+            (item) => String((item && item.symbol) || "").toUpperCase() === key,
+          );
+          if (inNails) {
+            openNailDrawerAtSymbol(key);
+          } else {
+            showToast(`${key} 未在钉子页，请先置顶后跳转`);
+          }
           return;
         }
         const pnlGroup = event.target.closest("[data-pnl-group]");
