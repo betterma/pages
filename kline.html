@@ -7399,6 +7399,69 @@
         opacity: 0.45;
         cursor: not-allowed;
       }
+      /* 置顶分栏贴行操作条：刷新 / 买入 / 卖出 / 便签 */
+      .nail-row-action-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        padding: 2px 0;
+        min-width: 0;
+      }
+      .nail-row-action-bar[hidden] {
+        display: none !important;
+      }
+      .nail-row-action-tr td {
+        padding: 2px 8px 8px;
+        border-bottom: 0.5px solid
+          color-mix(in srgb, var(--separator) 70%, transparent);
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 6%, transparent);
+      }
+      .nail-row-action-bar button {
+        border: 0.5px solid color-mix(in srgb, var(--label) 18%, transparent);
+        background: color-mix(in srgb, var(--fill) 70%, transparent);
+        color: var(--label);
+        height: 28px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .nail-row-action-bar button.is-buy {
+        border-color: transparent;
+        background: var(--accent, #2f8f6e);
+        color: #fff;
+      }
+      .nail-row-action-bar button.is-sell {
+        border-color: transparent;
+        background: #c45c5c;
+        color: #fff;
+      }
+      .nail-row-action-bar button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .nail-row-action-bar .nail-row-action-close {
+        margin-left: auto;
+        min-width: 28px;
+        padding: 0 8px;
+        font-size: 16px;
+        font-weight: 500;
+        color: var(--secondary);
+        background: transparent;
+        border-color: transparent;
+      }
+      .nail-grid > .nail-row-action-bar {
+        margin: -2px 0 10px;
+        padding: 6px 8px;
+        border-radius: 0 0 10px 10px;
+        border: 0.5px solid
+          color-mix(in srgb, var(--accent, #2f8f6e) 28%, var(--separator));
+        border-top: none;
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 6%, var(--elevated, #fff));
+      }
       /* 有买卖栏时：操作栏紧贴其上方，无空隙 */
       body.has-nail-trade-dock .card-focus-bar {
         left: 0;
@@ -11255,6 +11318,23 @@
       <span class="nail-trade-dock-sym" id="nailTradeDockSym">—</span>
       <button type="button" class="is-buy" data-nail-trade="buy">买入</button>
       <button type="button" class="is-sell" data-nail-trade="sell">卖出</button>
+    </div>
+
+    <!-- 仅置顶分栏：贴在选中行下方，顺序 刷新 / 买入 / 卖出 / 便签 -->
+    <div id="nailRowActionBar" class="nail-row-action-bar" hidden>
+      <button type="button" data-focus-action="refresh">刷新</button>
+      <button type="button" class="is-buy" data-nail-trade="buy">买入</button>
+      <button type="button" class="is-sell" data-nail-trade="sell">卖出</button>
+      <button type="button" data-focus-action="nail-note">便签</button>
+      <button
+        type="button"
+        class="nail-row-action-close"
+        data-nail-row-close
+        title="收起"
+        aria-label="收起操作条"
+      >
+        ×
+      </button>
     </div>
 
     <div id="quickTradeSheet" class="quick-trade-sheet" hidden>
@@ -26680,21 +26760,53 @@
           }
           if (Number.isFinite(livePrice) && livePrice > 0) {
             let labelColor = "";
+            let chipBg = "";
             try {
-              labelColor = getComputedStyle(document.documentElement)
-                .getPropertyValue("--secondary")
-                .trim();
+              const rootStyle = getComputedStyle(document.documentElement);
+              labelColor = rootStyle.getPropertyValue("--secondary").trim();
+              // 极浅底：优先用 elevated/fill，避免角标被 K 线干扰，又不抢视觉。
+              const elevated = rootStyle.getPropertyValue("--elevated").trim();
+              const fill = rootStyle.getPropertyValue("--fill").trim();
+              chipBg = elevated || fill || "rgba(255, 255, 255, 0.72)";
             } catch (_) {
               labelColor = "";
+              chipBg = "rgba(255, 255, 255, 0.72)";
             }
+            const text = formatPinPrice(livePrice);
             ctx.save();
             ctx.font =
               '10px -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif';
             ctx.textAlign = "left";
             ctx.textBaseline = "top";
-            ctx.globalAlpha = 0.85;
+            const tx = pad.left + 1;
+            const ty = pad.top + 1;
+            const metrics = ctx.measureText(text);
+            const tw = Math.ceil(metrics.width);
+            const th = 11;
+            const padX = 3;
+            const padY = 1;
+            ctx.globalAlpha = 0.55;
+            ctx.fillStyle = chipBg;
+            ctx.beginPath();
+            const rx = 3;
+            const x0 = tx - padX;
+            const y0 = ty - padY;
+            const x1 = tx + tw + padX;
+            const y1 = ty + th + padY;
+            ctx.moveTo(x0 + rx, y0);
+            ctx.lineTo(x1 - rx, y0);
+            ctx.quadraticCurveTo(x1, y0, x1, y0 + rx);
+            ctx.lineTo(x1, y1 - rx);
+            ctx.quadraticCurveTo(x1, y1, x1 - rx, y1);
+            ctx.lineTo(x0 + rx, y1);
+            ctx.quadraticCurveTo(x0, y1, x0, y1 - rx);
+            ctx.lineTo(x0, y0 + rx);
+            ctx.quadraticCurveTo(x0, y0, x0 + rx, y0);
+            ctx.closePath();
+            ctx.fill();
+            ctx.globalAlpha = 0.9;
             ctx.fillStyle = labelColor || "rgba(150, 158, 168, 1)";
-            ctx.fillText(formatPinPrice(livePrice), pad.left + 1, pad.top + 1);
+            ctx.fillText(text, tx, ty);
             ctx.restore();
           }
         }
@@ -28511,7 +28623,8 @@
         }
         const tradeDock = document.getElementById("nailTradeDock");
         const tradeDockSym = document.getElementById("nailTradeDockSym");
-        const showTradeDock =
+        // 置顶分栏改贴行浮条；底栏买卖条不再用于置顶选中。
+        const useNailRowBar =
           !!key &&
           scope === "nail" &&
           nailSegment === "pinned" &&
@@ -28519,17 +28632,21 @@
           !pinSelectMode &&
           !document.body.classList.contains("has-quick-trade");
         if (tradeDock) {
-          tradeDock.hidden = !showTradeDock;
-          document.body.classList.toggle("has-nail-trade-dock", showTradeDock);
+          tradeDock.hidden = true;
+          document.body.classList.remove("has-nail-trade-dock");
           if (tradeDockSym) {
             tradeDockSym.textContent = key
               ? key.replace(/USDT$/i, "")
               : "—";
           }
-          tradeDock.querySelectorAll("[data-nail-trade]").forEach((btn) => {
-            btn.disabled = !isManualTradeConfigured();
-          });
         }
+        if (useNailRowBar) {
+          bar.hidden = true;
+          document.body.classList.remove("has-card-focus");
+          mountNailRowActionBar(key);
+          return;
+        }
+        unmountNailRowActionBar();
         if (
           !key ||
           pinSelectMode ||
@@ -28552,27 +28669,98 @@
         }
       }
 
+      function unmountNailRowActionBar() {
+        const rowBar = document.getElementById("nailRowActionBar");
+        if (!rowBar) return;
+        rowBar.hidden = true;
+        const park =
+          document.getElementById("nailDrawer") || document.body;
+        if (rowBar.parentElement !== park) park.appendChild(rowBar);
+        document
+          .querySelectorAll("#nailList .nail-row-action-tr")
+          .forEach((tr) => tr.remove());
+      }
+
+      function mountNailRowActionBar(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const rowBar = document.getElementById("nailRowActionBar");
+        if (!rowBar || !key) {
+          unmountNailRowActionBar();
+          return;
+        }
+        const esc = CSS.escape ? CSS.escape(key) : key;
+        document.querySelectorAll("#nailList .nail-row-action-tr").forEach((tr) => {
+          const host = tr.closest(".nail-prow-tbody[data-nail-symbol]");
+          const hostKey = String(
+            (host && host.getAttribute("data-nail-symbol")) || "",
+          )
+            .trim()
+            .toUpperCase();
+          if (hostKey !== key) tr.remove();
+        });
+        rowBar.querySelectorAll("[data-nail-trade]").forEach((btn) => {
+          btn.disabled = !isManualTradeConfigured();
+        });
+        const tbody = document.querySelector(
+          `#nailList .nail-prow-tbody[data-nail-symbol="${esc}"]`,
+        );
+        if (tbody) {
+          let tr = tbody.querySelector(".nail-row-action-tr");
+          if (!tr) {
+            tr = document.createElement("tr");
+            tr.className = "nail-row-action-tr";
+            const td = document.createElement("td");
+            td.colSpan = 4;
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+          }
+          const td = tr.querySelector("td");
+          if (td && rowBar.parentElement !== td) td.appendChild(rowBar);
+          rowBar.hidden = false;
+          return;
+        }
+        const card = document.querySelector(
+          `#nailList .nail-grid .nail-kcard[data-nail-symbol="${esc}"]`,
+        );
+        if (card && card.parentElement) {
+          if (rowBar.previousElementSibling !== card) {
+            card.after(rowBar);
+          }
+          rowBar.hidden = false;
+          return;
+        }
+        unmountNailRowActionBar();
+      }
+
       function setFocusBarBusy(on, activeBtn, busyLabel) {
-        const bar = document.getElementById("cardFocusBar");
-        if (!bar) return;
-        bar.classList.toggle("is-busy", !!on);
-        bar.querySelectorAll("button[data-focus-action]").forEach((btn) => {
-          btn.disabled = !!on;
-          if (!on) {
-            if (btn.classList.contains("is-loading")) {
-              btn.classList.remove("is-loading");
-              if (btn.dataset.labelBefore) {
-                btn.textContent = btn.dataset.labelBefore;
-                delete btn.dataset.labelBefore;
+        const bars = [
+          document.getElementById("cardFocusBar"),
+          document.getElementById("nailRowActionBar"),
+        ].filter(Boolean);
+        if (!bars.length) return;
+        bars.forEach((bar) => {
+          bar.classList.toggle("is-busy", !!on);
+          bar.querySelectorAll("button[data-focus-action], button[data-nail-trade]").forEach((btn) => {
+            if (btn.hasAttribute("data-nail-row-close")) return;
+            btn.disabled = !!on || (btn.hasAttribute("data-nail-trade") && !isManualTradeConfigured());
+            if (!on) {
+              if (btn.classList.contains("is-loading")) {
+                btn.classList.remove("is-loading");
+                if (btn.dataset.labelBefore) {
+                  btn.textContent = btn.dataset.labelBefore;
+                  delete btn.dataset.labelBefore;
+                }
               }
+              return;
             }
-            return;
-          }
-          if (activeBtn && btn === activeBtn) {
-            btn.classList.add("is-loading");
-            btn.dataset.labelBefore = btn.textContent;
-            btn.textContent = busyLabel || "处理中";
-          }
+            if (activeBtn && btn === activeBtn) {
+              btn.classList.add("is-loading");
+              btn.dataset.labelBefore = btn.textContent;
+              btn.textContent = busyLabel || "处理中";
+            }
+          });
         });
       }
 
@@ -28707,10 +28895,19 @@
         const symbol = focusActionSymbol;
         if (!symbol) return;
         const bar = document.getElementById("cardFocusBar");
-        if (bar && bar.classList.contains("is-busy")) return;
+        const rowBar = document.getElementById("nailRowActionBar");
+        if (
+          (bar && bar.classList.contains("is-busy")) ||
+          (rowBar && rowBar.classList.contains("is-busy"))
+        ) {
+          return;
+        }
         const card = focusCardEl(symbol);
         const activeBtn =
-          bar && bar.querySelector('[data-focus-action="' + action + '"]');
+          (rowBar &&
+            !rowBar.hidden &&
+            rowBar.querySelector('[data-focus-action="' + action + '"]')) ||
+          (bar && bar.querySelector('[data-focus-action="' + action + '"]'));
         if (action === "more") {
           if (!card) {
             showToast("当前列表找不到该币卡片");
@@ -34552,6 +34749,8 @@
         const tab = document.getElementById("nailTab");
         const badge = document.getElementById("nailTabCount");
         const meta = document.getElementById("nailMeta");
+        // 重绘列表前先把贴行条挪出，避免随 innerHTML 被销毁。
+        unmountNailRowActionBar();
         syncNailRisingFilterUi();
         syncNailSortUi();
         const allItems = Array.isArray(nailItems) ? nailItems : [];
@@ -34861,7 +35060,13 @@
         );
         listEl.addEventListener("click", (event) => {
           if (nailSelectMode) return;
-          if (event.target.closest("button, a, input, label")) return;
+          if (
+            event.target.closest(
+              "button, a, input, label, .nail-row-action-bar, .nail-row-action-tr",
+            )
+          ) {
+            return;
+          }
           const card = event.target.closest(".nail-kcard[data-nail-symbol]");
           if (!card || moved) return;
           event.preventDefault();
@@ -39657,25 +39862,49 @@
           void runFocusBarAction(btn.getAttribute("data-focus-action"));
         });
       }
+      function handleNailTradeClick(btn) {
+        if (!btn || btn.disabled) return;
+        const mode =
+          btn.getAttribute("data-nail-trade") === "sell" ? "sell" : "buy";
+        const symbol = focusActionSymbol;
+        if (!symbol) {
+          showToast("请先点选置顶区的币");
+          return;
+        }
+        if (focusActionScope !== "nail" || nailSegment !== "pinned") {
+          showToast("快捷买卖仅在置顶分栏可用");
+          return;
+        }
+        btn.disabled = true;
+        void openQuickTradeSheet(symbol, mode).finally(() => {
+          applyFocusActionChrome();
+        });
+      }
       const nailTradeDock = document.getElementById("nailTradeDock");
       if (nailTradeDock) {
         nailTradeDock.addEventListener("click", (event) => {
-          const btn = event.target.closest("[data-nail-trade]");
-          if (!btn || btn.disabled) return;
-          const mode = btn.getAttribute("data-nail-trade") === "sell" ? "sell" : "buy";
-          const symbol = focusActionSymbol;
-          if (!symbol) {
-            showToast("请先点选置顶区的币");
+          handleNailTradeClick(event.target.closest("[data-nail-trade]"));
+        });
+      }
+      const nailRowActionBar = document.getElementById("nailRowActionBar");
+      if (nailRowActionBar) {
+        nailRowActionBar.addEventListener("click", (event) => {
+          if (event.target.closest("[data-nail-row-close]")) {
+            event.preventDefault();
+            setFocusActionSymbol(null);
             return;
           }
-          if (focusActionScope !== "nail" || nailSegment !== "pinned") {
-            showToast("快捷买卖仅在置顶分栏可用");
+          const tradeBtn = event.target.closest("[data-nail-trade]");
+          if (tradeBtn) {
+            event.preventDefault();
+            handleNailTradeClick(tradeBtn);
             return;
           }
-          btn.disabled = true;
-          void openQuickTradeSheet(symbol, mode).finally(() => {
-            applyFocusActionChrome();
-          });
+          const actionBtn = event.target.closest("[data-focus-action]");
+          if (actionBtn) {
+            event.preventDefault();
+            void runFocusBarAction(actionBtn.getAttribute("data-focus-action"));
+          }
         });
       }
       const quickTradeSheet = document.getElementById("quickTradeSheet");
