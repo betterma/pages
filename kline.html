@@ -5958,8 +5958,13 @@
         gap: 8px;
       }
       /* 置顶列表模式：真正的 table；表头 币|K线|24h|操作，第二列起上下打通 */
+      #nailList:has(.nail-prow-table) {
+        overflow-x: auto;
+        touch-action: pan-x pan-y;
+      }
       .nail-prow-table {
         width: 100%;
+        min-width: 340px;
         border-collapse: collapse;
         font-size: 12px;
         font-variant-numeric: tabular-nums;
@@ -6029,10 +6034,6 @@
       }
       .nail-prow-info-pnl { font-variant-numeric: tabular-nums; }
       .nail-prow-table .nail-check { vertical-align: middle; margin-right: 2px; }
-      @media (max-width: 720px) {
-        .nail-prow-ops { display: none; }
-        .nail-prow-table thead th:nth-child(4) { display: none; }
-      }
       .nail-section-label {
         grid-column: 1 / -1;
         position: sticky;
