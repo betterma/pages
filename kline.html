@@ -5270,7 +5270,10 @@
       /* 通知列表模式：雷达式两行；币名独立行，K线168x62+标签在下行 */
       .nail-notice-batch-list.is-list-view { grid-template-columns: 1fr; gap: 6px; }
       .nail-notice-row.nail-notice-card {
-        display: block;
+        display: grid;
+        grid-template-columns: minmax(56px, auto) 176px minmax(52px, 0.7fr);
+        align-items: start;
+        gap: 8px;
         padding: 6px 8px;
         border: 0.5px solid var(--separator);
         border-radius: 8px;
@@ -5285,20 +5288,15 @@
       .nail-notice-row > .nail-notice-check { position: absolute; left: -2px; top: 2px; }
       .nail-notice-row-name {
         display: flex;
-        align-items: center;
-        gap: 6px;
-        padding-bottom: 4px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
         min-width: 0;
+        padding-top: 1px;
       }
       .nail-notice-name { padding: 0; font-weight: 600; text-align: left; }
-      .nail-notice-row-name .nail-notice-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .nail-notice-row-time { margin-left: auto; color: var(--secondary); font-size: 10.5px; }
-      .nail-notice-row-grid {
-        display: grid;
-        grid-template-columns: 176px minmax(52px, 0.7fr);
-        align-items: start;
-        gap: 8px;
-      }
+      .nail-notice-row-name .nail-notice-name { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .nail-notice-row-time { color: var(--secondary); font-size: 10.5px; }
       .nail-notice-row-kline-cell { min-width: 0; }
       .nail-notice-row canvas[data-notice-chart] {
         display: block;
@@ -5323,7 +5321,7 @@
       .nail-notice-row-chg.is-up { color: var(--up); }
       .nail-notice-row-chg.is-down { color: var(--down); }
       @media (max-width: 720px) {
-        .nail-notice-row-grid { grid-template-columns: 176px minmax(44px, 0.7fr); }
+        .nail-notice-row.nail-notice-card { grid-template-columns: minmax(48px, auto) 176px minmax(44px, 0.7fr); }
       }
       /* 第一次进通知的卡（区别于被新命中顶上来的）：淡绿底 + 绿边。 */
       .nail-notice-card.is-first {
@@ -5961,7 +5959,10 @@
       /* 置顶列表模式：雷达式两行；币名独立行，K线168x62+信息下行 */
       .nail-prow-list { display: grid; gap: 6px; }
       .nail-prow.nail-kcard {
-        display: block;
+        display: grid;
+        grid-template-columns: minmax(56px, auto) 176px minmax(52px, 0.7fr) auto;
+        align-items: start;
+        gap: 8px;
         padding: 6px 8px;
         border: 0.5px solid var(--separator);
         border-radius: 10px;
@@ -5974,27 +5975,24 @@
       .nail-prow.is-selected { outline: 2px solid var(--accent); }
       .nail-prow.is-exited { opacity: 0.7; }
       .nail-prow > .nail-check { position: absolute; left: -2px; top: 2px; }
-      .nail-prow-name-row {
+      .nail-prow-name {
         display: flex;
-        align-items: center;
-        gap: 6px;
-        padding-bottom: 4px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 3px;
         min-width: 0;
+        padding-top: 1px;
       }
-      .nail-prow-name-row .nail-name {
+      .nail-prow-name .nail-name {
         font-weight: 600;
         min-width: 0;
+        max-width: 100%;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        padding: 0;
       }
-      .nail-prow-name-row .nail-pin { padding: 1px 6px; }
-      .nail-prow-grid {
-        display: grid;
-        grid-template-columns: 176px minmax(52px, 0.7fr) auto;
-        align-items: start;
-        gap: 8px;
-      }
+      .nail-prow-name .nail-pin { padding: 1px 6px; }
       .nail-prow-kline-cell { min-width: 0; }
       .nail-prow-kline-cell canvas.nail-kline {
         display: block;
@@ -6025,7 +6023,8 @@
       .nail-prow-ops { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
       .nail-prow-ops button { padding: 2px 6px; font-size: 11px; }
       @media (max-width: 720px) {
-        .nail-prow-grid { grid-template-columns: 176px minmax(44px, 0.7fr) auto; }
+        .nail-prow.nail-kcard { grid-template-columns: minmax(48px, auto) 176px minmax(44px, 0.7fr); }
+        .nail-prow-ops { display: none; }
       }
       .nail-section-label {
         grid-column: 1 / -1;
@@ -29592,13 +29591,11 @@
           `<button type="button" class="nail-notice-name" data-notice-jump="${symbol}">${label}</button>`,
           `<span class="nail-notice-row-time">${escapeHtml(formatNoticeTime(item.at))}</span>`,
           `</div>`,
-          `<div class="nail-notice-row-grid">`,
           `<div class="nail-notice-row-kline-cell">`,
-          `<canvas data-notice-chart="${symbol}" data-notice-at="${Number(item.at) || 0}" data-notice-first="${firstSeenAt}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${notePrice > 0 ? notePrice : 0}" data-notice-pin-price="${pinPrice > 0 ? pinPrice : 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
+          `<canvas data-notice-chart="${symbol}" data-price-label="1" data-notice-at="${Number(item.at) || 0}" data-notice-first="${firstSeenAt}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${notePrice > 0 ? notePrice : 0}" data-notice-pin-price="${pinPrice > 0 ? pinPrice : 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
           `<div class="nail-notice-row-tags">${tagBits.join("")}</div>`,
           `</div>`,
           `<div class="nail-notice-row-chg ${chCls}">${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</div>`,
-          `</div>`,
           `</div>`,
         ].join("");
       }
@@ -30840,7 +30837,11 @@
                     }
                   : null,
                 null,
-                nailCalmKlineOptions(),
+                nailCalmKlineOptions(
+                  canvas.getAttribute("data-price-label") === "1"
+                    ? { symbol, priceLabel: true }
+                    : undefined,
+                ),
               );
             } catch (error) {
               console.warn("notice chart failed", symbol, error);
@@ -34458,15 +34459,13 @@
             : `<div class="nail-prow-info" data-nail-pnl-slot="${symbol}" data-nail-note-display="${symbol}"></div>`;
           return [
             `<div class="nail-kcard nail-prow${selected}${exited ? " is-exited" : ""}" data-nail-symbol="${symbol}">`,
-            `<div class="nail-prow-name-row">${nameRow}</div>`,
-            `<div class="nail-prow-grid">`,
+            `<div class="nail-prow-name">${nameRow}</div>`,
             `<div class="nail-prow-kline-cell">`,
-            `<canvas class="nail-kline" data-kline="${symbol}"></canvas>`,
+            `<canvas class="nail-kline" data-kline="${symbol}" data-price-label="1"></canvas>`,
             infoHtml,
             `</div>`,
             `<div class="nail-prow-chg ${chCls}">${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</div>`,
             nailSelectMode ? "" : `<div class="nail-prow-ops"><button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button><button type="button" class="nail-del" data-nail-del="${symbol}">删</button></div>`,
-            `</div>`,
             `</div>`,
           ].join("");
         };
@@ -35281,7 +35280,11 @@
               notes,
               alertMark,
               null,
-              nailCalmKlineOptions(),
+              nailCalmKlineOptions(
+                canvas.getAttribute("data-price-label") === "1"
+                  ? { symbol, priceLabel: true }
+                  : undefined,
+              ),
             );
           } catch (error) {
             if (error && error.name === "AbortError") return;
