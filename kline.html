@@ -35939,6 +35939,12 @@
         );
 
         const finish = (event) => {
+          // 拖拽中瞬间切到列表：up 也判一次，避免误 commit 顺序
+          if (isListTableMode()) {
+            clearPress();
+            if (dragging) endDrag(false);
+            return;
+          }
           if (dragging) {
             if (event && event.cancelable) event.preventDefault();
             endDrag(moved || dragging.to !== dragging.from);
@@ -35947,7 +35953,14 @@
           clearPress();
         };
         listEl.addEventListener("pointerup", finish);
-        listEl.addEventListener("pointercancel", () => endDrag(false));
+        listEl.addEventListener("pointercancel", () => {
+          if (isListTableMode()) {
+            clearPress();
+            if (dragging) endDrag(false);
+            return;
+          }
+          endDrag(false);
+        });
         listEl.addEventListener(
           "click",
           (event) => {
