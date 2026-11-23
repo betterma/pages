@@ -5295,7 +5295,7 @@
       .nail-notice-row-time { margin-left: auto; color: var(--secondary); font-size: 10.5px; }
       .nail-notice-row-grid {
         display: grid;
-        grid-template-columns: 176px minmax(52px, 0.7fr) auto;
+        grid-template-columns: 176px minmax(52px, 0.7fr);
         align-items: start;
         gap: 8px;
       }
@@ -5322,9 +5322,8 @@
       .nail-notice-row-chg { font-variant-numeric: tabular-nums; font-size: 10.5px; text-align: right; padding-top: 2px; }
       .nail-notice-row-chg.is-up { color: var(--up); }
       .nail-notice-row-chg.is-down { color: var(--down); }
-      .nail-notice-row-ops button { padding: 2px 6px; font-size: 11px; }
       @media (max-width: 720px) {
-        .nail-notice-row-grid { grid-template-columns: 176px minmax(44px, 0.7fr) auto; }
+        .nail-notice-row-grid { grid-template-columns: 176px minmax(44px, 0.7fr); }
       }
       /* 第一次进通知的卡（区别于被新命中顶上来的）：淡绿底 + 绿边。 */
       .nail-notice-card.is-first {
@@ -29599,7 +29598,6 @@
           `<div class="nail-notice-row-tags">${tagBits.join("")}</div>`,
           `</div>`,
           `<div class="nail-notice-row-chg ${chCls}">${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</div>`,
-          `<div class="nail-notice-row-ops"><button type="button" class="nail-notice-act" data-notice-jump="${symbol}" title="跳到该币 K 线">跳</button></div>`,
           `</div>`,
           `</div>`,
         ].join("");
