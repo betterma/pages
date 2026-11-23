@@ -33422,7 +33422,7 @@
               pinChangeEl.remove();
             }
           });
-        // 列表模式：无 .nail-price 锚点，单独刷 24h 列与信息行盯幅。
+        // 列表模式：无 .nail-price 锚点，刷 24h / 盯幅；现价走 K 线末柱 + 左上角标。
         document
           .querySelectorAll("#nailList .nail-prow-tbody[data-nail-symbol]")
           .forEach((tbody) => {
@@ -33464,8 +33464,62 @@
               pinEl.remove();
             }
           });
+        refreshNailListLiveKlines();
         syncNailHeldPnlUi();
         if (nailSortMode === "change24h") applyNailListOrder();
+      }
+
+      /** 列表 K 线：用 ticker 修补当前柱并重画（含左上角现价角标），不重新拉 K 线。 */
+      function refreshNailListLiveKlines() {
+        document
+          .querySelectorAll(
+            '#nailList canvas.nail-kline[data-price-label="1"]',
+          )
+          .forEach((canvas) => {
+            const meta = canvas.__klineMeta;
+            if (!meta || !Array.isArray(meta.candles) || !meta.candles.length) {
+              return;
+            }
+            const symbol = String(canvas.getAttribute("data-kline") || "")
+              .trim()
+              .toUpperCase();
+            if (!symbol) return;
+            const live = Number(marketMap[symbol] && marketMap[symbol].price);
+            const candles = meta.candles.slice();
+            if (Number.isFinite(live) && live > 0) {
+              const prev = candles[candles.length - 1] || {};
+              const prevHigh = Number(prev.high);
+              const prevLow = Number(prev.low);
+              candles[candles.length - 1] = {
+                ...prev,
+                close: live,
+                high: Math.max(
+                  Number.isFinite(prevHigh) && prevHigh > 0 ? prevHigh : live,
+                  live,
+                ),
+                low: Math.min(
+                  Number.isFinite(prevLow) && prevLow > 0 ? prevLow : live,
+                  live,
+                ),
+              };
+              meta.candles = candles;
+            }
+            const pin = pinItemBySymbol(symbol);
+            try {
+              drawKline(
+                canvas,
+                candles,
+                pin ? pin.pinPrice : null,
+                pin ? pin.pinnedAt : null,
+                notesMarksForSymbol(symbol),
+                nailAlertMarkForSymbol(symbol),
+                null,
+                nailCalmKlineOptions({ symbol, priceLabel: true }),
+              );
+            } catch (_) {
+              /* ignore redraw blips */
+            }
+          });
       }
 
       /** 置顶列表：持有段合计 + 各卡便签区盈亏随现价刷新。 */
@@ -34656,7 +34710,7 @@
             nailSelectMode ? "" : `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "置顶选项" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
             `<button type="button" class="nail-name" data-nail-copy-name="${label}" data-copy="${label}" title="点击复制名称">${label}${exited ? '<span class="nail-exit-tag">退出</span>' : ""}</button>`,
           ].join("");
-          // 打通的信息行：盈亏在前，其次盯幅、便签（一行显示）
+          // 打通的信息行：盈亏在前，其次盯幅、便签（现价只走 K 线角标）
           const infoBits = [];
           if (pnlInner) infoBits.push(`<span class="nail-prow-info-pnl" data-nail-pnl="${symbol}" title="浮=持仓浮动盈亏、已落=卖出已实现盈亏">${pnlInner}</span>`);
           if (pinItem) infoBits.push(`<span class="nail-prow-info-pin">盯幅 ${escapeHtml(formatPercent(pinChangePercent(pinItem)))}</span>`);
