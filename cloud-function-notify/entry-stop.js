@@ -167,6 +167,7 @@ function computeWeightedEntryPrice(prevPrice, prevQty, fillPrice, fillQty) {
 /**
  * 买入成交后：加 open lot（或无 qty 时覆盖成单笔），清空 stopCancel，种固定止损。
  * source=buy-fill 且提供 fillQty 时走 addBuyLot；页面手填 P 走 kline 自己的 patch。
+ * fillQty 应为钱包净到账量（已扣标的币手续费）；由 buy-tasks.resolveBuyNetQty 或页面 order.netQty 传入。
  */
 async function applyEntryPriceAndSeedStops(options) {
   const opts = options || {};

@@ -102,7 +102,17 @@ function parseBody(event) {
 function summarize(order, side) {
   const qty = binance.filledQtyFromOrder(order);
   const avg = binance.avgPriceFromOrder(order);
-  const gross = Number(order.cummulativeQuoteQty) || (qty && avg ? qty * avg : 0);
+  const quoteGross =
+    Number(order.cummulativeQuoteQty) || (qty && avg ? qty * avg : 0);
+  const base = String(order.symbol || '')
+    .trim()
+    .toUpperCase()
+    .replace(/USDT$/i, '');
+  // 买入：lot 用净到账量（扣标的币手续费）；卖出仍用毛成交量销账
+  const netQty =
+    String(side || '').toUpperCase() === 'BUY'
+      ? binance.netFillQtyFromOrder(order, base)
+      : qty;
   return {
     orderId: order.orderId,
     symbol: order.symbol,
@@ -111,9 +121,10 @@ function summarize(order, side) {
     status: order.status,
     transactTime: order.transactTime,
     executedQty: qty,
-    cummulativeQuoteQty: gross || null,
+    netQty: netQty > 0 ? netQty : qty,
+    cummulativeQuoteQty: quoteGross || null,
     avgPrice: avg,
-    fee: gross * FEE_RATE,
+    fee: quoteGross * FEE_RATE,
   };
 }
 

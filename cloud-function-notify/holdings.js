@@ -18,6 +18,7 @@ const { dropAllSymbolTradeTasks } = require('./entry-stop');
 const {
   cloneLotsMap,
   migrateEntryLotsFromPrices,
+  reconcileLotsToBalance,
   lotsVwap,
 } = require('./trade-pnl');
 
@@ -377,13 +378,21 @@ function normalizeState(raw) {
       at: Number(row.at) || 0,
     };
   });
-  const entryPrices = normalizeEntryPrices(data.entryPrices);
+  let entryPrices = normalizeEntryPrices(data.entryPrices);
   let entryLots = cloneLotsMap(data.entryLots);
   entryLots = migrateEntryLotsFromPrices({
     entryLots,
     entryPrices,
     balances,
   });
+  // lots 多于余额：FIFO 裁幽灵数量（只裁不补）
+  const reconciled = reconcileLotsToBalance(
+    entryLots,
+    balances,
+    entryPrices,
+  );
+  entryLots = reconciled.entryLots;
+  entryPrices = reconciled.entryPrices;
   Object.keys(entryLots).forEach((symbol) => {
     const vwap = lotsVwap(entryLots[symbol]);
     if (!(vwap > 0)) return;

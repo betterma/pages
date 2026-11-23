@@ -40,10 +40,25 @@ async function resolvePrevQtyAfterFill(symbol, fillQty, context) {
   }
 }
 
+/** 净量记 lot 时用 quote/net 作价，避免净量×毛均价少算成本。 */
+function lotPriceFromFill(task, order) {
+  const netQty = Number(task && task.lastQty);
+  const quote = Number(
+    order && order.cummulativeQuoteQty != null
+      ? order.cummulativeQuoteQty
+      : task && task.lastQuote,
+  );
+  if (netQty > 0 && quote > 0) return quote / netQty;
+  const avg = spot.fillsAvgPrice(order);
+  if (avg > 0) return avg;
+  const px = Number(task && task.lastPrice);
+  return px > 0 ? px : null;
+}
+
 async function seedStopsAfterBuyFill(task, now, context) {
-  const price = Number(task && task.lastPrice);
   const fillQty = Number(task && task.lastQty);
   const symbol = task && task.symbol;
+  const price = Number(task && task.lastPrice);
   if (!symbol || !(price > 0)) return;
   try {
     const prevQty = await resolvePrevQtyAfterFill(symbol, fillQty, context);
@@ -135,8 +150,14 @@ async function pollOpenOrder(task, context) {
     task.openOrderId = null;
     task.skipReason = null;
     task.lastError = null;
-    task.lastQty = Number(order.executedQty) || task.lastQty;
-    task.lastPrice = spot.fillsAvgPrice(order) || Number(order.price) || task.lastPrice;
+    // GET /order 通常无 fills：resolveBuyNetQty 会用 myTrades 扣标的币手续费
+    const netQty = await spot.resolveBuyNetQty(task.symbol, order, context);
+    task.lastQty = netQty > 0 ? netQty : Number(order.executedQty) || task.lastQty;
+    task.lastQuote = Number(order.cummulativeQuoteQty) || task.lastQuote || null;
+    task.lastPrice =
+      lotPriceFromFill(task, order) ||
+      Number(order.price) ||
+      task.lastPrice;
     task._removeAfterFill = true;
     try {
       await appendTradeActionLog(
@@ -266,8 +287,10 @@ async function planAndMaybePlace(task, context, live) {
     task.openOrderId = null;
     task.skipReason = null;
     task.lastError = null;
-    task.lastQty = Number(order.executedQty) || qty;
-    task.lastPrice = spot.fillsAvgPrice(order) || price;
+    const netQty = await spot.resolveBuyNetQty(task.symbol, order, context);
+    task.lastQty = netQty > 0 ? netQty : Number(order.executedQty) || qty;
+    task.lastQuote = Number(order.cummulativeQuoteQty) || null;
+    task.lastPrice = lotPriceFromFill(task, order) || price;
     task._removeAfterFill = true;
     try {
       await appendTradeActionLog(

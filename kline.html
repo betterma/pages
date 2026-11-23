@@ -11771,7 +11771,7 @@
     </div>
 
     <script src="./github-token-vault.js"></script>
-    <script src="./watch-favorites.js?v=20261122lots"></script>
+    <script src="./watch-favorites.js?v=20261124recon"></script>
     <script src="./kline-mode.js"></script>
     <script>
       "use strict";
@@ -19478,22 +19478,28 @@
             quote,
           });
           const order = (data && data.order) || {};
-          const avg =
-            Number(order.avgPrice) ||
-            (Number(order.cummulativeQuoteQty) > 0 &&
-            Number(order.executedQty) > 0
-              ? Number(order.cummulativeQuoteQty) / Number(order.executedQty)
-              : NaN);
-          if (!(avg > 0)) {
+          // 优先 netQty（扣标的币手续费）；lot 价用 quote/net，避免净量×毛均价少算成本
+          const filledQty =
+            Number(order.netQty) > 0
+              ? Number(order.netQty)
+              : Number(order.executedQty) || 0;
+          const quoteSpent = Number(order.cummulativeQuoteQty);
+          const lotPrice =
+            filledQty > 0 && quoteSpent > 0
+              ? quoteSpent / filledQty
+              : Number(order.avgPrice) ||
+                (Number(order.executedQty) > 0 && quoteSpent > 0
+                  ? quoteSpent / Number(order.executedQty)
+                  : NaN);
+          if (!(lotPrice > 0)) {
             showTradeToast("已下单但均价缺失，请手动核对成本");
             await reloadNailHoldings({ silent: true });
             return false;
           }
-          const filledQty = Number(order.executedQty) || 0;
-          await applyMarketBuyCostAndStops(key, avg, filledQty);
+          await applyMarketBuyCostAndStops(key, lotPrice, filledQty);
           await reloadNailHoldings({ silent: true });
           showTradeToast(
-            `${asset} 现价买入成交 · 成本 ${formatHoldingsPriceInput(avg)} · 已重挂止损`,
+            `${asset} 现价买入成交 · 成本(含手续费) ${formatHoldingsPriceInput(lotPrice)} · 已重挂止损`,
           );
           return true;
         } catch (error) {
@@ -20310,16 +20316,21 @@
             quote,
           });
           const order = (data && data.order) || {};
-          const avg =
-            Number(order.avgPrice) ||
-            (Number(order.cummulativeQuoteQty) > 0 &&
-            Number(order.executedQty) > 0
-              ? Number(order.cummulativeQuoteQty) / Number(order.executedQty)
-              : NaN);
+          const filledQty =
+            Number(order.netQty) > 0
+              ? Number(order.netQty)
+              : Number(order.executedQty) || 0;
+          const quoteSpent = Number(order.cummulativeQuoteQty);
+          const lotPrice =
+            filledQty > 0 && quoteSpent > 0
+              ? quoteSpent / filledQty
+              : Number(order.avgPrice) ||
+                (Number(order.executedQty) > 0 && quoteSpent > 0
+                  ? quoteSpent / Number(order.executedQty)
+                  : NaN);
           setQuickTradeBusy(true, "同步中…");
-          if (avg > 0) {
-            const filledQty = Number(order.executedQty) || 0;
-            await applyMarketBuyCostAndStops(st.symbol, avg, filledQty);
+          if (lotPrice > 0) {
+            await applyMarketBuyCostAndStops(st.symbol, lotPrice, filledQty);
           }
           if (isManualTradeConfigured()) {
             try {
@@ -20342,9 +20353,9 @@
           if (typeof syncNailHeldPnlUi === "function") syncNailHeldPnlUi();
           if (typeof renderNailHoldList === "function") renderNailHoldList();
           closeQuickTradeSheet();
-          if (avg > 0) {
+          if (lotPrice > 0) {
             showTradeToast(
-              `${asset} 现价买入成交 · 成本 ${formatHoldingsPriceInput(avg)} · 已重挂止损`,
+              `${asset} 现价买入成交 · 成本(含手续费) ${formatHoldingsPriceInput(lotPrice)} · 已重挂止损`,
             );
           } else {
             showTradeToast("已下单但均价缺失，请手动核对成本");

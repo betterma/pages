@@ -20,13 +20,54 @@ const SELL_TASKS_PATH = process.env.SELL_TASKS_PATH || 'watch-sell-tasks.json';
 const HOLDINGS_PATH = process.env.HOLDINGS_PATH || 'watch-holdings.json';
 
 /**
+ * 成交后先 FIFO 销账，再写 action-log。
+ * 必须检查 recordSellFillFifo 返回值（失败用 return null，try/catch 接不住）。
+ */
+async function afterSellFilled(task) {
+  let fifo = null;
+  try {
+    fifo = await recordSellFillFifo(task);
+  } catch (error) {
+    console.warn('sell fill fifo failed', error && error.message);
+    fifo = null;
+  }
+  if (!fifo || !fifo.ok) {
+    task.fifoFailed = true;
+    task.fifoFailReason = (fifo && fifo.reason) || 'fifo-null';
+    console.warn(
+      'sell fifoFailed',
+      JSON.stringify({
+        symbol: task.symbol,
+        reason: task.fifoFailReason,
+        qty: task.lastQty,
+        price: task.lastPrice,
+      }),
+    );
+  } else {
+    task.fifoFailed = false;
+    task.fifoFailReason = null;
+  }
+  try {
+    await appendTradeActionLog(
+      'sell',
+      task.symbol,
+      task.lastPrice,
+      task.lastQty,
+    );
+  } catch (error) {
+    console.warn('sell fill log failed', error && error.message);
+  }
+  return fifo;
+}
+
+/**
  * 限价/止损成交后：FIFO 扣 lots，追加 watch-trade-pnl。
  */
 async function recordSellFillFifo(task) {
   const symbol = normalizeSymbol(task && task.symbol);
   const qty = Number(task && task.lastQty);
   const sellPrice = Number(task && task.lastPrice);
-  if (!symbol || !(qty > 0) || !(sellPrice > 0)) return null;
+  if (!symbol || !(qty > 0) || !(sellPrice > 0)) return { ok: false, reason: 'bad-args' };
   const isStop = String(task.kind || '') === 'stop';
   const source = isStop ? 'stop' : 'limit-sell';
   const at = Date.now();
@@ -37,7 +78,7 @@ async function recordSellFillFifo(task) {
     holdingsFile = await loadJson(HOLDINGS_PATH);
   } catch (error) {
     console.warn('sell fifo holdings load failed', error && error.message);
-    return null;
+    return { ok: false, reason: 'holdings-load' };
   }
   let holdings =
     holdingsFile.data && typeof holdingsFile.data === 'object'
@@ -70,7 +111,7 @@ async function recordSellFillFifo(task) {
     at,
   });
   const realized = (consumed && consumed.realizedEntries) || [];
-  if (!realized.length) return null;
+  if (!realized.length) return { ok: false, reason: 'no-realized' };
   try {
     await saveJson(
       HOLDINGS_PATH,
@@ -80,7 +121,7 @@ async function recordSellFillFifo(task) {
     );
   } catch (error) {
     console.warn('sell fifo holdings save failed', error && error.message);
-    return null;
+    return { ok: false, reason: 'holdings-save' };
   }
 
   let pnlFile;
@@ -93,6 +134,7 @@ async function recordSellFillFifo(task) {
   const nextEntries = base.entries.concat(realized);
   const nextState = {
     entries: nextEntries,
+    pending: Array.isArray(base.pending) ? base.pending : [],
     updatedAt: at,
   };
   try {
@@ -104,14 +146,60 @@ async function recordSellFillFifo(task) {
     );
   } catch (error) {
     console.warn('sell fifo trade-pnl save failed', error && error.message);
-    return null;
+    // lots 已扣、流水未落：写入 pending 供重试/审计（不自动改历史 entries）
+    let pendingFile;
+    try {
+      pendingFile = await loadJson(TRADE_PNL_PATH);
+    } catch (_) {
+      pendingFile = {
+        data: { entries: [], pending: [], updatedAt: 0 },
+        sha: null,
+      };
+    }
+    try {
+      const pendingBase = normalizeTradePnlState(pendingFile.data);
+      const pendingRows = realized.map((row) => ({
+        ...row,
+        pendingAt: at,
+        pendingReason: 'pnl-save-failed',
+      }));
+      const pendingState = {
+        entries: pendingBase.entries,
+        pending: (pendingBase.pending || []).concat(pendingRows),
+        updatedAt: at,
+      };
+      await saveJson(
+        TRADE_PNL_PATH,
+        pendingState,
+        pendingFile.sha,
+        `Pending realized ${symbol}`,
+      );
+      return {
+        ok: false,
+        reason: 'pnl-save-failed-pending',
+        pending: true,
+        pieces: realized.length,
+        source,
+      };
+    } catch (pendingErr) {
+      console.warn(
+        'sell fifo pending save failed',
+        pendingErr && pendingErr.message,
+      );
+      return {
+        ok: false,
+        reason: 'pnl-save-failed',
+        pieces: realized.length,
+        source,
+      };
+    }
   }
   const total = realized.reduce((sum, row) => sum + Number(row.pnl), 0);
   console.log(
     'sell fifo pnl',
     JSON.stringify({ symbol, source, pieces: realized.length, total }),
   );
-  return { total, pieces: realized.length, source };
+  return { ok: true, total, pieces: realized.length, source };
 }
 
 function baseAssetOf(symbol) {
@@ -238,21 +326,7 @@ async function pollOpenOrder(task, context) {
     task.lastQty = Number(order.executedQty) || task.lastQty;
     task.lastPrice = spot.fillAvgPrice(order) || Number(order.price) || task.lastPrice;
     task._removeAfterFill = true;
-    try {
-      await appendTradeActionLog(
-        'sell',
-        task.symbol,
-        task.lastPrice,
-        task.lastQty,
-      );
-    } catch (error) {
-      console.warn('sell fill log failed', error && error.message);
-    }
-    try {
-      await recordSellFillFifo(task);
-    } catch (error) {
-      console.warn('sell fill fifo failed', error && error.message);
-    }
+    await afterSellFilled(task);
     return 'filled';
   }
   if (status === 'CANCELED' || status === 'REJECTED' || status === 'EXPIRED') {
@@ -356,21 +430,7 @@ async function planAndMaybePlace(task, context, live) {
       task.skipReason = null;
       task.lastError = null;
       task._removeAfterFill = true;
-      try {
-        await appendTradeActionLog(
-          'sell',
-          task.symbol,
-          task.lastPrice,
-          task.lastQty,
-        );
-      } catch (error) {
-        console.warn('sell fill log failed', error && error.message);
-      }
-      try {
-        await recordSellFillFifo(task);
-      } catch (error) {
-        console.warn('sell fill fifo failed', error && error.message);
-      }
+      await afterSellFilled(task);
       return 'filled';
     }
     task.status = 'order_open';
@@ -447,21 +507,7 @@ async function planAndMaybePlace(task, context, live) {
     task.lastQty = Number(order.executedQty) || qty;
     task.lastPrice = spot.fillAvgPrice(order) || price;
     task._removeAfterFill = true;
-    try {
-      await appendTradeActionLog(
-        'sell',
-        task.symbol,
-        task.lastPrice,
-        task.lastQty,
-      );
-    } catch (error) {
-      console.warn('sell fill log failed', error && error.message);
-    }
-    try {
-      await recordSellFillFifo(task);
-    } catch (error) {
-      console.warn('sell fill fifo failed', error && error.message);
-    }
+    await afterSellFilled(task);
     return 'filled';
   }
   task.status = 'order_open';

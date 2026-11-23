@@ -277,6 +277,8 @@ async function marketBuyQuote(symbol, quoteOrderQty) {
     side: 'BUY',
     type: 'MARKET',
     quoteOrderQty: Number(quoteOrderQty).toFixed(2),
+    // 与 notify/binance-spot 对齐：显式 FULL，保证 fills 可用于 netQty（默认亦为 FULL）
+    newOrderRespType: 'FULL',
   });
 }
 
@@ -304,6 +306,30 @@ function filledQtyFromOrder(order) {
   return 0;
 }
 
+/**
+ * 买入到账净量：executedQty − 以标的币扣除的手续费。
+ * 手续费用 BNB/USDT 时净量=毛量。无 fills 时退回毛量。
+ */
+function netFillQtyFromOrder(order, baseAsset) {
+  const gross = filledQtyFromOrder(order);
+  if (!(gross > 0)) return 0;
+  const base = String(baseAsset || '')
+    .trim()
+    .toUpperCase();
+  if (!base || !Array.isArray(order && order.fills) || !order.fills.length) {
+    return gross;
+  }
+  let feeBase = 0;
+  order.fills.forEach((fill) => {
+    if (!fill || typeof fill !== 'object') return;
+    if (String(fill.commissionAsset || '').toUpperCase() !== base) return;
+    feeBase += Number(fill.commission) || 0;
+  });
+  if (!(feeBase > 0)) return gross;
+  const net = gross - feeBase;
+  return net > 0 ? net : gross;
+}
+
 function avgPriceFromOrder(order) {
   const qty = filledQtyFromOrder(order);
   if (!qty) return null;
@@ -329,6 +355,7 @@ module.exports = {
   marketBuyQuote,
   marketSellQty,
   filledQtyFromOrder,
+  netFillQtyFromOrder,
   avgPriceFromOrder,
   floorToStep,
   secretKindOf,

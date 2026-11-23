@@ -3014,7 +3014,31 @@
   }
 
   function emptyTradePnl() {
-    return { entries: [], updatedAt: 0 };
+    return { entries: [], pending: [], updatedAt: 0 };
+  }
+
+  function normalizeTradePnlRow(row) {
+    if (!row || typeof row !== "object") return null;
+    const symbol = normalizeHoldingsSymbol(row.symbol);
+    if (!symbol || symbol === "USDT") return null;
+    const pnl = Number(row.pnl);
+    if (!Number.isFinite(pnl)) return null;
+    const at = Number(row.at);
+    const id = String(row.id || `${symbol}:${at}:${pnl}`);
+    return {
+      id,
+      symbol,
+      label: String(row.label || symbol.replace(/USDT$/i, "")),
+      side: String(row.side || "sell"),
+      quantity: Number(row.quantity) || 0,
+      buyPrice: Number(row.buyPrice) || 0,
+      sellPrice: Number(row.sellPrice) || 0,
+      fee: Number(row.fee) || 0,
+      pnl,
+      at: Number.isFinite(at) && at > 0 ? at : 0,
+      source: String(row.source || "manual"),
+      ...(row.lotId ? { lotId: String(row.lotId) } : {}),
+    };
   }
 
   function normalizeTradePnl(raw) {
@@ -3022,32 +3046,26 @@
     const seen = new Set();
     const entries = [];
     (Array.isArray(data.entries) ? data.entries : []).forEach((row) => {
-      if (!row || typeof row !== "object") return;
-      const symbol = normalizeHoldingsSymbol(row.symbol);
-      if (!symbol || symbol === "USDT") return;
-      const pnl = Number(row.pnl);
-      if (!Number.isFinite(pnl)) return;
-      const at = Number(row.at);
-      const id = String(row.id || `${symbol}:${at}:${pnl}`);
-      if (seen.has(id)) return;
-      seen.add(id);
-      entries.push({
-        id,
-        symbol,
-        label: String(row.label || symbol.replace(/USDT$/i, "")),
-        side: String(row.side || "sell"),
-        quantity: Number(row.quantity) || 0,
-        buyPrice: Number(row.buyPrice) || 0,
-        sellPrice: Number(row.sellPrice) || 0,
-        fee: Number(row.fee) || 0,
-        pnl,
-        at: Number.isFinite(at) && at > 0 ? at : 0,
-        source: String(row.source || "manual"),
-        ...(row.lotId ? { lotId: String(row.lotId) } : {}),
-      });
+      const next = normalizeTradePnlRow(row);
+      if (!next || seen.has(next.id)) return;
+      seen.add(next.id);
+      entries.push(next);
     });
     entries.sort((a, b) => b.at - a.at);
-    return { entries, updatedAt: Number(data.updatedAt) || 0 };
+    const pending = [];
+    const pendingSeen = new Set();
+    (Array.isArray(data.pending) ? data.pending : []).forEach((row) => {
+      const next = normalizeTradePnlRow(row);
+      if (!next || pendingSeen.has(next.id) || seen.has(next.id)) return;
+      pendingSeen.add(next.id);
+      pending.push({
+        ...next,
+        pendingAt: Number(row.pendingAt) || next.at || Date.now(),
+        pendingReason: String(row.pendingReason || "pnl-save-failed"),
+      });
+    });
+    pending.sort((a, b) => b.pendingAt - a.pendingAt);
+    return { entries, pending, updatedAt: Number(data.updatedAt) || 0 };
   }
 
   async function loadTradePnlRaw(options) {
@@ -3092,7 +3110,15 @@
                 ? null
                 : base.entries;
           if (!list) return { state: base, skipped: true };
-          next = normalizeTradePnl({ entries: list, updatedAt: Date.now() });
+          const pending =
+            result && Array.isArray(result.pending)
+              ? result.pending
+              : base.pending;
+          next = normalizeTradePnl({
+            entries: list,
+            pending,
+            updatedAt: Date.now(),
+          });
         }
         const nextData = { ...next, updatedAt: Date.now() };
         await writeJsonFile({
@@ -3553,6 +3579,102 @@
     return next;
   }
 
+  /**
+   * lots 数量大于真实余额时，按 FIFO 从最旧 lot 裁掉多余量（只裁不补）。
+   * 避免「账上有、钱包没有」的幽灵数量把浮盈抬高。
+   * 阈值：超额 > 0.5% 或超额名义 > 1 USDT。
+   *
+   * 买入后余额常滞后数秒：lot.at >= balances[asset].at 的新 lot 视为 pending，
+   * 不计入 excess、也不被裁。无 bal.at 时整币跳过，避免首次建仓被抹掉。
+   */
+  function reconcileLotsToBalance(entryLots, balances, entryPrices) {
+    const bals = balances && typeof balances === "object" ? balances : {};
+    let prices =
+      entryPrices && typeof entryPrices === "object" ? { ...entryPrices } : {};
+    const next = { ...(entryLots || {}) };
+    const EXCESS_PCT = 0.005;
+    const EXCESS_NOTIONAL_USDT = 1;
+    Object.keys(next).forEach((symbol) => {
+      const key = normalizeHoldingsSymbol(symbol);
+      if (!key || key === "USDT") return;
+      const list = Array.isArray(next[symbol])
+        ? next[symbol].map((lot) => ({ ...lot }))
+        : [];
+      const lotsQty = lotsTotalQtyOf(list);
+      if (!(lotsQty > 0)) {
+        delete next[symbol];
+        prices = syncEntryPriceFromLotsMap(
+          prices,
+          key,
+          [],
+          Date.now(),
+          "lots-reconcile",
+        );
+        return;
+      }
+      const asset = key.replace(/USDT$/i, "");
+      const bal = bals[asset] || {};
+      const balAt = Number(bal.at) || 0;
+      // 余额从未打过时间戳：无法区分「幽灵」与「刚买入未 sync」，跳过
+      if (!(balAt > 0)) return;
+      const balanceQty =
+        (Number(bal.free) || 0) + (Number(bal.locked) || 0);
+      const aged = [];
+      list.forEach((lot) => {
+        const lotAt = Number(lot && lot.at) || 0;
+        const q = Number(lot && lot.qty) || 0;
+        if (!(q > 0)) return;
+        if (lotAt >= balAt) return;
+        aged.push(lot);
+      });
+      const agedQty = lotsTotalQtyOf(aged);
+      // excess 只看「余额快照已覆盖」的旧 lot；pending 新买不参与
+      const excess = agedQty - Math.max(0, balanceQty);
+      if (!(excess > 0)) return;
+      const vwap =
+        lotsVwapOf(list) ||
+        (prices[key] && Number(prices[key].price)) ||
+        0;
+      const excessPct = excess / Math.max(agedQty, 1e-12);
+      const excessNotional = vwap > 0 ? excess * vwap : Infinity;
+      if (excessPct <= EXCESS_PCT && !(excessNotional > EXCESS_NOTIONAL_USDT)) {
+        return;
+      }
+      let remain = excess;
+      const trimmedAged = [];
+      for (let i = 0; i < aged.length; i += 1) {
+        const lot = aged[i];
+        const q = Number(lot && lot.qty) || 0;
+        if (!(q > 0)) continue;
+        if (!(remain > 0)) {
+          trimmedAged.push(lot);
+          continue;
+        }
+        if (q <= remain + 1e-12) {
+          remain -= q;
+          continue;
+        }
+        trimmedAged.push({ ...lot, qty: q - remain });
+        remain = 0;
+      }
+      const pendingLots = list.filter(
+        (lot) => (Number(lot && lot.at) || 0) >= balAt,
+      );
+      const trimmed = trimmedAged.concat(pendingLots);
+      trimmed.sort((a, b) => (a.at || 0) - (b.at || 0));
+      if (trimmed.length) next[symbol] = trimmed;
+      else delete next[symbol];
+      prices = syncEntryPriceFromLotsMap(
+        prices,
+        key,
+        trimmed,
+        Date.now(),
+        "lots-reconcile",
+      );
+    });
+    return { entryLots: next, entryPrices: prices };
+  }
+
   /** 买入加一笔 open lot，并回写 VWAP 到 entryPrices。 */
   function addBuyLotToHoldings(holdings, options) {
     const opts = options || {};
@@ -3850,6 +3972,14 @@
     let entryPrices = normalizeHoldingsEntryPrices(data.entryPrices);
     let entryLots = normalizeHoldingsEntryLots(data.entryLots);
     entryLots = migrateEntryLotsFromPrices(entryLots, entryPrices, balances);
+    // lots 多于余额：FIFO 裁幽灵数量（只裁不补），再回写 VWAP
+    const reconciled = reconcileLotsToBalance(
+      entryLots,
+      balances,
+      entryPrices,
+    );
+    entryLots = reconciled.entryLots;
+    entryPrices = reconciled.entryPrices;
     // 有 lots 时用 VWAP 回写 entryPrices（供止损 / 展示）
     Object.keys(entryLots).forEach((symbol) => {
       const vwap = lotsVwapOf(entryLots[symbol]);
@@ -5567,6 +5697,7 @@
     normalizeHoldingsEntryLots,
     lotsVwapOf,
     lotsTotalQtyOf,
+    reconcileLotsToBalance,
     unrealizedPnlOfLots,
     addBuyLotToHoldings,
     consumeSellFifoFromHoldings,

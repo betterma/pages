@@ -364,6 +364,127 @@ function fillAvgPrice(order) {
   return Number.isFinite(px) && px > 0 ? px : null;
 }
 
+function baseAssetOfSymbol(symbol) {
+  return String(symbol || '')
+    .trim()
+    .toUpperCase()
+    .replace(/USDT$/i, '');
+}
+
+/**
+ * 毛成交量：优先 executedQty，其次 fills[].qty 之和。
+ */
+function filledQtyFromOrder(order) {
+  const executed = Number(order && order.executedQty);
+  if (Number.isFinite(executed) && executed > 0) return executed;
+  if (Array.isArray(order && order.fills) && order.fills.length) {
+    return order.fills.reduce((sum, fill) => sum + (Number(fill.qty) || 0), 0);
+  }
+  return 0;
+}
+
+/**
+ * 买入净到账量 = 毛量 − 以标的币扣的手续费。
+ * 支持 order.fills 或 myTrades 行（同字段名 commission / commissionAsset）。
+ */
+function netFillQtyFromFills(orderOrTrades, baseAsset) {
+  const base = String(baseAsset || '')
+    .trim()
+    .toUpperCase();
+  const rows = Array.isArray(orderOrTrades)
+    ? orderOrTrades
+    : orderOrTrades && Array.isArray(orderOrTrades.fills)
+      ? orderOrTrades.fills
+      : null;
+  let gross = 0;
+  if (rows && rows.length) {
+    let feeBase = 0;
+    rows.forEach((row) => {
+      if (!row || typeof row !== 'object') return;
+      gross += Number(row.qty) || 0;
+      if (base && String(row.commissionAsset || '').toUpperCase() === base) {
+        feeBase += Number(row.commission) || 0;
+      }
+    });
+    if (gross > 0) {
+      // 有 order.executedQty 时校验 fills 累加；差太多说明 fill 不全，退回毛量
+      const executed = filledQtyFromOrder(orderOrTrades);
+      if (
+        executed > 0 &&
+        Math.abs(gross - executed) / executed > 0.001
+      ) {
+        return executed;
+      }
+      if (!(feeBase > 0)) return gross;
+      const net = gross - feeBase;
+      return net > 0 ? net : gross;
+    }
+  }
+  return filledQtyFromOrder(orderOrTrades);
+}
+
+async function getMyTrades(symbol, options, context) {
+  const opts = options || {};
+  const params = {
+    symbol: String(symbol).toUpperCase(),
+  };
+  if (opts.orderId != null && String(opts.orderId).trim()) {
+    params.orderId = String(opts.orderId);
+  }
+  if (Number.isFinite(Number(opts.limit)) && Number(opts.limit) > 0) {
+    params.limit = Math.min(1000, Math.floor(Number(opts.limit)));
+  }
+  return signedRequest('GET', '/api/v3/myTrades', params, context);
+}
+
+/**
+ * 解析买入应记 lot 的净数量。
+ * POST 成交常有 fills；GET /order 无 fills 时用 myTrades(orderId) 补。
+ */
+async function resolveBuyNetQty(symbol, order, context) {
+  const base = baseAssetOfSymbol(symbol);
+  const gross = filledQtyFromOrder(order);
+  if (!(gross > 0)) return 0;
+  if (Array.isArray(order && order.fills) && order.fills.length) {
+    return netFillQtyFromFills(order, base);
+  }
+  const orderId =
+    order && order.orderId != null
+      ? order.orderId
+      : order && order.orderID != null
+        ? order.orderID
+        : null;
+  if (orderId == null || !context) return gross;
+  try {
+    const trades = await getMyTrades(
+      symbol,
+      { orderId, limit: 1000 },
+      context,
+    );
+    if (Array.isArray(trades) && trades.length) {
+      const tradeGross = trades.reduce(
+        (sum, row) => sum + (Number(row && row.qty) || 0),
+        0,
+      );
+      // 单订单 fill 过多被截断时退回毛量，避免少记手续费又少记数量
+      if (
+        gross > 0 &&
+        tradeGross > 0 &&
+        Math.abs(tradeGross - gross) / gross > 0.001
+      ) {
+        return gross;
+      }
+      return netFillQtyFromFills(trades, base);
+    }
+  } catch (error) {
+    console.warn(
+      'resolveBuyNetQty myTrades failed',
+      error && error.message ? error.message : error,
+    );
+  }
+  return gross;
+}
+
 module.exports = {
   hasKeys,
   binanceConfig,
@@ -380,6 +501,11 @@ module.exports = {
   limitBuy,
   getOrder,
   cancelOrder,
+  getMyTrades,
   fillAvgPrice,
   fillsAvgPrice: fillAvgPrice,
+  filledQtyFromOrder,
+  netFillQtyFromFills,
+  resolveBuyNetQty,
+  baseAssetOfSymbol,
 };
