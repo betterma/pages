@@ -9316,7 +9316,7 @@
       }
     </style>
   </head>
-  <body>
+  <body data-active-view="nails">
     <div
       id="modeProgressBar"
       class="mode-progress-bar"
@@ -10314,10 +10314,10 @@
                 aria-label="系统首页"
                 title="系统首页：切到哪一屏，刷新/下次启动就进哪一屏"
               >
-                <button type="button" data-home-pref="market" class="is-active">
+                <button type="button" data-home-pref="market">
                   行情
                 </button>
-                <button type="button" data-home-pref="nails">
+                <button type="button" data-home-pref="nails" class="is-active">
                   钉子
                 </button>
               </div>
@@ -29225,11 +29225,14 @@
       let nailDailyResetPromptKind = null; // pre | post
       let nailDailyResetPromptBusy = false;
       let nailDailyResetCountdownTimer = 0;
-      let activeView = "market"; // market | nails（会话当前屏）
-      let homePref = "market"; // market | nails（启动首页，GitHub）
+      // 减负 Phase A：默认钉子；有本地/GitHub 首页偏好时仍尊重记录。
+      let activeView = "nails"; // market | nails（会话当前屏）
+      let homePref = "nails"; // market | nails（启动首页，GitHub）
       let homePrefUpdatedAt = 0;
       let homePrefSaving = false;
       let watchPoolRankSaving = false;
+      /** 首页 pin/rising/fav 网格是否已画过；钉子优先跳过 WAVE2 时为 false。 */
+      let marketGridPainted = false;
       const HOME_PREFS_LOCAL_KEY =
         "kline-home-pref-v1";
       const WATCH_POOL_RANK_LOCAL_KEY = "kline-watch-pool-rank-v1";
@@ -29350,6 +29353,8 @@
             /* ignore */
           }
         }
+        // 首屏与偏好对齐：有本地 market 记录时才切行情（body 已默认 nails，避免无记录时闪行情）。
+        activeView = homePref === "nails" ? "nails" : "market";
       }
       document.body.dataset.activeView = activeView;
 
@@ -31934,6 +31939,43 @@
         return homePref === "nails" ? "nails" : "market";
       }
 
+      /** 减负：首页偏好=钉子时跳过 pin/rising/fav 批量 K 线。 */
+      function shouldSkipHomeKlineWave() {
+        return getHomePref() === "nails";
+      }
+
+      /**
+       * 切回行情时若尚未画过首页网格则补画；成功后才置 marketGridPainted。
+       * 中途切走不会误标 true，下次仍会补画。
+       */
+      async function ensureHomeMarketKlines() {
+        if (marketGridPainted) return;
+        if (loading) return;
+        setStatus(false, "加载行情 K 线…");
+        setTopProgress(true, { overlay: false, label: "加载行情 K 线…" });
+        try {
+          updateWatchPool();
+          await renderKlines({
+            onProgress: (done, total) => {
+              const label =
+                total > 0
+                  ? `加载行情 K 线 ${done}/${total}`
+                  : "加载行情 K 线…";
+              setStatus(false, label);
+              if (total > 0) setTopProgressValue(done / total, label);
+            },
+          });
+          marketGridPainted = true;
+          syncStopLossGate();
+          setStatus(true, "行情 K 线已就绪");
+        } catch (error) {
+          console.warn("ensureHomeMarketKlines failed", error);
+          setStatus(false, error.message || "行情 K 线加载失败");
+        } finally {
+          setTopProgress(false);
+        }
+      }
+
       function syncHomePrefUi() {
         const root = document.getElementById("nailHomePrefSwitch");
         if (!root) return;
@@ -32176,6 +32218,8 @@
           void setNailAutoPinPopoverOpen(false);
           void setNailRadarPopoverOpen(false);
           hideNailScrollPct(true);
+          // 减负：钉子优先跳过 WAVE2 后，首次回行情再补画首页网格。
+          void ensureHomeMarketKlines();
         }
       }
 
@@ -37330,37 +37374,49 @@
           }
 
           {
-            setStatus(
-              false,
-              mode === "full" ? "WAVE 2 · 加载K线…" : "更新 K 线…",
-            );
-            bootInitSetStep(
-              mode === "full" ? "WAVE 2 · 卡片 K 线" : "更新卡片 K 线",
-            );
+            // 减负：钉子优先时跳过 pin/rising/fav 批量 K 线；池与止损闸门仍更新。
+            // syncStopLossGate 只读 positionItems+marketMap，不依赖 renderKlines。
             updateWatchPool();
-            await bootTrack("klines", "卡片 K 线批量拉取", () =>
-              renderKlines({
-                onProgress: (done, total) => {
-                  // 钉子快速通道下这一波已转后台，文案不再提 WAVE 2。
-                  const prefix = nailFastOpened
-                    ? "后台初始化 "
-                    : mode === "full"
-                      ? "WAVE 2 · 加载K线 "
-                      : "加载K线 ";
-                  const label =
-                    total > 0 ? `${prefix}${done}/${total}` : prefix.trimEnd() + "…";
-                  setStatus(false, label);
-                  if (total > 0) setTopProgressValue(done / total, label);
-                  if (bootInitState.active) {
-                    bootInitSetStep(
+            const skipHomeKlines = shouldSkipHomeKlineWave();
+            if (skipHomeKlines) {
+              marketGridPainted = false;
+              bootInitMark("klines", "done");
+              setStatus(false, "已跳过行情页 K 线（钉子优先）");
+              bootInitSetStep("已跳过 WAVE 2 · 行情卡片 K 线");
+            } else {
+              setStatus(
+                false,
+                mode === "full" ? "WAVE 2 · 加载K线…" : "更新 K 线…",
+              );
+              bootInitSetStep(
+                mode === "full" ? "WAVE 2 · 卡片 K 线" : "更新卡片 K 线",
+              );
+              await bootTrack("klines", "卡片 K 线批量拉取", () =>
+                renderKlines({
+                  onProgress: (done, total) => {
+                    const prefix = nailFastOpened
+                      ? "后台初始化 "
+                      : mode === "full"
+                        ? "WAVE 2 · 加载K线 "
+                        : "加载K线 ";
+                    const label =
                       total > 0
-                        ? `WAVE 2 · 卡片 K 线 ${done}/${total}`
-                        : "WAVE 2 · 卡片 K 线",
-                    );
-                  }
-                },
-              }),
-            );
+                        ? `${prefix}${done}/${total}`
+                        : prefix.trimEnd() + "…";
+                    setStatus(false, label);
+                    if (total > 0) setTopProgressValue(done / total, label);
+                    if (bootInitState.active) {
+                      bootInitSetStep(
+                        total > 0
+                          ? `WAVE 2 · 卡片 K 线 ${done}/${total}`
+                          : "WAVE 2 · 卡片 K 线",
+                      );
+                    }
+                  },
+                }),
+              );
+              marketGridPainted = true;
+            }
             syncStopLossGate();
             if (mode === "light") {
               setStatus(false, "同步动态 / 企微 / 日志…");
