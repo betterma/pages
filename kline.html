@@ -10430,7 +10430,7 @@
                 id="nailPinnedOnlySwitch"
                 role="switch"
                 aria-checked="false"
-                title="开启后钉子页只显示置顶的币；持有且置顶的仍归「持有」段"
+                title="开启后钉子页只显示置顶的币；「持有」段仍由顶栏持有开关控制，与本开关无关"
                 aria-label="只看置顶区"
               ></button>
             </div>
@@ -34176,8 +34176,13 @@
             )
           : all.slice();
         if (nailPinnedOnlyOn) {
-          // 「只看置顶」：未置顶的持有不进列表（设置文案约定）；置顶持有仍归持有段。
-          items = items.filter((item) => !!(item && item.pinned));
+          // 「只看置顶」只藏非置顶的普通钉子；持有段是否出现只看顶栏「持有」开关。
+          items = items.filter((item) => {
+            if (item && item.pinned) return true;
+            return (
+              nailShowHeldSection && nailSymbolIsHeld(item && item.symbol)
+            );
+          });
         }
         if (nailSortMode === "alertGreen") {
           // 荧光绿模式：置顶区也按绿色面积排（切回「默认」即恢复手动拖拽序）；
