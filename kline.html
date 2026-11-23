@@ -5216,10 +5216,16 @@
         display: none !important;
       }
       .nail-notice-batch-head {
+        position: sticky;
+        top: 0;
+        z-index: 4;
         margin: 0 0 6px;
-        padding: 6px 8px;
+        padding: 10px 10px;
         border-radius: 8px;
-        background: color-mix(in srgb, var(--fill) 88%, transparent);
+        background: color-mix(in srgb, var(--elevated, var(--grouped)) 94%, transparent);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        box-shadow: 0 1px 0 color-mix(in srgb, var(--separator) 80%, transparent);
         font-size: 13px;
         font-weight: 700;
         letter-spacing: 0.02em;
@@ -5988,12 +5994,19 @@
         border-bottom: 0.5px solid var(--separator);
       }
       .nail-prow-table thead th:nth-child(3) { text-align: right; }
-      .nail-prow-table .nail-section-row td { padding: 0; }
+      .nail-prow-table .nail-section-row td {
+        padding: 0;
+        /* 列表模式：段标题吸顶，随该段滚出视区一起离开 */
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        background: var(--elevated, var(--grouped));
+      }
       .nail-prow-table .nail-section-label {
         position: static;
         display: flex;
         margin: 4px 0 2px;
-        padding: 6px 8px;
+        padding: 10px 10px 9px;
         border-radius: 8px;
         background: color-mix(in srgb, var(--fill) 70%, transparent);
       }
@@ -6059,7 +6072,7 @@
         justify-content: space-between;
         gap: 8px;
         margin: 2px 0 0;
-        padding: 7px 10px 6px;
+        padding: 10px 10px 9px;
         border-radius: 8px;
         border: 0.5px solid var(--separator);
         background: color-mix(in srgb, var(--grouped, var(--bg)) 92%, transparent);
@@ -7615,10 +7628,36 @@
         );
       }
       .nail-notice-pullback-focus-head {
+        position: sticky;
+        top: 0;
+        z-index: 4;
+        display: flex;
+        align-items: center;
+        gap: 6px;
         margin: 0 0 8px;
-        font-size: 12px;
+        padding: 10px 10px;
+        border-radius: 8px;
+        background: color-mix(
+          in srgb,
+          var(--accent, #2f8f6e) 12%,
+          var(--elevated, #fff)
+        );
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        box-shadow: 0 1px 0
+          color-mix(in srgb, var(--accent, #2f8f6e) 28%, var(--separator));
+        font-size: 13px;
         font-weight: 700;
         color: color-mix(in srgb, var(--accent, #2f8f6e) 78%, var(--label));
+        cursor: pointer;
+        user-select: none;
+      }
+      .nail-notice-pullback-focus.is-collapsed .nail-notice-group-caret {
+        transform: rotate(-90deg);
+      }
+      .nail-notice-pullback-focus.is-collapsed .nail-notice-batch-list,
+      .nail-notice-pullback-focus.is-collapsed .nail-notice-table {
+        display: none;
       }
       .nail-notice-card.is-pullback-focus {
         border-color: color-mix(
@@ -9121,8 +9160,30 @@
         margin-bottom: 10px;
       }
       .nail-price-alert-head {
-        display: flex; align-items: center; gap: 8px;
-        font-size: 12px; color: var(--secondary); margin: 0 0 6px;
+        position: sticky;
+        top: 0;
+        z-index: 4;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 6px;
+        padding: 10px 10px;
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--elevated, var(--grouped)) 94%, transparent);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        box-shadow: 0 1px 0 color-mix(in srgb, var(--separator) 80%, transparent);
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--secondary);
+        cursor: pointer;
+        user-select: none;
+      }
+      .nail-price-alert-section.is-collapsed .nail-notice-group-caret {
+        transform: rotate(-90deg);
+      }
+      .nail-price-alert-section.is-collapsed .nail-price-alert-list {
+        display: none;
       }
       .nail-price-alert-list {
         display: grid;
@@ -10467,18 +10528,6 @@
                   保存
                 </button>
               </div>
-            </div>
-            <div class="nail-rising-row">
-              <span>默认打开通知页面</span>
-              <button
-                type="button"
-                class="nail-switch"
-                id="nailDefaultNoticeOnEnter"
-                role="switch"
-                aria-checked="false"
-                title="每次进入钉子页时自动打开通知"
-                aria-label="默认打开通知页面"
-              ></button>
             </div>
             <div class="nail-rising-row nail-sort-row">
               <span title="仅本机：自动盯分栏用卡片还是雷达式列表">自动盯样式</span>
@@ -11961,14 +12010,6 @@
         }
       } catch (_) {
         nailSkinMode = "normal";
-      }
-      const NAIL_DEFAULT_NOTICE_ON_ENTER_KEY = "kline-nail-default-notice-on-enter-v1";
-      let nailDefaultNoticeOnEnter = false;
-      try {
-        nailDefaultNoticeOnEnter =
-          localStorage.getItem(NAIL_DEFAULT_NOTICE_ON_ENTER_KEY) === "1";
-      } catch (_) {
-        nailDefaultNoticeOnEnter = false;
       }
       /** 自动盯分栏展示：card 卡片（默认）/ list 雷达式列表；仅本机。 */
       const NAIL_AUTOPIN_VIEW_KEY = "kline-nail-autopin-view-v1";
@@ -30132,9 +30173,13 @@
         const parts = [];
         if (pullbackFocusRows.length) {
           const pbList = nailNoticeViewMode === "list";
+          const pbOpen = isNoticeGroupOpen("pullback-focus", "双命中");
           parts.push(
-            `<section class="nail-notice-pullback-focus" id="nailNoticePullbackFocusSection">`,
-            `<h4 class="nail-notice-pullback-focus-head">回踩置顶 · ${pullbackFocusRows.length} 个</h4>`,
+            `<section class="nail-notice-pullback-focus${pbOpen ? "" : " is-collapsed"}" id="nailNoticePullbackFocusSection">`,
+            `<h4 class="nail-notice-pullback-focus-head is-group-toggle" data-notice-section-toggle="pullback-focus" title="点击展开/收起">`,
+            `<span class="nail-notice-group-caret">▾</span>`,
+            `<span>回踩置顶 · ${pullbackFocusRows.length} 个</span>`,
+            `</h4>`,
             pbList ? `<table class="nail-notice-table"><thead><tr><th>币</th><th>K线</th><th>24h</th></tr></thead>` : `<div class="nail-notice-batch-list">`,
             pullbackFocusRows.map((row) => pbList
               ? buildNailNoticeRowHtml(
@@ -30153,9 +30198,14 @@
           );
         }
         if (alerts.length) {
+          const alertOpen = isNoticeGroupOpen("price-alert", "双命中");
           parts.push(
-            `<section class="nail-price-alert-section" data-price-alert-section>`,
-            `<h4 class="nail-price-alert-head">价格提醒<span class="nail-notice-batch-count">${alerts.length}个</span></h4>`,
+            `<section class="nail-price-alert-section${alertOpen ? "" : " is-collapsed"}" data-price-alert-section>`,
+            `<h4 class="nail-price-alert-head is-group-toggle" data-notice-section-toggle="price-alert" title="点击展开/收起">`,
+            `<span class="nail-notice-group-caret">▾</span>`,
+            `<span>价格提醒</span>`,
+            `<span class="nail-notice-batch-count">${alerts.length}个</span>`,
+            `</h4>`,
             `<div class="nail-price-alert-list">`,
             alerts.map((item) => buildPriceAlertNoticeHtml(item)).join(""),
             `</div></section>`,
@@ -30192,6 +30242,20 @@
             event.preventDefault();
             const key = head.getAttribute("data-notice-group-toggle");
             const section = head.closest(".nail-notice-batch");
+            if (!key || !section) return;
+            const nextOpen = section.classList.contains("is-collapsed");
+            section.classList.toggle("is-collapsed", !nextOpen);
+            nailNoticeGroupOpen.set(key, nextOpen);
+          });
+        });
+        // 回踩置顶 / 价格提醒：同样可折叠
+        listEl.querySelectorAll("[data-notice-section-toggle]").forEach((head) => {
+          head.addEventListener("click", (event) => {
+            event.preventDefault();
+            const key = head.getAttribute("data-notice-section-toggle");
+            const section =
+              head.closest(".nail-notice-pullback-focus") ||
+              head.closest(".nail-price-alert-section");
             if (!key || !section) return;
             const nextOpen = section.classList.contains("is-collapsed");
             section.classList.toggle("is-collapsed", !nextOpen);
@@ -32064,11 +32128,7 @@
       async function maybeOpenNailNoticeOnEntry() {
         await refreshNailGreenNotices();
         void refreshOverlookState({ force: true });
-        // 分栏化后，未读不再强行切走主视图——置顶栏顶部的摘要条负责提示；
-        // 只有用户在设置里显式勾了「进入即打开通知」才自动落到通知栏。
-        if (nailDefaultNoticeOnEnter && nailNoticeMode === "closed") {
-          void openNailNoticeDrawer();
-        }
+        // 未读由摘要条提示；不再自动切到通知分栏。
       }
 
       function stopNailDailyResetCountdown() {
@@ -35568,30 +35628,6 @@
         repaintNailCalmCanvases();
       }
 
-      function syncNailDefaultNoticeSwitch() {
-        const toggle = document.getElementById("nailDefaultNoticeOnEnter");
-        if (toggle) {
-          toggle.setAttribute(
-            "aria-checked",
-            nailDefaultNoticeOnEnter ? "true" : "false",
-          );
-        }
-      }
-
-      function setNailDefaultNoticeOnEnter(enabled) {
-        nailDefaultNoticeOnEnter = !!enabled;
-        try {
-          localStorage.setItem(
-            NAIL_DEFAULT_NOTICE_ON_ENTER_KEY,
-            nailDefaultNoticeOnEnter ? "1" : "0",
-          );
-        } catch (_) {
-          /* ignore */
-        }
-        if (nailDefaultNoticeOnEnter) setNailAutoRefreshEnabled(false);
-        syncNailDefaultNoticeSwitch();
-      }
-
       async function refreshNailVisibleTickers(limit) {
         const items = nailDrawerVisibleItems();
         const sliced =
@@ -38781,15 +38817,6 @@
           if (event.key !== "Enter") return;
           event.preventDefault();
           void flushWatchPoolRank(nailWatchPoolRankInput.value);
-        });
-      }
-      const nailDefaultNoticeSwitch = document.getElementById(
-        "nailDefaultNoticeOnEnter",
-      );
-      if (nailDefaultNoticeSwitch) {
-        syncNailDefaultNoticeSwitch();
-        nailDefaultNoticeSwitch.addEventListener("click", () => {
-          setNailDefaultNoticeOnEnter(!nailDefaultNoticeOnEnter);
         });
       }
       const nailAutoPinViewSwitch = document.getElementById(
