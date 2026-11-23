@@ -5977,6 +5977,15 @@
         border-bottom: 0.5px solid var(--separator);
       }
       .nail-prow-table thead th:nth-child(3) { text-align: right; }
+      .nail-prow-table .nail-section-row td { padding: 0; }
+      .nail-prow-table .nail-section-label {
+        position: static;
+        display: flex;
+        margin: 4px 0 2px;
+        padding: 6px 8px;
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--fill) 70%, transparent);
+      }
       .nail-prow-tbody { border-bottom: 0.5px solid var(--separator); }
       .nail-prow-tbody.is-exited { opacity: 0.7; }
       .nail-prow-table tr.nail-kcard.nail-prow-row {
@@ -34481,7 +34490,13 @@
         };
         if (listMode) {
           listEl.innerHTML = `<table class="nail-prow-table"><thead><tr><th>币</th><th>K线</th><th>24h</th><th>操作</th></tr></thead>${sections
-            .map((section) => section.items.map(rowHtml).join(""))
+            .map(
+              (section) =>
+                (showLabels
+                  ? `<tr class="nail-section-row"><td colspan="4">${nailSectionLabelHtml(section)}</td></tr>`
+                  : "") +
+                section.items.map(rowHtml).join(""),
+            )
             .join("")}</table>`;
         } else {
           listEl.innerHTML = `<div class="nail-grid">${sections
