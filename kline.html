@@ -5958,6 +5958,8 @@
         gap: 8px;
       }
       /* 置顶列表模式：真正的 table；表头 币|K线|24h|操作，第二列起上下打通 */
+      /* 同时用 class（无 :has 的旧 WebView）与 :has 兜底 */
+      #nailList.is-prow-table,
       #nailList:has(.nail-prow-table) {
         overflow-x: auto;
         touch-action: pan-x pan-y;
@@ -29609,7 +29611,7 @@
           `<td class="nail-notice-row-kline-cell">`,
           `<canvas data-notice-chart="${symbol}" data-price-label="1" data-notice-at="${Number(item.at) || 0}" data-notice-first="${firstSeenAt}" data-notice-open="${Number(item.openTime) || 0}" data-notice-price="${notePrice > 0 ? notePrice : 0}" data-notice-pin-price="${pinPrice > 0 ? pinPrice : 0}" data-notice-note-at="${Number(item.noteAt) || 0}"></canvas>`,
           `</td>`,
-          `<td class="nail-notice-row-chg ${chCls}">${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</td>`,
+          `<td class="nail-notice-row-chg ${chCls}" data-notice-delta>${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</td>`,
           `</tr>`,
           `<tr class="nail-notice-sub"><td></td><td colspan="2"><span class="nail-notice-row-tags">${tagBits.join("")}</span></td></tr>`,
           `</tbody>`,
@@ -30796,7 +30798,12 @@
                     deltaEl.classList.remove("is-up", "is-down");
                   }
                 } else {
-                  deltaEl.textContent = "";
+                  // 列表 td 占位用 --；卡片内联 span 可留空
+                  deltaEl.textContent = deltaEl.classList.contains(
+                    "nail-notice-row-chg",
+                  )
+                    ? "--"
+                    : "";
                   deltaEl.classList.remove("is-up", "is-down");
                 }
               }
@@ -33330,8 +33337,9 @@
       }
 
       function syncNailPriceRows() {
+        // 卡片模式：.nail-price[data-nail-price] 内现价/24h/盯幅
         document
-          .querySelectorAll("#nailList [data-nail-price]")
+          .querySelectorAll("#nailList .nail-price[data-nail-price]")
           .forEach((el) => {
             const key = String(el.getAttribute("data-nail-price") || "")
               .trim()
@@ -33366,6 +33374,48 @@
               pinChangeEl.textContent = `盯幅 ${formatPercent(pinChangePercent(pinItem))}`;
             } else if (pinChangeEl) {
               pinChangeEl.remove();
+            }
+          });
+        // 列表模式：无 .nail-price 锚点，单独刷 24h 列与信息行盯幅。
+        document
+          .querySelectorAll("#nailList .nail-prow-tbody[data-nail-symbol]")
+          .forEach((tbody) => {
+            const key = String(tbody.getAttribute("data-nail-symbol") || "")
+              .trim()
+              .toUpperCase();
+            if (!key) return;
+            const change = Number(marketMap[key]?.change24h);
+            const pinItem = pinItemBySymbol(key);
+            const chEl = tbody.querySelector(".nail-prow-chg");
+            if (chEl) {
+              chEl.textContent = Number.isFinite(change)
+                ? formatPercent(change)
+                : "--";
+              chEl.classList.toggle("is-up", Number.isFinite(change) && change > 0);
+              chEl.classList.toggle(
+                "is-down",
+                Number.isFinite(change) && change < 0,
+              );
+            }
+            const info = tbody.querySelector(".nail-prow-info");
+            let pinEl = tbody.querySelector(".nail-prow-info-pin");
+            if (pinItem) {
+              const pinText = `盯幅 ${formatPercent(pinChangePercent(pinItem))}`;
+              if (!pinEl && info) {
+                pinEl = document.createElement("span");
+                pinEl.className = "nail-prow-info-pin";
+                const pnlEl = info.querySelector(".nail-prow-info-pnl");
+                if (pnlEl && pnlEl.nextSibling) {
+                  info.insertBefore(pinEl, pnlEl.nextSibling);
+                } else if (pnlEl) {
+                  info.appendChild(pinEl);
+                } else {
+                  info.prepend(pinEl);
+                }
+              }
+              if (pinEl) pinEl.textContent = pinText;
+            } else if (pinEl) {
+              pinEl.remove();
             }
           });
         syncNailHeldPnlUi();
@@ -34310,8 +34360,6 @@
       }
 
       function applyNailListOrder() {
-        const grid = document.querySelector("#nailList .nail-grid");
-        if (!grid) return;
         const visibleItems = nailDrawerVisibleItems();
         const sections = nailDrawerSectionParts(visibleItems);
         const showLabels = nailDrawerShowSectionLabels(sections);
@@ -34322,6 +34370,46 @@
               .toUpperCase(),
           ),
         );
+        const table = document.querySelector("#nailList .nail-prow-table");
+        if (table) {
+          // 列表 table：按段重排 section-row + tbody，去掉已不可见币。
+          const thead = table.querySelector("thead");
+          for (const section of sections) {
+            if (showLabels) {
+              let secRow = table.querySelector(
+                `tr.nail-section-row [data-nail-section="${section.id}"]`,
+              );
+              secRow = secRow && secRow.closest("tr.nail-section-row");
+              if (secRow) {
+                table.appendChild(secRow);
+              } else {
+                const wrap = document.createElement("tbody");
+                wrap.innerHTML = `<tr class="nail-section-row"><td colspan="4">${nailSectionLabelHtml(section)}</td></tr>`;
+                const row = wrap.querySelector("tr");
+                if (row) table.appendChild(row);
+              }
+            }
+            for (const item of section.items) {
+              const key = String(item.symbol || "").toUpperCase();
+              if (!key) continue;
+              const sel = CSS.escape
+                ? `.nail-prow-tbody[data-nail-symbol="${CSS.escape(key)}"]`
+                : `.nail-prow-tbody[data-nail-symbol="${key}"]`;
+              const body = table.querySelector(sel);
+              if (body) table.appendChild(body);
+            }
+          }
+          table.querySelectorAll(".nail-prow-tbody[data-nail-symbol]").forEach((body) => {
+            const key = String(body.getAttribute("data-nail-symbol") || "")
+              .trim()
+              .toUpperCase();
+            if (key && !visibleKeys.has(key)) body.remove();
+          });
+          if (thead) table.insertBefore(thead, table.firstChild);
+          return;
+        }
+        const grid = document.querySelector("#nailList .nail-grid");
+        if (!grid) return;
         grid
           .querySelectorAll(".nail-section-label")
           .forEach((el) => el.remove());
@@ -34407,6 +34495,7 @@
         }
         if (!total) {
           abortNailKlines();
+          listEl.classList.remove("is-prow-table");
           listEl.innerHTML = '<div class="nail-empty">还没有钉子</div>';
           applyFocusActionChrome();
           syncNailSelectUi();
@@ -34414,6 +34503,7 @@
         }
         if (!n) {
           abortNailKlines();
+          listEl.classList.remove("is-prow-table");
           listEl.innerHTML = nailPinnedOnlyOn
             ? '<div class="nail-empty">没有置顶的钉子 · 可在设置里关闭「只看置顶区」</div>'
             : nailRisingFilterOn
@@ -34521,19 +34611,24 @@
           const infoCell = infoBits.length
             ? `<span class="nail-prow-info" data-nail-pnl-slot="${symbol}" data-nail-note-display="${symbol}">${infoBits.join("")}</span>`
             : `<span class="nail-prow-info" data-nail-pnl-slot="${symbol}" data-nail-note-display="${symbol}"></span>`;
+          // 操作列始终占位，多选时留空单元格，避免 thead 4 列与 rowspan 错位。
+          const opsCell = nailSelectMode
+            ? `<td class="nail-prow-ops"></td>`
+            : `<td class="nail-prow-ops"><button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button><button type="button" class="nail-del" data-nail-del="${symbol}">删</button></td>`;
           return [
             `<tbody class="nail-prow-tbody${selected}${exited ? " is-exited" : ""}" data-nail-symbol="${symbol}">`,
             `<tr class="nail-kcard nail-prow-row" data-nail-symbol="${symbol}">`,
             `<td class="nail-prow-name">${nameCell}</td>`,
             `<td class="nail-prow-kline-cell"><canvas class="nail-kline" data-kline="${symbol}" data-price-label="1"></canvas></td>`,
-            `<td class="nail-prow-chg ${chCls}">${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</td>`,
-            nailSelectMode ? "" : `<td class="nail-prow-ops"><button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button><button type="button" class="nail-del" data-nail-del="${symbol}">删</button></td>`,
+            `<td class="nail-prow-chg ${chCls}" data-nail-list-chg="${symbol}">${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</td>`,
+            opsCell,
             `</tr>`,
             `<tr class="nail-prow-sub"><td></td><td colspan="3">${infoCell}</td></tr>`,
             `</tbody>`,
           ].join("");
         };
         if (listMode) {
+          listEl.classList.add("is-prow-table");
           listEl.innerHTML = `<table class="nail-prow-table"><thead><tr><th>币</th><th>K线</th><th>24h</th><th>操作</th></tr></thead>${sections
             .map(
               (section) =>
@@ -34544,6 +34639,7 @@
             )
             .join("")}</table>`;
         } else {
+          listEl.classList.remove("is-prow-table");
           listEl.innerHTML = `<div class="nail-grid">${sections
             .map(
               (section) =>
@@ -35715,8 +35811,6 @@
       function bindNailDrag(root) {
         const listEl = root || document.getElementById("nailList");
         if (!listEl || listEl.dataset.nailDragBound === "1") return;
-        // 列表模式是 table 结构，拖拽排序会打乱 tbody，禁用（顺序仍按钉子数据渲染）。
-        if (listEl.querySelector(".nail-prow-table")) return;
         listEl.dataset.nailDragBound = "1";
         const longMs = 480;
         // 手指一滑动就取消长按，优先保证列表滚动
@@ -35728,6 +35822,10 @@
         let moved = false;
         let suppressClick = false;
         let pressCard = null;
+
+        // 列表 table 模式禁止拖拽（卡片→列表后监听仍在，每次事件再判一次）。
+        const isListTableMode = () =>
+          !!listEl.querySelector(".nail-prow-table");
 
         const clearPress = () => {
           if (pressTimer) {
@@ -35769,6 +35867,11 @@
         listEl.addEventListener(
           "pointerdown",
           (event) => {
+            if (isListTableMode()) {
+              clearPress();
+              if (dragging) endDrag(false);
+              return;
+            }
             if (nailSaving || nailSelectMode) return;
             // 展示排序下不改 GitHub 顺序
             if (nailSortMode !== "order") return;
@@ -35806,6 +35909,11 @@
         listEl.addEventListener(
           "pointermove",
           (event) => {
+            if (isListTableMode()) {
+              clearPress();
+              if (dragging) endDrag(false);
+              return;
+            }
             if (!dragging && pressTimer) {
               const dx = event.clientX - startX;
               const dy = event.clientY - startY;
