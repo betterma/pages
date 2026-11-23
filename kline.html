@@ -2324,7 +2324,9 @@
         top: calc(100% - 2px);
         left: 10px;
         right: 10px;
-        z-index: 8;
+        /* 置顶栏设置浮窗：钉子页内层级最高，切到通知/自动盯/雷达等分栏时
+           都压在各分栏 sticky 表头、贴行条、操作栏之上；仍低于全局 toast/门闩。 */
+        z-index: 1000;
         border-radius: 12px;
         border: 0.5px solid var(--separator);
         background: var(--elevated, var(--grouped));
@@ -10510,6 +10512,18 @@
                 aria-label="显示模拟盘"
               ></button>
             </div>
+            <div class="nail-rising-row">
+              <span title="代币化美股（bStock）：币安 exchangeInfo 权限组 TRD_GRP_261">显示 bStock 美股</span>
+              <button
+                type="button"
+                class="nail-switch"
+                id="nailShowBstockSwitch"
+                role="switch"
+                aria-checked="true"
+                title="关闭后置顶/通知/自动盯/雷达各分栏都不绘制也不显示 bStock 代币化美股。仅本机，默认显示"
+                aria-label="显示 bStock 美股"
+              ></button>
+            </div>
             <div class="nail-rising-row nail-pool-rank-row">
               <span title="24h 涨幅前 N 进入观察池 / 自动盯；与云函数共用，默认 30">观察池前 N</span>
               <div class="nail-pool-rank-edit">
@@ -12069,6 +12083,85 @@
         syncNailHeldToggleUi();
         renderNailDrawer();
       }
+
+      /* ---- bStock（代币化美股）显示开关：仅本机，默认显示 ----
+       * 标志来自币安 exchangeInfo：交易对 permissionSets 含 TRD_GRP_261 即为 bStock。
+       * 关闭后，钉子页置顶/通知/自动盯/雷达四个分栏都不绘制也不显示 bStock。 */
+      const NAIL_SHOW_BSTOCK_KEY = "kline-nail-show-bstock-v1";
+      let nailShowBstock = true;
+      try {
+        const savedBstock = localStorage.getItem(NAIL_SHOW_BSTOCK_KEY);
+        if (savedBstock === "0") nailShowBstock = false;
+        else if (savedBstock === "1") nailShowBstock = true;
+      } catch (_) {
+        nailShowBstock = true;
+      }
+      /** 币安 exchangeInfo 标记的 bStock symbol 全集；未拉到前为 null。 */
+      let bstockSymbolSet = null;
+      function isBstockSymbol(symbol) {
+        const key = String(symbol || "").trim().toUpperCase();
+        if (!key) return false;
+        return !!(
+          bstockSymbolSet &&
+          bstockSymbolSet.size &&
+          bstockSymbolSet.has(key)
+        );
+      }
+      /**
+       * 该 symbol 是否可在钉子页绘制。关闭 bStock 时隐藏代币化美股；
+       * 名单未拉到前一律放行，避免整表空白（拉到后会补渲）。
+       */
+      function nailBstockVisible(symbol) {
+        if (nailShowBstock) return true;
+        if (!(bstockSymbolSet && bstockSymbolSet.size)) return true;
+        return !isBstockSymbol(symbol);
+      }
+      function syncNailBstockUi() {
+        const sw = document.getElementById("nailShowBstockSwitch");
+        if (!sw) return;
+        sw.setAttribute("aria-checked", nailShowBstock ? "true" : "false");
+      }
+      function setNailShowBstock(on) {
+        nailShowBstock = !!on;
+        try {
+          localStorage.setItem(NAIL_SHOW_BSTOCK_KEY, nailShowBstock ? "1" : "0");
+        } catch (_) {
+          /* ignore */
+        }
+        syncNailBstockUi();
+        // 四个分栏一并重绘；逐栏容错，避免页面初始化未完成时某栏抛错
+        // 影响其它栏刷新或中断本次状态写入。
+        const repaintBstockViews = () => {
+          const tasks = [
+            () => renderNailDrawer(),
+            () => { if (typeof renderNailNoticeList === "function") renderNailNoticeList(); },
+            () => {
+              if (typeof renderNailAutoPinList === "function") {
+                renderNailAutoPinList();
+                if (nailSegment === "autopin" && typeof paintNailAutoPinCharts === "function") {
+                  void paintNailAutoPinCharts();
+                }
+              }
+            },
+            () => {
+              if (typeof renderNailRadarTable === "function") {
+                renderNailRadarTable();
+                if (nailSegment === "radar" && typeof paintNailRadarKlines === "function") {
+                  void paintNailRadarKlines();
+                }
+              }
+            },
+          ];
+          tasks.forEach((fn) => { try { fn(); } catch (e) { /* 单栏失败不阻断 */ } });
+        };
+        try {
+          repaintBstockViews();
+        } catch (_) {
+          // 极端时序（脚本尚未初始化完毕）下延后一帧再补一次重绘。
+          setTimeout(repaintBstockViews, 0);
+        }
+      }
+
       function setNailViewMode(which, mode) {
         const next = mode === "list" ? "list" : "card";
         if (which === "pin") {
@@ -15332,6 +15425,7 @@
 
       /** 自动盯列表是否收录该币。 */
       function autoPinSymbolVisible(symbol) {
+        if (!nailBstockVisible(symbol)) return false;
         return nailSymbolPassesRisingFilter(symbol);
       }
 
@@ -16039,7 +16133,9 @@
         const body = document.getElementById("nailRadarBody");
         const wrap = document.getElementById("nailRadarTableWrap");
         if (!body) return;
-        const list = nailRadarRankList();
+        const list = nailRadarRankList().filter((symbol) =>
+          nailBstockVisible(symbol),
+        );
         if (!list.length) {
           body.innerHTML = "";
           if (wrap) {
@@ -16066,6 +16162,7 @@
         // 标记只影响行的外观，不改变任何排序：主榜仍按 1、2、3… 原名次排。
         const markedSet = new Set(getRadarFixedSymbols());
         const buildRow = (symbol, rank, options) => {
+          if (!nailBstockVisible(symbol)) return "";
           const opts = options || {};
           const isMarked = markedSet.has(
             String(symbol).trim().toUpperCase(),
@@ -16116,6 +16213,7 @@
         // 掉出前 100 的标记币也一并归集，名次显示「—」。
         const grouped = nailRadarGroupOn
           ? getRadarFixedSymbols()
+              .filter((symbol) => nailBstockVisible(symbol))
               .slice()
               .sort((a, b) => {
                 const ra = rankOf(a) || Number.MAX_SAFE_INTEGER;
@@ -16141,7 +16239,7 @@
         // 榜外的钉子页置顶币：分组条之后补位，名次取全量榜真实排名；
         // 已归集的标记币不重复出现。
         const extras = nailRadarPinnedExtras().filter(
-          (symbol) => !groupedSet.has(symbol),
+          (symbol) => !groupedSet.has(symbol) && nailBstockVisible(symbol),
         );
         if (extras.length) {
           rows.push(
@@ -22606,11 +22704,23 @@
         const key = String(symbol || "").toUpperCase();
         return key.endsWith("USDT");
       }
+      /** 币安 exchangeInfo：交易对 permissionSets 含 TRD_GRP_261 即 bStock（代币化美股）。 */
+      function rowIsBstockTradingPair(row) {
+        const sets = row && Array.isArray(row.permissionSets)
+          ? row.permissionSets
+          : [];
+        for (let i = 0; i < sets.length; i += 1) {
+          const group = sets[i];
+          if (Array.isArray(group) && group.includes("TRD_GRP_261")) return true;
+        }
+        return false;
+      }
       async function loadUsdtTradingSet() {
         const ttlMs = 30 * 60 * 1000;
         if (
           usdtTradingSet &&
           usdtTradingSet.size &&
+          bstockSymbolSet &&
           Date.now() - usdtTradingSetAt < ttlMs
         ) {
           return usdtTradingSet;
@@ -22629,6 +22739,7 @@
             }
             const data = await response.json();
             const set = new Set();
+            const stocks = new Set();
             (data.symbols || []).forEach((row) => {
               if (
                 !row ||
@@ -22640,13 +22751,30 @@
               const symbol = String(row.symbol || "").toUpperCase();
               if (!symbol) return;
               set.add(symbol);
+              // bStock（代币化美股）：permissionSets 含 TRD_GRP_261。
+              if (rowIsBstockTradingPair(row)) stocks.add(symbol);
             });
             if (!set.size) {
               lastError = new Error("币安 TRADING USDT 列表为空");
               continue;
             }
+            const hadBstockList = !!(bstockSymbolSet && bstockSymbolSet.size);
             usdtTradingSet = set;
+            bstockSymbolSet = stocks;
             usdtTradingSetAt = Date.now();
+            // 名单刚到位且开关为关：补渲一次，把此前放行的 bStock 收掉。
+            if (!hadBstockList && !nailShowBstock && stocks.size) {
+              // 名单刚到位时可能仍在初始化：逐栏容错，失败延后一帧再补。
+              const repaint = () => {
+                [
+                  () => { if (typeof renderNailAutoPinList === "function") renderNailAutoPinList(); },
+                  () => { if (typeof renderNailRadarTable === "function") renderNailRadarTable(); },
+                  () => { if (typeof renderNailNoticeList === "function") renderNailNoticeList(); },
+                  () => { if (typeof renderNailDrawer === "function") renderNailDrawer(); },
+                ].forEach((fn) => { try { fn(); } catch (_) { /* 单栏失败不阻断 */ } });
+              };
+              try { repaint(); } catch (_) { setTimeout(repaint, 0); }
+            }
             return set;
           } catch (error) {
             lastError =
@@ -30127,7 +30255,8 @@
         const metaEl = document.getElementById("nailNoticeMeta");
         if (!listEl) return;
         const scrollSnap = captureNailNoticeScroll(listEl);
-        const risingOk = (symbol) => nailSymbolPassesRisingFilter(symbol);
+        const risingOk = (symbol) =>
+          nailBstockVisible(symbol) && nailSymbolPassesRisingFilter(symbol);
         const items = (Array.isArray(nailGreenNotices) ? nailGreenNotices : []).filter(
           (item) => risingOk(item && item.symbol),
         );
@@ -34530,7 +34659,9 @@
       }
 
       function nailDrawerVisibleItems() {
-        const all = Array.isArray(nailItems) ? nailItems : [];
+        const all = (Array.isArray(nailItems) ? nailItems : []).filter((item) =>
+          nailBstockVisible(item && item.symbol),
+        );
         // 上涨过滤：持有币显式放行（与 nailSymbolPassesRisingFilter 双保险）。
         let items = nailRisingFilterOn
           ? all.filter(
@@ -34873,7 +35004,9 @@
         unmountNailRowActionBar();
         syncNailRisingFilterUi();
         syncNailSortUi();
-        const allItems = Array.isArray(nailItems) ? nailItems : [];
+        const allItems = (Array.isArray(nailItems) ? nailItems : []).filter(
+          (item) => nailBstockVisible(item && item.symbol),
+        );
         const items = nailDrawerVisibleItems();
         const n = items.length;
         const total = allItems.length;
@@ -38862,6 +38995,15 @@
         syncNailRisingFilterUi();
         nailRisingFilter.addEventListener("click", () => {
           setNailRisingFilter(!nailRisingFilterOn);
+        });
+      }
+      const nailShowBstockSwitch = document.getElementById(
+        "nailShowBstockSwitch",
+      );
+      if (nailShowBstockSwitch) {
+        syncNailBstockUi();
+        nailShowBstockSwitch.addEventListener("click", () => {
+          setNailShowBstock(!nailShowBstock);
         });
       }
       const nailPinnedOnlySwitch = document.getElementById(
