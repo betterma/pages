@@ -34594,7 +34594,6 @@
           (event) => {
             if (event.pointerType === "mouse" && event.button !== 0) return;
             if (event.target.closest("button, a, input, label")) return;
-            if (listEl.querySelector(".nail-prow-table")) return;
             const card = event.target.closest(".nail-kcard[data-nail-symbol]");
             if (!card) return;
             startX = event.clientX;
