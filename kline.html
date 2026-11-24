@@ -6474,6 +6474,22 @@
           inset 3px 0 0 color-mix(in srgb, var(--accent) 78%, transparent),
           0 1px 0 color-mix(in srgb, var(--accent) 12%, transparent);
       }
+      .nail-kcard.is-jump-reveal {
+        border-color: color-mix(in srgb, #c45c5c 55%, var(--separator));
+        box-shadow: inset 3px 0 0 color-mix(in srgb, #c45c5c 70%, transparent);
+      }
+      .nail-jump-tag {
+        display: inline-block;
+        margin-left: 4px;
+        padding: 0 5px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        color: #b71c1c;
+        background: color-mix(in srgb, #c45c5c 16%, transparent);
+        vertical-align: middle;
+      }
       .nail-kcard.is-dragging {
         opacity: 0.45;
         cursor: grabbing;
@@ -10600,6 +10616,58 @@
             role="dialog"
             aria-label="筛选、排序与定时刷新"
           >
+            <div class="nail-rising-row nail-sort-row">
+              <span>排序</span>
+              <div
+                class="mode-switch pin-sort-switch"
+                id="nailSortSwitch"
+                role="group"
+                aria-label="钉子排序"
+                title="默认：置顶/拖拽顺序；荧光绿：置顶区也按绿色面积排序；24h：置顶区保持手动序，仅「其余」按涨幅排"
+              >
+                <button type="button" data-nail-sort="order" class="is-active">
+                  默认
+                </button>
+                <button
+                  type="button"
+                  data-nail-sort="alertGreen"
+                  title="置顶区与「其余」都按绿色K线占用面积从大到小；切回「默认」恢复手动拖拽序"
+                >
+                  荧光绿
+                </button>
+                <button
+                  type="button"
+                  data-nail-sort="change24h"
+                  title="置顶仍在最上且保持手动序；其余按24小时涨幅从高到低"
+                >
+                  24h
+                </button>
+              </div>
+            </div>
+            <div class="nail-rising-row">
+              <span>只看置顶区</span>
+              <button
+                type="button"
+                class="nail-switch"
+                id="nailPinnedOnlySwitch"
+                role="switch"
+                aria-checked="false"
+                title="开启后钉子页只显示置顶的币；「持有」段仍由顶栏持有开关控制，与本开关无关"
+                aria-label="只看置顶区"
+              ></button>
+            </div>
+            <div class="nail-rising-row">
+              <span>当前窗口上涨</span>
+              <button
+                type="button"
+                class="nail-switch"
+                id="nailRisingFilter"
+                role="switch"
+                aria-checked="true"
+                title="只显示当前窗口上涨：对置顶 / 通知 / 自动盯生效；持有币始终显示"
+                aria-label="当前窗口上涨"
+              ></button>
+            </div>
             <div class="nail-rising-row nail-home-row">
               <span>系统首页</span>
               <div
@@ -10687,58 +10755,6 @@
               <div class="mode-switch pin-sort-switch" id="nailNoticeViewSwitch" role="group" aria-label="通知样式" title="卡片：现状大方块；列表：币名 / K线 / 24h">
                 <button type="button" data-notice-view="card" class="is-active">卡片</button>
                 <button type="button" data-notice-view="list">列表</button>
-              </div>
-            </div>
-            <div class="nail-rising-row">
-              <span>当前窗口上涨</span>
-              <button
-                type="button"
-                class="nail-switch"
-                id="nailRisingFilter"
-                role="switch"
-                aria-checked="true"
-                title="只显示当前窗口上涨：对置顶 / 通知 / 自动盯生效；持有币始终显示"
-                aria-label="当前窗口上涨"
-              ></button>
-            </div>
-            <div class="nail-rising-row">
-              <span>只看置顶区</span>
-              <button
-                type="button"
-                class="nail-switch"
-                id="nailPinnedOnlySwitch"
-                role="switch"
-                aria-checked="false"
-                title="开启后钉子页只显示置顶的币；「持有」段仍由顶栏持有开关控制，与本开关无关"
-                aria-label="只看置顶区"
-              ></button>
-            </div>
-            <div class="nail-rising-row nail-sort-row">
-              <span>排序</span>
-              <div
-                class="mode-switch pin-sort-switch"
-                id="nailSortSwitch"
-                role="group"
-                aria-label="钉子排序"
-                title="默认：置顶/拖拽顺序；荧光绿：置顶区也按绿色面积排序；24h：置顶区保持手动序，仅「其余」按涨幅排"
-              >
-                <button type="button" data-nail-sort="order" class="is-active">
-                  默认
-                </button>
-                <button
-                  type="button"
-                  data-nail-sort="alertGreen"
-                  title="置顶区与「其余」都按绿色K线占用面积从大到小；切回「默认」恢复手动拖拽序"
-                >
-                  荧光绿
-                </button>
-                <button
-                  type="button"
-                  data-nail-sort="change24h"
-                  title="置顶仍在最上且保持手动序；其余按24小时涨幅从高到低"
-                >
-                  24h
-                </button>
               </div>
             </div>
             <div class="nail-auto-refresh-block">
@@ -12106,6 +12122,8 @@
       } catch (_) {
         nailPinnedOnlyOn = false;
       }
+      /** 从其它分栏跳到置顶时：临时露出目标币，不改筛选开关。guest=不在钉子名单。 */
+      let nailJumpReveal = null;
       /* 钉子页分栏：置顶 / 通知 / 自动盯 / 雷达，同一层平铺切换。 */
       const NAIL_SEGMENTS = ["pinned", "notice", "autopin", "radar"];
       const NAIL_SEG_LABELS = {
@@ -33818,6 +33836,8 @@
           const tradeDock = document.getElementById("nailTradeDock");
           if (tradeDock) tradeDock.hidden = true;
           document.body.classList.remove("has-nail-trade-dock");
+          // 离开置顶：清掉跳转临时露出（不改筛选开关）。
+          if (next !== "pinned") clearNailJumpReveal();
         }
         // 进通知/自动盯/雷达分栏时立刻拉一次云端状态，保证角标与固定名单
         // 和另一台设备一致（雷达固定名单也在这份共享文件里）。
@@ -34082,41 +34102,154 @@
         if (btn) btn.setAttribute("aria-expanded", next ? "true" : "false");
       }
 
-      function openNailDrawerAtSymbol(symbol) {
+      function nailJumpRevealKey() {
+        return nailJumpReveal && nailJumpReveal.symbol
+          ? String(nailJumpReveal.symbol).trim().toUpperCase()
+          : "";
+      }
+
+      function isNailJumpGuest(symbol) {
+        const key = String(symbol || "").trim().toUpperCase();
+        return !!(
+          key &&
+          nailJumpReveal &&
+          nailJumpReveal.guest &&
+          nailJumpRevealKey() === key
+        );
+      }
+
+      function makeNailJumpGuestItem(key) {
+        const sym = String(key || "").trim().toUpperCase();
+        return {
+          symbol: sym,
+          label: sym.replace(/USDT$/i, ""),
+          note: "",
+          pinned: false,
+          order: -1,
+          _jumpGuest: true,
+        };
+      }
+
+      function clearNailJumpReveal(opts) {
+        if (!nailJumpReveal) return;
+        nailJumpReveal = null;
+        if (opts && opts.rerender && nailSegment === "pinned") {
+          renderNailDrawer();
+        }
+      }
+
+      function focusNailCardInDrawer(symbol) {
+        const key = String(symbol || "").trim().toUpperCase();
+        if (!key) return false;
+        const card = [
+          ...document.querySelectorAll(
+            "#nailList .nail-kcard[data-nail-symbol], #nailList [data-nail-symbol]",
+          ),
+        ].find(
+          (item) =>
+            String(item.dataset.nailSymbol || "").toUpperCase() === key,
+        );
+        if (!card) return false;
+        document
+          .querySelectorAll("#nailList .nail-kcard.is-focus, #nailList .is-focus")
+          .forEach((item) => item.classList.remove("is-focus"));
+        card.classList.add("is-focus");
+        if (typeof card.scrollIntoView === "function") {
+          card.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        window.setTimeout(() => card.classList.remove("is-focus"), 2800);
+        return true;
+      }
+
+      async function pinNailJumpGuest(symbol) {
+        const key = WatchFavorites.nailSymbolKey
+          ? WatchFavorites.nailSymbolKey(symbol)
+          : String(symbol || "").trim().toUpperCase();
+        if (!key) return;
+        const label = key.replace(/USDT$/i, "");
+        const price = Number(marketMap[key]?.price);
+        const note =
+          Number.isFinite(price) && price > 0 ? formatPinPrice(price) : "";
+        try {
+          await persistNails(
+            (list, meta) => {
+              const withNail = WatchFavorites.upsertNail(list, key, note);
+              return {
+                list: WatchFavorites.setNailPinned(withNail, key, true),
+                dismissedNails: WatchFavorites.removeDismissedNails(
+                  (meta && meta.dismissedNails) || [],
+                  [key],
+                ),
+              };
+            },
+            `Jump pin nail ${label}`,
+            { loadingText: `置顶 ${label}…` },
+          );
+          clearNailJumpReveal();
+          showToast(`${label} 已加入钉子并置顶`);
+        } catch (error) {
+          console.warn(error);
+          showToast(error.message || "置顶失败");
+        }
+      }
+
+      async function openNailDrawerAtSymbol(symbol) {
         const key = String(symbol || "").trim().toUpperCase();
         if (!key) return;
-        // 目标卡片在「置顶」分栏里，先切过去再定位。
-        if (nailSegment !== "pinned") void setNailSegment("pinned");
-        const visibleHas = () =>
-          nailDrawerVisibleItems().some(
-            (item) => String(item.symbol || "").toUpperCase() === key,
-          );
-        if (nailRisingFilterOn && !visibleHas()) {
-          setNailRisingFilter(false);
+        const label = key.replace(/USDT$/i, "");
+        const inNails = hasNailForSymbol(key);
+        const nailItem = (Array.isArray(nailItems) ? nailItems : []).find(
+          (item) => String(item.symbol || "").toUpperCase() === key,
+        );
+
+        // 先按当前筛选测「自然可见」，测完再决定是否临时露出（不改开关）。
+        const prevReveal = nailJumpReveal;
+        nailJumpReveal = null;
+        const naturallyVisible = nailDrawerVisibleItems().some(
+          (item) => String(item.symbol || "").toUpperCase() === key,
+        );
+        nailJumpReveal = prevReveal;
+
+        let toastMsg = "";
+        if (!inNails) {
+          nailJumpReveal = { symbol: key, guest: true };
+          toastMsg = `${label} 未在钉子 · 临时查看`;
+        } else if (!naturallyVisible) {
+          nailJumpReveal = { symbol: key, guest: false };
+          if (nailPinnedOnlyOn && !(nailItem && nailItem.pinned)) {
+            toastMsg = `${label} 未置顶 · 已临时显示`;
+          } else if (
+            nailRisingFilterOn &&
+            !nailSymbolIsHeld(key) &&
+            !nailSymbolPassesRisingFilter(key)
+          ) {
+            toastMsg = `${label} 被上涨过滤挡住 · 已临时显示`;
+          } else {
+            toastMsg = `${label} 已临时显示`;
+          }
+        } else {
+          // 本来就看得见：清掉过期临时态
+          if (nailJumpRevealKey() && nailJumpRevealKey() !== key) {
+            clearNailJumpReveal();
+          } else if (nailJumpReveal && !nailJumpReveal.guest) {
+            clearNailJumpReveal();
+          }
+        }
+
+        if (nailSegment !== "pinned") {
+          await setNailSegment("pinned", { force: true });
+        } else {
+          renderNailDrawer();
         }
         setNailDrawerOpen(true);
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            const card = [
-              ...document.querySelectorAll(
-                "#nailList .nail-kcard[data-nail-symbol]",
-              ),
-            ].find(
-              (item) =>
-                String(item.dataset.nailSymbol || "").toUpperCase() === key,
-            );
-            if (!card) {
-              showToast(`${key.replace(/USDT$/i, "")} 未出现在钉子抽屉`);
-              return;
+            if (!focusNailCardInDrawer(key)) {
+              showToast(`${label} 未能定位到卡片`);
             }
-            document
-              .querySelectorAll("#nailList .nail-kcard.is-focus")
-              .forEach((item) => item.classList.remove("is-focus"));
-            card.classList.add("is-focus");
-            card.scrollIntoView({ behavior: "smooth", block: "center" });
-            window.setTimeout(() => card.classList.remove("is-focus"), 2800);
           });
         });
+        if (toastMsg) showToast(toastMsg);
       }
 
       /**
@@ -35310,6 +35443,31 @@
           const hb = nailSymbolIsHeld(b && b.symbol) ? 0 : 1;
           return ha - hb;
         });
+        // 跳转临时露出：被筛选挡住 / 访客卡强制进列表（不改开关）。
+        const revealKey = nailJumpRevealKey();
+        if (revealKey && nailBstockVisible(revealKey)) {
+          const idx = items.findIndex(
+            (item) => String(item.symbol || "").toUpperCase() === revealKey,
+          );
+          let revealItem = null;
+          if (idx >= 0) {
+            revealItem = items[idx];
+          } else {
+            const fromAll = (Array.isArray(nailItems) ? nailItems : []).find(
+              (item) => String(item.symbol || "").toUpperCase() === revealKey,
+            );
+            if (fromAll) revealItem = fromAll;
+            else if (nailJumpReveal && nailJumpReveal.guest) {
+              revealItem = makeNailJumpGuestItem(revealKey);
+            }
+          }
+          if (revealItem) {
+            items = items.filter(
+              (item) => String(item.symbol || "").toUpperCase() !== revealKey,
+            );
+            items.unshift(revealItem);
+          }
+        }
         return items;
       }
 
@@ -35437,10 +35595,17 @@
       /** 只挪 DOM 重排（持有优先 / 展示排序），避免整表重绘打断已画好的 K 线。 */
       /** 钉子列表视觉分段：持有 → 置顶 → 其余（与 nailDrawerVisibleItems 排序一致）。 */
       function nailDrawerSectionParts(items) {
+        const jump = [];
         const held = [];
         const pinned = [];
         const rest = [];
+        const revealKey = nailJumpRevealKey();
         for (const item of items || []) {
+          const key = String((item && item.symbol) || "").toUpperCase();
+          if (revealKey && key === revealKey) {
+            jump.push(item);
+            continue;
+          }
           // 关闭「持有」开关：不单独成段，按置顶/其余归入，币仍可见。
           if (nailShowHeldSection && nailSymbolIsHeld(item && item.symbol)) {
             held.push(item);
@@ -35448,6 +35613,12 @@
           else rest.push(item);
         }
         return [
+          {
+            id: "jump",
+            label: "临时查看",
+            className: "is-jump",
+            items: jump,
+          },
           { id: "held", label: "持有", className: "is-held", items: held },
           { id: "pin", label: "置顶", className: "is-pin", items: pinned },
           { id: "rest", label: "其余", className: "is-rest", items: rest },
@@ -35457,9 +35628,9 @@
       function nailDrawerShowSectionLabels(sections) {
         if (!sections || !sections.length) return false;
         if (sections.length > 1) return true;
-        // 仅一段时：置顶/持有仍出标题；纯「其余」不出
+        // 仅一段时：置顶/持有/临时查看仍出标题；纯「其余」不出
         const id = sections[0].id;
-        return id === "pin" || id === "held";
+        return id === "pin" || id === "held" || id === "jump";
       }
 
       const NAIL_PIN_REVIEW_EYE_SVG =
@@ -35633,7 +35804,7 @@
         ) {
           clearNailFocusSelection();
         }
-        if (!total) {
+        if (!total && !nailJumpRevealKey()) {
           abortNailKlines();
           listEl.classList.remove("is-prow-table");
           listEl.innerHTML = '<div class="nail-empty">还没有钉子</div>';
@@ -35659,12 +35830,16 @@
             const exited = Number(item.exitedAt) > 0;
             const pinned = !!item.pinned;
             const note = String(item.note || "").trim();
-            const tag = exited
-              ? '<span class="nail-exit-tag">退出</span>'
-              : "";
             const label = escapeHtml(item.label || item.symbol);
             const symbol = escapeHtml(item.symbol);
             const key = String(item.symbol || "").toUpperCase();
+            const isReveal = nailJumpRevealKey() === key;
+            const isGuest = !!(item && item._jumpGuest) || isNailJumpGuest(key);
+            const tag = exited
+              ? '<span class="nail-exit-tag">退出</span>'
+              : isReveal
+                ? `<span class="nail-jump-tag">${isGuest ? "临时" : "露出"}</span>`
+                : "";
             const selected =
               nailSelectMode && selectedNailSymbols.has(key)
                 ? " is-selected"
@@ -35688,13 +35863,15 @@
             const noteHtml = note
               ? `<p class="nail-note" data-nail-note-display="${symbol}">${formatNailNoteHtml(note)}</p>`
               : "";
+            const delLabel = isGuest ? "收起" : "删除";
+            const delTitle = isGuest ? "收起临时查看" : "删除钉子";
             return [
-              `<article class="nail-kcard${pinned ? " is-pinned" : ""}${selected}" data-nail-symbol="${symbol}">`,
+              `<article class="nail-kcard${pinned ? " is-pinned" : ""}${isReveal ? " is-jump-reveal" : ""}${selected}" data-nail-symbol="${symbol}"${isGuest ? ' data-nail-jump-guest="1"' : ""}>`,
               `<div class="nail-kcard-head">`,
               nailSelectMode
                 ? ""
               : `<span class="nail-pin-wrap">
-              <button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" aria-haspopup="${pinned ? "menu" : "false"}" aria-expanded="false" title="${pinned ? "置顶选项" : "置顶"}">${pinned ? "顶" : "↑"}</button>
+              <button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" aria-haspopup="${pinned ? "menu" : "false"}" aria-expanded="false" title="${pinned ? "置顶选项" : isGuest ? "加入钉子并置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>
             </span>`,
               `<button type="button" class="nail-name" data-nail-copy-name="${label}" data-copy="${label}" title="点击复制名称">${label}${tag}</button>`,
               nailSelectMode
@@ -35702,7 +35879,7 @@
                 : `<button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线" aria-label="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button>`,
               nailSelectMode
                 ? ""
-                : `<button type="button" class="nail-del" data-nail-del="${symbol}">删除</button>`,
+                : `<button type="button" class="nail-del" data-nail-del="${symbol}" title="${delTitle}">${delLabel}</button>`,
               `</div>`,
               nailPriceRowHtml(item.symbol),
               `<div class="nail-kline-wrap">`,
@@ -35724,6 +35901,8 @@
           const label = escapeHtml(item.label || item.symbol);
           const symbol = escapeHtml(item.symbol);
           const key = String(item.symbol || "").toUpperCase();
+          const isReveal = nailJumpRevealKey() === key;
+          const isGuest = !!(item && item._jumpGuest) || isNailJumpGuest(key);
           const change = Number(marketMap[key] && marketMap[key].change24h);
           const chCls = Number.isFinite(change) && change !== 0
             ? change > 0 ? "is-up" : "is-down" : "";
@@ -35737,11 +35916,16 @@
           const check = nailSelectMode
             ? `<input type="checkbox" class="nail-check" data-nail-select="${symbol}" ${selectedNailSymbols.has(key) ? "checked" : ""} aria-label="选择 ${label}" />`
             : "";
+          const nameTag = exited
+            ? '<span class="nail-exit-tag">退出</span>'
+            : isReveal
+              ? `<span class="nail-jump-tag">${isGuest ? "临时" : "露出"}</span>`
+              : "";
           // 币名列：置顶图标 + 币名 左右排列
           const nameCell = [
             check,
-            nailSelectMode ? "" : `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "置顶选项" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
-            `<button type="button" class="nail-name" data-nail-copy-name="${label}" data-copy="${label}" title="点击复制名称">${label}${exited ? '<span class="nail-exit-tag">退出</span>' : ""}</button>`,
+            nailSelectMode ? "" : `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "置顶选项" : isGuest ? "加入钉子并置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
+            `<button type="button" class="nail-name" data-nail-copy-name="${label}" data-copy="${label}" title="点击复制名称">${label}${nameTag}</button>`,
           ].join("");
           // 打通的信息行：盈亏在前，其次盯幅、便签（现价只走 K 线角标）
           const infoBits = [];
@@ -35752,12 +35936,13 @@
             ? `<span class="nail-prow-info" data-nail-pnl-slot="${symbol}" data-nail-note-display="${symbol}">${infoBits.join("")}</span>`
             : `<span class="nail-prow-info" data-nail-pnl-slot="${symbol}" data-nail-note-display="${symbol}"></span>`;
           // 操作列始终占位，多选时留空单元格，避免 thead 4 列与 rowspan 错位。
+          const delLabel = isGuest ? "收起" : "删";
           const opsCell = nailSelectMode
             ? `<td class="nail-prow-ops"></td>`
-            : `<td class="nail-prow-ops"><button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button><button type="button" class="nail-del" data-nail-del="${symbol}">删</button></td>`;
+            : `<td class="nail-prow-ops"><button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button><button type="button" class="nail-del" data-nail-del="${symbol}" title="${isGuest ? "收起临时查看" : "删除钉子"}">${delLabel}</button></td>`;
           return [
-            `<tbody class="nail-prow-tbody${selected}${exited ? " is-exited" : ""}" data-nail-symbol="${symbol}">`,
-            `<tr class="nail-kcard nail-prow-row" data-nail-symbol="${symbol}">`,
+            `<tbody class="nail-prow-tbody${selected}${exited ? " is-exited" : ""}${isReveal ? " is-jump-reveal" : ""}" data-nail-symbol="${symbol}"${isGuest ? ' data-nail-jump-guest="1"' : ""}>`,
+            `<tr class="nail-kcard nail-prow-row${isReveal ? " is-jump-reveal" : ""}" data-nail-symbol="${symbol}">`,
             `<td class="nail-prow-name">${nameCell}</td>`,
             `<td class="nail-prow-kline-cell"><canvas class="nail-kline" data-kline="${symbol}" data-price-label="1"></canvas></td>`,
             `<td class="nail-prow-chg ${chCls}" data-nail-list-chg="${symbol}">${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</td>`,
@@ -36947,6 +37132,8 @@
                 opts.loadingText || (want ? "置顶中…" : "取消置顶…"),
             },
           );
+          // 临时露出的币一旦真正置顶，临时态可清掉（筛选开着也会因置顶而自然可见）。
+          if (want && nailJumpRevealKey() === key) clearNailJumpReveal();
           showToast(
             opts.toast ||
               (want ? `${label} 已置顶` : `${label} 已取消置顶`),
@@ -39277,7 +39464,13 @@
           if (delBtn) {
             event.preventDefault();
             event.stopPropagation();
-            void deleteNail(delBtn.getAttribute("data-nail-del"));
+            const sym = delBtn.getAttribute("data-nail-del");
+            if (isNailJumpGuest(sym)) {
+              clearNailJumpReveal({ rerender: true });
+              showToast("已收起临时查看");
+              return;
+            }
+            void deleteNail(sym);
             return;
           }
           const pinFirstBtn = event.target.closest("[data-nail-pin-first]");
@@ -39305,6 +39498,9 @@
             const sym = pinBtn.getAttribute("data-nail-pin");
             if (pinBtn.classList.contains("is-on")) {
               openNailPinMenu(pinBtn, sym);
+            } else if (isNailJumpGuest(sym)) {
+              closeNailPinMenus();
+              void pinNailJumpGuest(sym);
             } else {
               closeNailPinMenus();
               void toggleNailPinned(sym);
@@ -39839,7 +40035,17 @@
             );
             return;
           }
-          // 点行主体（名次 / 币名 / K线 / 24h）切换焦点选中；复刻自动盯分栏的点击体验。
+          // 点币名：跳到置顶分栏并定位（与其它分栏 data-open-nail 一致）。
+          const nameBtn = event.target.closest("[data-nail-radar-symbol]");
+          if (nameBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            openNailDrawerAtSymbol(
+              nameBtn.getAttribute("data-nail-radar-symbol"),
+            );
+            return;
+          }
+          // 点行其余区域（名次 / K线 / 24h）切换焦点选中。
           const row = event.target.closest("tr[data-radar-symbol]");
           if (row) toggleRadarFocus(row.getAttribute("data-radar-symbol"));
         });
