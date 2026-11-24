@@ -7426,14 +7426,15 @@
         border-radius: 8px;
         background: color-mix(in srgb, #c45c5c 12%, transparent);
       }
-      .trade-confirm-stop-label {
+      .trade-confirm-k {
+        font-weight: 700;
+        margin-right: 2px;
+      }
+      .trade-confirm-stop .trade-confirm-k {
         color: #c62828;
-        font-weight: 800;
-        margin-right: 4px;
       }
       .trade-confirm-stop-immediate {
-        display: block;
-        margin-top: 6px;
+        margin: 8px 0 0 !important;
         color: #b71c1c;
         font-weight: 800;
         line-height: 1.35;
@@ -17894,36 +17895,22 @@
           plan.stop3 > 0 ? formatHoldingsPriceInput(plan.stop3) : "--";
         const stop5 =
           plan.stop5 > 0 ? formatHoldingsPriceInput(plan.stop5) : "--";
-        const entryText =
-          plan.entry > 0 ? formatHoldingsPriceInput(plan.entry) : "--";
         const spotText =
           plan.spot > 0 ? formatHoldingsPriceInput(plan.spot) : "--";
-        const avgNote =
-          plan.prevQty > 0
-            ? `含已有仓加权，预计成本约 ${entryText}`
-            : `预计成本约 ${entryText}`;
         const spot = Number(plan.spot) || 0;
-        const hitStop5 = spot > 0 && plan.stop5 > 0 && spot <= plan.stop5;
-        const hitStop3 = spot > 0 && plan.stop3 > 0 && spot <= plan.stop3;
-        let immediateHtml = "";
-        if (hitStop5) {
-          immediateHtml =
-            `<span class="trade-confirm-stop-immediate">` +
-            `⚠ 现价 ${escapeHtml(spotText)} 已低于 -5% 触发价 ${escapeHtml(stop5)}，` +
-            `确认后监控会立即卖出（含全仓）</span>`;
-        } else if (hitStop3) {
-          immediateHtml =
-            `<span class="trade-confirm-stop-immediate">` +
-            `⚠ 现价 ${escapeHtml(spotText)} 已低于 -3% 触发价 ${escapeHtml(stop3)}，` +
-            `确认后监控会立即卖出一半</span>`;
-        }
+        const immediate =
+          spot > 0 &&
+          ((plan.stop5 > 0 && spot <= plan.stop5) ||
+            (plan.stop3 > 0 && spot <= plan.stop3));
         return (
           `<p>确认现价买入 <strong>${escapeHtml(asset)}</strong>？</p>` +
-          `<p>约花费 <strong>${escapeHtml(formatHoldingsUsdt(quote))} USDT</strong></p>` +
-          `<p>参考现价 ${escapeHtml(spotText)} · ${escapeHtml(avgNote)}</p>` +
-          `<p class="trade-confirm-stop"><span class="trade-confirm-stop-label">止损监控</span>` +
-          `将按成本挂：-3% ≈ ${escapeHtml(stop3)}（卖一半），-5% ≈ ${escapeHtml(stop5)}（全出）` +
-          `${immediateHtml}</p>`
+          `<p><span class="trade-confirm-k">【花费】</span>${escapeHtml(formatHoldingsUsdt(quote))} USDT</p>` +
+          `<p><span class="trade-confirm-k">【现价】</span>${escapeHtml(spotText)}</p>` +
+          `<p class="trade-confirm-stop"><span class="trade-confirm-k">【止损监控】</span>` +
+          `-3% ≈ ${escapeHtml(stop3)}（卖一半），-5% ≈ ${escapeHtml(stop5)}（全出）</p>` +
+          (immediate
+            ? `<p class="trade-confirm-stop-immediate"><span class="trade-confirm-k">【警告】</span>「监控会立即卖出」</p>`
+            : "")
         );
       }
 
