@@ -7361,10 +7361,126 @@
         width: 100%;
         margin: 0 0 6px;
       }
+      .quick-trade-amount-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 0 0 8px;
+        font-size: 12px;
+      }
+      .quick-trade-amount-row label {
+        color: var(--secondary, #8a9692);
+        flex-shrink: 0;
+      }
+      .quick-trade-amount-row input {
+        flex: 1;
+        min-width: 0;
+        height: 32px;
+        border-radius: 8px;
+        border: 0.5px solid var(--separator);
+        background: var(--fill, rgba(90, 106, 104, 0.08));
+        color: var(--label);
+        padding: 0 10px;
+        font-size: 14px;
+        font-weight: 600;
+        text-align: right;
+      }
       .quick-trade-hint {
         font-size: 12px;
         color: var(--secondary, #8a9692);
         margin-bottom: 10px;
+      }
+      .trade-confirm-dialog {
+        position: fixed;
+        inset: 0;
+        z-index: 1400;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(0, 0, 0, 0.42);
+      }
+      .trade-confirm-dialog[hidden] {
+        display: none !important;
+      }
+      .trade-confirm-card {
+        width: min(92vw, 360px);
+        border-radius: 14px;
+        background: var(--card, #fff);
+        color: var(--label);
+        padding: 16px 16px 14px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+      }
+      .trade-confirm-body {
+        font-size: 14px;
+        line-height: 1.55;
+        margin-bottom: 14px;
+      }
+      .trade-confirm-body p {
+        margin: 0 0 8px;
+      }
+      .trade-confirm-stop {
+        margin-top: 10px !important;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: color-mix(in srgb, #c45c5c 12%, transparent);
+      }
+      .trade-confirm-stop-label {
+        color: #c62828;
+        font-weight: 800;
+        margin-right: 4px;
+      }
+      .trade-confirm-stop-immediate {
+        display: block;
+        margin-top: 6px;
+        color: #b71c1c;
+        font-weight: 800;
+        line-height: 1.35;
+      }
+      .trade-confirm-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .trade-confirm-actions button {
+        flex: 1;
+        height: 38px;
+        border-radius: 10px;
+        border: 0.5px solid var(--separator);
+        background: var(--fill, rgba(90, 106, 104, 0.1));
+        color: var(--label);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .trade-confirm-actions button.is-primary {
+        border-color: transparent;
+        background: var(--accent, #2f8f6e);
+        color: #fff;
+      }
+      .nail-hold-amount-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 6px 0 4px;
+      }
+      .nail-hold-amount-row label {
+        flex-shrink: 0;
+        font-size: 12px;
+        color: var(--secondary);
+      }
+      .nail-hold-amount-row input {
+        flex: 1;
+        min-width: 0;
+        height: 30px;
+        border-radius: 8px;
+        border: 0.5px solid var(--separator);
+        background: var(--fill, rgba(90, 106, 104, 0.08));
+        color: var(--label);
+        padding: 0 8px;
+        font-size: 13px;
+        font-weight: 600;
+        text-align: right;
       }
       .quick-trade-actions {
         display: flex;
@@ -11436,6 +11552,18 @@
       <button type="button" data-focus-action="refresh">刷新</button>
     </div>
 
+    <div id="tradeConfirmDialog" class="trade-confirm-dialog" hidden>
+      <div class="trade-confirm-card" role="dialog" aria-modal="true">
+        <div class="trade-confirm-body" id="tradeConfirmBody"></div>
+        <div class="trade-confirm-actions">
+          <button type="button" id="tradeConfirmCancel">取消</button>
+          <button type="button" class="is-primary" id="tradeConfirmOk">
+            确认下单
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div id="quickTradeSheet" class="quick-trade-sheet" hidden>
       <button
         type="button"
@@ -11469,6 +11597,17 @@
         step="1"
         value="50"
       />
+      <div class="quick-trade-amount-row">
+        <label id="quickTradeAmountLabel" for="quickTradeAmount">金额 USDT</label>
+        <input
+          type="number"
+          id="quickTradeAmount"
+          min="0"
+          step="any"
+          inputmode="decimal"
+          placeholder="0"
+        />
+      </div>
       <div class="quick-trade-hint" id="quickTradeHint">本单约 —</div>
       <div class="quick-trade-actions">
         <button type="button" id="quickTradeAdvanced" title="打开持有：限价 / 止损">
@@ -17710,6 +17849,143 @@
         ];
       }
 
+      /** 买入前预估：按现价加仓后的成本，以及将挂的 -3%/-5% 触发价。 */
+      function previewBuyEntryAndStops(symbol, quoteUsdt, spotPrice) {
+        const key = normalizeHoldSymbol(symbol);
+        const spot =
+          Number(spotPrice) > 0
+            ? Number(spotPrice)
+            : holdingsSpotPrice(key);
+        const quote = Number(quoteUsdt) || 0;
+        const estQty = spot > 0 && quote > 0 ? quote / spot : 0;
+        const lots = holdingsEntryLotsOf(key);
+        let prevQty = 0;
+        let prevCost = 0;
+        lots.forEach((lot) => {
+          const q = Number(lot && lot.qty) || 0;
+          const p = Number(lot && lot.price) || 0;
+          if (q > 0 && p > 0) {
+            prevQty += q;
+            prevCost += q * p;
+          }
+        });
+        let entry = spot;
+        if (estQty > 0 && prevQty > 0 && spot > 0) {
+          entry = (prevCost + estQty * spot) / (prevQty + estQty);
+        } else if (estQty > 0 && spot > 0) {
+          entry = spot;
+        } else if (prevQty > 0) {
+          entry = prevCost / prevQty;
+        }
+        return {
+          spot,
+          entry,
+          stop3: entry > 0 ? entry * 0.97 : null,
+          stop5: entry > 0 ? entry * 0.95 : null,
+          estQty,
+          prevQty,
+        };
+      }
+
+      function buildBuyStopConfirmHtml(symbol, quote, spotPrice) {
+        const asset = holdingsBaseAsset(symbol);
+        const plan = previewBuyEntryAndStops(symbol, quote, spotPrice);
+        const stop3 =
+          plan.stop3 > 0 ? formatHoldingsPriceInput(plan.stop3) : "--";
+        const stop5 =
+          plan.stop5 > 0 ? formatHoldingsPriceInput(plan.stop5) : "--";
+        const entryText =
+          plan.entry > 0 ? formatHoldingsPriceInput(plan.entry) : "--";
+        const spotText =
+          plan.spot > 0 ? formatHoldingsPriceInput(plan.spot) : "--";
+        const avgNote =
+          plan.prevQty > 0
+            ? `含已有仓加权，预计成本约 ${entryText}`
+            : `预计成本约 ${entryText}`;
+        const spot = Number(plan.spot) || 0;
+        const hitStop5 = spot > 0 && plan.stop5 > 0 && spot <= plan.stop5;
+        const hitStop3 = spot > 0 && plan.stop3 > 0 && spot <= plan.stop3;
+        let immediateHtml = "";
+        if (hitStop5) {
+          immediateHtml =
+            `<span class="trade-confirm-stop-immediate">` +
+            `⚠ 现价 ${escapeHtml(spotText)} 已低于 -5% 触发价 ${escapeHtml(stop5)}，` +
+            `确认后监控会立即卖出（含全仓）</span>`;
+        } else if (hitStop3) {
+          immediateHtml =
+            `<span class="trade-confirm-stop-immediate">` +
+            `⚠ 现价 ${escapeHtml(spotText)} 已低于 -3% 触发价 ${escapeHtml(stop3)}，` +
+            `确认后监控会立即卖出一半</span>`;
+        }
+        return (
+          `<p>确认现价买入 <strong>${escapeHtml(asset)}</strong>？</p>` +
+          `<p>约花费 <strong>${escapeHtml(formatHoldingsUsdt(quote))} USDT</strong></p>` +
+          `<p>参考现价 ${escapeHtml(spotText)} · ${escapeHtml(avgNote)}</p>` +
+          `<p class="trade-confirm-stop"><span class="trade-confirm-stop-label">止损监控</span>` +
+          `将按成本挂：-3% ≈ ${escapeHtml(stop3)}（卖一半），-5% ≈ ${escapeHtml(stop5)}（全出）` +
+          `${immediateHtml}</p>`
+        );
+      }
+
+      let tradeConfirmResolver = null;
+      function showTradeConfirmDialog(optsOrHtml) {
+        const opts =
+          optsOrHtml && typeof optsOrHtml === "object"
+            ? optsOrHtml
+            : { bodyHtml: optsOrHtml };
+        const bodyHtml = opts.bodyHtml != null ? opts.bodyHtml : "";
+        const confirmText = opts.confirmText || "确认下单";
+        return new Promise((resolve) => {
+          const dlg = document.getElementById("tradeConfirmDialog");
+          const body = document.getElementById("tradeConfirmBody");
+          const ok = document.getElementById("tradeConfirmOk");
+          const cancel = document.getElementById("tradeConfirmCancel");
+          if (!dlg || !body || !ok || !cancel) {
+            resolve(
+              window.confirm(
+                String(bodyHtml || "")
+                  .replace(/<[^>]+>/g, " ")
+                  .replace(/\s+/g, " ")
+                  .trim(),
+              ),
+            );
+            return;
+          }
+          if (tradeConfirmResolver) {
+            const prev = tradeConfirmResolver;
+            tradeConfirmResolver = null;
+            prev(false);
+          }
+          body.innerHTML = bodyHtml || "";
+          ok.textContent = confirmText;
+          if (cancel && opts.cancelText) cancel.textContent = opts.cancelText;
+          dlg.hidden = false;
+          const finish = (val) => {
+            dlg.hidden = true;
+            tradeConfirmResolver = null;
+            ok.onclick = null;
+            cancel.onclick = null;
+            dlg.onclick = null;
+            resolve(!!val);
+          };
+          tradeConfirmResolver = finish;
+          ok.onclick = () => finish(true);
+          cancel.onclick = () => finish(false);
+          dlg.onclick = (event) => {
+            if (event.target === dlg) finish(false);
+          };
+        });
+      }
+
+      async function confirmBuyWithStopPreview(symbol, quote, spotPrice) {
+        const q = Number(quote);
+        if (!(q > 0)) return false;
+        return showTradeConfirmDialog({
+          bodyHtml: buildBuyStopConfirmHtml(symbol, q, spotPrice),
+          confirmText: "确认买入",
+        });
+      }
+
       async function setNailTradeLive(side, nextLive) {
         const wantLive = !!nextLive;
         if (wantLive) {
@@ -18182,8 +18458,10 @@
           const entryInput = row.querySelector(`[data-hold-entry="${sym}"]`);
           const sellMin = row.querySelector(`[data-sell-min="${sym}"]`);
           const sellPct = row.querySelector(`[data-sell-pct="${sym}"]`);
+          const sellAmount = row.querySelector(`[data-sell-amount="${sym}"]`);
           const buyMax = row.querySelector(`[data-buy-max="${sym}"]`);
           const buyPct = row.querySelector(`[data-buy-pct="${sym}"]`);
+          const buyAmount = row.querySelector(`[data-buy-amount="${sym}"]`);
           map[sym] = {
             sellOpen: !!(sellPanel && !sellPanel.hidden),
             buyOpen: !!(buyPanel && !buyPanel.hidden),
@@ -18191,8 +18469,10 @@
             entryValue: entryInput ? String(entryInput.value || "") : "",
             sellMin: sellMin ? String(sellMin.value || "") : "",
             sellPct: sellPct ? String(sellPct.value || "") : "",
+            sellAmount: sellAmount ? String(sellAmount.value || "") : "",
             buyMax: buyMax ? String(buyMax.value || "") : "",
             buyPct: buyPct ? String(buyPct.value || "") : "",
+            buyAmount: buyAmount ? String(buyAmount.value || "") : "",
           };
         });
         return map;
@@ -18221,14 +18501,19 @@
           const buyPanel = row.querySelector('[data-hold-panel="buy"]');
           const sellMin = row.querySelector(`[data-sell-min="${sym}"]`);
           const sellPct = row.querySelector(`[data-sell-pct="${sym}"]`);
+          const sellAmount = row.querySelector(`[data-sell-amount="${sym}"]`);
           const buyMax = row.querySelector(`[data-buy-max="${sym}"]`);
           const buyPct = row.querySelector(`[data-buy-pct="${sym}"]`);
+          const buyAmount = row.querySelector(`[data-buy-amount="${sym}"]`);
           if (state.sellOpen && sellPanel) {
             if (buyPanel) buyPanel.hidden = true;
             sellPanel.hidden = false;
             if (sellMin && state.sellMin !== "") sellMin.value = state.sellMin;
-            if (sellPct && state.sellPct !== "") {
-              sellPct.value = state.sellPct;
+            if (sellPct && state.sellPct !== "") sellPct.value = state.sellPct;
+            if (sellAmount && state.sellAmount !== "") {
+              sellAmount.value = state.sellAmount;
+              syncNailHoldSellHints(row, sym, { from: "amount" });
+            } else if (sellPct && state.sellPct !== "") {
               syncNailHoldSellHints(row, sym);
             }
             snapshotNailHoldPanel(sellPanel);
@@ -18236,8 +18521,11 @@
             if (sellPanel) sellPanel.hidden = true;
             buyPanel.hidden = false;
             if (buyMax && state.buyMax !== "") buyMax.value = state.buyMax;
-            if (buyPct && state.buyPct !== "") {
-              buyPct.value = state.buyPct;
+            if (buyPct && state.buyPct !== "") buyPct.value = state.buyPct;
+            if (buyAmount && state.buyAmount !== "") {
+              buyAmount.value = state.buyAmount;
+              syncNailHoldBuyHints(row, sym, { from: "amount" });
+            } else if (buyPct && state.buyPct !== "") {
               syncNailHoldBuyHints(row, sym);
             }
             snapshotNailHoldPanel(buyPanel);
@@ -18252,8 +18540,10 @@
           const key =
             input.getAttribute("data-sell-min") ||
             input.getAttribute("data-sell-pct") ||
+            input.getAttribute("data-sell-amount") ||
             input.getAttribute("data-buy-max") ||
             input.getAttribute("data-buy-pct") ||
+            input.getAttribute("data-buy-amount") ||
             input.name ||
             input.id;
           if (key) data[key] = String(input.value || "");
@@ -18276,8 +18566,10 @@
           const key =
             input.getAttribute("data-sell-min") ||
             input.getAttribute("data-sell-pct") ||
+            input.getAttribute("data-sell-amount") ||
             input.getAttribute("data-buy-max") ||
             input.getAttribute("data-buy-pct") ||
+            input.getAttribute("data-buy-amount") ||
             input.name ||
             input.id;
           if (!key) continue;
@@ -18286,19 +18578,35 @@
         return false;
       }
 
-      function syncNailHoldSellHints(row, symbol) {
+      function syncNailHoldSellHints(row, symbol, opts) {
         const sym = String(symbol || "").toUpperCase();
         if (!row || !sym) return;
+        const from = (opts && opts.from) || "pct";
         const free = Number(row.getAttribute("data-hold-free")) || 0;
         const px = Number(row.getAttribute("data-hold-px")) || 0;
         const pctEl = row.querySelector(`[data-sell-pct="${sym}"]`);
+        const amountEl = row.querySelector(`[data-sell-amount="${sym}"]`);
         const label = row.querySelector(`[data-sell-pct-label="${sym}"]`);
         const qtyHint = row.querySelector(`[data-sell-qty-hint="${sym}"]`);
         const planEl = row.querySelector(`[data-sell-plan-qty="${sym}"]`);
         const notionalEl = row.querySelector(`[data-sell-notional="${sym}"]`);
-        const pct = Number(pctEl && pctEl.value) || 0;
+        let pct;
+        let plan;
+        if (from === "amount") {
+          plan = Number(amountEl && amountEl.value);
+          if (!(plan > 0)) plan = 0;
+          if (plan > free && free > 0) plan = free;
+          pct = pctFromAmount(plan, free);
+          if (pctEl) pctEl.value = String(pct);
+        } else {
+          pct = Number(pctEl && pctEl.value) || 0;
+          plan = free * (pct / 100);
+          if (amountEl && document.activeElement !== amountEl) {
+            amountEl.value =
+              plan > 0 ? formatTradeInputNumber(plan, "qty") : "";
+          }
+        }
         if (label) label.textContent = `${pct}%`;
-        const plan = free * (pct / 100);
         const minEl = row.querySelector(`[data-sell-min="${sym}"]`);
         const usePx = Number(minEl && minEl.value) || px;
         if (qtyHint) {
@@ -18313,18 +18621,34 @@
         }
       }
 
-      function syncNailHoldBuyHints(row, symbol) {
+      function syncNailHoldBuyHints(row, symbol, opts) {
         const sym = String(symbol || "").toUpperCase();
         if (!row || !sym) return;
+        const from = (opts && opts.from) || "pct";
         const usdt = Number(row.getAttribute("data-hold-usdt")) || 0;
         const pctEl = row.querySelector(`[data-buy-pct="${sym}"]`);
+        const amountEl = row.querySelector(`[data-buy-amount="${sym}"]`);
         const label = row.querySelector(`[data-buy-pct-label="${sym}"]`);
         const qtyHint = row.querySelector(`[data-buy-qty-hint="${sym}"]`);
         const spendEl = row.querySelector(`[data-buy-spend="${sym}"]`);
         const getEl = row.querySelector(`[data-buy-get-qty="${sym}"]`);
-        const pct = Number(pctEl && pctEl.value) || 0;
+        let pct;
+        let spend;
+        if (from === "amount") {
+          spend = Number(amountEl && amountEl.value);
+          if (!(spend > 0)) spend = 0;
+          if (spend > usdt && usdt > 0) spend = usdt;
+          pct = pctFromAmount(spend, usdt);
+          if (pctEl) pctEl.value = String(pct);
+        } else {
+          pct = Number(pctEl && pctEl.value) || 0;
+          spend = usdt * (pct / 100);
+          if (amountEl && document.activeElement !== amountEl) {
+            amountEl.value =
+              spend > 0 ? formatTradeInputNumber(spend, "usdt") : "";
+          }
+        }
         if (label) label.textContent = `${pct}%`;
-        const spend = usdt * (pct / 100);
         const maxEl = row.querySelector(`[data-buy-max="${sym}"]`);
         const usePx = Number(maxEl && maxEl.value) || Number(row.getAttribute("data-hold-px")) || 0;
         if (qtyHint) {
@@ -18337,6 +18661,29 @@
               ? formatHoldingsQty(spend / usePx)
               : "--";
         }
+      }
+
+      function readNailHoldOrderAmount(row, symbol, mode) {
+        const sym = String(symbol || "").toUpperCase();
+        if (!row || !sym) return { ok: false };
+        if (mode === "sell") {
+          const free = Number(row.getAttribute("data-hold-free")) || 0;
+          const pctEl = row.querySelector(`[data-sell-pct="${sym}"]`);
+          const amountEl = row.querySelector(`[data-sell-amount="${sym}"]`);
+          const pct = Number(pctEl && pctEl.value) || 0;
+          let qty = Number(amountEl && amountEl.value);
+          if (!(qty > 0) && pct > 0) qty = free * (pct / 100);
+          if (qty > free && free > 0) qty = free;
+          return { ok: qty > 0, qty, pct, free };
+        }
+        const usdt = Number(row.getAttribute("data-hold-usdt")) || 0;
+        const pctEl = row.querySelector(`[data-buy-pct="${sym}"]`);
+        const amountEl = row.querySelector(`[data-buy-amount="${sym}"]`);
+        const pct = Number(pctEl && pctEl.value) || 0;
+        let quote = Number(amountEl && amountEl.value);
+        if (!(quote > 0) && pct > 0) quote = usdt * (pct / 100);
+        if (quote > usdt && usdt > 0) quote = usdt;
+        return { ok: quote > 0, quote, pct, usdt };
       }
 
       function updateNailHoldEntryPreview(row, symbol) {
@@ -18808,6 +19155,10 @@
                 <div>
                   <div class="nail-hold-pct-line"><span>卖出比例</span><span data-sell-pct-label="${escapeHtml(symbol)}">${escapeHtml(String(sellPct))}%</span></div>
                   <input type="range" min="1" max="100" step="1" value="${escapeHtml(String(sellPct))}" data-sell-pct="${escapeHtml(symbol)}" />
+                  <div class="nail-hold-amount-row">
+                    <label>数量 ${escapeHtml(asset)}</label>
+                    <input type="number" min="0" step="any" inputmode="decimal" value="${escapeHtml(formatTradeInputNumber(sellPlanQty, "qty"))}" data-sell-amount="${escapeHtml(symbol)}" />
+                  </div>
                   <div class="nail-hold-qty-hint" data-sell-qty-hint="${escapeHtml(symbol)}">可用 ${escapeHtml(formatHoldingsQty(freeNum))} · 本单约 ${escapeHtml(formatHoldingsQty(sellPlanQty))}</div>
                 </div>
                   <div class="nail-hold-panel-stats">
@@ -18836,6 +19187,10 @@
                 <div>
                   <div class="nail-hold-pct-line"><span>使用 USDT 比例</span><span data-buy-pct-label="${escapeHtml(symbol)}">${escapeHtml(String(buyPct))}%</span></div>
                   <input type="range" min="1" max="100" step="1" value="${escapeHtml(String(buyPct))}" data-buy-pct="${escapeHtml(symbol)}" />
+                  <div class="nail-hold-amount-row">
+                    <label>金额 USDT</label>
+                    <input type="number" min="0" step="any" inputmode="decimal" value="${escapeHtml(formatTradeInputNumber(buySpendHint, "usdt"))}" data-buy-amount="${escapeHtml(symbol)}" />
+                  </div>
                   <div class="nail-hold-qty-hint" data-buy-qty-hint="${escapeHtml(symbol)}">可用 USDT ${escapeHtml(usdtFree)} · 本单约 ${escapeHtml(formatHoldingsUsdt(buySpendHint))} USDT</div>
                 </div>
                   <div class="nail-hold-panel-stats">
@@ -19692,12 +20047,11 @@
           return false;
         }
         const panel = row.querySelector('[data-hold-panel="buy"]');
-        const usdt = Number(row.getAttribute("data-hold-usdt")) || 0;
-        const pctEl = row.querySelector(`[data-buy-pct="${key}"]`);
-        const pct = Number(pctEl && pctEl.value) || 0;
-        const quote = usdt * (pct / 100);
+        const orderAmt = readNailHoldOrderAmount(row, key, "buy");
+        const quote = orderAmt.quote;
+        const pct = orderAmt.pct || 0;
         if (!(quote > 0)) {
-          showToast("买入金额无效（检查 USDT 可用与比例）");
+          showToast("买入金额无效（检查 USDT 可用与输入框）");
           return false;
         }
         if (quote < 5) {
@@ -19705,13 +20059,12 @@
           return false;
         }
         const asset = holdingsBaseAsset(key);
-        if (
-          !window.confirm(
-            `确认现价买入 ${asset}？\n约花费 ${formatHoldingsUsdt(quote)} USDT（${pct}% 可用）`,
-          )
-        ) {
-          return false;
-        }
+        const okBuy = await confirmBuyWithStopPreview(
+          key,
+          quote,
+          holdingsSpotPrice(key) || Number(row.getAttribute("data-hold-px")) || 0,
+        );
+        if (!okBuy) return false;
         setNailHoldPanelLoading(panel, true, "买入中…");
         try {
           const data = await callManualTradeHttp("/buy", {
@@ -19774,26 +20127,27 @@
           return false;
         }
         const panel = row.querySelector('[data-hold-panel="sell"]');
-        const free = Number(row.getAttribute("data-hold-free")) || 0;
-        const pctEl = row.querySelector(`[data-sell-pct="${key}"]`);
-        const pct = Number(pctEl && pctEl.value) || 0;
-        const quantity = free * (pct / 100);
+        const orderAmt = readNailHoldOrderAmount(row, key, "sell");
+        const free = orderAmt.free || 0;
+        const quantity = orderAmt.qty;
+        const pct = orderAmt.pct || 0;
         if (!(free > 0)) {
           showToast("可用数量为 0");
           return false;
         }
-        if (!(pct > 0) || !(quantity > 0)) {
-          showToast("卖出比例无效");
+        if (!(quantity > 0)) {
+          showToast("卖出数量无效");
           return false;
         }
         const asset = holdingsBaseAsset(key);
-        if (
-          !window.confirm(
-            `确认现价卖出 ${asset}？\n约 ${formatHoldingsQty(quantity)}（${pct}% 可用）`,
-          )
-        ) {
-          return false;
-        }
+        const okSell = await showTradeConfirmDialog({
+          bodyHtml:
+            `<p>确认现价卖出 <strong>${escapeHtml(asset)}</strong>？</p>` +
+            `<p>约 <strong>${escapeHtml(formatHoldingsQty(quantity))}</strong>` +
+            `（输入框数量；约 ${pct}% 可用）</p>`,
+          confirmText: "确认卖出",
+        });
+        if (!okSell) return false;
         setNailHoldPanelLoading(panel, true, "卖出中…");
         try {
           const data = await callManualTradeHttp("/sell", {
@@ -20280,10 +20634,32 @@
         }
       }
 
-      function syncQuickTradeSheet() {
+      function formatTradeInputNumber(value, kind) {
+        const n = Number(value);
+        if (!Number.isFinite(n) || n < 0) return "";
+        if (kind === "usdt") {
+          if (n >= 1) return n.toFixed(2);
+          if (n >= 0.01) return n.toFixed(4);
+          return String(Number(n.toPrecision(6)));
+        }
+        if (n >= 1000) return n.toFixed(2);
+        if (n >= 1) return n.toFixed(4);
+        return String(Number(n.toPrecision(6)));
+      }
+
+      function pctFromAmount(amount, total) {
+        const a = Number(amount);
+        const t = Number(total);
+        if (!(t > 0) || !(a >= 0)) return 1;
+        return Math.min(100, Math.max(1, Math.round((a / t) * 100)));
+      }
+
+      /** opts.from = 'amount' | 'pct' | undefined（余额刷新等，用比例推金额） */
+      function syncQuickTradeSheet(opts) {
         const st = quickTradeState;
         const sheet = document.getElementById("quickTradeSheet");
         if (!st || !sheet || sheet.hidden) return;
+        const from = (opts && opts.from) || "pct";
         const busy = sheet.classList.contains("is-busy");
         const sideEl = document.getElementById("quickTradeSide");
         const symEl = document.getElementById("quickTradeSym");
@@ -20291,10 +20667,11 @@
         const availEl = document.getElementById("quickTradeAvail");
         const pctEl = document.getElementById("quickTradePct");
         const pctLabel = document.getElementById("quickTradePctLabel");
+        const amountEl = document.getElementById("quickTradeAmount");
+        const amountLabel = document.getElementById("quickTradeAmountLabel");
         const hintEl = document.getElementById("quickTradeHint");
         const confirmBtn = document.getElementById("quickTradeConfirm");
         const asset = holdingsBaseAsset(st.symbol);
-        const pct = Number(pctEl && pctEl.value) || 50;
         const px = holdingsSpotPrice(st.symbol);
         const isSell = st.mode === "sell";
         sheet.classList.toggle("is-sell", isSell);
@@ -20304,10 +20681,30 @@
           pxEl.textContent =
             Number.isFinite(px) && px > 0 ? formatHoldingsPriceInput(px) : "—";
         }
-        if (pctLabel) pctLabel.textContent = `${pct}%`;
+        if (amountLabel) {
+          amountLabel.textContent = isSell
+            ? `数量 ${asset || ""}`.trim()
+            : "金额 USDT";
+        }
         if (isSell) {
           const free = holdingsFreeQty(st.symbol);
-          const qty = free * (pct / 100);
+          let qty;
+          let pct;
+          if (from === "amount") {
+            qty = Number(amountEl && amountEl.value);
+            if (!(qty > 0)) qty = 0;
+            if (qty > free && free > 0) qty = free;
+            pct = pctFromAmount(qty, free);
+            if (pctEl) pctEl.value = String(pct);
+          } else {
+            pct = Number(pctEl && pctEl.value) || 50;
+            qty = free * (pct / 100);
+            if (amountEl && document.activeElement !== amountEl) {
+              amountEl.value =
+                qty > 0 ? formatTradeInputNumber(qty, "qty") : "";
+            }
+          }
+          if (pctLabel) pctLabel.textContent = `${pct}%`;
           const notional =
             Number.isFinite(px) && px > 0 ? qty * px : NaN;
           if (availEl) {
@@ -20324,7 +20721,23 @@
           }
         } else {
           const usdt = holdingsUsdtFree();
-          const quote = usdt * (pct / 100);
+          let quote;
+          let pct;
+          if (from === "amount") {
+            quote = Number(amountEl && amountEl.value);
+            if (!(quote > 0)) quote = 0;
+            if (quote > usdt && usdt > 0) quote = usdt;
+            pct = pctFromAmount(quote, usdt);
+            if (pctEl) pctEl.value = String(pct);
+          } else {
+            pct = Number(pctEl && pctEl.value) || 50;
+            quote = usdt * (pct / 100);
+            if (amountEl && document.activeElement !== amountEl) {
+              amountEl.value =
+                quote > 0 ? formatTradeInputNumber(quote, "usdt") : "";
+            }
+          }
+          if (pctLabel) pctLabel.textContent = `${pct}%`;
           if (availEl) {
             availEl.textContent = `可用 ${formatHoldingsUsdt(usdt)} USDT`;
           }
@@ -20340,6 +20753,27 @@
             confirmBtn.disabled = !(quote >= 5);
           }
         }
+      }
+
+      function readQuickTradeOrderAmount() {
+        const st = quickTradeState;
+        const amountEl = document.getElementById("quickTradeAmount");
+        const pctEl = document.getElementById("quickTradePct");
+        const pct = Number(pctEl && pctEl.value) || 0;
+        const typed = Number(amountEl && amountEl.value);
+        if (!st) return { ok: false };
+        if (st.mode === "sell") {
+          const free = holdingsFreeQty(st.symbol);
+          let qty = typed;
+          if (!(qty > 0) && pct > 0) qty = free * (pct / 100);
+          if (qty > free && free > 0) qty = free;
+          return { ok: qty > 0, qty, pct, free };
+        }
+        const usdt = holdingsUsdtFree();
+        let quote = typed;
+        if (!(quote > 0) && pct > 0) quote = usdt * (pct / 100);
+        if (quote > usdt && usdt > 0) quote = usdt;
+        return { ok: quote > 0, quote, pct, usdt };
       }
 
       async function softRefreshTradeBalances(symbol) {
@@ -20397,6 +20831,8 @@
         quickTradeState = { symbol, mode: want };
         const pctEl = document.getElementById("quickTradePct");
         if (pctEl) pctEl.value = "50";
+        const amountEl = document.getElementById("quickTradeAmount");
+        if (amountEl) amountEl.value = "";
         sheet.hidden = false;
         document.body.classList.add("has-quick-trade");
         applyFocusActionChrome();
@@ -20449,24 +20885,26 @@
         if (!st) return false;
         const sheet = document.getElementById("quickTradeSheet");
         if (sheet && sheet.classList.contains("is-busy")) return false;
-        const pctEl = document.getElementById("quickTradePct");
-        const pct = Number(pctEl && pctEl.value) || 0;
         const asset = holdingsBaseAsset(st.symbol);
+        const orderAmt = readQuickTradeOrderAmount();
         try {
           if (st.mode === "sell") {
-            const free = holdingsFreeQty(st.symbol);
-            const quantity = free * (pct / 100);
+            const quantity = orderAmt.qty;
+            const pct = orderAmt.pct || 0;
             if (!(quantity > 0)) {
               showToast("卖出数量无效");
               return false;
             }
-            if (
-              !window.confirm(
-                `确认现价卖出 ${asset}？\n约 ${formatHoldingsQty(quantity)}（${pct}% 可用）`,
-              )
-            ) {
-              return false;
-            }
+            const okSell = await showTradeConfirmDialog({
+              title: "确认卖出",
+              bodyHtml:
+                `<p>确认现价卖出 <strong>${escapeHtml(asset)}</strong>？</p>` +
+                `<p>约 <strong>${escapeHtml(formatHoldingsQty(quantity))}</strong>` +
+                `（输入框数量；约 ${pct}% 可用）</p>`,
+              confirmText: "确认卖出",
+              cancelText: "取消",
+            });
+            if (!okSell) return false;
             setQuickTradeBusy(true, "卖出中…");
             const data = await callManualTradeHttp("/sell", {
               symbol: st.symbol,
@@ -20532,8 +20970,7 @@
             return true;
           }
 
-          const usdt = holdingsUsdtFree();
-          const quote = usdt * (pct / 100);
+          const quote = orderAmt.quote;
           if (!(quote > 0)) {
             showToast("买入金额无效");
             return false;
@@ -20544,13 +20981,12 @@
             );
             return false;
           }
-          if (
-            !window.confirm(
-              `确认现价买入 ${asset}？\n约花费 ${formatHoldingsUsdt(quote)} USDT（${pct}% 可用）`,
-            )
-          ) {
-            return false;
-          }
+          const okBuy = await confirmBuyWithStopPreview(
+            st.symbol,
+            quote,
+            holdingsSpotPrice(st.symbol),
+          );
+          if (!okBuy) return false;
           setQuickTradeBusy(true, "买入中…");
           const data = await callManualTradeHttp("/buy", {
             symbol: st.symbol,
@@ -39465,13 +39901,33 @@
           const sellRange = event.target.closest("[data-sell-pct]");
           if (sellRange && sellRange.type === "range") {
             const sym = sellRange.getAttribute("data-sell-pct");
-            syncNailHoldSellHints(sellRange.closest(".nail-hold-row"), sym);
+            syncNailHoldSellHints(sellRange.closest(".nail-hold-row"), sym, {
+              from: "pct",
+            });
+            return;
+          }
+          const sellAmount = event.target.closest("[data-sell-amount]");
+          if (sellAmount) {
+            const sym = sellAmount.getAttribute("data-sell-amount");
+            syncNailHoldSellHints(sellAmount.closest(".nail-hold-row"), sym, {
+              from: "amount",
+            });
             return;
           }
           const buyRange = event.target.closest("[data-buy-pct]");
           if (buyRange && buyRange.type === "range") {
             const sym = buyRange.getAttribute("data-buy-pct");
-            syncNailHoldBuyHints(buyRange.closest(".nail-hold-row"), sym);
+            syncNailHoldBuyHints(buyRange.closest(".nail-hold-row"), sym, {
+              from: "pct",
+            });
+            return;
+          }
+          const buyAmount = event.target.closest("[data-buy-amount]");
+          if (buyAmount) {
+            const sym = buyAmount.getAttribute("data-buy-amount");
+            syncNailHoldBuyHints(buyAmount.closest(".nail-hold-row"), sym, {
+              from: "amount",
+            });
           }
         });
         nailHoldList.addEventListener("click", (event) => {
@@ -40377,7 +40833,15 @@
         }
         const quickTradePct = document.getElementById("quickTradePct");
         if (quickTradePct) {
-          quickTradePct.addEventListener("input", () => syncQuickTradeSheet());
+          quickTradePct.addEventListener("input", () =>
+            syncQuickTradeSheet({ from: "pct" }),
+          );
+        }
+        const quickTradeAmount = document.getElementById("quickTradeAmount");
+        if (quickTradeAmount) {
+          quickTradeAmount.addEventListener("input", () =>
+            syncQuickTradeSheet({ from: "amount" }),
+          );
         }
         const quickTradePxRefresh = document.getElementById("quickTradePxRefresh");
         if (quickTradePxRefresh) {
