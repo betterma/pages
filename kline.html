@@ -6027,6 +6027,12 @@
         background: color-mix(in srgb, var(--accent) 12%, transparent);
         outline: none;
       }
+      .nail-prow-table .nail-prow-row.is-jump-target,
+      .nail-prow-table .nail-prow-kline-cell.is-jump-target {
+        outline: 2px solid transparent;
+        outline-offset: 2px;
+        animation: kline-jump-flash 2.8s ease-in-out 1;
+      }
       .nail-prow-table td { padding: 4px 6px; vertical-align: middle; }
       .nail-prow-name { white-space: nowrap; }
       .nail-prow-name .nail-pin { padding: 1px 6px; }
@@ -8047,7 +8053,9 @@
       .nail-auto-pin-card.is-jump-target,
       .nail-auto-pin-row.is-jump-target,
       .nail-kcard.is-jump-target,
-      .nail-notice-card.is-jump-target {
+      .nail-notice-card.is-jump-target,
+      .nail-kline-wrap.is-jump-target,
+      .nail-prow-kline-cell.is-jump-target {
         outline: 2px solid transparent;
         outline-offset: 2px;
         animation: kline-jump-flash 2.8s ease-in-out 1;
@@ -34141,20 +34149,55 @@
       function focusNailCardInDrawer(symbol) {
         const key = String(symbol || "").trim().toUpperCase();
         if (!key) return false;
-        const card = [
-          ...document.querySelectorAll(
-            "#nailList .nail-kcard[data-nail-symbol], #nailList [data-nail-symbol]",
-          ),
-        ].find(
-          (item) =>
-            String(item.dataset.nailSymbol || "").toUpperCase() === key,
-        );
+        // 优先真正的 K 卡 / 列表行（避免先命中 tbody 导致闪动样式套不上）。
+        const card =
+          [
+            ...document.querySelectorAll(
+              `#nailList .nail-kcard[data-nail-symbol="${key}"]`,
+            ),
+          ].find(Boolean) ||
+          [
+            ...document.querySelectorAll("#nailList [data-nail-symbol]"),
+          ].find(
+            (item) =>
+              String(item.dataset.nailSymbol || "").toUpperCase() === key,
+          );
         if (!card) return false;
         document
-          .querySelectorAll("#nailList .nail-kcard.is-focus, #nailList .is-focus")
-          .forEach((item) => item.classList.remove("is-focus"));
+          .querySelectorAll(
+            "#nailList .nail-kcard.is-focus, #nailList .is-focus, #nailList .is-jump-target",
+          )
+          .forEach((item) => {
+            item.classList.remove("is-focus");
+            item.classList.remove("is-jump-target");
+          });
         card.classList.add("is-focus");
-        if (typeof card.scrollIntoView === "function") {
+        // 与通知/摘要跳转同一套：滚到中央 + K 线外框闪动。
+        if (typeof scrollJumpTargetIntoView === "function") {
+          scrollJumpTargetIntoView(card, { resettleMs: 480 });
+          const klineBox =
+            card.querySelector(".nail-kline-wrap, .nail-prow-kline-cell") ||
+            (card.classList.contains("nail-prow-row")
+              ? card.querySelector(".nail-prow-kline-cell")
+              : null);
+          // 列表行：再给 K 线单元格单独闪一下，更贴「K线外边框」。
+          if (
+            klineBox &&
+            klineBox !== card &&
+            typeof scrollJumpTargetIntoView === "function"
+          ) {
+            klineBox.classList.remove("is-jump-target");
+            void klineBox.offsetWidth;
+            klineBox.classList.add("is-jump-target");
+            if (klineBox._jumpFlashTimer) {
+              window.clearTimeout(klineBox._jumpFlashTimer);
+            }
+            klineBox._jumpFlashTimer = window.setTimeout(() => {
+              klineBox.classList.remove("is-jump-target");
+              klineBox._jumpFlashTimer = null;
+            }, 2900);
+          }
+        } else if (typeof card.scrollIntoView === "function") {
           card.scrollIntoView({ behavior: "smooth", block: "center" });
         }
         window.setTimeout(() => card.classList.remove("is-focus"), 2800);
@@ -34236,17 +34279,26 @@
           }
         }
 
-        if (nailSegment !== "pinned") {
+        const fromOtherSeg = nailSegment !== "pinned";
+        if (fromOtherSeg) {
           await setNailSegment("pinned", { force: true });
         } else {
           renderNailDrawer();
         }
         setNailDrawerOpen(true);
+        const tryFocus = () => focusNailCardInDrawer(key);
+        // 跨分栏切换后布局/列表重绘稍晚，双 rAF 后再补一两次，避免闪动丢了。
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            if (!focusNailCardInDrawer(key)) {
-              showToast(`${label} 未能定位到卡片`);
-            }
+            if (tryFocus()) return;
+            window.setTimeout(() => {
+              if (tryFocus()) return;
+              window.setTimeout(() => {
+                if (!tryFocus()) {
+                  showToast(`${label} 未能定位到卡片`);
+                }
+              }, fromOtherSeg ? 320 : 120);
+            }, fromOtherSeg ? 180 : 60);
           });
         });
         if (toastMsg) showToast(toastMsg);
