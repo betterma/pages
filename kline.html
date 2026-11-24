@@ -12990,6 +12990,10 @@
       let lastResumePinSymbols = [];
       const klineFetchCache = new Map();
       const KLINE_FETCH_CACHE_TTL_MS = 90 * 1000;
+      /** history 缺本窗快照时：用 4h K 线 open 作窗起点（symbol → { open, windowStart, at }） */
+      const windowOpenFallbackMap = new Map();
+      const windowOpenFallbackInflight = new Set();
+      let windowOpenFallbackRefreshTimer = 0;
       const PIN_CARD_ROOT_SELECTOR =
         "#pinGrid .kline-card[data-symbol], #recentAutoPinGrid .kline-card[data-symbol], #resumePinGrid .kline-card[data-symbol], #hiddenPinGrid .kline-card[data-symbol]";
       const PIN_SELECT_MODE_SELECTOR =
@@ -14591,18 +14595,157 @@
         return selectEarliestWindowSnapshot(currentWindowStart, duration);
       }
 
-      function windowPriceChange(symbol, interval) {
-        const old = comparison(interval);
-        const oldPrice = old?.prices?.[symbol];
-        const currentPrice = marketMap[symbol]?.price;
-        if (
-          !Number.isFinite(oldPrice) ||
-          !Number.isFinite(currentPrice) ||
-          oldPrice === 0
-        ) {
+      /**
+       * 从已拉过的 K 线缓存取「当前窗」open（与币安 4h 开盘对齐）。
+       */
+      function windowOpenFromKlineCache(symbol, interval) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const iv = interval || CONFIG.KLINE_INTERVAL || "4h";
+        const duration = DURATION_MS[iv];
+        if (!key || !duration || typeof klineFetchCache === "undefined") {
           return null;
         }
-        return ((currentPrice - oldPrice) / oldPrice) * 100;
+        const windowStart = getWindowStart(Date.now(), duration);
+        const prefix = `${key}|${iv}|`;
+        for (const [cacheKey, cached] of klineFetchCache.entries()) {
+          if (!String(cacheKey).startsWith(prefix)) continue;
+          if (
+            !cached ||
+            !Array.isArray(cached.candles) ||
+            !cached.candles.length
+          ) {
+            continue;
+          }
+          for (let i = cached.candles.length - 1; i >= 0; i -= 1) {
+            const bar = cached.candles[i];
+            if (
+              Number(bar && bar.time) === windowStart &&
+              Number(bar && bar.open) > 0
+            ) {
+              return Number(bar.open);
+            }
+          }
+        }
+        return null;
+      }
+
+      function getCachedWindowOpen(symbol, interval) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const iv = interval || CONFIG.KLINE_INTERVAL || "4h";
+        const duration = DURATION_MS[iv];
+        if (!key || !duration) return null;
+        const windowStart = getWindowStart(Date.now(), duration);
+        const hit = windowOpenFallbackMap.get(key);
+        if (
+          hit &&
+          Number(hit.windowStart) === windowStart &&
+          Number(hit.open) > 0
+        ) {
+          return Number(hit.open);
+        }
+        return windowOpenFromKlineCache(key, iv);
+      }
+
+      function scheduleRisingFilterRefreshFromFallback() {
+        if (!nailRisingFilterOn) return;
+        if (windowOpenFallbackRefreshTimer) return;
+        windowOpenFallbackRefreshTimer = setTimeout(() => {
+          windowOpenFallbackRefreshTimer = 0;
+          if (!nailRisingFilterOn) return;
+          if (typeof renderNailDrawer === "function") renderNailDrawer();
+          if (typeof renderNailNoticeList === "function") {
+            renderNailNoticeList();
+          }
+          if (typeof renderNailAutoPinList === "function") {
+            renderNailAutoPinList();
+          }
+        }, 160);
+      }
+
+      /**
+       * history 无本窗价时，拉 4h K 线取当前窗 open 写入兜底表，再刷新上涨过滤。
+       */
+      function scheduleWindowOpenFallback(symbol, interval) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const iv = interval || CONFIG.KLINE_INTERVAL || "4h";
+        if (!key || key === "USDT") return;
+        if (!nailRisingFilterOn) return;
+        const duration = DURATION_MS[iv];
+        if (!duration) return;
+        const old = comparison(iv);
+        const histPx = old && old.prices ? Number(old.prices[key]) : NaN;
+        if (Number.isFinite(histPx) && histPx > 0) return;
+        if (getCachedWindowOpen(key, iv) != null) return;
+        const inflightKey = `${key}|${iv}`;
+        if (windowOpenFallbackInflight.has(inflightKey)) return;
+        windowOpenFallbackInflight.add(inflightKey);
+        void (async () => {
+          try {
+            if (typeof fetchKlines !== "function") return;
+            const candles = await fetchKlines(key, iv, null, 2);
+            const windowStart = getWindowStart(Date.now(), duration);
+            let open = null;
+            if (Array.isArray(candles)) {
+              for (let i = candles.length - 1; i >= 0; i -= 1) {
+                const bar = candles[i];
+                if (
+                  Number(bar && bar.time) === windowStart &&
+                  Number(bar && bar.open) > 0
+                ) {
+                  open = Number(bar.open);
+                  break;
+                }
+              }
+            }
+            if (!(open > 0)) return;
+            windowOpenFallbackMap.set(key, {
+              open,
+              windowStart,
+              at: Date.now(),
+            });
+            scheduleRisingFilterRefreshFromFallback();
+          } catch (_) {
+            /* ignore */
+          } finally {
+            windowOpenFallbackInflight.delete(inflightKey);
+          }
+        })();
+      }
+
+      function windowPriceChange(symbol, interval) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const iv = interval || CONFIG.KLINE_INTERVAL || "4h";
+        const currentPrice = Number(
+          (marketMap[key] && marketMap[key].price) ||
+            (marketMap[symbol] && marketMap[symbol].price),
+        );
+        if (!Number.isFinite(currentPrice) || !(currentPrice > 0)) {
+          return null;
+        }
+        const old = comparison(iv);
+        const oldPrice = Number(
+          old && old.prices
+            ? old.prices[key] ?? old.prices[symbol]
+            : NaN,
+        );
+        if (Number.isFinite(oldPrice) && oldPrice > 0) {
+          return ((currentPrice - oldPrice) / oldPrice) * 100;
+        }
+        // history 缺本窗快照：用币安当前 4h K 线 open 兜底（与钉子图口径一致）
+        const open = getCachedWindowOpen(key, iv);
+        if (Number.isFinite(open) && open > 0) {
+          return ((currentPrice - open) / open) * 100;
+        }
+        scheduleWindowOpenFallback(key, iv);
+        return null;
       }
 
       function hasWindowGain(symbol, interval) {
@@ -34599,6 +34742,21 @@
           /* ignore */
         }
         syncNailRisingFilterUi();
+        // 打开上涨过滤时：对缺 history 窗价的钉子预拉 4h open，避免「未画 K → 无缓存 → 永远滤掉」
+        if (nailRisingFilterOn) {
+          const iv = CONFIG.KLINE_INTERVAL || "4h";
+          (Array.isArray(nailItems) ? nailItems : []).forEach((item) => {
+            const sym = item && item.symbol;
+            if (!sym) return;
+            if (
+              typeof nailSymbolIsHeld === "function" &&
+              nailSymbolIsHeld(sym)
+            ) {
+              return;
+            }
+            scheduleWindowOpenFallback(sym, iv);
+          });
+        }
         renderNailDrawer();
         // 前三个分栏共用：置顶（上）、通知、自动盯一并刷新。
         if (typeof renderNailNoticeList === "function") renderNailNoticeList();
