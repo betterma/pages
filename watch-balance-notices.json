@@ -3,6 +3,47 @@
   "readAt": 1795543836147,
   "items": [
     {
+      "id": "PDDBUSDT:1795550400000:1795552200503",
+      "symbol": "PDDBUSDT",
+      "label": "PDDB",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1795552200503,
+      "firstSeenAt": 1795552200503,
+      "openTime": 1795550400000,
+      "pinPrice": 86.15,
+      "pinnedAt": 1795530900638,
+      "alertPrice": 85.73,
+      "notifyPrice": 86.9,
+      "noteAt": 1795536000873,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795552200503
+    },
+    {
+      "id": "DODOUSDT:1795550400000:1795552200503",
+      "symbol": "DODOUSDT",
+      "label": "DODO",
+      "kinds": [
+        "天平",
+        "回踩放量",
+        "回踩观察",
+        "直拉"
+      ],
+      "at": 1795552200503,
+      "firstSeenAt": 1795190400852,
+      "openTime": 1795550400000,
+      "pinPrice": 0.0432,
+      "pinnedAt": 1795521900669,
+      "alertPrice": 0.04348,
+      "notifyPrice": 0.04324,
+      "noteAt": 1795540603171,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795552200503
+    },
+    {
       "id": "AMCBUSDT:1795550400000:1795552200503",
       "symbol": "AMCBUSDT",
       "label": "AMCB",
@@ -42,28 +83,6 @@
       "batchAt": 1795550101155
     },
     {
-      "id": "DODOUSDT:1795550400000:1795552200503",
-      "symbol": "DODOUSDT",
-      "label": "DODO",
-      "kinds": [
-        "天平",
-        "回踩放量",
-        "回踩观察",
-        "直拉"
-      ],
-      "at": 1795552200503,
-      "firstSeenAt": 1795190400852,
-      "openTime": 1795550400000,
-      "pinPrice": 0.0432,
-      "pinnedAt": 1795521900669,
-      "alertPrice": 0.04348,
-      "notifyPrice": 0.04324,
-      "noteAt": 1795540603171,
-      "interval": "4h",
-      "windowUp": true,
-      "batchAt": 1795550101155
-    },
-    {
       "id": "LISTAUSDT:1795550400000:1795552200503",
       "symbol": "LISTAUSDT",
       "label": "LISTA",
@@ -82,25 +101,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1795550101155
-    },
-    {
-      "id": "PDDBUSDT:1795550400000:1795552200503",
-      "symbol": "PDDBUSDT",
-      "label": "PDDB",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1795552200503,
-      "firstSeenAt": 1795552200503,
-      "openTime": 1795550400000,
-      "pinPrice": 86.15,
-      "pinnedAt": 1795530900638,
-      "alertPrice": 85.73,
-      "notifyPrice": 86.9,
-      "noteAt": 1795536000873,
-      "interval": "4h",
-      "windowUp": true,
-      "batchAt": 0
     },
     {
       "id": "ONEUSDT:1795536000000:1795551900909:watch",
@@ -3451,6 +3451,14 @@
   ],
   "batches": [
     {
+      "at": 1795552200503,
+      "count": 2,
+      "symbols": [
+        "DODOUSDT",
+        "PDDBUSDT"
+      ]
+    },
+    {
       "at": 1795551900909,
       "count": 2,
       "symbols": [
@@ -3511,13 +3519,12 @@
     },
     {
       "at": 1795550101155,
-      "count": 7,
+      "count": 6,
       "symbols": [
         "AMCBUSDT",
         "APPBUSDT",
         "BEBUSDT",
         "BIGTIMEUSDT",
-        "DODOUSDT",
         "ENJUSDT",
         "LISTAUSDT"
       ]
