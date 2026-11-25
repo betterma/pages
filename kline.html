@@ -36419,9 +36419,23 @@
           const ib = alwaysIndex.has(kb) ? alwaysIndex.get(kb) : -1;
           const awA = ia >= 0;
           const awB = ib >= 0;
+          // 常看清单整体前置，组内仍保持清单里的手动顺序。
           if (awA && awB) return ia - ib;
           if (awA) return -1;
           if (awB) return 1;
+          // 便签涨幅：置顶段内也按涨幅从高到低（常看仍前置）；
+          // 无便签水位 / 无现价的沉底；其余模式保持手动拖拽序。
+          if (nailSortMode === "alertGreen") {
+            const ga = nailNoteGainPercent(ka);
+            const gb = nailNoteGainPercent(kb);
+            const hasA = Number.isFinite(ga);
+            const hasB = Number.isFinite(gb);
+            if (!hasA && !hasB) return (a.order || 0) - (b.order || 0);
+            if (!hasA) return 1;
+            if (!hasB) return -1;
+            if (gb !== ga) return gb - ga;
+            return (a.order || 0) - (b.order || 0);
+          }
           return (a.order || 0) - (b.order || 0);
         });
         return [
