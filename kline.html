@@ -9599,11 +9599,14 @@
         flex: 1 1 0;
         min-height: 100px;
         margin: 0 0 6px;
+        touch-action: none;
       }
       .kline-zoom-long-chart canvas {
         display: block;
         width: 100%;
         height: 100%;
+        pointer-events: auto;
+        touch-action: none;
       }
       .kline-zoom-hint {
         margin: 4px 10px 8px;
@@ -10770,7 +10773,7 @@
                 id="nailSortSwitch"
                 role="group"
                 aria-label="钉子排序"
-                title="默认：置顶/拖拽顺序；荧光绿：置顶区也按绿色面积排序；24h：置顶区保持手动序，仅「其余」按涨幅排"
+                title="默认：置顶/拖拽顺序；便签涨幅：相对便签价的现价涨跌幅；24h：置顶区保持手动序，仅「其余」按涨幅排"
               >
                 <button type="button" data-nail-sort="order" class="is-active">
                   默认
@@ -10778,9 +10781,9 @@
                 <button
                   type="button"
                   data-nail-sort="alertGreen"
-                  title="置顶区与「其余」都按绿色K线占用面积从大到小；切回「默认」恢复手动拖拽序"
+                  title="置顶区与「其余」都按现价相对便签价涨幅从高到低；无便签沉底；切回「默认」恢复手动拖拽序"
                 >
-                  荧光绿
+                  便签涨幅
                 </button>
                 <button
                   type="button"
@@ -11950,8 +11953,16 @@
             target="_blank"
             rel="noopener noreferrer"
           >在 Binance 查看市值 ↗</a>
-          <div class="kline-zoom-long-chart">
+          <div class="kline-zoom-long-chart" id="klineZoomLongChart">
             <canvas id="klineZoomLongCanvas"></canvas>
+            <div class="kline-crosshair" id="klineZoomLongCrosshair" hidden>
+              <div class="kline-crosshair-v"></div>
+              <div class="kline-crosshair-h"></div>
+              <div class="kline-crosshair-dot"></div>
+              <div class="kline-crosshair-price"></div>
+              <div class="kline-crosshair-time"></div>
+              <div class="kline-crosshair-tip"></div>
+            </div>
           </div>
         </section>
       </div>
@@ -27331,6 +27342,19 @@
         };
       }
 
+      /** 现价相对便签水位涨幅：(spot/note - 1)；无便签/无现价返回 null。 */
+      function nailNoteGainPercent(symbol) {
+        const mark = nailAlertMarkForSymbol(symbol);
+        const note = Number(mark && mark.price);
+        if (!Number.isFinite(note) || note <= 0) return null;
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const spot = Number(marketMap[key] && marketMap[key].price);
+        if (!Number.isFinite(spot) || spot <= 0) return null;
+        return spot / note - 1;
+      }
+
       function klinePriceBounds(candles, pinPrice, noteMarks, alertPrice, extraPrice) {
         const highs = candles.map((item) => item.high);
         const lows = candles.map((item) => item.low);
@@ -28268,24 +28292,50 @@
         return `${mo}-${d} ${hh}:${mm}`;
       }
 
+      function klineCrosshairTargets(canvas) {
+        if (!canvas) return null;
+        if (canvas.id === "klineZoomCanvas") {
+          return {
+            layer: document.getElementById("klineZoomCrosshair"),
+            wrap: document.getElementById("klineZoomChart"),
+          };
+        }
+        if (canvas.id === "klineZoomLongCanvas") {
+          return {
+            layer: document.getElementById("klineZoomLongCrosshair"),
+            wrap:
+              document.getElementById("klineZoomLongChart") ||
+              canvas.closest(".kline-zoom-long-chart"),
+          };
+        }
+        return null;
+      }
+
       function ensureKlineCrosshairLayer(canvas) {
-        if (!canvas || canvas.id !== "klineZoomCanvas") return null;
-        const layer = document.getElementById("klineZoomCrosshair");
-        const wrap = document.getElementById("klineZoomChart");
-        if (!layer || !wrap) return null;
+        const targets = klineCrosshairTargets(canvas);
+        if (!targets || !targets.layer || !targets.wrap) return null;
         const rect = canvas.getBoundingClientRect();
-        const prect = wrap.getBoundingClientRect();
-        layer.style.left = `${Math.round(rect.left - prect.left)}px`;
-        layer.style.top = `${Math.round(rect.top - prect.top)}px`;
-        layer.style.width = `${Math.round(rect.width)}px`;
-        layer.style.height = `${Math.round(rect.height)}px`;
-        return layer;
+        const prect = targets.wrap.getBoundingClientRect();
+        targets.layer.style.left = `${Math.round(rect.left - prect.left)}px`;
+        targets.layer.style.top = `${Math.round(rect.top - prect.top)}px`;
+        targets.layer.style.width = `${Math.round(rect.width)}px`;
+        targets.layer.style.height = `${Math.round(rect.height)}px`;
+        return targets.layer;
       }
 
       function hideKlineCrosshair(canvas) {
-        const layer = document.getElementById("klineZoomCrosshair");
-        if (layer) layer.hidden = true;
-        if (canvas) canvas.classList.remove("is-crosshair");
+        const hideOne = (node) => {
+          if (!node) return;
+          const targets = klineCrosshairTargets(node);
+          if (targets && targets.layer) targets.layer.hidden = true;
+          node.classList.remove("is-crosshair");
+        };
+        if (canvas) {
+          hideOne(canvas);
+          return;
+        }
+        hideOne(document.getElementById("klineZoomCanvas"));
+        hideOne(document.getElementById("klineZoomLongCanvas"));
       }
 
       function updateKlineCrosshair(canvas, clientX, clientY) {
@@ -28311,9 +28361,11 @@
         const candle = meta.candles[idx];
         const snapX = meta.pad.left + meta.slot * idx + meta.slot / 2;
         const price = meta.max - ((y - meta.pad.top) / meta.chartH) * meta.range;
-        // 抬手后仍保留最后一次十字线价格，供「设提醒」取快照价。
-        klineZoomCrosshairPrice = price;
-        const displayX = (snapX / scaleX);
+        // 仅主图十字线价留给「设提醒」；长周期游走不覆盖快照。
+        if (canvas.id === "klineZoomCanvas") {
+          klineZoomCrosshairPrice = price;
+        }
+        const displayX = snapX / scaleX;
         const displayY = y / scaleY;
 
         layer.hidden = false;
@@ -28355,7 +28407,6 @@
       }
 
       let klineZoomSymbol = null;
-      let klineZoomBound = false;
       let klineZoomLongRange = "week";
       let klineZoomCrosshairPrice = NaN;
       const PRICE_ALERT_READ_KEY = "kline-price-alert-read-v1";
@@ -28377,9 +28428,8 @@
 
       function closeKlineZoom() {
         const gate = document.getElementById("klineZoomGate");
-        const canvas = document.getElementById("klineZoomCanvas");
         if (gate) gate.hidden = true;
-        hideKlineCrosshair(canvas);
+        hideKlineCrosshair();
         klineZoomSymbol = null;
         klineZoomCrosshairPrice = NaN;
         const panel = document.getElementById("klineZoomAlertPanel");
@@ -28388,10 +28438,9 @@
         syncBodyScrollLock();
       }
 
-      function bindKlineZoomPointer() {
-        const canvas = document.getElementById("klineZoomCanvas");
-        if (!canvas || klineZoomBound) return;
-        klineZoomBound = true;
+      function bindKlineZoomCanvasPointer(canvas) {
+        if (!canvas || canvas.dataset.crosshairBound === "1") return;
+        canvas.dataset.crosshairBound = "1";
         let tracking = false;
         let pointerId = null;
         canvas.addEventListener(
@@ -28404,6 +28453,12 @@
               canvas.setPointerCapture(event.pointerId);
             } catch (error) {
               /* ignore */
+            }
+            // 主图 / 长周期互斥显示，避免两层十字线叠在一起。
+            if (canvas.id === "klineZoomCanvas") {
+              hideKlineCrosshair(document.getElementById("klineZoomLongCanvas"));
+            } else {
+              hideKlineCrosshair(document.getElementById("klineZoomCanvas"));
             }
             updateKlineCrosshair(canvas, event.clientX, event.clientY);
           },
@@ -28424,6 +28479,13 @@
         };
         canvas.addEventListener("pointerup", stopTrack);
         canvas.addEventListener("pointercancel", stopTrack);
+      }
+
+      function bindKlineZoomPointer() {
+        bindKlineZoomCanvasPointer(document.getElementById("klineZoomCanvas"));
+        bindKlineZoomCanvasPointer(
+          document.getElementById("klineZoomLongCanvas"),
+        );
       }
 
       async function paintKlineZoom(symbol) {
@@ -28496,6 +28558,7 @@
             pinItem ? pinItem.pinnedAt : null,
             notesMarksForSymbol(symbol),
           );
+          hideKlineCrosshair(canvas);
           if (metaEl) metaEl.textContent = `${range.label} · ${candles.length} 根`;
         } catch (error) {
           console.error(error);
@@ -35270,7 +35333,13 @@
           });
         refreshNailListLiveKlines();
         syncNailHeldPnlUi();
-        if (nailSortMode === "change24h") applyNailListOrder();
+        // 24h / 便签涨幅都跟现价走，ticker 刷新后重排段内顺序。
+        if (
+          nailSortMode === "change24h" ||
+          nailSortMode === "alertGreen"
+        ) {
+          applyNailListOrder();
+        }
       }
 
       /** 列表 K 线：用 ticker 修补当前柱并重画（含左上角现价角标），不重新拉 K 线。 */
@@ -36121,20 +36190,18 @@
           items.push(fromAll || makeNailAlwaysWatchItem(key));
         });
         if (nailSortMode === "alertGreen") {
-          // 荧光绿模式：置顶区也按绿色面积排（切回「默认」即恢复手动拖拽序）；
-          // 持有/置顶/其余的分段不受影响，这里只决定段内顺序。
+          // 便签涨幅：段内按现价相对便签价 % 从高到低（不再用绿色像素面积）；
+          // 持有/置顶/其余分段不变；切回「默认」恢复手动拖拽序。
           items = items.slice().sort((a, b) => {
-            const ka = String(a.symbol || "").toUpperCase();
-            const kb = String(b.symbol || "").toUpperCase();
-            const sa = nailAlertGreenScores.get(ka);
-            const sb = nailAlertGreenScores.get(kb);
-            const scoreA = Number.isFinite(sa) ? sa : null;
-            const scoreB = Number.isFinite(sb) ? sb : null;
-            if (scoreA == null && scoreB == null) {
+            const scoreA = nailNoteGainPercent(a && a.symbol);
+            const scoreB = nailNoteGainPercent(b && b.symbol);
+            const hasA = Number.isFinite(scoreA);
+            const hasB = Number.isFinite(scoreB);
+            if (!hasA && !hasB) {
               return (a.order || 0) - (b.order || 0);
             }
-            if (scoreA == null) return 1;
-            if (scoreB == null) return -1;
+            if (!hasA) return 1;
+            if (!hasB) return -1;
             if (scoreB !== scoreA) return scoreB - scoreA;
             return (a.order || 0) - (b.order || 0);
           });
@@ -36522,7 +36589,7 @@
           ).length;
           const sortHint =
             nailSortMode === "alertGreen"
-              ? "持有优先 · 置顶 · 绿色面积"
+              ? "持有优先 · 置顶 · 便签涨幅"
               : nailSortMode === "change24h"
                 ? "持有优先 · 置顶 · 24h涨幅"
                 : "持有优先 · 置顶 / 长按拖动";
