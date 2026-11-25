@@ -11799,6 +11799,7 @@
           <div class="kline-zoom-long-head">
             <h3>长周期走势</h3>
             <div class="kline-zoom-range" role="group" aria-label="长周期 K 线范围">
+              <button type="button" data-kline-zoom-range="day" aria-pressed="false">一天</button>
               <button type="button" data-kline-zoom-range="week" class="is-active" aria-pressed="true">一周</button>
               <button type="button" data-kline-zoom-range="month" aria-pressed="false">一月</button>
             </div>
@@ -27836,14 +27837,21 @@
         }
       }
 
+      function klineZoomLongRangeConfig(range) {
+        if (range === "month") {
+          return { key: "month", interval: "1M", limit: 36, label: "月 K · 一根一月" };
+        }
+        if (range === "day") {
+          return { key: "day", interval: "1d", limit: 90, label: "日 K · 一根一天" };
+        }
+        return { key: "week", interval: "1w", limit: 52, label: "周 K · 一根一周" };
+      }
+
       async function paintKlineZoomLong(symbol) {
         const canvas = document.getElementById("klineZoomLongCanvas");
         const metaEl = document.getElementById("klineZoomLongMeta");
         if (!canvas || !symbol) return;
-        const range =
-          klineZoomLongRange === "month"
-            ? { interval: "1M", limit: 36, label: "月 K · 一根一月" }
-            : { interval: "1w", limit: 52, label: "周 K · 一根一周" };
+        const range = klineZoomLongRangeConfig(klineZoomLongRange);
         if (metaEl) metaEl.textContent = `加载${range.label}…`;
         try {
           const candles = await fetchKlines(
@@ -27855,7 +27863,7 @@
           if (
             !isKlineZoomOpen() ||
             klineZoomSymbol !== symbol ||
-            klineZoomLongRange !== (range.interval === "1M" ? "month" : "week")
+            klineZoomLongRange !== range.key
           ) {
             return;
           }
@@ -28470,7 +28478,8 @@
       }
 
       function setKlineZoomLongRange(range) {
-        klineZoomLongRange = range === "month" ? "month" : "week";
+        klineZoomLongRange =
+          range === "month" ? "month" : range === "day" ? "day" : "week";
         document.querySelectorAll("[data-kline-zoom-range]").forEach((button) => {
           const active = button.dataset.klineZoomRange === klineZoomLongRange;
           button.classList.toggle("is-active", active);
