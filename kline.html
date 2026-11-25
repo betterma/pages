@@ -6522,6 +6522,27 @@
         background: color-mix(in srgb, #c45c5c 16%, transparent);
         vertical-align: middle;
       }
+      .nail-always-tag {
+        display: inline-block;
+        margin-left: 4px;
+        padding: 0 5px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        color: color-mix(in srgb, var(--accent, #2f8f6e) 85%, var(--label));
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 14%, transparent);
+        vertical-align: middle;
+      }
+      .nail-kcard.is-always-watch:not(.is-pinned) {
+        border-color: color-mix(
+          in srgb,
+          var(--accent, #2f8f6e) 45%,
+          var(--separator)
+        );
+        box-shadow: inset 3px 0 0
+          color-mix(in srgb, var(--accent, #2f8f6e) 55%, transparent);
+      }
       .nail-kcard.is-dragging {
         opacity: 0.45;
         cursor: grabbing;
@@ -11998,7 +12019,7 @@
     </div>
 
     <script src="./github-token-vault.js"></script>
-    <script src="./watch-favorites.js?v=20261124recon"></script>
+    <script src="./watch-favorites.js?v=20261125always"></script>
     <script src="./kline-mode.js"></script>
     <script>
       "use strict";
@@ -16335,6 +16356,225 @@
       const NAIL_RADAR_FIXED_KEY = "kline-radar-fixed-v2";
       let radarFixedState = { symbols: [], at: 0 };
       let radarFixedSyncing = false;
+
+      /**
+       * 常看名单：独立于钉子存亡（取消置顶 / 自动退出仍保留）。
+       * 跨端写 watch-ui-read-state.json；本机缓存同雷达标记。
+       */
+      const NAIL_ALWAYS_WATCH_KEY = "kline-always-watch-v1";
+      let alwaysWatchState = { symbols: [], at: 0 };
+      let alwaysWatchSyncing = false;
+
+      function normalizeAlwaysWatchSymbols(list) {
+        if (
+          typeof WatchFavorites !== "undefined" &&
+          WatchFavorites &&
+          typeof WatchFavorites.normalizeUiReadSymbols === "function"
+        ) {
+          return WatchFavorites.normalizeUiReadSymbols(list);
+        }
+        return [
+          ...new Set(
+            (Array.isArray(list) ? list : [])
+              .map((item) => String(item || "").trim().toUpperCase())
+              .filter(Boolean),
+          ),
+        ].slice(0, 50);
+      }
+
+      function loadLocalAlwaysWatch() {
+        let raw = null;
+        try {
+          raw = JSON.parse(
+            localStorage.getItem(NAIL_ALWAYS_WATCH_KEY) || "null",
+          );
+        } catch (_) {
+          raw = null;
+        }
+        if (Array.isArray(raw)) raw = { symbols: raw, at: 0 };
+        return {
+          symbols: normalizeAlwaysWatchSymbols(raw && raw.symbols),
+          at: Number(raw && raw.at) || 0,
+        };
+      }
+
+      alwaysWatchState = loadLocalAlwaysWatch();
+
+      function getAlwaysWatchSymbols() {
+        return alwaysWatchState.symbols.slice();
+      }
+
+      function isNailAlwaysWatch(symbol) {
+        const key = String(symbol || "").trim().toUpperCase();
+        return !!key && alwaysWatchState.symbols.includes(key);
+      }
+
+      function setLocalAlwaysWatch(symbols, at) {
+        alwaysWatchState = {
+          symbols: normalizeAlwaysWatchSymbols(symbols),
+          at: Number(at) || Date.now(),
+        };
+        try {
+          localStorage.setItem(
+            NAIL_ALWAYS_WATCH_KEY,
+            JSON.stringify(alwaysWatchState),
+          );
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
+      function makeNailAlwaysWatchItem(key) {
+        const sym = String(key || "").trim().toUpperCase();
+        return {
+          symbol: sym,
+          label: sym.replace(/USDT$/i, ""),
+          note: "",
+          pinned: false,
+          order: -1,
+          _alwaysWatch: true,
+        };
+      }
+
+      async function patchSharedAlwaysWatchSet(symbols, at) {
+        if (alwaysWatchSyncing) return;
+        alwaysWatchSyncing = true;
+        try {
+          await WatchFavorites.patchUiReadState({
+            repo: CONFIG.GITHUB_REPO,
+            message: "Sync always-watch symbols across devices",
+            mutate: (state) =>
+              (Number(state.alwaysWatchAt) || 0) >= at
+                ? state
+                : {
+                    ...state,
+                    alwaysWatchSymbols: symbols,
+                    alwaysWatchAt: at,
+                  },
+          });
+        } catch (error) {
+          console.warn("always-watch sync failed", error);
+        } finally {
+          alwaysWatchSyncing = false;
+        }
+      }
+
+      async function setNailAlwaysWatch(symbol, want) {
+        const key = WatchFavorites.nailSymbolKey
+          ? WatchFavorites.nailSymbolKey(symbol)
+          : String(symbol || "").trim().toUpperCase();
+        if (!key) return;
+        const label = key.replace(/USDT$/i, "");
+        const on = !!want;
+        if (on) {
+          const nail = (nailItems || []).find(
+            (item) => String(item.symbol || "").toUpperCase() === key,
+          );
+          if (!(nail && nail.pinned)) {
+            showToast("仅已置顶的钉子可加常看");
+            return;
+          }
+        }
+        const current = getAlwaysWatchSymbols();
+        const has = current.includes(key);
+        if (on === has) return;
+        const next = on
+          ? [key, ...current.filter((s) => s !== key)]
+          : current.filter((s) => s !== key);
+        const at = Date.now();
+        setLocalAlwaysWatch(next, at);
+        renderNailDrawer();
+        showToast(on ? `${label} 已加常看` : `${label} 已取消常看`);
+        try {
+          const result = await WatchFavorites.patchUiReadState({
+            repo: CONFIG.GITHUB_REPO,
+            message: on
+              ? `Always-watch add ${label}`
+              : `Always-watch remove ${label}`,
+            mutate: (state) => {
+              const list = normalizeAlwaysWatchSymbols(state.alwaysWatchSymbols);
+              const idx = list.indexOf(key);
+              let symbols;
+              if (on) {
+                symbols = [key, ...list.filter((s) => s !== key)];
+              } else if (idx >= 0) {
+                symbols = list.filter((s) => s !== key);
+              } else {
+                symbols = list;
+              }
+              return {
+                ...state,
+                alwaysWatchSymbols: symbols,
+                alwaysWatchAt: Date.now(),
+              };
+            },
+          });
+          if (result && result.state) {
+            setLocalAlwaysWatch(
+              result.state.alwaysWatchSymbols,
+              result.state.alwaysWatchAt,
+            );
+            renderNailDrawer();
+          }
+        } catch (error) {
+          // 与雷达标记一致：本地较新时间戳保留，联网后 patchSharedAlwaysWatchSet 补推。
+          console.warn("always-watch patch failed", error);
+          showToast(error.message || "常看保存失败");
+        }
+      }
+
+      /** 批量去掉常看（删钉 / 批量删时连带清，避免变成孤儿观察卡）。 */
+      async function clearAlwaysWatchSymbols(rawSymbols, options) {
+        const opts = options || {};
+        const drop = [
+          ...new Set(
+            (rawSymbols || [])
+              .map((symbol) =>
+                WatchFavorites.nailSymbolKey
+                  ? WatchFavorites.nailSymbolKey(symbol)
+                  : String(symbol || "").trim().toUpperCase(),
+              )
+              .filter(Boolean),
+          ),
+        ];
+        if (!drop.length) return false;
+        const dropSet = new Set(drop);
+        const current = getAlwaysWatchSymbols();
+        const next = current.filter((sym) => !dropSet.has(sym));
+        if (next.length === current.length) return false;
+        const at = Date.now();
+        setLocalAlwaysWatch(next, at);
+        if (!opts.skipRender) renderNailDrawer();
+        try {
+          const result = await WatchFavorites.patchUiReadState({
+            repo: CONFIG.GITHUB_REPO,
+            message: `Always-watch clear x${drop.length}`,
+            mutate: (state) => {
+              const list = normalizeAlwaysWatchSymbols(state.alwaysWatchSymbols);
+              const symbols = list.filter((sym) => !dropSet.has(sym));
+              if (symbols.length === list.length) return state;
+              return {
+                ...state,
+                alwaysWatchSymbols: symbols,
+                alwaysWatchAt: Date.now(),
+              };
+            },
+          });
+          if (result && result.state) {
+            setLocalAlwaysWatch(
+              result.state.alwaysWatchSymbols,
+              result.state.alwaysWatchAt,
+            );
+            if (!opts.skipRender) renderNailDrawer();
+          }
+        } catch (error) {
+          console.warn("always-watch clear failed", error);
+          if (!opts.silent) {
+            showToast(error.message || "常看同步失败");
+          }
+        }
+        return true;
+      }
 
       function normalizeRadarFixedSymbols(list) {
         if (
@@ -28475,6 +28715,18 @@
         } else if (localFixedAt > cloudFixedAt) {
           void patchSharedRadarFixedSet(getRadarFixedSymbols(), localFixedAt);
         }
+        // 常看名单：同上，按时间戳收敛；变更后重渲置顶分栏。
+        const cloudWatchAt = Number(base.alwaysWatchAt) || 0;
+        const localWatchAt = Number(alwaysWatchState.at) || 0;
+        if (cloudWatchAt > localWatchAt) {
+          setLocalAlwaysWatch(base.alwaysWatchSymbols, cloudWatchAt);
+          if (nailSegment === "pinned") renderNailDrawer();
+        } else if (localWatchAt > cloudWatchAt) {
+          void patchSharedAlwaysWatchSet(
+            getAlwaysWatchSymbols(),
+            localWatchAt,
+          );
+        }
       }
 
       /** 30s 节流轮询云端基线；打开分栏时传 force 立刻同步一次。 */
@@ -35247,7 +35499,10 @@
       function openNailPinReview() {
         const sections = nailDrawerSectionParts(nailDrawerVisibleItems());
         const pinSec = sections.find((s) => s.id === "pin");
-        const items = pinSec && Array.isArray(pinSec.items) ? pinSec.items : [];
+        // 只筛真正置顶的钉子；常看孤儿 / 已取消置顶的常看不进队列（左滑取消置顶对它们是空操作）。
+        const items = (
+          pinSec && Array.isArray(pinSec.items) ? pinSec.items : []
+        ).filter((it) => it && it.pinned && hasNailForSymbol(it.symbol));
         if (!items.length) {
           showToast("当前没有置顶币");
           return;
@@ -35437,12 +35692,38 @@
           showToast("先选中要删除的钉子");
           return;
         }
+        const nailKeys = symbols.filter((sym) => hasNailForSymbol(sym));
+        const alwaysKeys = symbols.filter((sym) => isNailAlwaysWatch(sym));
+        // 只选了常看观察卡：等价批量「取消常看」，不要写 dismissed。
+        if (!nailKeys.length) {
+          if (!alwaysKeys.length) {
+            showToast("先选中要删除的钉子");
+            return;
+          }
+          if (
+            !confirmDestructive(
+              `确定取消选中的 ${alwaysKeys.length} 个常看？\n${alwaysKeys
+                .slice(0, 8)
+                .map((symbol) => symbol.replace(/USDT$/i, ""))
+                .join("、")}${alwaysKeys.length > 8 ? "…" : ""}`,
+            )
+          ) {
+            return;
+          }
+          await clearAlwaysWatchSymbols(alwaysKeys);
+          setNailSelectMode(false);
+          showToast(`已取消常看 ${alwaysKeys.length} 个`);
+          return;
+        }
+        const alwaysHint = alwaysKeys.length
+          ? `\n其中 ${alwaysKeys.length} 个常看会一并取消`
+          : "";
         if (
           !confirmDestructive(
-            `确定删除选中的 ${symbols.length} 个钉子？\n${symbols
+            `确定删除选中的 ${nailKeys.length} 个钉子？${alwaysHint}\n${nailKeys
               .slice(0, 8)
               .map((symbol) => symbol.replace(/USDT$/i, ""))
-              .join("、")}${symbols.length > 8 ? "…" : ""}`,
+              .join("、")}${nailKeys.length > 8 ? "…" : ""}`,
           )
         ) {
           return;
@@ -35452,21 +35733,28 @@
             (list, meta) => ({
               list:
                 typeof WatchFavorites.removeNailsBatch === "function"
-                  ? WatchFavorites.removeNailsBatch(list, symbols)
-                  : symbols.reduce(
+                  ? WatchFavorites.removeNailsBatch(list, nailKeys)
+                  : nailKeys.reduce(
                       (acc, symbol) => WatchFavorites.removeNail(acc, symbol),
                       list,
                     ),
               dismissedNails: WatchFavorites.addDismissedNails(
                 (meta && meta.dismissedNails) || [],
-                symbols,
+                nailKeys,
               ),
             }),
-            `Remove nails x${symbols.length}`,
-            { loadingText: `删除 ${symbols.length}…` },
+            `Remove nails x${nailKeys.length}`,
+            { loadingText: `删除 ${nailKeys.length}…` },
           );
+          if (alwaysKeys.length) {
+            await clearAlwaysWatchSymbols(alwaysKeys, { silent: true });
+          }
           setNailSelectMode(false);
-          showToast(`已删除 ${symbols.length} 个钉子`);
+          showToast(
+            alwaysKeys.length
+              ? `已删除 ${nailKeys.length} 个钉子（含取消常看）`
+              : `已删除 ${nailKeys.length} 个钉子`,
+          );
         } catch (error) {
           console.warn(error);
           showToast(error.message || "批量删除失败");
@@ -35562,23 +35850,44 @@
         const all = (Array.isArray(nailItems) ? nailItems : []).filter((item) =>
           nailBstockVisible(item && item.symbol),
         );
-        // 上涨过滤：持有币显式放行（与 nailSymbolPassesRisingFilter 双保险）。
+        const alwaysWatchSet = new Set(getAlwaysWatchSymbols());
+        // 上涨过滤：持有币 / 常看显式放行（与 nailSymbolPassesRisingFilter 双保险）。
         let items = nailRisingFilterOn
-          ? all.filter(
-              (item) =>
+          ? all.filter((item) => {
+              const key = String((item && item.symbol) || "").toUpperCase();
+              return (
+                alwaysWatchSet.has(key) ||
                 nailSymbolIsHeld(item && item.symbol) ||
-                nailSymbolPassesRisingFilter(item && item.symbol),
-            )
+                nailSymbolPassesRisingFilter(item && item.symbol)
+              );
+            })
           : all.slice();
         if (nailPinnedOnlyOn) {
-          // 「只看置顶」只藏非置顶的普通钉子；持有段是否出现只看顶栏「持有」开关。
+          // 「只看置顶」只藏非置顶的普通钉子；常看 / 持有段放行。
           items = items.filter((item) => {
+            const key = String((item && item.symbol) || "").toUpperCase();
+            if (alwaysWatchSet.has(key)) return true;
             if (item && item.pinned) return true;
             return (
               nailShowHeldSection && nailSymbolIsHeld(item && item.symbol)
             );
           });
         }
+        // 常看但不在钉子名单（如自动退出后）：合成观察卡，仍进置顶段前排。
+        alwaysWatchSet.forEach((key) => {
+          if (!key || !nailBstockVisible(key)) return;
+          if (
+            items.some(
+              (item) => String(item.symbol || "").toUpperCase() === key,
+            )
+          ) {
+            return;
+          }
+          const fromAll = all.find(
+            (item) => String(item.symbol || "").toUpperCase() === key,
+          );
+          items.push(fromAll || makeNailAlwaysWatchItem(key));
+        });
         if (nailSortMode === "alertGreen") {
           // 荧光绿模式：置顶区也按绿色面积排（切回「默认」即恢复手动拖拽序）；
           // 持有/置顶/其余的分段不受影响，这里只决定段内顺序。
@@ -35786,6 +36095,10 @@
         const pinned = [];
         const rest = [];
         const revealKey = nailJumpRevealKey();
+        const alwaysOrder = getAlwaysWatchSymbols();
+        const alwaysIndex = new Map(
+          alwaysOrder.map((sym, idx) => [sym, idx]),
+        );
         for (const item of items || []) {
           const key = String((item && item.symbol) || "").toUpperCase();
           if (revealKey && key === revealKey) {
@@ -35793,11 +36106,25 @@
             continue;
           }
           // 关闭「持有」开关：不单独成段，按置顶/其余归入，币仍可见。
+          // 常看并入置顶段（不另起段），且排在置顶段前排。
           if (nailShowHeldSection && nailSymbolIsHeld(item && item.symbol)) {
             held.push(item);
-          } else if (item && item.pinned) pinned.push(item);
-          else rest.push(item);
+          } else if ((item && item.pinned) || alwaysIndex.has(key)) {
+            pinned.push(item);
+          } else rest.push(item);
         }
+        pinned.sort((a, b) => {
+          const ka = String((a && a.symbol) || "").toUpperCase();
+          const kb = String((b && b.symbol) || "").toUpperCase();
+          const ia = alwaysIndex.has(ka) ? alwaysIndex.get(ka) : -1;
+          const ib = alwaysIndex.has(kb) ? alwaysIndex.get(kb) : -1;
+          const awA = ia >= 0;
+          const awB = ib >= 0;
+          if (awA && awB) return ia - ib;
+          if (awA) return -1;
+          if (awB) return 1;
+          return (a.order || 0) - (b.order || 0);
+        });
         return [
           {
             id: "jump",
@@ -35990,7 +36317,11 @@
         ) {
           clearNailFocusSelection();
         }
-        if (!total && !nailJumpRevealKey()) {
+        if (
+          !total &&
+          !nailJumpRevealKey() &&
+          !getAlwaysWatchSymbols().length
+        ) {
           abortNailKlines();
           listEl.classList.remove("is-prow-table");
           listEl.innerHTML = '<div class="nail-empty">还没有钉子</div>';
@@ -36021,11 +36352,14 @@
             const key = String(item.symbol || "").toUpperCase();
             const isReveal = nailJumpRevealKey() === key;
             const isGuest = !!(item && item._jumpGuest) || isNailJumpGuest(key);
+            const isAlways = isNailAlwaysWatch(key);
             const tag = exited
               ? '<span class="nail-exit-tag">退出</span>'
               : isReveal
                 ? `<span class="nail-jump-tag">${isGuest ? "临时" : "露出"}</span>`
-                : "";
+                : isAlways
+                  ? '<span class="nail-always-tag">常看</span>'
+                  : "";
             const selected =
               nailSelectMode && selectedNailSymbols.has(key)
                 ? " is-selected"
@@ -36049,15 +36383,25 @@
             const noteHtml = note
               ? `<p class="nail-note" data-nail-note-display="${symbol}">${formatNailNoteHtml(note)}</p>`
               : "";
-            const delLabel = isGuest ? "收起" : "删除";
-            const delTitle = isGuest ? "收起临时查看" : "删除钉子";
+            const alwaysOrphan = isAlways && !hasNailForSymbol(key);
+            const delLabel = isGuest
+              ? "收起"
+              : alwaysOrphan
+                ? "取消常看"
+                : "删除";
+            const delTitle = isGuest
+              ? "收起临时查看"
+              : alwaysOrphan
+                ? "取消常看（钉子已不在）"
+                : "删除钉子";
+            const pinMenu = pinned || isAlways;
             return [
-              `<article class="nail-kcard${pinned ? " is-pinned" : ""}${isReveal ? " is-jump-reveal" : ""}${selected}" data-nail-symbol="${symbol}"${isGuest ? ' data-nail-jump-guest="1"' : ""}>`,
+              `<article class="nail-kcard${pinned ? " is-pinned" : ""}${isAlways ? " is-always-watch" : ""}${isReveal ? " is-jump-reveal" : ""}${selected}" data-nail-symbol="${symbol}"${isGuest ? ' data-nail-jump-guest="1"' : ""}${isAlways ? ' data-nail-always-watch="1"' : ""}>`,
               `<div class="nail-kcard-head">`,
               nailSelectMode
                 ? ""
               : `<span class="nail-pin-wrap">
-              <button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" aria-haspopup="${pinned ? "menu" : "false"}" aria-expanded="false" title="${pinned ? "置顶选项" : isGuest ? "加入钉子并置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>
+              <button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" aria-haspopup="${pinMenu ? "menu" : "false"}" aria-expanded="false" title="${pinned ? "置顶选项" : isAlways ? "常看选项" : isGuest ? "加入钉子并置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>
             </span>`,
               `<button type="button" class="nail-name" data-nail-copy-name="${label}" data-copy="${label}" title="点击复制名称">${label}${tag}</button>`,
               nailSelectMode
@@ -36089,6 +36433,7 @@
           const key = String(item.symbol || "").toUpperCase();
           const isReveal = nailJumpRevealKey() === key;
           const isGuest = !!(item && item._jumpGuest) || isNailJumpGuest(key);
+          const isAlways = isNailAlwaysWatch(key);
           const change = Number(marketMap[key] && marketMap[key].change24h);
           const chCls = Number.isFinite(change) && change !== 0
             ? change > 0 ? "is-up" : "is-down" : "";
@@ -36106,11 +36451,13 @@
             ? '<span class="nail-exit-tag">退出</span>'
             : isReveal
               ? `<span class="nail-jump-tag">${isGuest ? "临时" : "露出"}</span>`
-              : "";
+              : isAlways
+                ? '<span class="nail-always-tag">常看</span>'
+                : "";
           // 币名列：置顶图标 + 币名 左右排列
           const nameCell = [
             check,
-            nailSelectMode ? "" : `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "置顶选项" : isGuest ? "加入钉子并置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
+            nailSelectMode ? "" : `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "置顶选项" : isAlways ? "常看选项" : isGuest ? "加入钉子并置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
             `<button type="button" class="nail-name" data-nail-copy-name="${label}" data-copy="${label}" title="点击复制名称">${label}${nameTag}</button>`,
           ].join("");
           // 打通的信息行：盈亏在前，其次盯幅、便签（现价只走 K 线角标）
@@ -36122,13 +36469,18 @@
             ? `<span class="nail-prow-info" data-nail-pnl-slot="${symbol}" data-nail-note-display="${symbol}">${infoBits.join("")}</span>`
             : `<span class="nail-prow-info" data-nail-pnl-slot="${symbol}" data-nail-note-display="${symbol}"></span>`;
           // 操作列始终占位，多选时留空单元格，避免 thead 4 列与 rowspan 错位。
-          const delLabel = isGuest ? "收起" : "删";
+          const alwaysOrphan = isAlways && !hasNailForSymbol(key);
+          const delLabel = isGuest
+            ? "收起"
+            : alwaysOrphan
+              ? "取消常看"
+              : "删";
           const opsCell = nailSelectMode
             ? `<td class="nail-prow-ops"></td>`
-            : `<td class="nail-prow-ops"><button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button><button type="button" class="nail-del" data-nail-del="${symbol}" title="${isGuest ? "收起临时查看" : "删除钉子"}">${delLabel}</button></td>`;
+            : `<td class="nail-prow-ops"><button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button><button type="button" class="nail-del" data-nail-del="${symbol}" title="${isGuest ? "收起临时查看" : alwaysOrphan ? "取消常看（钉子已不在）" : "删除钉子"}">${delLabel}</button></td>`;
           return [
-            `<tbody class="nail-prow-tbody${selected}${exited ? " is-exited" : ""}${isReveal ? " is-jump-reveal" : ""}" data-nail-symbol="${symbol}"${isGuest ? ' data-nail-jump-guest="1"' : ""}>`,
-            `<tr class="nail-kcard nail-prow-row${isReveal ? " is-jump-reveal" : ""}" data-nail-symbol="${symbol}">`,
+            `<tbody class="nail-prow-tbody${selected}${exited ? " is-exited" : ""}${isReveal ? " is-jump-reveal" : ""}${isAlways ? " is-always-watch" : ""}" data-nail-symbol="${symbol}"${isGuest ? ' data-nail-jump-guest="1"' : ""}${isAlways ? ' data-nail-always-watch="1"' : ""}>`,
+            `<tr class="nail-kcard nail-prow-row${isReveal ? " is-jump-reveal" : ""}${isAlways ? " is-always-watch" : ""}" data-nail-symbol="${symbol}">`,
             `<td class="nail-prow-name">${nameCell}</td>`,
             `<td class="nail-prow-kline-cell"><canvas class="nail-kline" data-kline="${symbol}" data-price-label="1"></canvas></td>`,
             `<td class="nail-prow-chg ${chCls}" data-nail-list-chg="${symbol}">${escapeHtml(Number.isFinite(change) ? formatPercent(change) : "--")}</td>`,
@@ -37290,15 +37642,84 @@
           return;
         }
         closeNailPinMenus();
+        const nail = (nailItems || []).find(
+          (item) => String(item.symbol || "").toUpperCase() === key,
+        );
+        const pinned = !!(nail && nail.pinned);
+        const always = isNailAlwaysWatch(key);
         const menu = document.createElement("div");
         menu.className = "nail-pin-menu";
         menu.setAttribute("role", "menu");
-        menu.innerHTML = [
-          `<button type="button" role="menuitem" data-nail-pin-first="${escapeHtml(key)}">置顶排第一</button>`,
-          `<button type="button" role="menuitem" class="is-danger" data-nail-pin-off="${escapeHtml(key)}">取消置顶</button>`,
-        ].join("");
+        const bits = [];
+        if (pinned) {
+          bits.push(
+            `<button type="button" role="menuitem" data-nail-pin-first="${escapeHtml(key)}">置顶排第一</button>`,
+          );
+          bits.push(
+            always
+              ? `<button type="button" role="menuitem" data-nail-always-off="${escapeHtml(key)}">取消常看</button>`
+              : `<button type="button" role="menuitem" data-nail-always-on="${escapeHtml(key)}">常看</button>`,
+          );
+          bits.push(
+            `<button type="button" role="menuitem" class="is-danger" data-nail-pin-off="${escapeHtml(key)}">取消置顶</button>`,
+          );
+        } else if (always) {
+          bits.push(
+            `<button type="button" role="menuitem" data-nail-pin-on="${escapeHtml(key)}">置顶</button>`,
+          );
+          bits.push(
+            `<button type="button" role="menuitem" class="is-danger" data-nail-always-off="${escapeHtml(key)}">取消常看</button>`,
+          );
+        } else {
+          bits.push(
+            `<button type="button" role="menuitem" data-nail-pin-first="${escapeHtml(key)}">置顶排第一</button>`,
+          );
+          bits.push(
+            `<button type="button" role="menuitem" class="is-danger" data-nail-pin-off="${escapeHtml(key)}">取消置顶</button>`,
+          );
+        }
+        menu.innerHTML = bits.join("");
         wrap.appendChild(menu);
         pinBtn.setAttribute("aria-expanded", "true");
+      }
+
+      /** 常看孤儿（无钉/已取消置顶）一键重新置顶；无钉时会先钉入。 */
+      async function ensureNailPinnedFromAlwaysWatch(symbol) {
+        const key = WatchFavorites.nailSymbolKey
+          ? WatchFavorites.nailSymbolKey(symbol)
+          : String(symbol || "").trim().toUpperCase();
+        if (!key) return;
+        const label = key.replace(/USDT$/i, "");
+        const existing = (nailItems || []).find(
+          (item) => String(item.symbol || "").toUpperCase() === key,
+        );
+        if (existing) {
+          await setNailPinnedState(key, true);
+          return;
+        }
+        const price = Number(marketMap[key]?.price);
+        const note =
+          Number.isFinite(price) && price > 0 ? formatPinPrice(price) : "";
+        try {
+          await persistNails(
+            (list, meta) => {
+              const withNail = WatchFavorites.upsertNail(list, key, note);
+              return {
+                list: WatchFavorites.setNailPinned(withNail, key, true),
+                dismissedNails: WatchFavorites.removeDismissedNails(
+                  (meta && meta.dismissedNails) || [],
+                  [key],
+                ),
+              };
+            },
+            `Repin always-watch ${label}`,
+            { loadingText: `置顶 ${label}…` },
+          );
+          showToast(`${label} 已置顶`);
+        } catch (error) {
+          console.warn(error);
+          showToast(error.message || "置顶失败");
+        }
       }
 
       async function setNailPinnedState(symbol, pinned, options) {
@@ -37450,6 +37871,8 @@
             if (!card) return;
             const symbol = card.getAttribute("data-nail-symbol");
             if (!symbol) return;
+            // 常看孤儿不在 nails 名单，拖排序会空写 / 回弹。
+            if (!hasNailForSymbol(symbol)) return;
             startX = event.clientX;
             startY = event.clientY;
             moved = false;
@@ -37622,7 +38045,16 @@
           return;
         }
         const label = key.replace(/USDT$/i, "");
-        if (!confirmDestructive(`确定删除钉子 ${label}？`)) return;
+        const alsoAlways = isNailAlwaysWatch(key);
+        if (
+          !confirmDestructive(
+            alsoAlways
+              ? `确定删除钉子 ${label}？\n将同时取消常看`
+              : `确定删除钉子 ${label}？`,
+          )
+        ) {
+          return;
+        }
         try {
           await persistNails(
             (list, meta) => ({
@@ -37635,7 +38067,14 @@
             `Remove nail ${label}`,
             { loadingText: `删除 ${label}…` },
           );
-          showToast(`${label} 已从钉子去掉`);
+          if (alsoAlways) {
+            await clearAlwaysWatchSymbols([key], { silent: true });
+          }
+          showToast(
+            alsoAlways
+              ? `${label} 已从钉子去掉（已取消常看）`
+              : `${label} 已从钉子去掉`,
+          );
         } catch (error) {
           console.warn(error);
           showToast(error.message || "删除失败");
@@ -39656,6 +40095,11 @@
               showToast("已收起临时查看");
               return;
             }
+            // 仅常看观察卡（钉子已退出）：删 = 取消常看
+            if (isNailAlwaysWatch(sym) && !hasNailForSymbol(sym)) {
+              void setNailAlwaysWatch(sym, false);
+              return;
+            }
             void deleteNail(sym);
             return;
           }
@@ -39668,6 +40112,15 @@
             void promoteNailPinnedFirst(sym);
             return;
           }
+          const pinOnBtn = event.target.closest("[data-nail-pin-on]");
+          if (pinOnBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            const sym = pinOnBtn.getAttribute("data-nail-pin-on");
+            closeNailPinMenus();
+            void ensureNailPinnedFromAlwaysWatch(sym);
+            return;
+          }
           const pinOffBtn = event.target.closest("[data-nail-pin-off]");
           if (pinOffBtn) {
             event.preventDefault();
@@ -39677,12 +40130,30 @@
             void setNailPinnedState(sym, false);
             return;
           }
+          const alwaysOnBtn = event.target.closest("[data-nail-always-on]");
+          if (alwaysOnBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            const sym = alwaysOnBtn.getAttribute("data-nail-always-on");
+            closeNailPinMenus();
+            void setNailAlwaysWatch(sym, true);
+            return;
+          }
+          const alwaysOffBtn = event.target.closest("[data-nail-always-off]");
+          if (alwaysOffBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            const sym = alwaysOffBtn.getAttribute("data-nail-always-off");
+            closeNailPinMenus();
+            void setNailAlwaysWatch(sym, false);
+            return;
+          }
           const pinBtn = event.target.closest("[data-nail-pin]");
           if (pinBtn) {
             event.preventDefault();
             event.stopPropagation();
             const sym = pinBtn.getAttribute("data-nail-pin");
-            if (pinBtn.classList.contains("is-on")) {
+            if (pinBtn.classList.contains("is-on") || isNailAlwaysWatch(sym)) {
               openNailPinMenu(pinBtn, sym);
             } else if (isNailJumpGuest(sym)) {
               closeNailPinMenus();

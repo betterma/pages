@@ -5340,6 +5340,8 @@
       pullbackFocusAt: num(data.pullbackFocusAt),
       radarFixedSymbols: normalizeUiReadSymbols(data.radarFixedSymbols),
       radarFixedAt: num(data.radarFixedAt),
+      alwaysWatchSymbols: normalizeUiReadSymbols(data.alwaysWatchSymbols),
+      alwaysWatchAt: num(data.alwaysWatchAt),
       updatedAt: num(data.updatedAt),
     };
   }
@@ -5355,6 +5357,7 @@
     if (left.overlookFocusAt !== right.overlookFocusAt) return false;
     if (left.pullbackFocusAt !== right.pullbackFocusAt) return false;
     if (left.radarFixedAt !== right.radarFixedAt) return false;
+    if (left.alwaysWatchAt !== right.alwaysWatchAt) return false;
     if (!dismissMapsEqual(left.overlookFocusDismissed, right.overlookFocusDismissed)) {
       return false;
     }
@@ -5372,6 +5375,12 @@
     if (ls.length !== rs.length) return false;
     for (let i = 0; i < ls.length; i += 1) {
       if (ls[i] !== rs[i]) return false;
+    }
+    const law = left.alwaysWatchSymbols;
+    const raw = right.alwaysWatchSymbols;
+    if (law.length !== raw.length) return false;
+    for (let i = 0; i < law.length; i += 1) {
+      if (law[i] !== raw[i]) return false;
     }
     return true;
   }
@@ -5488,9 +5497,11 @@
           pullbackFocusRows: nextPullbackFocusRows,
           radarFixedSymbols: base.radarFixedSymbols.slice(),
           radarFixedAt: base.radarFixedAt,
+          alwaysWatchSymbols: base.alwaysWatchSymbols.slice(),
+          alwaysWatchAt: base.alwaysWatchAt,
           updatedAt: base.updatedAt,
         };
-        // 数组类状态（雷达固定名单）由回调基于云端最新值原子改写，
+        // 数组类状态（雷达固定 / 常看）由回调基于云端最新值原子改写，
         // 避免多端各自拿旧数组整表覆盖、互相清掉对方的修改。
         if (typeof opts.mutate === "function") {
           const result = opts.mutate(state) || state;
@@ -5541,6 +5552,14 @@
               Number(result.radarFixedAt) > 0
                 ? Number(result.radarFixedAt)
                 : state.radarFixedAt,
+            alwaysWatchSymbols:
+              result.alwaysWatchSymbols === undefined
+                ? state.alwaysWatchSymbols
+                : normalizeUiReadSymbols(result.alwaysWatchSymbols),
+            alwaysWatchAt:
+              Number(result.alwaysWatchAt) > 0
+                ? Number(result.alwaysWatchAt)
+                : state.alwaysWatchAt,
           };
         }
         // 合并 / mutate 后与云端一致：不 PUT，避免空写撞 409。
