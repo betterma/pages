@@ -2744,6 +2744,32 @@
         color: color-mix(in srgb, var(--warn, #b07030) 72%, var(--label));
         font-weight: 700;
       }
+      .nail-auto-pin-overlook-block .nail-auto-pin-section.is-overlook {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .nail-auto-pin-overlook-block.is-collapsed .nail-notice-group-caret,
+      .nail-auto-pin-overlook-tbody.is-collapsed .nail-notice-group-caret {
+        transform: rotate(-90deg);
+      }
+      .nail-auto-pin-overlook-block.is-collapsed .nail-auto-pin-grid.is-overlook {
+        display: none;
+      }
+      .nail-auto-pin-sep.is-overlook.is-group-toggle {
+        cursor: pointer;
+        user-select: none;
+      }
+      .nail-auto-pin-sep.is-overlook.is-group-toggle td {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .nail-auto-pin-overlook-tbody.is-collapsed tr.nail-auto-pin-row.is-overlook {
+        display: none;
+      }
       .nail-auto-pin-card-head {
         display: flex;
         align-items: baseline;
@@ -7461,9 +7487,31 @@
         font-weight: 800;
         line-height: 1.35;
       }
+      .trade-confirm-ack {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin: 12px 0 0;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: color-mix(in srgb, #c45c5c 8%, transparent);
+        color: #b71c1c;
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.35;
+        cursor: pointer;
+        user-select: none;
+      }
+      .trade-confirm-ack input {
+        margin-top: 2px;
+        flex-shrink: 0;
+      }
       .trade-confirm-actions {
         display: flex;
         gap: 8px;
+      }
+      .trade-confirm-actions button.is-primary[hidden] {
+        display: none !important;
       }
       .trade-confirm-actions button {
         flex: 1;
@@ -12661,6 +12709,26 @@
       let nailAutoPinOverlookFocusRows = [];
       /** 本机俯瞰置顶区手动移出的币（不改已读基线）。 */
       const nailAutoPinOverlookHidden = new Set();
+      /** 俯瞰置顶区折叠（仅本机 UI；点摘要进区时会强制展开）。 */
+      const OVERLOOK_FOCUS_COLLAPSE_KEY = "kline-overlook-focus-collapsed-v1";
+      let nailAutoPinOverlookCollapsed = false;
+      try {
+        nailAutoPinOverlookCollapsed =
+          localStorage.getItem(OVERLOOK_FOCUS_COLLAPSE_KEY) === "1";
+      } catch (_) {
+        nailAutoPinOverlookCollapsed = false;
+      }
+      function setNailAutoPinOverlookCollapsed(on) {
+        nailAutoPinOverlookCollapsed = !!on;
+        try {
+          localStorage.setItem(
+            OVERLOOK_FOCUS_COLLAPSE_KEY,
+            nailAutoPinOverlookCollapsed ? "1" : "0",
+          );
+        } catch (_) {
+          /* ignore */
+        }
+      }
       const OVERLOOK_FOCUS_DISMISS_KEY = "kline-overlook-focus-dismiss-v1";
       const PULLBACK_FOCUS_DISMISS_KEY = "kline-pullback-focus-dismiss-v1";
       const OVERLOOK_FOCUS_ROWS_KEY = "kline-overlook-focus-rows-v1";
@@ -12926,6 +12994,9 @@
         nailAutoPinOverlookFocus = true;
         if (!visibleOverlookFocusRows().length) {
           nailAutoPinOverlookFocus = false;
+        } else {
+          // 从摘要点进：强制展开，避免折叠态看不到刚并入的 K 线。
+          setNailAutoPinOverlookCollapsed(false);
         }
         queueFocusRowsShared("overlook");
       }
@@ -15910,35 +15981,42 @@
 
         if (listMode) {
           // 列表模式：整张表放进唯一滚动容器（对齐雷达），避免多层 overflow 抢手势。
-          const rows = [];
+          const bodies = [];
           if (overlookFocusRows.length) {
-            rows.push(
-              `<tr class="nail-auto-pin-sep is-overlook" id="nailAutoPinOverlookSection"><td colspan="3">俯瞰 · ${overlookFocusRows.length} 个</td></tr>`,
-            );
-            overlookFocusRows.forEach((row) => {
-              rows.push(
+            const overlookRows = overlookFocusRows
+              .map((row) =>
                 buildItem(row.symbol, row.at, 0, {
                   overlook: true,
                   overPct: row.overPct,
                 }),
-              );
-            });
+              )
+              .join("");
+            bodies.push(
+              `<tbody class="nail-auto-pin-overlook-tbody${nailAutoPinOverlookCollapsed ? " is-collapsed" : ""}" data-autopin-overlook-block>`,
+              `<tr class="nail-auto-pin-sep is-overlook is-group-toggle" id="nailAutoPinOverlookSection" data-autopin-overlook-toggle title="点击展开/收起"><td colspan="3"><span class="nail-notice-group-caret">▾</span><span>俯瞰 · ${overlookFocusRows.length} 个</span></td></tr>`,
+              overlookRows,
+              `</tbody>`,
+            );
           }
+          const restRows = [];
           if (cards.length) {
-            rows.push(
+            restRows.push(
               `<tr class="nail-auto-pin-sep"><td colspan="3">近 8 小时 · ${cards.length} 个币</td></tr>`,
             );
-            cards.forEach((row) => rows.push(buildItem(row.symbol, row.at)));
+            cards.forEach((row) => restRows.push(buildItem(row.symbol, row.at)));
           }
           if (olderCards.length) {
-            rows.push(
+            restRows.push(
               `<tr class="nail-auto-pin-sep"><td colspan="3">更早（近 3 天）· ${olderCards.length} 个币</td></tr>`,
             );
             olderCards.forEach((row) => {
-              rows.push(buildItem(row.symbol, row.at, row.count));
+              restRows.push(buildItem(row.symbol, row.at, row.count));
             });
           }
-          if (!rows.length) {
+          if (restRows.length) {
+            bodies.push(`<tbody>${restRows.join("")}</tbody>`);
+          }
+          if (!bodies.length) {
             list.innerHTML =
               '<div class="nail-auto-pin-empty">暂无自动盯记录</div>';
             return;
@@ -15952,18 +16030,20 @@
             `<div class="nail-auto-pin-table-wrap">`,
             `<table class="nail-auto-pin-table">`,
             `<thead><tr><th>币</th><th>K线</th><th>24h</th></tr></thead>`,
-            `<tbody>${rows.join("")}</tbody>`,
+            bodies.join(""),
             `</table>`,
             more,
             `</div>`,
           ].join("");
+          bindNailAutoPinOverlookToggle(list);
           return;
         }
 
         const parts = [];
         if (overlookFocusRows.length) {
           parts.push(
-            `<div class="nail-auto-pin-section is-overlook" id="nailAutoPinOverlookSection">俯瞰 · ${overlookFocusRows.length} 个</div>`,
+            `<div class="nail-auto-pin-overlook-block${nailAutoPinOverlookCollapsed ? " is-collapsed" : ""}" data-autopin-overlook-block>`,
+            `<div class="nail-auto-pin-section is-overlook is-group-toggle" id="nailAutoPinOverlookSection" data-autopin-overlook-toggle title="点击展开/收起"><span class="nail-notice-group-caret">▾</span><span>俯瞰 · ${overlookFocusRows.length} 个</span></div>`,
             `<div class="nail-auto-pin-grid is-overlook">${overlookFocusRows
               .map((row) =>
                 buildItem(row.symbol, row.at, 0, {
@@ -15972,6 +16052,7 @@
                 }),
               )
               .join("")}</div>`,
+            `</div>`,
           );
         }
         if (cards.length) {
@@ -16003,6 +16084,26 @@
           return;
         }
         list.innerHTML = parts.join("");
+        bindNailAutoPinOverlookToggle(list);
+      }
+
+      function bindNailAutoPinOverlookToggle(root) {
+        const listEl = root || document.getElementById("nailAutoPinList");
+        if (!listEl) return;
+        listEl.querySelectorAll("[data-autopin-overlook-toggle]").forEach((head) => {
+          head.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const block =
+              head.closest("[data-autopin-overlook-block]") ||
+              head.closest(".nail-auto-pin-overlook-tbody") ||
+              head.closest(".nail-auto-pin-overlook-block");
+            if (!block) return;
+            const nextCollapsed = !block.classList.contains("is-collapsed");
+            block.classList.toggle("is-collapsed", nextCollapsed);
+            setNailAutoPinOverlookCollapsed(nextCollapsed);
+          });
+        });
       }
 
       async function refreshNailAutoPinChart(symbol) {
@@ -17929,16 +18030,20 @@
           spot > 0 &&
           ((plan.stop5 > 0 && spot <= plan.stop5) ||
             (plan.stop3 > 0 && spot <= plan.stop3));
-        return (
+        const html =
           `<p>确认现价买入 <strong>${escapeHtml(asset)}</strong>？</p>` +
           `<p><span class="trade-confirm-k">【花费】</span>${escapeHtml(formatHoldingsUsdt(quote))} USDT</p>` +
           `<p><span class="trade-confirm-k">【现价】</span>${escapeHtml(spotText)}</p>` +
           `<p class="trade-confirm-stop"><span class="trade-confirm-k">【止损监控】</span>` +
           `-3% ≈ ${escapeHtml(stop3)}（卖一半），-5% ≈ ${escapeHtml(stop5)}（全出）</p>` +
           (immediate
-            ? `<p class="trade-confirm-stop-immediate"><span class="trade-confirm-k">【警告】</span>「监控会立即卖出」</p>`
-            : "")
-        );
+            ? `<p class="trade-confirm-stop-immediate"><span class="trade-confirm-k">【警告】</span>「监控会立即卖出」</p>` +
+              `<label class="trade-confirm-ack" for="tradeConfirmAck">` +
+              `<input type="checkbox" id="tradeConfirmAck" />` +
+              `<span>确认知道了：现价已低于止损触发价，买入后监控可能立即卖出</span>` +
+              `</label>`
+            : "");
+        return { html, requireAck: immediate };
       }
 
       let tradeConfirmResolver = null;
@@ -17949,6 +18054,7 @@
             : { bodyHtml: optsOrHtml };
         const bodyHtml = opts.bodyHtml != null ? opts.bodyHtml : "";
         const confirmText = opts.confirmText || "确认下单";
+        const requireAck = !!opts.requireAck;
         return new Promise((resolve) => {
           const dlg = document.getElementById("tradeConfirmDialog");
           const body = document.getElementById("tradeConfirmBody");
@@ -17973,13 +18079,30 @@
           body.innerHTML = bodyHtml || "";
           ok.textContent = confirmText;
           if (cancel && opts.cancelText) cancel.textContent = opts.cancelText;
+          const ack = body.querySelector("#tradeConfirmAck");
+          const syncAckGate = () => {
+            if (!requireAck) {
+              ok.hidden = false;
+              return;
+            }
+            ok.hidden = !(ack && ack.checked);
+          };
+          if (ack) {
+            ack.checked = false;
+            ack.onchange = syncAckGate;
+          }
+          syncAckGate();
           dlg.hidden = false;
           const finish = (val) => {
+            // 二次确认闸：未勾选时不允许确认下单（防键盘/脚本误触）
+            if (val && requireAck && !(ack && ack.checked)) return;
             dlg.hidden = true;
             tradeConfirmResolver = null;
+            ok.hidden = false;
             ok.onclick = null;
             cancel.onclick = null;
             dlg.onclick = null;
+            if (ack) ack.onchange = null;
             resolve(!!val);
           };
           tradeConfirmResolver = finish;
@@ -17994,9 +18117,11 @@
       async function confirmBuyWithStopPreview(symbol, quote, spotPrice) {
         const q = Number(quote);
         if (!(q > 0)) return false;
+        const built = buildBuyStopConfirmHtml(symbol, q, spotPrice);
         return showTradeConfirmDialog({
-          bodyHtml: buildBuyStopConfirmHtml(symbol, q, spotPrice),
+          bodyHtml: built.html,
           confirmText: "确认买入",
+          requireAck: built.requireAck,
         });
       }
 
