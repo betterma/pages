@@ -1,41 +1,43 @@
 {
-  "updatedAt": 1795624830323,
-  "lastRunAt": 1795624800562,
-  "ok": true,
-  "error": null,
-  "durationMs": 29761,
-  "autoPins": 137,
+  "updatedAt": 1795625144488,
+  "lastRunAt": 1795625100627,
+  "ok": false,
+  "error": "balance×1:batch-notices:GitHub PUT watch-balance-notices.json failed: 409 {\"message\":\"watch-balance-notices.json does not match a0098ebae23be7e5af049c51beb73162190725e5\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"409\"}",
+  "durationMs": 43861,
+  "autoPins": 138,
   "balance": {
     "skipped": false,
     "reason": null,
-    "autoPins": 137,
-    "due": 105,
-    "checked": 105,
-    "hits": 9,
+    "autoPins": 138,
+    "due": 125,
+    "checked": 125,
+    "hits": 27,
     "sent": 0,
-    "wecomDue": 0,
-    "wecomQueued": 0,
+    "wecomDue": 15,
+    "wecomQueued": 15,
     "wecomDeferred": 0,
-    "skippedWecomWindow": 9,
+    "skippedWecomWindow": 12,
     "checkMax": 0,
     "sendMax": 0,
     "checkCursor": 0,
     "cooldownMs": 1800000,
-    "cooldownSkipped": 32,
-    "errorCount": 0,
-    "errors": []
+    "cooldownSkipped": 13,
+    "errorCount": 1,
+    "errors": [
+      "batch-notices:GitHub PUT watch-balance-notices.json failed: 409 {\"message\":\"watch-balance-notices.json does not match a0098ebae23be7e5af049c51beb73162190725e5\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":\"409\"}"
+    ]
   },
   "nailGreen": {
     "skipped": false,
     "reason": null,
-    "nails": 153,
+    "nails": 154,
     "pending": 46,
     "checked": 46,
-    "hits": 1,
+    "hits": 0,
     "sent": 0,
     "checkMax": 0,
     "checkCursor": 0,
-    "bucketSkipped": 107,
+    "bucketSkipped": 108,
     "errorCount": 0,
     "errors": []
   },
@@ -43,7 +45,8 @@
     "skipped": false,
     "reason": "none-stale",
     "checked": 12,
-    "candidate": 108,
+    "candidate": 109,
     "removed": 0
-  }
+  },
+  "degraded": true
 }
