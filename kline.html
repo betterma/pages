@@ -2747,7 +2747,8 @@
       .nail-auto-pin-overlook-block .nail-auto-pin-section.is-overlook {
         display: flex;
         align-items: center;
-        gap: 6px;
+        flex-wrap: wrap;
+        gap: 6px 8px;
         cursor: pointer;
         user-select: none;
       }
@@ -2762,10 +2763,79 @@
         cursor: pointer;
         user-select: none;
       }
-      .nail-auto-pin-sep.is-overlook.is-group-toggle td {
+      /* 勿对 td 设 display:flex：会丢掉 colspan，标题被挤进第一列竖排。 */
+      .nail-auto-pin-sep-inner {
         display: flex;
         align-items: center;
+        flex-wrap: wrap;
+        gap: 6px 8px;
+        width: 100%;
+        min-width: 0;
+      }
+      .nail-auto-pin-overlook-title {
+        flex: 0 1 auto;
+        min-width: 0;
+      }
+      .nail-auto-pin-overlook-actions {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: wrap;
         gap: 6px;
+        margin-left: auto;
+      }
+      .nail-auto-pin-overlook-actions button {
+        border: none;
+        background: color-mix(in srgb, var(--fill, #808080) 70%, transparent);
+        color: var(--label);
+        height: 26px;
+        padding: 0 10px;
+        border-radius: 7px;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .nail-auto-pin-overlook-actions button.is-danger {
+        color: var(--down, #a05a52);
+        background: color-mix(in srgb, var(--down, #c45c5c) 12%, transparent);
+      }
+      .nail-auto-pin-overlook-actions button.is-active {
+        background: color-mix(in srgb, var(--warn, #b07030) 18%, transparent);
+        color: color-mix(in srgb, var(--warn, #b07030) 80%, var(--label));
+      }
+      .nail-auto-pin-overlook-sel-count {
+        font-size: 11px;
+        font-weight: 650;
+        color: var(--secondary);
+        margin-right: 2px;
+      }
+      .nail-auto-pin-row.is-overlook.is-selected,
+      .nail-auto-pin-card.is-overlook.is-selected {
+        outline: 2px solid color-mix(in srgb, var(--warn, #b07030) 55%, transparent);
+        outline-offset: -1px;
+        background: color-mix(in srgb, var(--warn, #b07030) 18%, transparent);
+      }
+      .nail-auto-pin-list.is-overlook-selecting .nail-auto-pin-card.is-overlook,
+      .nail-auto-pin-list.is-overlook-selecting .nail-auto-pin-row.is-overlook {
+        cursor: pointer;
+      }
+      .nail-auto-pin-check {
+        width: 15px;
+        height: 15px;
+        margin: 0 6px 0 0;
+        vertical-align: middle;
+        accent-color: var(--warn, #b07030);
+        cursor: pointer;
+        flex: 0 0 auto;
+      }
+      .nail-auto-pin-card.is-overlook .nail-auto-pin-check {
+        position: absolute;
+        left: 8px;
+        bottom: 8px;
+        z-index: 2;
+        margin: 0;
+      }
+      .nail-auto-pin-card.is-overlook {
+        position: relative;
       }
       .nail-auto-pin-overlook-tbody.is-collapsed tr.nail-auto-pin-row.is-overlook {
         display: none;
@@ -12750,6 +12820,165 @@
           /* ignore */
         }
       }
+      /** 俯瞰置顶区多选：批量移出。 */
+      let overlookSelectMode = false;
+      const selectedOverlookSymbols = new Set();
+
+      function setOverlookSelectMode(on) {
+        const next = !!on;
+        if (next === overlookSelectMode) return;
+        overlookSelectMode = next;
+        if (!overlookSelectMode) selectedOverlookSymbols.clear();
+        if (overlookSelectMode && focusActionScope === "overlook") {
+          setFocusActionSymbol(null);
+        }
+        // 进多选时展开，避免选了看不见。
+        if (overlookSelectMode && nailAutoPinOverlookCollapsed) {
+          setNailAutoPinOverlookCollapsed(false);
+        }
+        renderNailAutoPinList();
+        void paintNailAutoPinCharts();
+        applyFocusActionChrome();
+      }
+
+      function toggleOverlookSelectSymbol(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        if (selectedOverlookSymbols.has(key)) selectedOverlookSymbols.delete(key);
+        else selectedOverlookSymbols.add(key);
+        document
+          .querySelectorAll(
+            `#nailAutoPinList [data-autopin-overlook][data-autopin-card]`,
+          )
+          .forEach((card) => {
+            const sym = String(
+              card.getAttribute("data-autopin-card") || "",
+            ).toUpperCase();
+            if (sym !== key) return;
+            card.classList.toggle(
+              "is-selected",
+              selectedOverlookSymbols.has(key),
+            );
+            const check = card.querySelector(".nail-auto-pin-check");
+            if (check) check.checked = selectedOverlookSymbols.has(key);
+          });
+        const countEl = document.querySelector(
+          "#nailAutoPinList .nail-auto-pin-overlook-sel-count",
+        );
+        if (countEl) {
+          countEl.textContent = `已选 ${selectedOverlookSymbols.size}`;
+        }
+        const removeBtn = document.querySelector(
+          "#nailAutoPinList [data-overlook-batch-remove]",
+        );
+        if (removeBtn) {
+          removeBtn.disabled = selectedOverlookSymbols.size === 0;
+        }
+      }
+
+      function selectAllOverlookFocusSymbols() {
+        const rows = visibleOverlookFocusRows();
+        if (!rows.length) return;
+        const allSelected =
+          rows.length > 0 &&
+          rows.every((row) =>
+            selectedOverlookSymbols.has(
+              String((row && row.symbol) || "").toUpperCase(),
+            ),
+          );
+        if (allSelected) {
+          selectedOverlookSymbols.clear();
+        } else {
+          rows.forEach((row) => {
+            const key = String((row && row.symbol) || "")
+              .trim()
+              .toUpperCase();
+            if (key) selectedOverlookSymbols.add(key);
+          });
+        }
+        renderNailAutoPinList();
+        void paintNailAutoPinCharts();
+      }
+
+      /**
+       * 批量从俯瞰置顶区移出（写 dismiss 水位，本命中不再进摘要/置顶）。
+       * @returns {number} 实际移出条数
+       */
+      function removeOverlookFocusSymbols(rawSymbols) {
+        const keys = [
+          ...new Set(
+            (rawSymbols || [])
+              .map((symbol) =>
+                String(symbol || "")
+                  .trim()
+                  .toUpperCase(),
+              )
+              .filter(Boolean),
+          ),
+        ];
+        if (!keys.length) return 0;
+        keys.forEach((key) => {
+          const focusRow = nailAutoPinOverlookFocusRows.find(
+            (row) =>
+              String((row && row.symbol) || "").toUpperCase() === key,
+          );
+          const cloudRow = (overlookItems || []).find(
+            (row) =>
+              String((row && row.symbol) || "").toUpperCase() === key,
+          );
+          const hitAt =
+            Number(focusRow && focusRow.at) ||
+            Number(cloudRow && cloudRow.detectedAt) ||
+            Date.now();
+          const next = Math.max(
+            Number(overlookFocusDismissed.get(key)) || 0,
+            Number(hitAt) || 0,
+            Date.now(),
+          );
+          overlookFocusDismissed.set(key, next);
+          nailAutoPinOverlookHidden.add(key);
+        });
+        saveFocusDismissMap(
+          OVERLOOK_FOCUS_DISMISS_KEY,
+          overlookFocusDismissed,
+        );
+        queueSharedUiReadState({
+          overlookFocusDismissed: dismissMapToObject(overlookFocusDismissed),
+        });
+        const drop = new Set(keys);
+        const before = nailAutoPinOverlookFocusRows.length;
+        nailAutoPinOverlookFocusRows = nailAutoPinOverlookFocusRows.filter(
+          (row) =>
+            !drop.has(String((row && row.symbol) || "").toUpperCase()),
+        );
+        const removed = before - nailAutoPinOverlookFocusRows.length;
+        if (!visibleOverlookFocusRows().length) {
+          clearOverlookFocusSection();
+        } else {
+          queueFocusRowsShared("overlook");
+        }
+        return removed;
+      }
+
+      function overlookSectionHeadHtml(count) {
+        const n = Number(count) || 0;
+        const actions = overlookSelectMode
+          ? [
+              `<span class="nail-auto-pin-overlook-sel-count">已选 ${selectedOverlookSymbols.size}</span>`,
+              `<button type="button" data-overlook-select-all>全选</button>`,
+              `<button type="button" class="is-danger" data-overlook-batch-remove${selectedOverlookSymbols.size ? "" : " disabled"}>移出</button>`,
+              `<button type="button" data-overlook-select-cancel>取消</button>`,
+            ].join("")
+          : `<button type="button" data-overlook-select-toggle title="多选后批量移出">多选</button>`;
+        return [
+          `<span class="nail-notice-group-caret" aria-hidden="true">▾</span>`,
+          `<span class="nail-auto-pin-overlook-title">俯瞰 · ${n} 个</span>`,
+          `<span class="nail-auto-pin-overlook-actions">${actions}</span>`,
+        ].join("");
+      }
+
       const OVERLOOK_FOCUS_DISMISS_KEY = "kline-overlook-focus-dismiss-v1";
       const PULLBACK_FOCUS_DISMISS_KEY = "kline-pullback-focus-dismiss-v1";
       const OVERLOOK_FOCUS_ROWS_KEY = "kline-overlook-focus-rows-v1";
@@ -15861,8 +16090,14 @@
           : pinState === "pinned"
             ? `<button type="button" class="nail-auto-pin-pin is-on" data-autopin-pin-btn="${escapeHtml(key)}" disabled title="已在钉子置顶">顶</button>`
             : `<button type="button" class="nail-auto-pin-pin" data-autopin-pin-btn="${escapeHtml(key)}" title="${pinState === "nailed" ? "置顶排第一" : "置顶到钉子页"}">↑</button>`;
+        const selected =
+          overlook && overlookSelectMode && selectedOverlookSymbols.has(key);
+        const check =
+          overlook && overlookSelectMode
+            ? `<input type="checkbox" class="nail-auto-pin-check" data-overlook-select="${escapeHtml(key)}" ${selected ? "checked" : ""} aria-label="选择 ${label}" />`
+            : "";
         return [
-          `<article class="nail-auto-pin-card${overlook ? " is-overlook" : ""}" data-autopin-card="${escapeHtml(key)}"${overlook ? ` data-autopin-overlook="1"` : ""}>`,
+          `<article class="nail-auto-pin-card${overlook ? " is-overlook" : ""}${selected ? " is-selected" : ""}" data-autopin-card="${escapeHtml(key)}"${overlook ? ` data-autopin-overlook="1"` : ""}>`,
           `<div class="nail-auto-pin-card-head">`,
           `<button type="button" class="nail-auto-pin-card-name" data-nail-auto-symbol="${escapeHtml(key)}">${label}</button>`,
           overPctText,
@@ -15874,6 +16109,7 @@
           `<span>现 <b class="nail-auto-pin-card-live" data-autopin-live>${liveText}</b></span>`,
           `</div>`,
           `<canvas class="nail-auto-pin-kline is-loading" data-kline="${escapeHtml(key)}" data-autopin-chart="${escapeHtml(key)}"></canvas>`,
+          check,
           `</article>`,
         ].join("");
       }
@@ -15911,9 +16147,15 @@
         const meta = metaBits.length
           ? `<span class="nail-auto-pin-row-meta">${metaBits.join(" · ")}</span>`
           : "";
+        const selected =
+          overlook && overlookSelectMode && selectedOverlookSymbols.has(key);
+        const check =
+          overlook && overlookSelectMode
+            ? `<input type="checkbox" class="nail-auto-pin-check" data-overlook-select="${escapeHtml(key)}" ${selected ? "checked" : ""} aria-label="选择 ${label}" />`
+            : "";
         return [
-          `<tr class="nail-auto-pin-row${overlook ? " is-overlook" : ""}" data-autopin-card="${escapeHtml(key)}"${overlook ? ` data-autopin-overlook="1"` : ""}>`,
-          `<td><button type="button" class="nail-auto-pin-card-name" data-nail-auto-symbol="${escapeHtml(key)}">${label}</button>${meta}</td>`,
+          `<tr class="nail-auto-pin-row${overlook ? " is-overlook" : ""}${selected ? " is-selected" : ""}" data-autopin-card="${escapeHtml(key)}"${overlook ? ` data-autopin-overlook="1"` : ""}>`,
+          `<td>${check}<button type="button" class="nail-auto-pin-card-name" data-nail-auto-symbol="${escapeHtml(key)}">${label}</button>${meta}</td>`,
           `<td><canvas class="nail-auto-pin-kline is-loading" data-kline="${escapeHtml(key)}" data-autopin-chart="${escapeHtml(key)}"></canvas></td>`,
           `<td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td>`,
           `</tr>`,
@@ -15927,6 +16169,7 @@
         nailAutoPinPaintToken += 1;
         const listMode = nailAutoPinViewMode === "list";
         list.classList.toggle("is-list-view", listMode);
+        list.classList.toggle("is-overlook-selecting", overlookSelectMode);
         const buildItem = listMode
           ? buildNailAutoPinRowHtml
           : buildNailAutoPinCardHtml;
@@ -15943,6 +16186,11 @@
         const overlookFocusSet = new Set(
           overlookFocusRows.map((row) => row.symbol),
         );
+        if (overlookSelectMode && !overlookFocusRows.length) {
+          overlookSelectMode = false;
+          selectedOverlookSymbols.clear();
+          list.classList.remove("is-overlook-selecting");
+        }
         if (!entries.length && !overlookFocusRows.length) {
           list.innerHTML = '<div class="nail-auto-pin-empty">暂无自动盯记录</div>';
           return;
@@ -16014,7 +16262,7 @@
               .join("");
             bodies.push(
               `<tbody class="nail-auto-pin-overlook-tbody${nailAutoPinOverlookCollapsed ? " is-collapsed" : ""}" data-autopin-overlook-block>`,
-              `<tr class="nail-auto-pin-sep is-overlook is-group-toggle" id="nailAutoPinOverlookSection" data-autopin-overlook-toggle title="点击展开/收起"><td colspan="3"><span class="nail-notice-group-caret">▾</span><span>俯瞰 · ${overlookFocusRows.length} 个</span></td></tr>`,
+              `<tr class="nail-auto-pin-sep is-overlook is-group-toggle" id="nailAutoPinOverlookSection" data-autopin-overlook-toggle title="点击展开/收起"><td colspan="3"><span class="nail-auto-pin-sep-inner">${overlookSectionHeadHtml(overlookFocusRows.length)}</span></td></tr>`,
               overlookRows,
               `</tbody>`,
             );
@@ -16064,7 +16312,7 @@
         if (overlookFocusRows.length) {
           parts.push(
             `<div class="nail-auto-pin-overlook-block${nailAutoPinOverlookCollapsed ? " is-collapsed" : ""}" data-autopin-overlook-block>`,
-            `<div class="nail-auto-pin-section is-overlook is-group-toggle" id="nailAutoPinOverlookSection" data-autopin-overlook-toggle title="点击展开/收起"><span class="nail-notice-group-caret">▾</span><span>俯瞰 · ${overlookFocusRows.length} 个</span></div>`,
+            `<div class="nail-auto-pin-section is-overlook is-group-toggle" id="nailAutoPinOverlookSection" data-autopin-overlook-toggle title="点击展开/收起">${overlookSectionHeadHtml(overlookFocusRows.length)}</div>`,
             `<div class="nail-auto-pin-grid is-overlook">${overlookFocusRows
               .map((row) =>
                 buildItem(row.symbol, row.at, 0, {
@@ -16113,6 +16361,14 @@
         if (!listEl) return;
         listEl.querySelectorAll("[data-autopin-overlook-toggle]").forEach((head) => {
           head.addEventListener("click", (event) => {
+            // 多选 / 全选 / 移出 / 取消：不触发折叠。
+            if (
+              event.target.closest(
+                "button, input, .nail-auto-pin-overlook-actions",
+              )
+            ) {
+              return;
+            }
             event.preventDefault();
             event.stopPropagation();
             const block =
@@ -30160,33 +30416,8 @@
             .toUpperCase();
           if (!key) return;
           if (focusActionScope === "overlook") {
-            const focusRow = nailAutoPinOverlookFocusRows.find(
-              (row) =>
-                String((row && row.symbol) || "").toUpperCase() === key,
-            );
-            const cloudRow = (overlookItems || []).find(
-              (row) =>
-                String((row && row.symbol) || "").toUpperCase() === key,
-            );
-            const hitAt =
-              Number(focusRow && focusRow.at) ||
-              Number(cloudRow && cloudRow.detectedAt) ||
-              Date.now();
-            dismissFocusHit(
-              overlookFocusDismissed,
-              OVERLOOK_FOCUS_DISMISS_KEY,
-              key,
-              hitAt,
-            );
-            nailAutoPinOverlookHidden.add(key);
-            nailAutoPinOverlookFocusRows = nailAutoPinOverlookFocusRows.filter(
-              (row) => String((row && row.symbol) || "").toUpperCase() !== key,
-            );
-            if (!visibleOverlookFocusRows().length) {
-              clearOverlookFocusSection();
-            } else {
-              queueFocusRowsShared("overlook");
-            }
+            removeOverlookFocusSymbols([key]);
+            selectedOverlookSymbols.delete(key);
             setFocusActionSymbol(null);
             renderNailAutoPinList();
             void paintNailAutoPinCharts();
@@ -34240,6 +34471,7 @@
         }
         // 四个面互斥：进哪个，其余三个的浮层状态全部收起。
         if (next !== "autopin") {
+          if (overlookSelectMode) setOverlookSelectMode(false);
           await setNailAutoPinPopoverOpen(false);
         }
         if (next !== "radar") await setNailRadarPopoverOpen(false);
@@ -35497,12 +35729,12 @@
       }
 
       function openNailPinReview() {
-        const sections = nailDrawerSectionParts(nailDrawerVisibleItems());
-        const pinSec = sections.find((s) => s.id === "pin");
-        // 只筛真正置顶的钉子；常看孤儿 / 已取消置顶的常看不进队列（左滑取消置顶对它们是空操作）。
-        const items = (
-          pinSec && Array.isArray(pinSec.items) ? pinSec.items : []
-        ).filter((it) => it && it.pinned && hasNailForSymbol(it.symbol));
+        // 全量置顶：不走页面「上涨 / 只看置顶 / 持有分段」等可见筛选，
+        // 否则开了筛选时漏掉被藏起来的置顶币。
+        const items = (Array.isArray(nailItems) ? nailItems : [])
+          .filter((it) => it && it.pinned && it.symbol)
+          .slice()
+          .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
         if (!items.length) {
           showToast("当前没有置顶币");
           return;
@@ -40557,6 +40789,77 @@
       }
       if (nailAutoPinList) {
         nailAutoPinList.addEventListener("click", (event) => {
+          const overlookToggleBtn = event.target.closest(
+            "[data-overlook-select-toggle]",
+          );
+          if (overlookToggleBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            setOverlookSelectMode(true);
+            return;
+          }
+          const overlookCancelBtn = event.target.closest(
+            "[data-overlook-select-cancel]",
+          );
+          if (overlookCancelBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            setOverlookSelectMode(false);
+            return;
+          }
+          const overlookSelectAllBtn = event.target.closest(
+            "[data-overlook-select-all]",
+          );
+          if (overlookSelectAllBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            selectAllOverlookFocusSymbols();
+            return;
+          }
+          const overlookBatchRemoveBtn = event.target.closest(
+            "[data-overlook-batch-remove]",
+          );
+          if (overlookBatchRemoveBtn) {
+            event.preventDefault();
+            event.stopPropagation();
+            const keys = [...selectedOverlookSymbols];
+            if (!keys.length) {
+              showToast("先选中要移出的币");
+              return;
+            }
+            if (
+              !confirmDestructive(
+                `确定移出选中的 ${keys.length} 个俯瞰？\n${keys
+                  .slice(0, 8)
+                  .map((symbol) => symbol.replace(/USDT$/i, ""))
+                  .join("、")}${keys.length > 8 ? "…" : ""}`,
+              )
+            ) {
+              return;
+            }
+            const removed = removeOverlookFocusSymbols(keys);
+            selectedOverlookSymbols.clear();
+            overlookSelectMode = false;
+            setFocusActionSymbol(null);
+            renderNailAutoPinList();
+            void paintNailAutoPinCharts();
+            syncNailDigest();
+            applyFocusActionChrome();
+            showToast(
+              removed > 0
+                ? `已移出 ${removed} 个俯瞰`
+                : "没有可移出的俯瞰",
+            );
+            return;
+          }
+          const overlookCheck = event.target.closest("[data-overlook-select]");
+          if (overlookCheck) {
+            event.stopPropagation();
+            toggleOverlookSelectSymbol(
+              overlookCheck.getAttribute("data-overlook-select"),
+            );
+            return;
+          }
           const pinBtn = event.target.closest("[data-autopin-pin-btn]");
           if (pinBtn) {
             void pinAutoPinSymbol(pinBtn);
@@ -40566,6 +40869,13 @@
             "[data-autopin-overlook][data-autopin-card]",
           );
           if (overlookCard) {
+            if (overlookSelectMode) {
+              event.preventDefault();
+              toggleOverlookSelectSymbol(
+                overlookCard.getAttribute("data-autopin-card"),
+              );
+              return;
+            }
             // 俯瞰区点 K 线/卡片/列表行：展开操作栏（置顶/刷新/移出）。
             // 点币名仍可去钉子抽屉。
             const nameBtn = event.target.closest("[data-nail-auto-symbol]");
