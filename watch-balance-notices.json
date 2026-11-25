@@ -3,6 +3,25 @@
   "readAt": 1795585830455,
   "items": [
     {
+      "id": "TUSDT:1795593600000:1795602900570",
+      "symbol": "TUSDT",
+      "label": "T",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1795602900570,
+      "firstSeenAt": 1795602900570,
+      "openTime": 1795593600000,
+      "pinPrice": 0.00375,
+      "pinnedAt": 1795591200649,
+      "alertPrice": 0.00375,
+      "notifyPrice": 0.00385,
+      "noteAt": 1795591200649,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795602900570
+    },
+    {
       "id": "AIGENSYNUSDT:1795593600000:1795602900570",
       "symbol": "AIGENSYNUSDT",
       "label": "AIGENSYN",
@@ -22,7 +41,27 @@
       "noteAt": 1795540603170,
       "interval": "4h",
       "windowUp": true,
-      "batchAt": 1795600801166
+      "batchAt": 1795602900570
+    },
+    {
+      "id": "TMFBUSDT:1795593600000:1795602900570",
+      "symbol": "TMFBUSDT",
+      "label": "TMFB",
+      "kinds": [
+        "天平",
+        "直拉"
+      ],
+      "at": 1795602900570,
+      "firstSeenAt": 1795536300687,
+      "openTime": 1795593600000,
+      "pinPrice": 30.02,
+      "pinnedAt": 1795528800523,
+      "alertPrice": 29.98,
+      "notifyPrice": 30.28,
+      "noteAt": 1795536000873,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795602900570
     },
     {
       "id": "BABYUSDT:1795593600000:1795602900570",
@@ -63,45 +102,6 @@
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1795593300650
-    },
-    {
-      "id": "TMFBUSDT:1795593600000:1795602900570",
-      "symbol": "TMFBUSDT",
-      "label": "TMFB",
-      "kinds": [
-        "天平",
-        "直拉"
-      ],
-      "at": 1795602900570,
-      "firstSeenAt": 1795536300687,
-      "openTime": 1795593600000,
-      "pinPrice": 30.02,
-      "pinnedAt": 1795528800523,
-      "alertPrice": 29.98,
-      "notifyPrice": 30.28,
-      "noteAt": 1795536000873,
-      "interval": "4h",
-      "windowUp": true,
-      "batchAt": 1795600801166
-    },
-    {
-      "id": "TUSDT:1795593600000:1795602900570",
-      "symbol": "TUSDT",
-      "label": "T",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1795602900570,
-      "firstSeenAt": 1795602900570,
-      "openTime": 1795593600000,
-      "pinPrice": 0.00375,
-      "pinnedAt": 1795591200649,
-      "alertPrice": 0.00375,
-      "notifyPrice": 0.00385,
-      "noteAt": 1795591200649,
-      "interval": "4h",
-      "windowUp": true,
-      "batchAt": 0
     },
     {
       "id": "LAYERUSDT:1795593600000:1795602600740",
@@ -2682,6 +2682,15 @@
   ],
   "batches": [
     {
+      "at": 1795602900570,
+      "count": 3,
+      "symbols": [
+        "AIGENSYNUSDT",
+        "TMFBUSDT",
+        "TUSDT"
+      ]
+    },
+    {
       "at": 1795602600740,
       "count": 1,
       "symbols": [
@@ -2747,11 +2756,9 @@
     },
     {
       "at": 1795600801166,
-      "count": 3,
+      "count": 1,
       "symbols": [
-        "AIGENSYNUSDT",
-        "GMXUSDT",
-        "TMFBUSDT"
+        "GMXUSDT"
       ]
     },
     {
