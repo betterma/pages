@@ -3,6 +3,64 @@
   "readAt": 1795665202021,
   "items": [
     {
+      "id": "FLUXUSDT:1795665600000:1795673700469",
+      "symbol": "FLUXUSDT",
+      "label": "FLUX",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1795673700469,
+      "firstSeenAt": 1795652100661,
+      "openTime": 1795665600000,
+      "pinPrice": 0.052,
+      "pinnedAt": 1795627500645,
+      "alertPrice": 0.0515,
+      "notifyPrice": 0.0527,
+      "noteAt": 1795628108647,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795673700469
+    },
+    {
+      "id": "EDENUSDT:1795665600000:1795673700469",
+      "symbol": "EDENUSDT",
+      "label": "EDEN",
+      "kinds": [
+        "天平"
+      ],
+      "at": 1795673700469,
+      "firstSeenAt": 1795562700528,
+      "openTime": 1795665600000,
+      "pinPrice": 0.04039,
+      "pinnedAt": 1795548900775,
+      "alertPrice": 0.0392,
+      "notifyPrice": 0.04191,
+      "noteAt": 1795623000641,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795673700469
+    },
+    {
+      "id": "SYNUSDT:1795665600000:1795673700469",
+      "symbol": "SYNUSDT",
+      "label": "SYN",
+      "kinds": [
+        "天平",
+        "直拉"
+      ],
+      "at": 1795673700469,
+      "firstSeenAt": 1795651200856,
+      "openTime": 1795665600000,
+      "pinPrice": 0.11474,
+      "pinnedAt": 1795645800683,
+      "alertPrice": 0.11474,
+      "notifyPrice": 0.11629,
+      "noteAt": 1795645800683,
+      "interval": "4h",
+      "windowUp": true,
+      "batchAt": 1795673700469
+    },
+    {
       "id": "BTTCUSDT:1795665600000:1795673700469",
       "symbol": "BTTCUSDT",
       "label": "BTTC",
@@ -467,25 +525,6 @@
       "batchAt": 1795665300722
     },
     {
-      "id": "EDENUSDT:1795665600000:1795673400726",
-      "symbol": "EDENUSDT",
-      "label": "EDEN",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1795673400726,
-      "firstSeenAt": 1795562700528,
-      "openTime": 1795665600000,
-      "pinPrice": 0.04039,
-      "pinnedAt": 1795548900775,
-      "alertPrice": 0.0392,
-      "notifyPrice": 0.0419,
-      "noteAt": 1795623000641,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1795671600646
-    },
-    {
       "id": "LAYERUSDT:1795665600000:1795673400726",
       "symbol": "LAYERUSDT",
       "label": "LAYER",
@@ -616,26 +655,6 @@
       "alertPrice": 1.3164,
       "notifyPrice": 1.3208,
       "noteAt": 1795650300484,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1795671600646
-    },
-    {
-      "id": "SYNUSDT:1795665600000:1795673400726",
-      "symbol": "SYNUSDT",
-      "label": "SYN",
-      "kinds": [
-        "天平",
-        "直拉"
-      ],
-      "at": 1795673400726,
-      "firstSeenAt": 1795651200856,
-      "openTime": 1795665600000,
-      "pinPrice": 0.11474,
-      "pinnedAt": 1795645800683,
-      "alertPrice": 0.11474,
-      "notifyPrice": 0.116,
-      "noteAt": 1795645800683,
       "interval": "4h",
       "windowUp": false,
       "batchAt": 1795671600646
@@ -1950,25 +1969,6 @@
       "batchAt": 1795667700679
     },
     {
-      "id": "FLUXUSDT:1795665600000:1795671900664",
-      "symbol": "FLUXUSDT",
-      "label": "FLUX",
-      "kinds": [
-        "天平"
-      ],
-      "at": 1795671900664,
-      "firstSeenAt": 1795652100661,
-      "openTime": 1795665600000,
-      "pinPrice": 0.052,
-      "pinnedAt": 1795627500645,
-      "alertPrice": 0.0515,
-      "notifyPrice": 0.0523,
-      "noteAt": 1795628108647,
-      "interval": "4h",
-      "windowUp": false,
-      "batchAt": 1795663800800
-    },
-    {
       "id": "KERNELUSDT:1795665600000:1795671900664",
       "symbol": "KERNELUSDT",
       "label": "KERNEL",
@@ -2880,6 +2880,15 @@
   ],
   "batches": [
     {
+      "at": 1795673700469,
+      "count": 3,
+      "symbols": [
+        "EDENUSDT",
+        "FLUXUSDT",
+        "SYNUSDT"
+      ]
+    },
+    {
       "at": 1795673400726,
       "count": 14,
       "symbols": [
@@ -2966,18 +2975,16 @@
     },
     {
       "at": 1795671600646,
-      "count": 10,
+      "count": 8,
       "symbols": [
         "AAPLBUSDT",
         "ANTBUSDT",
         "ASTSBUSDT",
-        "EDENUSDT",
         "MDBBUSDT",
         "METABUSDT",
         "MRNABUSDT",
         "RAYUSDT",
-        "RDDTBUSDT",
-        "SYNUSDT"
+        "RDDTBUSDT"
       ]
     },
     {
@@ -3130,9 +3137,8 @@
     },
     {
       "at": 1795663800800,
-      "count": 2,
+      "count": 1,
       "symbols": [
-        "FLUXUSDT",
         "KERNELUSDT"
       ]
     },
