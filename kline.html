@@ -4399,6 +4399,10 @@
       .nail-hold-status-chip.is-dust {
         color: rgba(28, 28, 30, 0.5);
       }
+      .nail-hold-status-chip.is-task-only {
+        color: color-mix(in srgb, var(--warn, #b07030) 80%, var(--label));
+        background: color-mix(in srgb, var(--warn, #b07030) 12%, transparent);
+      }
       .nail-hold-status-chip.is-frozen {
         color: #8a5a20;
         background: color-mix(in srgb, #c45c26 14%, #fff);
@@ -7407,11 +7411,11 @@
       .quick-trade-sheet.is-busy {
         pointer-events: none;
       }
-      /* 同步余额时仍可点「限价/止损」进持有页 */
-      .quick-trade-sheet.is-busy #quickTradeAdvanced {
-        pointer-events: auto;
-      }
       .quick-trade-sheet.is-busy input[type="range"] {
+        opacity: 0.55;
+      }
+      .quick-trade-sheet.is-busy .quick-trade-kind {
+        pointer-events: none;
         opacity: 0.55;
       }
       .quick-trade-actions button.is-loading {
@@ -7529,6 +7533,90 @@
         font-size: 12px;
         color: var(--secondary, #8a9692);
         margin-bottom: 10px;
+      }
+      .quick-trade-hint.is-invalid {
+        color: color-mix(in srgb, var(--down, #c45c5c) 85%, var(--label));
+      }
+      .quick-trade-cost {
+        font-size: 12px;
+        color: var(--secondary, #8a9692);
+        margin: -4px 0 10px;
+      }
+      .quick-trade-cost strong {
+        color: var(--label);
+        font-variant-numeric: tabular-nums;
+      }
+      .quick-trade-cost.is-under {
+        color: color-mix(in srgb, var(--down, #c45c5c) 85%, var(--label));
+      }
+      .quick-trade-kind {
+        display: flex;
+        gap: 4px;
+        margin: 0 0 10px;
+        padding: 3px;
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--fill, #808080) 55%, transparent);
+      }
+      .quick-trade-kind button {
+        flex: 1;
+        height: 30px;
+        border: none;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--secondary);
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .quick-trade-kind button.is-active {
+        background: var(--elevated, #fff);
+        color: var(--label);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+      }
+      .quick-trade-limit-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 0 0 8px;
+        font-size: 12px;
+      }
+      .quick-trade-limit-row[hidden],
+      .quick-trade-stop-box[hidden],
+      .quick-trade-market-block[hidden] {
+        display: none !important;
+      }
+      .quick-trade-limit-row label {
+        color: var(--secondary, #8a9692);
+        flex-shrink: 0;
+      }
+      .quick-trade-limit-row input {
+        flex: 1;
+        min-width: 0;
+        height: 32px;
+        border-radius: 8px;
+        border: 0.5px solid var(--separator);
+        background: var(--fill, rgba(90, 106, 104, 0.08));
+        color: var(--label);
+        padding: 0 10px;
+        font-size: 14px;
+        font-weight: 600;
+        text-align: right;
+      }
+      .quick-trade-limit-row input.is-invalid {
+        border-color: color-mix(in srgb, var(--down, #c45c5c) 70%, var(--separator));
+      }
+      .quick-trade-stop-box {
+        margin: 0 0 10px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--down, #c45c5c) 8%, transparent);
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--label);
+      }
+      .quick-trade-stop-box strong {
+        font-variant-numeric: tabular-nums;
       }
       .trade-confirm-dialog {
         position: fixed;
@@ -11752,34 +11840,55 @@
         现价 <strong id="quickTradePx">—</strong>
         <span class="quick-trade-avail" id="quickTradeAvail"></span>
       </div>
-      <div class="quick-trade-pct-line">
-        <span>比例</span>
-        <span id="quickTradePctLabel">50%</span>
+      <div class="quick-trade-cost" id="quickTradeCost" hidden></div>
+      <div class="quick-trade-kind" id="quickTradeKind" role="group" aria-label="下单类型">
+        <button type="button" data-quick-kind="market" class="is-active">市价</button>
+        <button type="button" data-quick-kind="limit">限价</button>
+        <button type="button" data-quick-kind="stop" id="quickTradeKindStop" hidden>
+          止损
+        </button>
       </div>
-      <input
-        type="range"
-        id="quickTradePct"
-        min="1"
-        max="100"
-        step="1"
-        value="50"
-      />
-      <div class="quick-trade-amount-row">
-        <label id="quickTradeAmountLabel" for="quickTradeAmount">金额 USDT</label>
+      <div class="quick-trade-limit-row" id="quickTradeLimitRow" hidden>
+        <label id="quickTradeLimitLabel" for="quickTradeLimitPrice">委托价</label>
         <input
           type="number"
-          id="quickTradeAmount"
+          id="quickTradeLimitPrice"
           min="0"
           step="any"
           inputmode="decimal"
           placeholder="0"
         />
       </div>
+      <div class="quick-trade-stop-box" id="quickTradeStopBox" hidden>
+        按成本挂 -3% 半仓 / -5% 全出市价止损。无成本时请先填成本价。
+      </div>
+      <div class="quick-trade-market-block" id="quickTradeMarketBlock">
+        <div class="quick-trade-pct-line">
+          <span>比例</span>
+          <span id="quickTradePctLabel">50%</span>
+        </div>
+        <input
+          type="range"
+          id="quickTradePct"
+          min="1"
+          max="100"
+          step="1"
+          value="50"
+        />
+        <div class="quick-trade-amount-row">
+          <label id="quickTradeAmountLabel" for="quickTradeAmount">金额 USDT</label>
+          <input
+            type="number"
+            id="quickTradeAmount"
+            min="0"
+            step="any"
+            inputmode="decimal"
+            placeholder="0"
+          />
+        </div>
+      </div>
       <div class="quick-trade-hint" id="quickTradeHint">本单约 —</div>
       <div class="quick-trade-actions">
-        <button type="button" id="quickTradeAdvanced" title="打开持有：限价 / 止损">
-          限价/止损
-        </button>
         <button type="button" class="is-primary" id="quickTradeConfirm">
           确认买入
         </button>
@@ -16558,6 +16667,43 @@
         await Promise.all(workers);
       }
 
+      /** 切走自动盯分栏时记住滚动；panel.hidden 会清零 scrollTop。 */
+      let nailAutoPinPendingScrollTop = null;
+      let nailAutoPinContentReady = false;
+
+      function nailAutoPinScrollHost() {
+        const listEl = document.getElementById("nailAutoPinList");
+        if (!listEl) return null;
+        return (
+          listEl.querySelector(".nail-auto-pin-table-wrap") || listEl
+        );
+      }
+
+      function captureNailAutoPinScroll() {
+        const host = nailAutoPinScrollHost();
+        if (host && host.scrollTop > 0) {
+          nailAutoPinPendingScrollTop = host.scrollTop;
+        }
+      }
+
+      function restoreNailAutoPinScroll() {
+        const host = nailAutoPinScrollHost();
+        if (!host || nailAutoPinPendingScrollTop == null) return;
+        const top = nailAutoPinPendingScrollTop;
+        nailAutoPinPendingScrollTop = null;
+        host.scrollTop = top;
+        window.requestAnimationFrame(() => {
+          host.scrollTop = top;
+        });
+      }
+
+      function nailAutoPinHasKeepaliveContent() {
+        const listEl = document.getElementById("nailAutoPinList");
+        if (!nailAutoPinContentReady || !listEl) return false;
+        if (listEl.querySelector(".nail-sheet-loading")) return false;
+        return listEl.children.length > 0;
+      }
+
       async function setNailAutoPinPopoverOpen(open) {
         const popover = document.getElementById("nailAutoPinPopover");
         const button = document.getElementById("nailAutoPinBtn");
@@ -16567,6 +16713,8 @@
         if (next) {
           await setNailRadarPopoverOpen(false);
           await setNailHoldPopoverOpen(false);
+        } else if (wasOpen) {
+          captureNailAutoPinScroll();
         }
         popover.hidden = !next;
         if (button) {
@@ -16577,18 +16725,24 @@
           layoutNailHeadSheet(popover);
           // 已经打开时再点进自动盯（例如俯瞰摘要跳转）：只校正布局，不整页重载。
           if (wasOpen) return;
-          // 日志要请求后端，先给整区 loading，避免旧内容让人误以为是最新的。
-          const listEl = document.getElementById("nailAutoPinList");
-          if (listEl) {
-            listEl.innerHTML = '<div class="nail-sheet-loading">加载中…</div>';
+          const keepAlive = nailAutoPinHasKeepaliveContent();
+          if (!keepAlive) {
+            const listEl = document.getElementById("nailAutoPinList");
+            if (listEl) {
+              listEl.innerHTML =
+                '<div class="nail-sheet-loading">加载中…</div>';
+            }
           }
-          await loadSharedActionLog();
+          await loadSharedActionLog({ skipBodyRender: true });
+          // 保活：静默重渲并还原滚动，避免「加载中」闪一下丢位置。
           renderNailAutoPinList();
+          nailAutoPinContentReady = true;
+          restoreNailAutoPinScroll();
           writeNailAutoPinSeenAt(Date.now());
           syncNailAutoPinBadge();
           void paintNailAutoPinCharts();
         } else {
-          nailAutoPinPaintToken += 1;
+          // 保活：不清 DOM / 不废画布；只停观察者，回来再挂。
           if (nailAutoPinChartObserver) {
             nailAutoPinChartObserver.disconnect();
             nailAutoPinChartObserver = null;
@@ -17522,14 +17676,55 @@
         });
       }
 
+      /** 切走雷达分栏时记住滚动。 */
+      let nailRadarPendingScrollTop = null;
+      let nailRadarContentReady = false;
+
+      function nailRadarScrollHost() {
+        return (
+          document.getElementById("nailRadarTableWrap") ||
+          document.getElementById("nailRadarBody")
+        );
+      }
+
+      function captureNailRadarScroll() {
+        const host = nailRadarScrollHost();
+        if (host && host.scrollTop > 0) {
+          nailRadarPendingScrollTop = host.scrollTop;
+        }
+      }
+
+      function restoreNailRadarScroll() {
+        const host = nailRadarScrollHost();
+        if (!host || nailRadarPendingScrollTop == null) return;
+        const top = nailRadarPendingScrollTop;
+        nailRadarPendingScrollTop = null;
+        host.scrollTop = top;
+        window.requestAnimationFrame(() => {
+          host.scrollTop = top;
+        });
+      }
+
+      function nailRadarHasKeepaliveContent() {
+        const body = document.getElementById("nailRadarBody");
+        return !!(
+          nailRadarContentReady &&
+          body &&
+          body.querySelector("tr[data-radar-symbol]")
+        );
+      }
+
       async function setNailRadarPopoverOpen(open) {
         const popover = document.getElementById("nailRadarPopover");
         const button = document.getElementById("nailRadarBtn");
         if (!popover) return;
         const next = !!open;
+        const wasOpen = !popover.hidden;
         if (next) {
           await setNailAutoPinPopoverOpen(false);
           await setNailHoldPopoverOpen(false);
+        } else if (wasOpen) {
+          captureNailRadarScroll();
         }
         popover.hidden = !next;
         if (button) {
@@ -17540,18 +17735,17 @@
           layoutNailHeadSheet(popover);
           syncNailRadarAllKlineUi();
           syncNailRadarGroupUi();
+          // 保活：已有表体则重渲后还原滚动，避免空白闪一下。
           renderNailRadarTable();
+          nailRadarContentReady = true;
+          restoreNailRadarScroll();
           syncNailRadarUpdatedUi();
-          // 打开即补拉一次名单 ticker，保证第一眼看到的就是新数据；
-          // 之后交给 30s 节拍，靠头部时间戳感知新旧。
           void refreshNailRadarTickers();
           void paintNailRadarKlines();
           startNailRadarLive();
         } else {
           stopNailRadarLive();
-          nailRadarPaintToken += 1;
-          focusedRadarSymbol = null;
-          syncNailRadarFocusUi();
+          // 保活：不清表体；停直播即可。焦点可留着，回来还认得。
           popover.style.top = "";
         }
       }
@@ -18940,6 +19134,29 @@
         return !!String(task.lastError || "").trim();
       }
 
+      /** 无仓时是否仍保留该币在持有列表（可取消）；终态不 keep，好让 purge 清掉。 */
+      function holdTaskKeepsSymbol(task) {
+        if (!task || !task.symbol) return false;
+        const st = String(task.status || "").toLowerCase();
+        if (
+          st === "filled" ||
+          st === "done" ||
+          st === "canceled" ||
+          st === "cancelled"
+        ) {
+          return false;
+        }
+        // enabled=false 且非 paused/cancel_requested：视为已关闭
+        if (
+          task.enabled === false &&
+          st !== "paused" &&
+          st !== "cancel_requested"
+        ) {
+          return false;
+        }
+        return true;
+      }
+
       function holdTaskBadgeTone(task) {
         if (!task) return "";
         if (holdTaskIsError(task)) return "is-err";
@@ -19412,6 +19629,19 @@
         let symbols = Array.isArray(nailHoldingsState.symbols)
           ? nailHoldingsState.symbols.slice()
           : [];
+        // 无仓但有进行中任务的币也要进列表（取消入口）；与云端 symbols 合并去重。
+        const seenHold = new Set(
+          symbols.map((s) => normalizeHoldSymbol(s)).filter(Boolean),
+        );
+        const pushTaskSym = (task) => {
+          if (!holdTaskKeepsSymbol(task)) return;
+          const key = normalizeHoldSymbol(task && task.symbol);
+          if (!key || key === "USDT" || seenHold.has(key)) return;
+          seenHold.add(key);
+          symbols.push(key);
+        };
+        (nailSellTasksState.tasks || []).forEach((task) => pushTaskSym(task));
+        (nailBuyTasksState.tasks || []).forEach((task) => pushTaskSym(task));
         if (hint) {
           const err = String(nailHoldingsState.lastError || "").trim();
           const stamp = Number(nailHoldingsState.updatedAt) || 0;
@@ -19650,7 +19880,9 @@
                     ? '<span class="nail-hold-status-chip is-frozen">有冻结</span>'
                     : freeNum > 0
                       ? '<span class="nail-hold-status-chip is-held">持有中</span>'
-                      : '<span class="nail-hold-status-chip">无持仓</span>';
+                      : taskPairs.length
+                        ? '<span class="nail-hold-status-chip is-task-only">仅任务</span>'
+                        : '<span class="nail-hold-status-chip">无持仓</span>';
               // 规范：成本/止损区始终可见（USDT 除外）；无仓也可先配成本。
               const showCost = true;
               const costConfigured = entryPx != null;
@@ -20103,6 +20335,27 @@
               at: stamp,
             };
 
+            // 无仓但仍有进行中买/卖任务：保留关注，方便取消；不进 cleared（避免误清任务）。
+            // 终态任务不 keep，否则永远进不了 cleared → purge 永不跑 → 幽灵「仅任务」。
+            const taskKeep = new Set();
+            (Array.isArray(nailSellTasksState.tasks)
+              ? nailSellTasksState.tasks
+              : []
+            ).forEach((task) => {
+              if (!holdTaskKeepsSymbol(task)) return;
+              const sym = normalizeHoldSymbol(task && task.symbol);
+              if (sym && sym !== "USDT") taskKeep.add(sym);
+            });
+            (Array.isArray(nailBuyTasksState.tasks)
+              ? nailBuyTasksState.tasks
+              : []
+            ).forEach((task) => {
+              if (!holdTaskKeepsSymbol(task)) return;
+              const sym = normalizeHoldSymbol(task && task.symbol);
+              if (sym && sym !== "USDT") taskKeep.add(sym);
+            });
+            taskKeep.forEach((sym) => pushSymbol(sym));
+
             const nextSymbols = [];
             merged.forEach((key) => {
               const asset = holdingsBaseAsset(key);
@@ -20120,6 +20373,10 @@
                 px > 0 &&
                 notional < HOLDINGS_DUST_USDT;
               if (isFlat || isDust) {
+                if (taskKeep.has(key)) {
+                  nextSymbols.push(key);
+                  return;
+                }
                 markCleared(key);
                 return;
               }
@@ -20512,48 +20769,166 @@
           });
           nailHoldingsState = holdResult.state || nailHoldingsState;
 
-          const stops = buildFixedStopTasks(key, price, now);
-          const sellResult = await WatchFavorites.patchSellTasks({
-            repo: CONFIG.GITHUB_REPO,
-            message: `Seed stop tasks ${key}`,
-            mutate: (state) => {
-              const tasks = Array.isArray(state.tasks) ? state.tasks.slice() : [];
-              stops.forEach((stop) => {
-                const idx = tasks.findIndex((t) => String(t.id) === stop.id);
-                if (idx >= 0) {
-                  const prev = tasks[idx];
-                  if (
-                    prev.openOrderId ||
-                    prev.status === "order_open" ||
-                    prev.status === "partial" ||
-                    prev.status === "cancel_requested"
-                  ) {
-                    return;
-                  }
-                  tasks[idx] = {
-                    ...prev,
-                    ...stop,
-                    createdAt: prev.createdAt || now,
-                    updatedAt: now,
-                  };
-                } else {
-                  tasks.unshift(stop);
-                }
-              });
-              return { ...state, tasks };
-            },
-          });
-          nailSellTasksState = sellResult.state || nailSellTasksState;
+          const seed = await patchNailStopTasks(key, price, now);
           renderNailHoldList();
-          showToast(
-            `${holdingsBaseAsset(key)} 买入价 ${formatHoldingsPriceInput(price)} · 已重挂 -3%/-5% 止损`,
-          );
+          showToast(formatNailStopSeedToast(key, price, seed, { withCost: true }));
           return true;
         } catch (error) {
           console.warn("saveNailHoldEntryPrice failed", error);
           showToast(error.message || "保存买入价失败");
           return false;
         }
+      }
+
+      /**
+       * 快捷条「止损」专用：先挂止损，成功后再按需写 holdings；绝不碰 entryLots。
+       * options.hasEntry：与 confirm 同源（entry>0）；有则只清 stopCancel，不写 entryPrices。
+       */
+      async function seedNailHoldStops(symbol, rawPrice, options) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || key === "USDT") {
+          showToast("请选择具体币种");
+          return false;
+        }
+        const price = Number(rawPrice);
+        if (!(Number.isFinite(price) && price > 0)) {
+          showToast("请填写有效成本价");
+          return false;
+        }
+        const hasEntry = !!(options && options.hasEntry);
+        const now = Date.now();
+        try {
+          // 先挂后写：以 patch 实际 {seeded,skipped} 为准，全 skip 则 holdings 零改动。
+          const seed = await patchNailStopTasks(key, price, now);
+          if (seed.seeded === 0 && seed.skipped > 0) {
+            showToast("已有挂单止损，请先取消再重挂");
+            return false;
+          }
+          try {
+            if (hasEntry) {
+              const holdResult = await WatchFavorites.patchHoldings({
+                repo: CONFIG.GITHUB_REPO,
+                message: `Clear stopCancel ${key}`,
+                mutate: (state) => {
+                  const stopCancel = { ...(state.stopCancel || {}) };
+                  if (!stopCancel[key]) {
+                    return { skipWrite: true, state };
+                  }
+                  delete stopCancel[key];
+                  // 有 entry：不改 entryPrices / entryLots / symbols。
+                  return { ...state, stopCancel };
+                },
+              });
+              if (!holdResult.skipped) {
+                nailHoldingsState = holdResult.state || nailHoldingsState;
+              }
+            } else {
+              const holdResult = await WatchFavorites.patchHoldings({
+                repo: CONFIG.GITHUB_REPO,
+                message: `Seed stops ${key} ${price}`,
+                mutate: (state) => {
+                  const entryPrices = { ...(state.entryPrices || {}) };
+                  const stopCancel = { ...(state.stopCancel || {}) };
+                  const prev = entryPrices[key];
+                  entryPrices[key] = {
+                    price,
+                    at: now,
+                    source:
+                      prev && String(prev.source || "").trim()
+                        ? prev.source
+                        : "stop-seed",
+                  };
+                  if (stopCancel[key]) delete stopCancel[key];
+                  // 不 push symbols（ensureHoldSymbol / taskKeep 已保障）；不改 entryLots。
+                  return { ...state, entryPrices, stopCancel };
+                },
+              });
+              nailHoldingsState = holdResult.state || nailHoldingsState;
+            }
+          } catch (holdError) {
+            // 挂单已成功：勿 return false 误导用户再点一次。
+            console.warn("seedNailHoldStops holdings write failed", holdError);
+            showToast("止损已挂上，成本展示同步失败，可稍后刷新持有");
+            renderNailHoldList();
+            return true;
+          }
+          renderNailHoldList();
+          showToast(formatNailStopSeedToast(key, price, seed, { withCost: false }));
+          return true;
+        } catch (error) {
+          console.warn("seedNailHoldStops failed", error);
+          showToast(error.message || "挂止损失败");
+          return false;
+        }
+      }
+
+      function formatNailStopSeedToast(symbol, price, seed, options) {
+        const opts = options || {};
+        const asset = holdingsBaseAsset(symbol);
+        const px = formatHoldingsPriceInput(price);
+        const skipped = Number(seed && seed.skipped) || 0;
+        const seeded = Number(seed && seed.seeded) || 0;
+        if (opts.withCost) {
+          if (skipped > 0 && seeded > 0) {
+            return `${asset} 买入价 ${px} · 止损已更新（${skipped} 档因挂单未改）`;
+          }
+          if (skipped > 0 && seeded === 0) {
+            return `${asset} 买入价 ${px} · 已有挂单止损未改动`;
+          }
+          return `${asset} 买入价 ${px} · 已重挂 -3%/-5% 止损`;
+        }
+        if (skipped > 0 && seeded > 0) {
+          return `${asset} 止损已更新（${skipped} 档因挂单未改）`;
+        }
+        return `${asset} 已按成本 ${px} 挂 -3%/-5% 止损`;
+      }
+
+      async function patchNailStopTasks(symbol, price, now) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const stops = buildFixedStopTasks(key, price, now);
+        let seeded = 0;
+        let skipped = 0;
+        const sellResult = await WatchFavorites.patchSellTasks({
+          repo: CONFIG.GITHUB_REPO,
+          message: `Seed stop tasks ${key}`,
+          mutate: (state) => {
+            const tasks = Array.isArray(state.tasks) ? state.tasks.slice() : [];
+            seeded = 0;
+            skipped = 0;
+            stops.forEach((stop) => {
+              const idx = tasks.findIndex((t) => String(t.id) === stop.id);
+              if (idx >= 0) {
+                const prev = tasks[idx];
+                if (
+                  prev.openOrderId ||
+                  prev.status === "order_open" ||
+                  prev.status === "partial" ||
+                  prev.status === "cancel_requested"
+                ) {
+                  skipped += 1;
+                  return;
+                }
+                tasks[idx] = {
+                  ...prev,
+                  ...stop,
+                  createdAt: prev.createdAt || now,
+                  updatedAt: now,
+                };
+                seeded += 1;
+              } else {
+                tasks.unshift(stop);
+                seeded += 1;
+              }
+            });
+            return { ...state, tasks };
+          },
+        });
+        nailSellTasksState = sellResult.state || nailSellTasksState;
+        return { seeded, skipped };
       }
 
       async function applyMarketBuyCostAndStops(symbol, avgPrice, fillQty) {
@@ -20911,10 +21286,11 @@
           .toUpperCase();
         if (!key || key === "USDT") {
           showToast("USDT 不能挂卖出任务");
-          return;
+          return false;
         }
         const opts = options || {};
         const pause = !!opts.pause;
+        const fromQuick = !!opts.fromQuick;
         const existing = (nailSellTasksState.tasks || []).find(
           (t) =>
             String(t.symbol).toUpperCase() === key && isLimitSellTask(t),
@@ -20928,28 +21304,30 @@
             existing.status === "cancel_requested")
         ) {
           showToast("请先取消该限价卖出任务（有挂单会先撤单）再重新设置");
-          return;
+          return false;
         }
         const row = document.querySelector(
           `.nail-hold-row[data-hold-symbol="${key}"]`,
         );
         const panel =
           row && row.querySelector('[data-hold-panel="sell"]');
-        let sellPercent = 100;
-        let minSell = 0;
-        if (row) {
-          const pctEl = row.querySelector("[data-sell-pct]");
-          const minEl = row.querySelector("[data-sell-min]");
-          sellPercent = Number(pctEl && pctEl.value);
-          minSell = Number(minEl && minEl.value);
+        let sellPercent = Number(opts.sellPercent);
+        let minSell = Number(opts.minSell);
+        if (!(sellPercent > 0) || !(minSell > 0)) {
+          if (row) {
+            const pctEl = row.querySelector("[data-sell-pct]");
+            const minEl = row.querySelector("[data-sell-min]");
+            if (!(sellPercent > 0)) sellPercent = Number(pctEl && pctEl.value);
+            if (!(minSell > 0)) minSell = Number(minEl && minEl.value);
+          }
         }
         if (!Number.isFinite(sellPercent) || sellPercent <= 0) sellPercent = 50;
         if (sellPercent > 100) sellPercent = 100;
         if (!pause && (!(Number.isFinite(minSell) && minSell > 0))) {
           showToast("请填写最低卖出价");
-          return;
+          return false;
         }
-        if (!pause) setNailHoldPanelLoading(panel, true, "创建中…");
+        if (!pause && !fromQuick) setNailHoldPanelLoading(panel, true, "创建中…");
         try {
         if (!pause) {
           try {
@@ -20958,14 +21336,14 @@
               showToast(
                 `卖出价须 ≥ 现价 ${formatHoldingsPriceInput(spot)}（更高=等涨）`,
               );
-              return;
+              return false;
             }
           } catch (error) {
             showToast(
                 (error && (error.userMessage || error.message)) ||
                   "无法校验现价",
             );
-            return;
+            return false;
           }
         }
           const result = await WatchFavorites.patchSellTasks({
@@ -21015,7 +21393,7 @@
             },
           });
           nailSellTasksState = result.state || nailSellTasksState;
-          if (!pause) closeNailHoldPanels(row);
+          if (!pause && !fromQuick) closeNailHoldPanels(row);
           renderNailHoldList();
           showToast(
             pause
@@ -21023,11 +21401,13 @@
               : "创建任务成功",
             pause ? undefined : { duration: 2200 },
           );
+          return true;
         } catch (error) {
           console.warn("upsertNailSellTask failed", error);
           showToast("保存卖出任务失败");
+          return false;
         } finally {
-          if (!pause) setNailHoldPanelLoading(panel, false);
+          if (!pause && !fromQuick) setNailHoldPanelLoading(panel, false);
         }
       }
 
@@ -21037,10 +21417,11 @@
           .toUpperCase();
         if (!key || key === "USDT") {
           showToast("请选择具体币种挂买");
-          return;
+          return false;
         }
         const opts = options || {};
         const pause = !!opts.pause;
+        const fromQuick = !!opts.fromQuick;
         const existing = (nailBuyTasksState.tasks || []).find(
           (t) => String(t.symbol).toUpperCase() === key,
         );
@@ -21053,28 +21434,30 @@
             existing.status === "cancel_requested")
         ) {
           showToast("请先清除买入任务（有挂单会先撤单）再重新设置");
-          return;
+          return false;
         }
         const row = document.querySelector(
           `.nail-hold-row[data-hold-symbol="${key}"]`,
         );
         const panel =
           row && row.querySelector('[data-hold-panel="buy"]');
-        let buyPercent = 100;
-        let maxBuy = 0;
-        if (row) {
-          const pctEl = row.querySelector("[data-buy-pct]");
-          const maxEl = row.querySelector("[data-buy-max]");
-          buyPercent = Number(pctEl && pctEl.value);
-          maxBuy = Number(maxEl && maxEl.value);
+        let buyPercent = Number(opts.buyPercent);
+        let maxBuy = Number(opts.maxBuy);
+        if (!(buyPercent > 0) || !(maxBuy > 0)) {
+          if (row) {
+            const pctEl = row.querySelector("[data-buy-pct]");
+            const maxEl = row.querySelector("[data-buy-max]");
+            if (!(buyPercent > 0)) buyPercent = Number(pctEl && pctEl.value);
+            if (!(maxBuy > 0)) maxBuy = Number(maxEl && maxEl.value);
+          }
         }
         if (!Number.isFinite(buyPercent) || buyPercent <= 0) buyPercent = 50;
         if (buyPercent > 100) buyPercent = 100;
         if (!pause && (!(Number.isFinite(maxBuy) && maxBuy > 0))) {
           showToast("请填写最高买入价");
-          return;
+          return false;
         }
-        if (!pause) setNailHoldPanelLoading(panel, true, "创建中…");
+        if (!pause && !fromQuick) setNailHoldPanelLoading(panel, true, "创建中…");
         try {
         if (!pause) {
           try {
@@ -21083,14 +21466,14 @@
               showToast(
                 `买入价须 ≤ 现价 ${formatHoldingsPriceInput(spot)}（更低=等跌）`,
               );
-              return;
+              return false;
             }
           } catch (error) {
             showToast(
                 (error && (error.userMessage || error.message)) ||
                   "无法校验现价",
             );
-            return;
+            return false;
           }
         }
           const result = await WatchFavorites.patchBuyTasks({
@@ -21139,7 +21522,7 @@
             },
           });
           nailBuyTasksState = result.state || nailBuyTasksState;
-          if (!pause) closeNailHoldPanels(row);
+          if (!pause && !fromQuick) closeNailHoldPanels(row);
           renderNailHoldList();
           showToast(
             pause
@@ -21147,11 +21530,13 @@
               : "创建任务成功",
             pause ? undefined : { duration: 2200 },
           );
+          return true;
         } catch (error) {
           console.warn("upsertNailBuyTask failed", error);
           showToast("保存买入任务失败");
+          return false;
         } finally {
-          if (!pause) setNailHoldPanelLoading(panel, false);
+          if (!pause && !fromQuick) setNailHoldPanelLoading(panel, false);
         }
       }
 
@@ -21253,6 +21638,21 @@
         applyFocusActionChrome();
       }
 
+      function setQuickTradeOrderKind(kind) {
+        const st = quickTradeState;
+        if (!st) return;
+        const prev = st.orderKind || "market";
+        let next =
+          kind === "limit" ? "limit" : kind === "stop" ? "stop" : "market";
+        if (next === "stop" && st.mode !== "sell") next = "market";
+        if (next === prev) return;
+        st.orderKind = next;
+        // 限价委托价与止损成本价共用输入框：切 kind 必须清空，避免串价。
+        const limitEl = document.getElementById("quickTradeLimitPrice");
+        if (limitEl) limitEl.value = "";
+        syncQuickTradeSheet();
+      }
+
       function setQuickTradeBusy(on, label) {
         const sheet = document.getElementById("quickTradeSheet");
         const confirmBtn = document.getElementById("quickTradeConfirm");
@@ -21260,7 +21660,7 @@
         const pxRefresh = document.getElementById("quickTradePxRefresh");
         if (sheet) sheet.classList.toggle("is-busy", !!on);
         if (pctEl) pctEl.disabled = !!on;
-        /* 限价/止损在 busy 时仍可点，不在此 disable */
+        /* kind 切换由 CSS .is-busy .quick-trade-kind { pointer-events:none } 挡住 */
         if (pxRefresh) pxRefresh.disabled = !!on;
         if (!confirmBtn) return;
         if (on) {
@@ -21305,21 +21705,32 @@
         const st = quickTradeState;
         const sheet = document.getElementById("quickTradeSheet");
         if (!st || !sheet || sheet.hidden) return;
+        if (!st.orderKind) st.orderKind = "market";
+        if (st.orderKind === "stop" && st.mode !== "sell") st.orderKind = "market";
         const from = (opts && opts.from) || "pct";
         const busy = sheet.classList.contains("is-busy");
         const sideEl = document.getElementById("quickTradeSide");
         const symEl = document.getElementById("quickTradeSym");
         const pxEl = document.getElementById("quickTradePx");
         const availEl = document.getElementById("quickTradeAvail");
+        const costEl = document.getElementById("quickTradeCost");
         const pctEl = document.getElementById("quickTradePct");
         const pctLabel = document.getElementById("quickTradePctLabel");
         const amountEl = document.getElementById("quickTradeAmount");
         const amountLabel = document.getElementById("quickTradeAmountLabel");
         const hintEl = document.getElementById("quickTradeHint");
         const confirmBtn = document.getElementById("quickTradeConfirm");
+        const limitRow = document.getElementById("quickTradeLimitRow");
+        const limitLabel = document.getElementById("quickTradeLimitLabel");
+        const limitEl = document.getElementById("quickTradeLimitPrice");
+        const stopBox = document.getElementById("quickTradeStopBox");
+        const marketBlock = document.getElementById("quickTradeMarketBlock");
+        const kindStopBtn = document.getElementById("quickTradeKindStop");
         const asset = holdingsBaseAsset(st.symbol);
         const px = holdingsSpotPrice(st.symbol);
+        const entryPx = holdingsEntryPriceOf(st.symbol);
         const isSell = st.mode === "sell";
+        const kind = st.orderKind;
         sheet.classList.toggle("is-sell", isSell);
         if (sideEl) sideEl.textContent = isSell ? "卖出" : "买入";
         if (symEl) symEl.textContent = asset || st.symbol;
@@ -21327,10 +21738,101 @@
           pxEl.textContent =
             Number.isFinite(px) && px > 0 ? formatHoldingsPriceInput(px) : "—";
         }
+        if (kindStopBtn) kindStopBtn.hidden = !isSell;
+        document.querySelectorAll("#quickTradeKind [data-quick-kind]").forEach((btn) => {
+          const k = btn.getAttribute("data-quick-kind");
+          btn.classList.toggle("is-active", k === kind);
+        });
+        if (costEl) {
+          if (Number.isFinite(entryPx) && entryPx > 0) {
+            const under =
+              Number.isFinite(px) && px > 0 && px + 1e-12 < entryPx;
+            const pnlPct =
+              Number.isFinite(px) && px > 0 ? (px / entryPx - 1) * 100 : NaN;
+            const pctBit = Number.isFinite(pnlPct)
+              ? ` · ${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%`
+              : "";
+            costEl.hidden = false;
+            costEl.classList.toggle("is-under", under);
+            costEl.innerHTML = `成本 <strong>${escapeHtml(formatHoldingsPriceInput(entryPx))}</strong>${escapeHtml(pctBit)}${under ? " · 现价低于成本" : ""}`;
+          } else {
+            costEl.hidden = true;
+            costEl.textContent = "";
+            costEl.classList.remove("is-under");
+          }
+        }
+        if (limitRow) {
+          limitRow.hidden = !(kind === "limit" || (kind === "stop" && !(entryPx > 0)));
+        }
+        if (limitLabel) {
+          limitLabel.textContent =
+            kind === "stop"
+              ? "成本价"
+              : isSell
+                ? "最低卖出价"
+                : "最高买入价";
+        }
+        if (limitEl && document.activeElement !== limitEl) {
+          if (kind === "stop" && entryPx > 0) {
+            limitEl.value = formatHoldingsPriceInput(entryPx);
+          } else if (
+            kind === "limit" &&
+            !(Number(limitEl.value) > 0) &&
+            Number.isFinite(px) &&
+            px > 0
+          ) {
+            limitEl.value = formatHoldingsPriceInput(px);
+          }
+        }
+        if (stopBox) {
+          stopBox.hidden = kind !== "stop";
+          if (kind === "stop") {
+            const base =
+              entryPx > 0
+                ? entryPx
+                : Number(limitEl && limitEl.value) || 0;
+            if (base > 0) {
+              stopBox.innerHTML =
+                `成本 <strong>${escapeHtml(formatHoldingsPriceInput(base))}</strong>` +
+                ` · -3% <strong>${escapeHtml(formatHoldingsPriceInput(base * 0.97))}</strong>（半仓）` +
+                ` · -5% <strong>${escapeHtml(formatHoldingsPriceInput(base * 0.95))}</strong>（全出）`;
+            } else {
+              stopBox.textContent =
+                "按成本挂 -3% 半仓 / -5% 全出市价止损。请先填写成本价。";
+            }
+          }
+        }
+        if (marketBlock) marketBlock.hidden = kind === "stop";
         if (amountLabel) {
           amountLabel.textContent = isSell
             ? `数量 ${asset || ""}`.trim()
             : "金额 USDT";
+        }
+        if (kind !== "limit") {
+          if (limitEl) limitEl.classList.remove("is-invalid");
+          if (hintEl) hintEl.classList.remove("is-invalid");
+        }
+        if (kind === "stop") {
+          if (availEl) {
+            availEl.textContent = isSell
+              ? `可用 ${formatHoldingsQty(holdingsFreeQty(st.symbol))} ${asset}`
+              : "";
+          }
+          if (hintEl) {
+            hintEl.textContent =
+              entryPx > 0
+                ? "确认后按现有成本挂 -3%/-5% 止损任务"
+                : "确认后写入成本展示价并挂 -3%/-5% 止损任务";
+          }
+          if (confirmBtn && !busy) {
+            const base =
+              entryPx > 0
+                ? entryPx
+                : Number(limitEl && limitEl.value) || 0;
+            confirmBtn.textContent = "确认挂止损";
+            confirmBtn.disabled = !(base > 0);
+          }
+          return;
         }
         if (isSell) {
           const free = holdingsFreeQty(st.symbol);
@@ -21356,14 +21858,34 @@
           if (availEl) {
             availEl.textContent = `可用 ${formatHoldingsQty(free)} ${asset}`;
           }
+          const limitPx = Number(limitEl && limitEl.value);
+          const normalHint = Number.isFinite(notional)
+            ? `本单约 ${formatHoldingsQty(qty)} · ${formatHoldingsUsdt(notional)} USDT`
+            : `本单约 ${formatHoldingsQty(qty)} ${asset}`;
+          const dirBad =
+            kind === "limit" &&
+            quickTradeLimitDirBad("sell", limitPx, px);
+          if (limitEl) {
+            if (dirBad) limitEl.classList.add("is-invalid");
+            else limitEl.classList.remove("is-invalid");
+          }
           if (hintEl) {
-            hintEl.textContent = Number.isFinite(notional)
-              ? `本单约 ${formatHoldingsQty(qty)} · ${formatHoldingsUsdt(notional)} USDT`
-              : `本单约 ${formatHoldingsQty(qty)} ${asset}`;
+            if (dirBad) {
+              hintEl.classList.add("is-invalid");
+              hintEl.textContent = quickTradeLimitDirMessage("sell", px);
+            } else {
+              hintEl.classList.remove("is-invalid");
+              hintEl.textContent = normalHint;
+            }
           }
           if (confirmBtn && !busy) {
-            confirmBtn.textContent = "确认卖出";
-            confirmBtn.disabled = !(free > 0 && qty > 0);
+            confirmBtn.textContent =
+              kind === "limit" ? "确认限价卖" : "确认卖出";
+            const baseDisabled =
+              kind === "limit"
+                ? !(free > 0 && qty > 0 && limitPx > 0)
+                : !(free > 0 && qty > 0);
+            confirmBtn.disabled = baseDisabled || dirBad;
           }
         } else {
           const usdt = holdingsUsdtFree();
@@ -21387,18 +21909,52 @@
           if (availEl) {
             availEl.textContent = `可用 ${formatHoldingsUsdt(usdt)} USDT`;
           }
+          const limitPx = Number(limitEl && limitEl.value);
+          const getQty =
+            Number.isFinite(px) && px > 0 && quote > 0
+              ? formatHoldingsQty(quote / px)
+              : "—";
+          const normalHint = `本单约 ${formatHoldingsUsdt(quote)} USDT · ≈ ${getQty} ${asset}`;
+          const dirBad =
+            kind === "limit" &&
+            quickTradeLimitDirBad("buy", limitPx, px);
+          if (limitEl) {
+            if (dirBad) limitEl.classList.add("is-invalid");
+            else limitEl.classList.remove("is-invalid");
+          }
           if (hintEl) {
-            const getQty =
-              Number.isFinite(px) && px > 0 && quote > 0
-                ? formatHoldingsQty(quote / px)
-                : "—";
-            hintEl.textContent = `本单约 ${formatHoldingsUsdt(quote)} USDT · ≈ ${getQty} ${asset}`;
+            if (dirBad) {
+              hintEl.classList.add("is-invalid");
+              hintEl.textContent = quickTradeLimitDirMessage("buy", px);
+            } else {
+              hintEl.classList.remove("is-invalid");
+              hintEl.textContent = normalHint;
+            }
           }
           if (confirmBtn && !busy) {
-            confirmBtn.textContent = "确认买入";
-            confirmBtn.disabled = !(quote >= 5);
+            confirmBtn.textContent =
+              kind === "limit" ? "确认限价买" : "确认买入";
+            const baseDisabled =
+              kind === "limit"
+                ? !(quote >= 5 && limitPx > 0)
+                : !(quote >= 5);
+            confirmBtn.disabled = baseDisabled || dirBad;
           }
         }
+      }
+
+      function quickTradeLimitDirBad(mode, limitPx, spot) {
+        if (!(Number(limitPx) > 0)) return false;
+        if (!(Number.isFinite(spot) && spot > 0)) return false;
+        if (mode === "sell") return limitPx < spot * 0.999999;
+        return limitPx > spot * 1.000001;
+      }
+
+      function quickTradeLimitDirMessage(mode, spot) {
+        if (mode === "sell") {
+          return `卖出价须 ≥ 现价 ${formatHoldingsPriceInput(spot)}（更高=等涨）`;
+        }
+        return `买入价须 ≤ 现价 ${formatHoldingsPriceInput(spot)}（更低=等跌）`;
       }
 
       function readQuickTradeOrderAmount() {
@@ -21474,11 +22030,13 @@
         if (!sheet) return false;
 
         // 立刻出条，但锁定到余额/现价刷新完成（避免用过期缓存下单）。
-        quickTradeState = { symbol, mode: want };
+        quickTradeState = { symbol, mode: want, orderKind: "market" };
         const pctEl = document.getElementById("quickTradePct");
         if (pctEl) pctEl.value = "50";
         const amountEl = document.getElementById("quickTradeAmount");
         if (amountEl) amountEl.value = "";
+        const limitEl = document.getElementById("quickTradeLimitPrice");
+        if (limitEl) limitEl.value = "";
         sheet.hidden = false;
         document.body.classList.add("has-quick-trade");
         applyFocusActionChrome();
@@ -21526,14 +22084,172 @@
         }
       }
 
+      function buildQuickTradeCostConfirmBits(symbol, spotPrice) {
+        const entry = holdingsEntryPriceOf(symbol);
+        const spot = Number(spotPrice);
+        const hasCost = Number.isFinite(entry) && entry > 0;
+        const under =
+          hasCost && Number.isFinite(spot) && spot > 0 && spot + 1e-12 < entry;
+        const pnlPct =
+          hasCost && Number.isFinite(spot) && spot > 0
+            ? (spot / entry - 1) * 100
+            : NaN;
+        const costHtml = hasCost
+          ? `<p><span class="trade-confirm-k">【成本】</span>${escapeHtml(formatHoldingsPriceInput(entry))}` +
+            (Number.isFinite(pnlPct)
+              ? `（浮 ${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%）`
+              : "") +
+            `</p>`
+          : "";
+        const spotHtml = `<p><span class="trade-confirm-k">【现价】</span>${
+          Number.isFinite(spot) && spot > 0
+            ? escapeHtml(formatHoldingsPriceInput(spot))
+            : "—"
+        }</p>`;
+        const ackHtml = under
+          ? `<label class="trade-confirm-ack"><input type="checkbox" id="tradeConfirmAck" />` +
+            `<span>已知现价低于成本，仍要继续</span></label>`
+          : "";
+        return { costHtml, spotHtml, under, requireAck: under, ackHtml };
+      }
+
       async function confirmQuickTradeSheet() {
         const st = quickTradeState;
         if (!st) return false;
         const sheet = document.getElementById("quickTradeSheet");
         if (sheet && sheet.classList.contains("is-busy")) return false;
         const asset = holdingsBaseAsset(st.symbol);
+        const orderKind = st.orderKind || "market";
         const orderAmt = readQuickTradeOrderAmount();
+        const limitEl = document.getElementById("quickTradeLimitPrice");
+        const limitPx = Number(limitEl && limitEl.value);
+        const spot = holdingsSpotPrice(st.symbol);
         try {
+          if (orderKind === "stop") {
+            if (st.mode !== "sell") {
+              showToast("止损仅支持卖出侧");
+              return false;
+            }
+            const entry = holdingsEntryPriceOf(st.symbol);
+            const costPx = entry > 0 ? entry : limitPx;
+            if (!(costPx > 0)) {
+              showToast("请填写成本价");
+              return false;
+            }
+            // 用本次实际成本价判断（含手填、尚无 entry 的情况），不只看 holdings 旧值。
+            const under =
+              Number.isFinite(spot) &&
+              spot > 0 &&
+              costPx > 0 &&
+              spot + 1e-12 < costPx;
+            const bits = buildQuickTradeCostConfirmBits(st.symbol, spot);
+            const ackHtml = under
+              ? `<label class="trade-confirm-ack"><input type="checkbox" id="tradeConfirmAck" />` +
+                `<span>已知现价低于成本，仍要继续</span></label>`
+              : "";
+            const okStop = await showTradeConfirmDialog({
+              bodyHtml:
+                `<p><span class="trade-confirm-k">【挂止损】</span>${escapeHtml(asset)}</p>` +
+                bits.spotHtml +
+                `<p><span class="trade-confirm-k">【成本】</span>${escapeHtml(formatHoldingsPriceInput(costPx))}</p>` +
+                `<p>-3% ≈ ${escapeHtml(formatHoldingsPriceInput(costPx * 0.97))}（半仓）· ` +
+                `-5% ≈ ${escapeHtml(formatHoldingsPriceInput(costPx * 0.95))}（全出）</p>` +
+                ackHtml,
+              confirmText: "确认挂止损",
+              requireAck: under,
+            });
+            if (!okStop) return false;
+            setQuickTradeBusy(true, "挂止损…");
+            // 不走 saveNailHoldEntryPrice：那会把分笔 lots 收成一笔。
+            const ok = await seedNailHoldStops(st.symbol, costPx, {
+              hasEntry: entry > 0,
+            });
+            setQuickTradeBusy(false);
+            if (ok) closeQuickTradeSheet();
+            return !!ok;
+          }
+
+          if (orderKind === "limit") {
+            if (!(limitPx > 0)) {
+              showToast(st.mode === "sell" ? "请填写最低卖出价" : "请填写最高买入价");
+              return false;
+            }
+            // 确认前同口径拦截（仅 spot 有效时）；无效现价交给 upsert 第三层。
+            if (
+              quickTradeLimitDirBad(
+                st.mode === "sell" ? "sell" : "buy",
+                limitPx,
+                spot,
+              )
+            ) {
+              showToast(
+                quickTradeLimitDirMessage(
+                  st.mode === "sell" ? "sell" : "buy",
+                  spot,
+                ),
+              );
+              return false;
+            }
+            const bits = buildQuickTradeCostConfirmBits(st.symbol, spot);
+            if (st.mode === "sell") {
+              const quantity = orderAmt.qty;
+              const pct = orderAmt.pct || 0;
+              if (!(quantity > 0)) {
+                showToast("卖出数量无效");
+                return false;
+              }
+              const okLimitSell = await showTradeConfirmDialog({
+                bodyHtml:
+                  `<p><span class="trade-confirm-k">【限价卖出】</span>${escapeHtml(asset)}</p>` +
+                  bits.spotHtml +
+                  bits.costHtml +
+                  `<p><span class="trade-confirm-k">【委托】</span>≥ ${escapeHtml(formatHoldingsPriceInput(limitPx))}</p>` +
+                  `<p><span class="trade-confirm-k">【数量】</span>${escapeHtml(formatHoldingsQty(quantity))}（约 ${pct}%）</p>` +
+                  bits.ackHtml,
+                confirmText: "确认限价卖",
+                requireAck: bits.requireAck,
+              });
+              if (!okLimitSell) return false;
+              setQuickTradeBusy(true, "创建中…");
+              const okSellTask = await upsertNailSellTask(st.symbol, {
+                minSell: limitPx,
+                sellPercent: pct || 50,
+                fromQuick: true,
+              });
+              setQuickTradeBusy(false);
+              if (okSellTask) closeQuickTradeSheet();
+              return !!okSellTask;
+            }
+            const quote = orderAmt.quote;
+            const pct = orderAmt.pct || 0;
+            if (!(quote >= 5)) {
+              showToast("金额无效或不足 5 USDT");
+              return false;
+            }
+            // 买入 underwater 是加仓摊薄，不做「割肉」ack（与市价买一致）。
+            const okLimitBuy = await showTradeConfirmDialog({
+              bodyHtml:
+                `<p><span class="trade-confirm-k">【限价买入】</span>${escapeHtml(asset)}</p>` +
+                bits.spotHtml +
+                bits.costHtml +
+                `<p><span class="trade-confirm-k">【委托】</span>≤ ${escapeHtml(formatHoldingsPriceInput(limitPx))}</p>` +
+                `<p><span class="trade-confirm-k">【花费】</span>${escapeHtml(formatHoldingsUsdt(quote))} USDT（约 ${pct}%）</p>`,
+              confirmText: "确认限价买",
+              requireAck: false,
+            });
+            if (!okLimitBuy) return false;
+            setQuickTradeBusy(true, "创建中…");
+            await ensureHoldSymbol(st.symbol);
+            const okBuyTask = await upsertNailBuyTask(st.symbol, {
+              maxBuy: limitPx,
+              buyPercent: pct || 50,
+              fromQuick: true,
+            });
+            setQuickTradeBusy(false);
+            if (okBuyTask) closeQuickTradeSheet();
+            return !!okBuyTask;
+          }
+
           if (st.mode === "sell") {
             const quantity = orderAmt.qty;
             const pct = orderAmt.pct || 0;
@@ -21541,14 +22257,18 @@
               showToast("卖出数量无效");
               return false;
             }
+            const bits = buildQuickTradeCostConfirmBits(st.symbol, spot);
             const okSell = await showTradeConfirmDialog({
               title: "确认卖出",
               bodyHtml:
-                `<p>确认现价卖出 <strong>${escapeHtml(asset)}</strong>？</p>` +
-                `<p>约 <strong>${escapeHtml(formatHoldingsQty(quantity))}</strong>` +
-                `（输入框数量；约 ${pct}% 可用）</p>`,
+                `<p><span class="trade-confirm-k">【现价卖出】</span>${escapeHtml(asset)}</p>` +
+                bits.spotHtml +
+                bits.costHtml +
+                `<p><span class="trade-confirm-k">【数量】</span>${escapeHtml(formatHoldingsQty(quantity))}（约 ${pct}%）</p>` +
+                bits.ackHtml,
               confirmText: "确认卖出",
               cancelText: "取消",
+              requireAck: bits.requireAck,
             });
             if (!okSell) return false;
             setQuickTradeBusy(true, "卖出中…");
@@ -21688,40 +22408,6 @@
           console.warn("confirmQuickTradeSheet failed", error);
           showTradeToast(error.message || "下单失败");
           setQuickTradeBusy(false);
-          return false;
-        }
-      }
-
-      /** 打开持有浮层并展开限价/止损面板（交易条「限价/止损」）。 */
-      async function openHoldTradeForSymbol(rawSymbol, mode) {
-        const want = mode === "sell" ? "sell" : "buy";
-        const symbol = normalizeHoldSymbol(rawSymbol);
-        if (!symbol || symbol === "USDT") {
-          showToast("请选择具体币种");
-          return false;
-        }
-        try {
-          closeQuickTradeSheet();
-          setFocusActionSymbol(null);
-          showToast("打开持有…");
-          // 先打开浮层并刷新；ensure 必须在刷新之后，
-          // 否则即时同步会把无仓币当灰尘清掉，导致「找不到该币」。
-          await setNailHoldPopoverOpen(true);
-          await ensureHoldSymbol(symbol);
-          setNailHoldExpanded(symbol);
-          renderNailHoldList();
-          applyNailHoldCollapsedState();
-          const row = nailHoldRowBySymbol(symbol);
-          if (!row) {
-            showToast("持有列表未找到该币");
-            return false;
-          }
-          openNailHoldPanel(symbol, want);
-          row.scrollIntoView({ block: "nearest", behavior: "smooth" });
-          return true;
-        } catch (error) {
-          console.warn("openHoldTradeForSymbol failed", error);
-          showToast(error.message || "打开持有交易失败");
           return false;
         }
       }
@@ -34058,12 +34744,6 @@
       }
 
       function applyNailSegmentUi() {
-        // 切走通知分栏前记住滚动位置：panel.hidden 触发 display:none 会把
-        // scrollTop 清零，交给下次 renderNailNoticeList 的锚点机制恢复。
-        const noticeList = document.getElementById("nailNoticeList");
-        if (noticeList && noticeList.scrollTop > 0) {
-          nailNoticePendingScrollTop = noticeList.scrollTop;
-        }
         document.querySelectorAll("[data-nail-seg]").forEach((btn) => {
           const on = btn.getAttribute("data-nail-seg") === nailSegment;
           btn.classList.toggle("is-active", on);
@@ -34515,6 +35195,17 @@
         const next = NAIL_SEGMENTS.includes(seg) ? seg : "pinned";
         const changed = next !== nailSegment;
         const token = ++nailSegSwitchToken;
+        // panel.hidden 会清 scrollTop：必须在切分栏 UI 之前抓滚动。
+        if (changed) {
+          if (nailSegment === "autopin") captureNailAutoPinScroll();
+          if (nailSegment === "radar") captureNailRadarScroll();
+          if (nailSegment === "notice") {
+            const noticeList = document.getElementById("nailNoticeList");
+            if (noticeList && noticeList.scrollTop > 0) {
+              nailNoticePendingScrollTop = noticeList.scrollTop;
+            }
+          }
+        }
         nailSegment = next;
         applyNailSegmentUi();
         // 换分栏时收起旧分栏操作栏 / 交易条，避免底栏挂在新分栏上。
@@ -42094,12 +42785,20 @@
               .catch(() => showToast("刷新现价失败"));
           });
         }
-        const quickTradeAdvanced = document.getElementById("quickTradeAdvanced");
-        if (quickTradeAdvanced) {
-          quickTradeAdvanced.addEventListener("click", () => {
-            const st = quickTradeState;
-            if (!st) return;
-            void openHoldTradeForSymbol(st.symbol, st.mode);
+        const quickTradeKind = document.getElementById("quickTradeKind");
+        if (quickTradeKind) {
+          quickTradeKind.addEventListener("click", (event) => {
+            const btn = event.target.closest("[data-quick-kind]");
+            if (!btn || !quickTradeState) return;
+            setQuickTradeOrderKind(btn.getAttribute("data-quick-kind"));
+          });
+        }
+        const quickTradeLimitPrice = document.getElementById(
+          "quickTradeLimitPrice",
+        );
+        if (quickTradeLimitPrice) {
+          quickTradeLimitPrice.addEventListener("input", () => {
+            syncQuickTradeSheet({ from: "limit" });
           });
         }
         const quickTradeConfirm = document.getElementById("quickTradeConfirm");
