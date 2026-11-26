@@ -4411,6 +4411,20 @@
         color: #a32d2d;
         background: rgba(255, 92, 100, 0.14);
       }
+      .nail-hold-status-chip.is-ledger-pending {
+        color: color-mix(in srgb, var(--warn, #b07030) 88%, var(--label));
+        background: color-mix(in srgb, var(--warn, #b07030) 14%, transparent);
+      }
+      .nail-hold-cost-pending {
+        margin-top: 6px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 650;
+        line-height: 1.4;
+        color: color-mix(in srgb, var(--warn, #b07030) 90%, var(--label));
+        background: color-mix(in srgb, var(--warn, #b07030) 12%, transparent);
+      }
       .nail-hold-px-block {
         flex: 0 0 auto;
         text-align: right;
@@ -7628,6 +7642,9 @@
       }
       .quick-trade-cost.is-under {
         color: color-mix(in srgb, var(--down, #c45c5c) 85%, var(--label));
+      }
+      .quick-trade-cost.is-pending {
+        color: color-mix(in srgb, var(--warn, #b07030) 90%, var(--label));
       }
       .quick-trade-kind {
         display: flex;
@@ -18700,6 +18717,33 @@
         return Array.isArray(lots) ? lots : [];
       }
 
+      /**
+       * 余额已有币（非灰尘）但账本尚无 lot / entry：限价成交后云回写空窗。
+       * 只做提示，不写 holdings、不下单、不重挂。
+       */
+      function holdingsLedgerPendingSync(symbol) {
+        const key = normalizeHoldSymbol(symbol);
+        if (!key || key === "USDT") return false;
+        const asset = holdingsBaseAsset(key);
+        const row =
+          (nailHoldingsState &&
+            nailHoldingsState.balances &&
+            nailHoldingsState.balances[asset]) ||
+          {};
+        const qty = (Number(row.free) || 0) + (Number(row.locked) || 0);
+        if (!(qty > 0)) return false;
+        const px = holdingsSpotPrice(key);
+        const notional =
+          Number.isFinite(px) && px > 0 ? qty * px : Number.NaN;
+        // 无现价时只要有余额也提示，避免空窗被当成「无持仓」。
+        if (Number.isFinite(notional) && notional < HOLDINGS_DUST_USDT) {
+          return false;
+        }
+        if (holdingsEntryLotsOf(key).length > 0) return false;
+        if (holdingsEntryPriceOf(key) > 0) return false;
+        return true;
+      }
+
       function holdingsEntryPriceOf(symbol) {
         const key = String(symbol || "")
           .trim()
@@ -20226,17 +20270,20 @@
               const taskRows = taskPairs.map((p) =>
                 buildNailHoldTaskRowHtml(p.side, p.task),
               );
+              const ledgerPending = holdingsLedgerPendingSync(symbol);
               const statusChip = hasTaskError
                 ? '<span class="nail-hold-status-chip is-err">执行异常</span>'
                 : isDust
                   ? '<span class="nail-hold-status-chip is-dust">尘埃</span>'
-                  : lockedNum > 0
-                    ? '<span class="nail-hold-status-chip is-frozen">有冻结</span>'
-                    : freeNum > 0
-                      ? '<span class="nail-hold-status-chip is-held">持有中</span>'
-                      : taskPairs.length
-                        ? '<span class="nail-hold-status-chip is-task-only">仅任务</span>'
-                        : '<span class="nail-hold-status-chip">无持仓</span>';
+                  : ledgerPending
+                    ? '<span class="nail-hold-status-chip is-ledger-pending">账本回写中</span>'
+                    : lockedNum > 0
+                      ? '<span class="nail-hold-status-chip is-frozen">有冻结</span>'
+                      : freeNum > 0
+                        ? '<span class="nail-hold-status-chip is-held">持有中</span>'
+                        : taskPairs.length
+                          ? '<span class="nail-hold-status-chip is-task-only">仅任务</span>'
+                          : '<span class="nail-hold-status-chip">无持仓</span>';
               // 规范：成本/止损区始终可见（USDT 除外）；买入成本只跟分笔 VWAP。
               const showCost = true;
               const costConfigured = lotVwap != null;
@@ -20257,7 +20304,9 @@
                   ? '<span class="nail-hold-sec-tag is-err">异常</span>'
                   : costConfigured || stopBasis.price != null
                     ? '<span class="nail-hold-sec-tag is-ok">已配置</span>'
-                    : '<span class="nail-hold-sec-tag">未设置</span>';
+                    : ledgerPending
+                      ? '<span class="nail-hold-sec-tag is-warn">回写中</span>'
+                      : '<span class="nail-hold-sec-tag">未设置</span>';
               const ops = canSell
                 ? `<button type="button" class="is-sell" data-hold-open-sell="${escapeHtml(symbol)}">设置卖出<span class="nail-hold-ops-sub">LIMIT</span></button>
                    <button type="button" class="is-buy" data-hold-open-buy="${escapeHtml(symbol)}">买入<span class="nail-hold-ops-sub">LIMIT</span></button>`
@@ -20337,7 +20386,9 @@
                     ${
                       costConfigured
                         ? `<div><div class="nail-hold-sec-label">买入成本价 P${lotCount > 1 ? ` · ${lotCount}笔均价` : ""}</div><div class="nail-hold-cost-price">${escapeHtml(formatHoldingsPriceInput(lotVwap))}</div></div>`
-                        : `<div class="nail-hold-cost-empty">无分笔成本（成交后入账）</div>`
+                        : ledgerPending
+                          ? `<div class="nail-hold-cost-pending">成交可能已发生，账本回写中 · 暂无成本 / 盈亏，请稍候刷新，勿重复下单</div>`
+                          : `<div class="nail-hold-cost-empty">无分笔成本（成交后入账）</div>`
                     }
                     <button type="button" class="nail-hold-cost-edit-btn" data-hold-entry-edit="${escapeHtml(symbol)}">编辑止损基准 ↗</button>
                   </div>
@@ -22067,12 +22118,19 @@
               ? ` · ${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%`
               : "";
             costEl.hidden = false;
+            costEl.classList.remove("is-pending");
             costEl.classList.toggle("is-under", under);
             costEl.innerHTML = `成本 <strong>${escapeHtml(formatHoldingsPriceInput(entryPx))}</strong>${escapeHtml(pctBit)}${under ? " · 现价低于成本" : ""}`;
+          } else if (holdingsLedgerPendingSync(st.symbol)) {
+            costEl.hidden = false;
+            costEl.classList.remove("is-under");
+            costEl.classList.add("is-pending");
+            costEl.innerHTML =
+              "成交可能已发生，账本回写中 · 暂无成本 / 盈亏，勿重复下单";
           } else {
             costEl.hidden = true;
             costEl.textContent = "";
-            costEl.classList.remove("is-under");
+            costEl.classList.remove("is-under", "is-pending");
           }
         }
         if (limitRow) {
