@@ -32624,7 +32624,11 @@
         syncNailNoticeSelectUi();
       }
 
-      /** 通知页置顶：缺钉则按现价补入，再统一置顶到钉子页顶部。 */
+      /**
+       * 通知 / 自动盯 / 雷达三个分栏的置顶落盘：缺钉则按现价补入，
+       * 且不论新旧，都把该币便签整条改成「此刻起的现价」（noteAt 重置为此刻），
+       * 再统一置顶到钉子页顶部。置顶分栏自己的批量置顶不走这里。
+       */
       async function pinNoticeSymbolsToNails(symbols, options) {
         const opts = options || {};
         const keys = [
@@ -32640,8 +32644,19 @@
         }
         const before = existingNailSymbolSet();
         const fresh = keys.filter((symbol) => !before.has(symbol));
+        // USDT 本身不是交易对，批量行情与便签现价都要排除。
+        const tradeKeys = keys.filter(
+          (key) => key !== "USDT" && key !== "USDTUSDT",
+        );
+        // 先单请求刷新这批币的行情，保证写进便签的是「此刻」的现价。
+        // 刷新失败不阻断置顶：沿用 marketMap 缓存，再逐币兜底。
+        try {
+          await fetchBinanceTickersForSymbols(tradeKeys);
+        } catch (_) {
+          /* ignore */
+        }
         const notesBySymbol = {};
-        for (const key of fresh) {
+        for (const key of tradeKeys) {
           let price = Number(marketMap[key]?.price);
           if (!(Number.isFinite(price) && price > 0)) {
             try {
@@ -32651,9 +32666,13 @@
               /* ignore */
             }
           }
-          notesBySymbol[key] =
-            Number.isFinite(price) && price > 0 ? formatPinPrice(price) : "";
+          if (Number.isFinite(price) && price > 0) {
+            notesBySymbol[key] = formatPinPrice(price);
+          }
         }
+        const noteKeys = Object.keys(notesBySymbol);
+        // 同一批共用一个时间戳：便签涨幅 / 荧光绿都从这一刻起算。
+        const noteAt = Date.now();
         await persistNails(
           (list, meta) => {
             let next = list;
@@ -32664,6 +32683,14 @@
                 notesBySymbol,
               );
             }
+            // 整条覆盖已有便签（含手写备注），并重置起始时间。
+            next = noteKeys.reduce(
+              (acc, key) =>
+                WatchFavorites.setNailNote(acc, key, notesBySymbol[key], {
+                  noteAt,
+                }),
+              next,
+            );
             next =
               typeof WatchFavorites.setNailsPinnedBatch === "function"
                 ? WatchFavorites.setNailsPinnedBatch(next, keys, true)
@@ -32686,19 +32713,27 @@
               opts.loadingText || `置顶到钉子 ${keys.length}…`,
           },
         );
+        const noteSuffix = noteKeys.length ? " · 便签现价" : "";
         if (typeof opts.toastOk === "function" && keys.length === 1) {
-          showToast(opts.toastOk(keys[0].replace(/USDT$/i, "")));
+          showToast(opts.toastOk(keys[0].replace(/USDT$/i, "")) + noteSuffix);
         } else {
           const parts = [`已置顶到钉子页 ${keys.length} 个`];
           if (fresh.length) parts.push(`新钉入 ${fresh.length}`);
+          if (noteKeys.length) parts.push(`便签现价 ${noteKeys.length}`);
+          const skippedPrice = tradeKeys.length - noteKeys.length;
+          if (skippedPrice > 0) parts.push(`无现价掠过 ${skippedPrice}`);
           showToast(parts.join(" · "));
         }
-        return { pinned: keys.length, added: fresh.length };
+        return {
+          pinned: keys.length,
+          added: fresh.length,
+          notePrice: noteKeys.length,
+        };
       }
 
       /**
        * 自动盯卡片的一键置顶：只动这一张卡的按钮，不重排列表、不重画 K 线。
-       * 已钉未置顶的只补 pinned 标记，不在抽屉里的按现价补钉后再置顶。
+       * 不在抽屉里的按现价补钉；不论新旧都会把便签改成此刻现价，再置顶。
        */
       async function pinAutoPinSymbol(btn) {
         const key = String(btn.getAttribute("data-autopin-pin-btn") || "")
