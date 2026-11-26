@@ -6554,6 +6554,59 @@
         );
         color: color-mix(in srgb, var(--accent) 70%, var(--label));
       }
+      /* 常看：轻量标题栏 + 段内毛玻璃底；点标题折叠 */
+      .nail-section-label.is-always {
+        margin-top: 4px;
+        padding: 6px 10px;
+        border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+        background: color-mix(in srgb, var(--elevated, var(--bg)) 42%, transparent);
+        color: color-mix(in srgb, var(--accent) 55%, var(--secondary));
+        font-size: 10px;
+        font-weight: 650;
+        letter-spacing: 0.06em;
+        cursor: pointer;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        backdrop-filter: blur(12px) saturate(160%);
+        -webkit-backdrop-filter: blur(12px) saturate(160%);
+        box-shadow: inset 0 1px 0
+          color-mix(in srgb, #fff 10%, transparent);
+      }
+      .nail-section-label.is-always .nail-notice-group-caret {
+        display: inline-block;
+        margin-right: 2px;
+        font-size: 11px;
+        line-height: 1;
+        transition: transform 0.15s ease;
+      }
+      .nail-section-label.is-always.is-collapsed .nail-notice-group-caret {
+        transform: rotate(-90deg);
+      }
+      /* 常看段卡片 / 列表行：半透明 + 模糊，透出底层 */
+      .nail-kcard[data-nail-in-section="always"],
+      .nail-prow-tbody[data-nail-in-section="always"] .nail-prow-row,
+      .nail-prow-tbody[data-nail-in-section="always"] .nail-prow-sub td {
+        background: color-mix(in srgb, var(--elevated, var(--bg)) 38%, transparent);
+        backdrop-filter: blur(14px) saturate(155%);
+        -webkit-backdrop-filter: blur(14px) saturate(155%);
+        border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+        box-shadow:
+          inset 0 1px 0 color-mix(in srgb, #fff 8%, transparent),
+          inset 3px 0 0 color-mix(in srgb, var(--accent) 42%, transparent);
+      }
+      .nail-kcard[data-nail-in-section="always"].is-pinned {
+        background: color-mix(
+          in srgb,
+          var(--accent) 10%,
+          color-mix(in srgb, var(--elevated, var(--bg)) 36%, transparent)
+        );
+      }
+      #nailList.is-always-collapsed
+        .nail-kcard[data-nail-in-section="always"],
+      #nailList.is-always-collapsed
+        .nail-prow-tbody[data-nail-in-section="always"] {
+        display: none !important;
+      }
       .nail-section-label.is-rest {
         opacity: 0.92;
       }
@@ -16794,8 +16847,51 @@
        * 跨端写 watch-ui-read-state.json；本机缓存同雷达标记。
        */
       const NAIL_ALWAYS_WATCH_KEY = "kline-always-watch-v1";
+      const NAIL_ALWAYS_COLLAPSE_KEY = "kline-always-watch-collapsed-v1";
       let alwaysWatchState = { symbols: [], at: 0 };
       let alwaysWatchSyncing = false;
+      /** 置顶分栏「常看」段折叠：仅本机 UI，默认展开。 */
+      let nailAlwaysSectionCollapsed = false;
+      try {
+        nailAlwaysSectionCollapsed =
+          localStorage.getItem(NAIL_ALWAYS_COLLAPSE_KEY) === "1";
+      } catch (_) {
+        nailAlwaysSectionCollapsed = false;
+      }
+
+      function setNailAlwaysSectionCollapsed(on) {
+        nailAlwaysSectionCollapsed = !!on;
+        try {
+          localStorage.setItem(
+            NAIL_ALWAYS_COLLAPSE_KEY,
+            nailAlwaysSectionCollapsed ? "1" : "0",
+          );
+        } catch (_) {
+          /* ignore */
+        }
+        syncNailAlwaysSectionCollapseUi();
+      }
+
+      function syncNailAlwaysSectionCollapseUi() {
+        const list = document.getElementById("nailList");
+        if (list) {
+          list.classList.toggle(
+            "is-always-collapsed",
+            nailAlwaysSectionCollapsed,
+          );
+        }
+        document
+          .querySelectorAll(
+            '#nailList .nail-section-label[data-nail-section="always"]',
+          )
+          .forEach((el) => {
+            el.classList.toggle("is-collapsed", nailAlwaysSectionCollapsed);
+            el.setAttribute(
+              "aria-expanded",
+              nailAlwaysSectionCollapsed ? "false" : "true",
+            );
+          });
+      }
 
       function normalizeAlwaysWatchSymbols(list) {
         if (
@@ -35551,6 +35647,14 @@
               String(item.dataset.nailSymbol || "").toUpperCase() === key,
           );
         if (!card) return false;
+        // 目标在折叠的常看段：先展开再滚，否则 display:none 量不到位置。
+        const sectionOwner =
+          (card.closest("[data-nail-in-section]") || card).getAttribute(
+            "data-nail-in-section",
+          ) || "";
+        if (sectionOwner === "always" && nailAlwaysSectionCollapsed) {
+          setNailAlwaysSectionCollapsed(false);
+        }
         document
           .querySelectorAll(
             "#nailList .nail-kcard.is-focus, #nailList .is-focus, #nailList .is-jump-target",
@@ -36041,9 +36145,11 @@
         refreshNailListLiveKlines();
         syncNailHeldPnlUi();
         // 24h / 便签涨幅都跟现价走，ticker 刷新后重排段内顺序。
+        // 常看段固定跟 24h，与全局排序开关无关，有常看也要重排。
         if (
           nailSortMode === "change24h" ||
-          nailSortMode === "alertGreen"
+          nailSortMode === "alertGreen" ||
+          getAlwaysWatchSymbols().length
         ) {
           applyNailListOrder();
         }
@@ -36881,7 +36987,7 @@
             );
           });
         }
-        // 常看但不在钉子名单（如自动退出后）：合成观察卡，仍进置顶段前排。
+        // 常看但不在钉子名单（如自动退出后）：合成观察卡，进「常看」段。
         alwaysWatchSet.forEach((key) => {
           if (!key || !nailBstockVisible(key)) return;
           if (
@@ -37094,43 +37200,47 @@
       }
 
       /** 只挪 DOM 重排（持有优先 / 展示排序），避免整表重绘打断已画好的 K 线。 */
-      /** 钉子列表视觉分段：持有 → 置顶 → 其余（与 nailDrawerVisibleItems 排序一致）。 */
+      /** 钉子列表视觉分段：持有 → 常看 → 置顶 → 其余。 */
       function nailDrawerSectionParts(items) {
         const jump = [];
         const held = [];
+        const always = [];
         const pinned = [];
         const rest = [];
         const revealKey = nailJumpRevealKey();
-        const alwaysOrder = getAlwaysWatchSymbols();
-        const alwaysIndex = new Map(
-          alwaysOrder.map((sym, idx) => [sym, idx]),
-        );
+        const alwaysSet = new Set(getAlwaysWatchSymbols());
         for (const item of items || []) {
           const key = String((item && item.symbol) || "").toUpperCase();
           if (revealKey && key === revealKey) {
             jump.push(item);
             continue;
           }
-          // 关闭「持有」开关：不单独成段，按置顶/其余归入，币仍可见。
-          // 常看并入置顶段（不另起段），且排在置顶段前排。
+          // 关闭「持有」开关：不单独成段，按常看/置顶/其余归入，币仍可见。
+          // 常看独立成段（可折叠）；持有优先于常看，避免同一币两段。
           if (nailShowHeldSection && nailSymbolIsHeld(item && item.symbol)) {
             held.push(item);
-          } else if ((item && item.pinned) || alwaysIndex.has(key)) {
+          } else if (alwaysSet.has(key)) {
+            always.push(item);
+          } else if (item && item.pinned) {
             pinned.push(item);
           } else rest.push(item);
         }
+        // 常看固定按 24h 涨幅从高到低（与全局排序开关无关）。
+        always.sort((a, b) => {
+          const ka = String((a && a.symbol) || "").toUpperCase();
+          const kb = String((b && b.symbol) || "").toUpperCase();
+          const changeA = Number(marketMap[ka] && marketMap[ka].change24h);
+          const changeB = Number(marketMap[kb] && marketMap[kb].change24h);
+          const hasA = Number.isFinite(changeA);
+          const hasB = Number.isFinite(changeB);
+          if (hasA && hasB && changeA !== changeB) return changeB - changeA;
+          if (hasA !== hasB) return hasA ? -1 : 1;
+          return (a.order || 0) - (b.order || 0);
+        });
         pinned.sort((a, b) => {
           const ka = String((a && a.symbol) || "").toUpperCase();
           const kb = String((b && b.symbol) || "").toUpperCase();
-          const ia = alwaysIndex.has(ka) ? alwaysIndex.get(ka) : -1;
-          const ib = alwaysIndex.has(kb) ? alwaysIndex.get(kb) : -1;
-          const awA = ia >= 0;
-          const awB = ib >= 0;
-          // 常看清单整体前置，组内仍保持清单里的手动顺序。
-          if (awA && awB) return ia - ib;
-          if (awA) return -1;
-          if (awB) return 1;
-          // 便签涨幅：置顶段内也按涨幅从高到低（常看仍前置）；
+          // 便签涨幅：置顶段内按涨幅从高到低；
           // 无便签水位 / 无现价的沉底；其余模式保持手动拖拽序。
           if (nailSortMode === "alertGreen") {
             const ga = nailNoteGainPercent(ka);
@@ -37153,6 +37263,12 @@
             items: jump,
           },
           { id: "held", label: "持有", className: "is-held", items: held },
+          {
+            id: "always",
+            label: "常看",
+            className: "is-always",
+            items: always,
+          },
           { id: "pin", label: "置顶", className: "is-pin", items: pinned },
           { id: "rest", label: "其余", className: "is-rest", items: rest },
         ].filter((section) => section.items.length > 0);
@@ -37161,9 +37277,11 @@
       function nailDrawerShowSectionLabels(sections) {
         if (!sections || !sections.length) return false;
         if (sections.length > 1) return true;
-        // 仅一段时：置顶/持有/临时查看仍出标题；纯「其余」不出
+        // 仅一段时：置顶/持有/常看/临时查看仍出标题；纯「其余」不出
         const id = sections[0].id;
-        return id === "pin" || id === "held" || id === "jump";
+        return (
+          id === "pin" || id === "held" || id === "always" || id === "jump"
+        );
       }
 
       const NAIL_PIN_REVIEW_EYE_SVG =
@@ -37191,9 +37309,18 @@
             `<circle class="prog" cx="8" cy="8" r="6"></circle>` +
             `</svg></span>`;
         }
+        const isAlways = section.id === "always";
+        const collapsedCls =
+          isAlways && nailAlwaysSectionCollapsed ? " is-collapsed" : "";
+        const caret = isAlways
+          ? `<span class="nail-notice-group-caret" aria-hidden="true">▾</span>`
+          : "";
+        const toggleAttrs = isAlways
+          ? ` role="button" tabindex="0" data-nail-always-toggle aria-expanded="${nailAlwaysSectionCollapsed ? "false" : "true"}" title="点击展开/收起常看"`
+          : "";
         return (
-          `<div class="nail-section-label ${section.className}" data-nail-section="${section.id}">` +
-          `<span class="nail-section-label-title"><span>${section.label}</span>${pnlBit}</span>` +
+          `<div class="nail-section-label ${section.className}${collapsedCls}" data-nail-section="${section.id}"${toggleAttrs}>` +
+          `<span class="nail-section-label-title">${caret}<span>${section.label}</span>${pnlBit}</span>` +
           `<span class="nail-section-label-end">${eye}<span class="nail-section-count">${section.items.length}</span></span>` +
           `</div>`
         );
@@ -37236,7 +37363,10 @@
                 ? `.nail-prow-tbody[data-nail-symbol="${CSS.escape(key)}"]`
                 : `.nail-prow-tbody[data-nail-symbol="${key}"]`;
               const body = table.querySelector(sel);
-              if (body) table.appendChild(body);
+              if (body) {
+                body.setAttribute("data-nail-in-section", section.id);
+                table.appendChild(body);
+              }
             }
           }
           table.querySelectorAll(".nail-prow-tbody[data-nail-symbol]").forEach((body) => {
@@ -37246,6 +37376,7 @@
             if (key && !visibleKeys.has(key)) body.remove();
           });
           if (thead) table.insertBefore(thead, table.firstChild);
+          syncNailAlwaysSectionCollapseUi();
           return;
         }
         const grid = document.querySelector("#nailList .nail-grid");
@@ -37267,9 +37398,13 @@
               ? `.nail-kcard[data-nail-symbol="${CSS.escape(key)}"]`
               : `.nail-kcard[data-nail-symbol="${key}"]`;
             const card = grid.querySelector(sel);
-            if (card) grid.appendChild(card);
+            if (card) {
+              card.setAttribute("data-nail-in-section", section.id);
+              grid.appendChild(card);
+            }
           }
         }
+        syncNailAlwaysSectionCollapseUi();
         // 卖光后不再持有、且非上涨：可见集已不含，把残留卡清掉。
         // 注意：缺卡（新买入的非涨持有）仍须 renderNailDrawer 补画。
         grid.querySelectorAll(".nail-kcard[data-nail-symbol]").forEach((card) => {
@@ -37310,10 +37445,10 @@
           ).length;
           const sortHint =
             nailSortMode === "alertGreen"
-              ? "持有优先 · 置顶 · 便签涨幅"
+              ? "持有 · 常看24h · 置顶便签涨幅"
               : nailSortMode === "change24h"
-                ? "持有优先 · 置顶 · 24h涨幅"
-                : "持有优先 · 置顶 / 长按拖动";
+                ? "持有 · 常看24h · 置顶 · 其余24h"
+                : "持有 · 常看24h · 置顶拖动";
           const pinHint =
             pinnedCount > 0 ? `置顶 ${pinnedCount}` : "无置顶";
           const holdHint = heldCount > 0 ? ` · 持有 ${heldCount}` : "";
@@ -37363,7 +37498,7 @@
         }
         const sections = nailDrawerSectionParts(items);
         const showLabels = nailDrawerShowSectionLabels(sections);
-        const cardHtml = (item) => {
+        const cardHtml = (item, sectionId) => {
             const exited = Number(item.exitedAt) > 0;
             const pinned = !!item.pinned;
             const note = String(item.note || "").trim();
@@ -37373,6 +37508,7 @@
             const isReveal = nailJumpRevealKey() === key;
             const isGuest = !!(item && item._jumpGuest) || isNailJumpGuest(key);
             const isAlways = isNailAlwaysWatch(key);
+            const inSection = String(sectionId || "").trim() || "rest";
             const tag = exited
               ? '<span class="nail-exit-tag">退出</span>'
               : isReveal
@@ -37416,7 +37552,7 @@
                 : "删除钉子";
             const pinMenu = pinned || isAlways;
             return [
-              `<article class="nail-kcard${pinned ? " is-pinned" : ""}${isAlways ? " is-always-watch" : ""}${isReveal ? " is-jump-reveal" : ""}${selected}" data-nail-symbol="${symbol}"${isGuest ? ' data-nail-jump-guest="1"' : ""}${isAlways ? ' data-nail-always-watch="1"' : ""}>`,
+              `<article class="nail-kcard${pinned ? " is-pinned" : ""}${isAlways ? " is-always-watch" : ""}${isReveal ? " is-jump-reveal" : ""}${selected}" data-nail-symbol="${symbol}" data-nail-in-section="${escapeHtml(inSection)}"${isGuest ? ' data-nail-jump-guest="1"' : ""}${isAlways ? ' data-nail-always-watch="1"' : ""}>`,
               `<div class="nail-kcard-head">`,
               nailSelectMode
                 ? ""
@@ -37444,7 +37580,7 @@
         };
         // 列表模式：一行一币，保留小 K 线 / 现价 / 24h / 盯幅 / 盈亏 / 便签 / 操作。
         const listMode = nailPinViewMode === "list";
-        const rowHtml = (item) => {
+        const rowHtml = (item, sectionId) => {
           const exited = Number(item.exitedAt) > 0;
           const pinned = !!item.pinned;
           const note = String(item.note || "").trim();
@@ -37454,6 +37590,7 @@
           const isReveal = nailJumpRevealKey() === key;
           const isGuest = !!(item && item._jumpGuest) || isNailJumpGuest(key);
           const isAlways = isNailAlwaysWatch(key);
+          const inSection = String(sectionId || "").trim() || "rest";
           const change = Number(marketMap[key] && marketMap[key].change24h);
           const chCls = Number.isFinite(change) && change !== 0
             ? change > 0 ? "is-up" : "is-down" : "";
@@ -37503,7 +37640,7 @@
             ? `<td class="nail-prow-ops"></td>`
             : `<td class="nail-prow-ops"><button type="button" class="nail-zoom" data-kline-zoom="${symbol}" title="放大 K 线">${KLINE_ZOOM_ICON_SVG}</button><button type="button" class="nail-del" data-nail-del="${symbol}" title="${isGuest ? "收起临时查看" : alwaysOrphan ? "取消常看（钉子已不在）" : "删除钉子"}">${delLabel}</button></td>`;
           return [
-            `<tbody class="nail-prow-tbody${selected}${exited ? " is-exited" : ""}${isReveal ? " is-jump-reveal" : ""}${isAlways ? " is-always-watch" : ""}" data-nail-symbol="${symbol}"${isGuest ? ' data-nail-jump-guest="1"' : ""}${isAlways ? ' data-nail-always-watch="1"' : ""}>`,
+            `<tbody class="nail-prow-tbody${selected}${exited ? " is-exited" : ""}${isReveal ? " is-jump-reveal" : ""}${isAlways ? " is-always-watch" : ""}" data-nail-symbol="${symbol}" data-nail-in-section="${escapeHtml(inSection)}"${isGuest ? ' data-nail-jump-guest="1"' : ""}${isAlways ? ' data-nail-always-watch="1"' : ""}>`,
             `<tr class="nail-kcard nail-prow-row${isReveal ? " is-jump-reveal" : ""}${isAlways ? " is-always-watch" : ""}" data-nail-symbol="${symbol}">`,
             `<td class="nail-prow-name">${nameCell}</td>`,
             `<td class="nail-prow-kline-cell"><canvas class="nail-kline" data-kline="${symbol}" data-price-label="1"></canvas></td>`,
@@ -37522,7 +37659,9 @@
                 (showLabels
                   ? `<tr class="nail-section-row"><td colspan="4">${nailSectionLabelHtml(section)}</td></tr>`
                   : "") +
-                section.items.map(rowHtml).join(""),
+                section.items
+                  .map((item) => rowHtml(item, section.id))
+                  .join(""),
             )
             .join("")}</table>`;
         } else {
@@ -37531,7 +37670,9 @@
             .map(
               (section) =>
                 (showLabels ? nailSectionLabelHtml(section) : "") +
-                section.items.map(cardHtml).join(""),
+                section.items
+                  .map((item) => cardHtml(item, section.id))
+                  .join(""),
             )
             .join("")}</div>`;
         }
@@ -37540,6 +37681,7 @@
         applyFocusActionChrome();
         syncNailSelectUi();
         syncNailHeldRefreshRing();
+        syncNailAlwaysSectionCollapseUi();
         if (isNailDrawerOpen()) {
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
@@ -38902,6 +39044,12 @@
             if (!symbol) return;
             // 常看孤儿不在 nails 名单，拖排序会空写 / 回弹。
             if (!hasNailForSymbol(symbol)) return;
+            // 常看段固定 24h 序，不允许拖改。
+            const sectionOwner =
+              (card.closest("[data-nail-in-section]") || card).getAttribute(
+                "data-nail-in-section",
+              ) || "";
+            if (sectionOwner === "always") return;
             startX = event.clientX;
             startY = event.clientY;
             moved = false;
@@ -41076,6 +41224,13 @@
       }
       const nailDrawer = document.getElementById("nailDrawer");
       if (nailDrawer) {
+        nailDrawer.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          const alwaysToggle = event.target.closest("[data-nail-always-toggle]");
+          if (!alwaysToggle || !nailDrawer.contains(alwaysToggle)) return;
+          event.preventDefault();
+          setNailAlwaysSectionCollapsed(!nailAlwaysSectionCollapsed);
+        });
         nailDrawer.addEventListener("click", (event) => {
           if (event.target && event.target.hasAttribute("data-close-nails")) {
             setNailDrawerOpen(false);
@@ -41086,6 +41241,15 @@
             event.preventDefault();
             event.stopPropagation();
             openNailPinReview();
+            return;
+          }
+          const alwaysToggle = event.target.closest("[data-nail-always-toggle]");
+          if (alwaysToggle) {
+            // 眼睛按钮在常看栏不会出现；整栏可点折叠。
+            if (event.target.closest("button")) return;
+            event.preventDefault();
+            event.stopPropagation();
+            setNailAlwaysSectionCollapsed(!nailAlwaysSectionCollapsed);
             return;
           }
           // 点在置顶按钮/菜单上时不要先关：否则二次点「顶」会关完又立刻打开。
