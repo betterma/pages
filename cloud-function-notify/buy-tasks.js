@@ -59,7 +59,9 @@ async function seedStopsAfterBuyFill(task, now, context) {
   const fillQty = Number(task && task.lastQty);
   const symbol = task && task.symbol;
   const price = Number(task && task.lastPrice);
-  if (!symbol || !(price > 0)) return;
+  if (!symbol || !(price > 0)) return null;
+  const orderId =
+    task && (task.lastOrderId != null ? task.lastOrderId : task.openOrderId);
   try {
     const prevQty = await resolvePrevQtyAfterFill(symbol, fillQty, context);
     const seeded = await applyEntryPriceAndSeedStops({
@@ -70,13 +72,23 @@ async function seedStopsAfterBuyFill(task, now, context) {
       average: true,
       source: 'buy-fill',
       now: now || Date.now(),
+      orderId: orderId != null && orderId !== '' ? String(orderId) : undefined,
     });
     console.log('buy-fill entry/stops', JSON.stringify(seeded));
+    if (!seeded || !seeded.ok) {
+      console.warn(
+        'buy-fill entry/stops not ok',
+        symbol,
+        seeded && seeded.reason,
+      );
+    }
+    return seeded;
   } catch (error) {
     console.warn(
       'buy-fill entry/stops failed',
       error && error.message ? error.message : error,
     );
+    return null;
   }
 }
 
@@ -113,6 +125,7 @@ function normalizeTask(raw) {
     enabled: raw.enabled !== false,
     status: String(raw.status || 'paused').toLowerCase(),
     openOrderId: raw.openOrderId != null ? String(raw.openOrderId) : null,
+    lastOrderId: raw.lastOrderId != null ? String(raw.lastOrderId) : null,
     lastPrice: Number(raw.lastPrice) || null,
     lastQty: Number(raw.lastQty) || null,
     wouldBuy: raw.wouldBuy && typeof raw.wouldBuy === 'object' ? raw.wouldBuy : null,
@@ -147,6 +160,10 @@ async function pollOpenOrder(task, context) {
   if (status === 'FILLED') {
     task.status = 'filled';
     task.enabled = false;
+    task.lastOrderId =
+      order.orderId != null
+        ? String(order.orderId)
+        : task.openOrderId || task.lastOrderId || null;
     task.openOrderId = null;
     task.skipReason = null;
     task.lastError = null;
@@ -284,6 +301,8 @@ async function planAndMaybePlace(task, context, live) {
   if (placeStatus === 'FILLED') {
     task.status = 'filled';
     task.enabled = false;
+    task.lastOrderId =
+      order.orderId != null ? String(order.orderId) : task.lastOrderId || null;
     task.openOrderId = null;
     task.skipReason = null;
     task.lastError = null;
@@ -463,8 +482,133 @@ async function runBuyTasks(options) {
   return result;
 }
 
+/**
+ * 薄入口：只轮询已有 openOrderId 的买入任务（不新下单）。
+ * 给 SCF 第二定时器（建议 30–60s）用；无挂单时零 Binance 调用。
+ */
+async function runBuyOpenPoll(options) {
+  const opts = options || {};
+  const now = Number(opts.now) || Date.now();
+  const context = opts.context || null;
+  const result = {
+    skipped: false,
+    reason: null,
+    mode: 'buy-open-poll',
+    hasKeys: spot.hasKeys(context),
+    checked: 0,
+    filled: 0,
+    open: 0,
+    rearmed: 0,
+    errors: [],
+  };
+
+  if (!result.hasKeys) {
+    result.skipped = true;
+    result.reason = 'missing-api-keys';
+    return result;
+  }
+
+  let file;
+  try {
+    file = await loadJson(BUY_TASKS_PATH);
+  } catch (error) {
+    result.skipped = true;
+    result.reason = `load-failed:${error.message || error}`;
+    return result;
+  }
+
+  const state = normalizeState(file.data);
+  const openTasks = state.tasks.filter(
+    (task) =>
+      task &&
+      task.openOrderId &&
+      task.status !== 'filled' &&
+      task.status !== 'done' &&
+      task.status !== 'canceled',
+  );
+  if (!openTasks.length) {
+    result.skipped = true;
+    result.reason = 'no-open-orders';
+    return result;
+  }
+
+  let changed = false;
+  for (const task of openTasks) {
+    result.checked += 1;
+    try {
+      const poll = await pollOpenOrder(task, context);
+      changed = true;
+      if (poll === 'filled') {
+        result.filled += 1;
+        await seedStopsAfterBuyFill(task, now, context);
+      } else if (poll === 'rearmed') {
+        result.rearmed += 1;
+      } else if (poll === 'open' || poll === 'partial') {
+        result.open += 1;
+      }
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      task.lastError = message.slice(0, 240);
+      task.status = 'error';
+      task.updatedAt = now;
+      changed = true;
+      result.errors.push(`${task.symbol}:${message.slice(0, 120)}`);
+    }
+  }
+
+  const keptTasks = state.tasks.filter((task) => !task._removeAfterFill);
+  if (keptTasks.length !== state.tasks.length) changed = true;
+  if (!changed) {
+    result.reason = 'no-change';
+    return result;
+  }
+
+  const next = {
+    updatedAt: now,
+    live: !!state.live,
+    tasks: keptTasks.map((task) => {
+      const copy = { ...task };
+      delete copy._removeAfterFill;
+      return copy;
+    }),
+  };
+  try {
+    await saveJson(
+      BUY_TASKS_PATH,
+      next,
+      file.sha,
+      `Buy open-poll fill=${result.filled} open=${result.open}`,
+    );
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    if (/409|conflict|sha/i.test(message)) {
+      result.skipped = true;
+      result.reason = 'conflict';
+      return result;
+    }
+    throw error;
+  }
+
+  result.reason = 'ok';
+  return result;
+}
+
+function isBuyOpenPollEvent(event) {
+  if (!event || typeof event !== 'object') return false;
+  if (event.buyOpenPoll === true || event.mode === 'buy-open-poll') return true;
+  const msg = String(event.Message || event.message || '').toLowerCase();
+  if (msg.includes('buy-open') || msg.includes('buy_open')) return true;
+  const name = String(
+    event.TriggerName || event.triggerName || event.TimeTriggerName || '',
+  ).toLowerCase();
+  if (name.includes('buy-open') || name.includes('buyopen')) return true;
+  return false;
+}
+
 module.exports = {
   runBuyTasks,
+  runBuyOpenPoll,
+  isBuyOpenPollEvent,
   normalizeState,
   normalizeTask,
   BUY_TASKS_PATH,

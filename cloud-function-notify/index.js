@@ -26,6 +26,17 @@ function resolveMain(mod) {
   return null;
 }
 
+function tryBuyOpenPoll(event) {
+  try {
+    const buyTasks = require('./buy-tasks');
+    return typeof buyTasks.isBuyOpenPollEvent === 'function'
+      ? buyTasks.isBuyOpenPollEvent(event)
+      : false;
+  } catch (error) {
+    return false;
+  }
+}
+
 exports.handler = async (event, context) => {
   console.log(
     'notify invoke',
@@ -38,6 +49,26 @@ exports.handler = async (event, context) => {
           : null,
     }),
   );
+
+  // 第二定时器：只轮询 openOrderId，不跑全量 notify
+  if (tryBuyOpenPoll(event)) {
+    try {
+      const { runBuyOpenPoll } = require('./buy-tasks');
+      const out = await runBuyOpenPoll({
+        now: Date.now(),
+        context: context || null,
+      });
+      console.log('buy-open-poll', JSON.stringify(out));
+      return { ok: true, buyOpenPoll: out };
+    } catch (error) {
+      const errorMessage =
+        error && error.message ? error.message : String(error);
+      const errorType = error && error.name ? error.name : 'Error';
+      console.error('buy-open-poll failed', errorType, errorMessage);
+      return { ok: false, errorType, errorMessage };
+    }
+  }
+
   if (notifyLoadError) {
     const errorMessage =
       (notifyLoadError && notifyLoadError.message

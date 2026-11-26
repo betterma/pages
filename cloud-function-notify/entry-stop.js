@@ -164,10 +164,28 @@ function computeWeightedEntryPrice(prevPrice, prevQty, fillPrice, fillQty) {
   return (q0 * p0 + q1 * p1) / total;
 }
 
+function isShaConflict(error) {
+  const message = error && error.message ? error.message : String(error || '');
+  return /409|conflict|sha/i.test(message);
+}
+
+function lotIdFromOpts(symbol, opts) {
+  if (opts && opts.lotId) return String(opts.lotId);
+  const orderId =
+    opts && (opts.orderId != null ? opts.orderId : opts.binanceOrderId);
+  if (orderId == null || orderId === '') return null;
+  return `${symbol}:ord:${String(orderId)}`;
+}
+
+function findLotById(lots, id) {
+  if (!id || !Array.isArray(lots)) return null;
+  return lots.find((lot) => lot && String(lot.id) === String(id)) || null;
+}
+
 /**
  * 买入成交后：有 qty 则加 open lot；无 qty 则不改分笔，只清 stopCancel / 补 symbols，再种固定止损。
  * fillQty 应为钱包净到账量（已扣标的币手续费）；由 buy-tasks.resolveBuyNetQty 或页面 order.netQty 传入。
- * 页面「重挂止损」不走本函数。
+ * orderId/lotId：幂等，同单只加一笔；GitHub 409 最多重试 3 次；sell 失败不再假 ok。
  */
 async function applyEntryPriceAndSeedStops(options) {
   const opts = options || {};
@@ -176,6 +194,8 @@ async function applyEntryPriceAndSeedStops(options) {
   const now = Number(opts.now) || Date.now();
   const source = opts.source ? String(opts.source) : 'buy-fill';
   const fillQty = Number(opts.fillQty);
+  const wantLotId = lotIdFromOpts(symbol, opts);
+  const maxAttempts = 3;
   const result = {
     ok: false,
     reason: null,
@@ -187,6 +207,7 @@ async function applyEntryPriceAndSeedStops(options) {
     fillQty: Number.isFinite(fillQty) && fillQty > 0 ? fillQty : null,
     averaged: false,
     lotAdded: false,
+    lotId: wantLotId || null,
     seeded: false,
   };
   if (!symbol || !(fillPrice > 0)) {
@@ -194,85 +215,101 @@ async function applyEntryPriceAndSeedStops(options) {
     return result;
   }
 
-  let holdingsFile;
-  try {
-    holdingsFile = await loadJson(HOLDINGS_PATH);
-  } catch (error) {
-    result.reason = `holdings-load:${error.message || error}`;
-    return result;
-  }
-  let holdings =
-    holdingsFile.data && typeof holdingsFile.data === 'object'
-      ? { ...holdingsFile.data }
-      : {};
-  // 旧数据仅有 entryPrices：先迁移出 lots，再加仓
-  holdings.entryLots = migrateEntryLotsFromPrices(holdings);
+  let nextHoldings = null;
+  let stopCancel = {};
+  let nextPrice = fillPrice;
+  let holdingsSaved = false;
 
-  let nextHoldings;
-  let holdingsDirty = false;
-  if (result.fillQty > 0) {
-    const prevLots =
-      holdings.entryLots && holdings.entryLots[symbol]
-        ? holdings.entryLots[symbol]
-        : [];
-    result.prevQty = prevLots.reduce(
-      (sum, lot) => sum + (Number(lot.qty) || 0),
-      0,
-    );
-    result.prevPrice = lotsVwap(prevLots);
-    const added = addBuyLot(holdings, {
-      symbol,
-      qty: result.fillQty,
-      price: fillPrice,
-      at: now,
-      source,
-    });
-    nextHoldings = added.holdings;
-    result.lotAdded = !!added.lot;
-    result.averaged = !!(result.prevQty > 0);
-    holdingsDirty = true;
-  } else {
-    // 对齐页面 applyMarketBuyCostAndStops：无成交量绝不覆盖已有分笔
-    nextHoldings = { ...holdings };
-    const stopCancelMap =
-      nextHoldings.stopCancel && typeof nextHoldings.stopCancel === 'object'
-        ? { ...nextHoldings.stopCancel }
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    let holdingsFile;
+    try {
+      holdingsFile = await loadJson(HOLDINGS_PATH);
+    } catch (error) {
+      result.reason = `holdings-load:${error.message || error}`;
+      return result;
+    }
+    let holdings =
+      holdingsFile.data && typeof holdingsFile.data === 'object'
+        ? { ...holdingsFile.data }
         : {};
-    if (stopCancelMap[symbol]) {
-      delete stopCancelMap[symbol];
-      nextHoldings.stopCancel = stopCancelMap;
-      holdingsDirty = true;
-    }
-    const symbols = Array.isArray(nextHoldings.symbols)
-      ? nextHoldings.symbols.slice()
-      : [];
-    if (!symbols.includes(symbol)) {
-      symbols.push(symbol);
-      nextHoldings.symbols = symbols;
-      holdingsDirty = true;
-    }
-    nextHoldings.updatedAt = now;
-  }
+    holdings.entryLots = migrateEntryLotsFromPrices(holdings);
 
-  const stopCancel =
-    nextHoldings.stopCancel && typeof nextHoldings.stopCancel === 'object'
-      ? nextHoldings.stopCancel
-      : {};
-  const lotsNow =
-    (nextHoldings.entryLots && nextHoldings.entryLots[symbol]) || [];
-  const vwapNow = lotsVwap(lotsNow);
-  const pricedNow = Number(
-    nextHoldings.entryPrices &&
-      nextHoldings.entryPrices[symbol] &&
-      nextHoldings.entryPrices[symbol].price,
-  );
-  const nextPrice =
-    (vwapNow > 0 ? vwapNow : 0) ||
-    (pricedNow > 0 ? pricedNow : 0) ||
-    fillPrice;
-  result.price = nextPrice;
+    let holdingsDirty = false;
+    result.lotAdded = false;
+    if (result.fillQty > 0) {
+      const prevLots =
+        holdings.entryLots && holdings.entryLots[symbol]
+          ? holdings.entryLots[symbol]
+          : [];
+      result.prevQty = prevLots.reduce(
+        (sum, lot) => sum + (Number(lot.qty) || 0),
+        0,
+      );
+      result.prevPrice = lotsVwap(prevLots);
+      const existing = findLotById(prevLots, wantLotId);
+      if (existing) {
+        nextHoldings = holdings;
+        result.lotId = String(existing.id);
+        result.averaged = !!(result.prevQty > 0);
+      } else {
+        const added = addBuyLot(holdings, {
+          symbol,
+          qty: result.fillQty,
+          price: fillPrice,
+          at: now,
+          source,
+          id: wantLotId || undefined,
+        });
+        nextHoldings = added.holdings;
+        result.lotAdded = !!added.lot;
+        if (added.lot) result.lotId = String(added.lot.id);
+        result.averaged = !!(result.prevQty > 0);
+        holdingsDirty = true;
+      }
+    } else {
+      nextHoldings = { ...holdings };
+      const stopCancelMap =
+        nextHoldings.stopCancel && typeof nextHoldings.stopCancel === 'object'
+          ? { ...nextHoldings.stopCancel }
+          : {};
+      if (stopCancelMap[symbol]) {
+        delete stopCancelMap[symbol];
+        nextHoldings.stopCancel = stopCancelMap;
+        holdingsDirty = true;
+      }
+      const symbols = Array.isArray(nextHoldings.symbols)
+        ? nextHoldings.symbols.slice()
+        : [];
+      if (!symbols.includes(symbol)) {
+        symbols.push(symbol);
+        nextHoldings.symbols = symbols;
+        holdingsDirty = true;
+      }
+      nextHoldings.updatedAt = now;
+    }
 
-  if (holdingsDirty) {
+    stopCancel =
+      nextHoldings.stopCancel && typeof nextHoldings.stopCancel === 'object'
+        ? nextHoldings.stopCancel
+        : {};
+    const lotsNow =
+      (nextHoldings.entryLots && nextHoldings.entryLots[symbol]) || [];
+    const vwapNow = lotsVwap(lotsNow);
+    const pricedNow = Number(
+      nextHoldings.entryPrices &&
+        nextHoldings.entryPrices[symbol] &&
+        nextHoldings.entryPrices[symbol].price,
+    );
+    nextPrice =
+      (vwapNow > 0 ? vwapNow : 0) ||
+      (pricedNow > 0 ? pricedNow : 0) ||
+      fillPrice;
+    result.price = nextPrice;
+
+    if (!holdingsDirty) {
+      holdingsSaved = true;
+      break;
+    }
     try {
       await saveJson(
         HOLDINGS_PATH,
@@ -282,57 +319,74 @@ async function applyEntryPriceAndSeedStops(options) {
           ? `Entry lot ${symbol} ${fillPrice} → VWAP ${nextPrice}`
           : `Clear stopCancel ${symbol} (no fill qty)`,
       );
+      holdingsSaved = true;
+      break;
     } catch (error) {
-      const message = error && error.message ? error.message : String(error);
-      if (/409|conflict|sha/i.test(message)) {
+      if (isShaConflict(error) && attempt < maxAttempts - 1) {
+        console.warn(
+          `[entry-stop] holdings conflict retry ${attempt + 1}/${maxAttempts} ${symbol}`,
+        );
+        continue;
+      }
+      if (isShaConflict(error)) {
         result.reason = 'holdings-conflict';
         return result;
       }
       throw error;
     }
   }
-
-  let sellFile;
-  try {
-    sellFile = await loadJson(SELL_TASKS_PATH);
-  } catch (error) {
-    result.reason = `sell-load:${error.message || error}`;
-    result.ok = true;
+  if (!holdingsSaved || !nextHoldings) {
+    result.reason = result.reason || 'holdings-failed';
     return result;
   }
-  const sellData =
-    sellFile.data && typeof sellFile.data === 'object' ? sellFile.data : {};
-  const tasks = upsertFixedStopTasks(
-    sellData.tasks,
-    symbol,
-    nextPrice,
-    stopCancel,
-    now,
-  );
-  try {
-    await saveJson(
-      SELL_TASKS_PATH,
-      {
-        updatedAt: now,
-        live: sellData.live === true,
-        tasks,
-      },
-      sellFile.sha,
-      `Seed stop tasks ${symbol}`,
-    );
-    result.seeded = true;
-  } catch (error) {
-    const message = error && error.message ? error.message : String(error);
-    if (/409|conflict|sha/i.test(message)) {
-      result.reason = 'sell-conflict';
-      result.ok = true;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    let sellFile;
+    try {
+      sellFile = await loadJson(SELL_TASKS_PATH);
+    } catch (error) {
+      result.reason = `sell-load:${error.message || error}`;
       return result;
     }
-    throw error;
+    const sellData =
+      sellFile.data && typeof sellFile.data === 'object' ? sellFile.data : {};
+    const tasks = upsertFixedStopTasks(
+      sellData.tasks,
+      symbol,
+      nextPrice,
+      stopCancel,
+      now,
+    );
+    try {
+      await saveJson(
+        SELL_TASKS_PATH,
+        {
+          updatedAt: now,
+          live: sellData.live === true,
+          tasks,
+        },
+        sellFile.sha,
+        `Seed stop tasks ${symbol}`,
+      );
+      result.seeded = true;
+      result.ok = true;
+      result.reason = 'ok';
+      return result;
+    } catch (error) {
+      if (isShaConflict(error) && attempt < maxAttempts - 1) {
+        console.warn(
+          `[entry-stop] sell conflict retry ${attempt + 1}/${maxAttempts} ${symbol}`,
+        );
+        continue;
+      }
+      if (isShaConflict(error)) {
+        result.reason = 'sell-conflict';
+        return result;
+      }
+      throw error;
+    }
   }
-
-  result.ok = true;
-  result.reason = 'ok';
+  result.reason = 'sell-conflict';
   return result;
 }
 

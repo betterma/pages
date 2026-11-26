@@ -115,11 +115,12 @@
 
 ## 部署
 
-1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `mom-notes-shared.js` + `notes-rank-snap.js` + `nail-green-alert.js` + `balance-alert.js` + `overlook-pin.js` + `pullback-volume.js` + `prune-stale-auto-pin-nails.js` + `nail-daily-reset.js` + `holdings.js` + `runtime-env.js` + `binance-spot.js` + `sell-tasks.js` + `buy-tasks.js` + `trade-action-log.js`）。只更新 `index.js` 会出现 `main is not a function`。漏传 `overlook-pin.js` / `pullback-volume.js` 时定时任务仍能跑，但俯瞰/回踩会静默跳过；漏传 `mom-notes-shared.js` 时记一笔/排行会降级（见 `notify.js` 软加载）。
+1. **整包上传**本目录全部 `.js`（至少 `index.js` + `notify.js` + `auto-pin.js` + `github-wecom.js` + `kline-chart.js` + `mom-notes-shared.js` + `notes-rank-snap.js` + `nail-green-alert.js` + `balance-alert.js` + `overlook-pin.js` + `pullback-volume.js` + `prune-stale-auto-pin-nails.js` + `nail-daily-reset.js` + `holdings.js` + `runtime-env.js` + `binance-spot.js` + `sell-tasks.js` + `buy-tasks.js` + `entry-stop.js` + `trade-pnl.js` + `trade-action-log.js`）。只更新 `index.js` 会出现 `main is not a function`。漏传 `overlook-pin.js` / `pullback-volume.js` 时定时任务仍能跑，但俯瞰/回踩会静默跳过；漏传 `mom-notes-shared.js` 时记一笔/排行会降级（见 `notify.js` 软加载）。
 2. Handler：`index.handler`，Node.js 18+
 3. **超时建议 ≥ 60～120 秒**
-4. 定时触发器：`0 */5 * * * *`
-5. 环境变量：
+4. 定时触发器（主任务）：`0 */5 * * * *`（约每 5 分钟：盯价 / 俯瞰 / 买卖任务全量等）
+5. **可选第二定时器（买入挂单快轮询）**：同一函数再加一个触发器，建议 `0/30 * * * * *` 或 `0 * * * * *`（30–60 秒）。触发器名称含 `buy-open`（或 Message/`mode`=`buy-open-poll`），则**只**跑 `runBuyOpenPoll`：轮询已有 `openOrderId` → FILLED 立刻 seed 分笔/止损，**不下新单**。无挂单时零 Binance 调用。主 5 分钟任务仍会兜底。
+6. 环境变量：
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
