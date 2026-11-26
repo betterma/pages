@@ -7772,6 +7772,111 @@
         background: var(--accent, #2f8f6e);
         color: #fff;
       }
+      /* 确认框：成本→现价楼梯图（固定 3～4 阶，只表方向） */
+      .trade-stair {
+        margin: 8px 0 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 0.5px solid var(--separator);
+        background: color-mix(in srgb, var(--fill, rgba(90, 106, 104, 0.08)) 80%, transparent);
+      }
+      .trade-stair.is-up {
+        border-color: color-mix(in srgb, var(--accent, #2f8f6e) 35%, var(--separator));
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 8%, transparent);
+      }
+      .trade-stair.is-down {
+        border-color: color-mix(in srgb, #c45c5c 40%, var(--separator));
+        background: color-mix(in srgb, #c45c5c 8%, transparent);
+      }
+      .trade-stair-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .trade-stair.is-up .trade-stair-head {
+        color: color-mix(in srgb, var(--accent, #2f8f6e) 75%, var(--label));
+      }
+      .trade-stair.is-down .trade-stair-head {
+        color: #b71c1c;
+      }
+      .trade-stair.is-flat .trade-stair-head {
+        color: var(--secondary);
+      }
+      .trade-stair-pct {
+        font-variant-numeric: tabular-nums;
+        font-weight: 800;
+      }
+      .trade-stair-row {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: 8px;
+        min-height: 72px;
+      }
+      .trade-stair-side {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .trade-stair-side.is-end {
+        text-align: right;
+        align-items: flex-end;
+      }
+      .trade-stair-side .k {
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--secondary);
+        letter-spacing: 0.04em;
+      }
+      .trade-stair-side .v {
+        font-size: 13px;
+        font-weight: 750;
+        font-variant-numeric: tabular-nums;
+        color: var(--label);
+        word-break: break-all;
+      }
+      .trade-stair-side .t {
+        font-size: 10px;
+        color: var(--secondary);
+      }
+      .trade-stair-svg {
+        width: 88px;
+        height: 64px;
+        display: block;
+        flex: 0 0 auto;
+      }
+      .trade-stair-svg .rail {
+        fill: none;
+        stroke-width: 2.4;
+        stroke-linecap: square;
+        stroke-linejoin: miter;
+      }
+      .trade-stair.is-up .trade-stair-svg .rail {
+        stroke: color-mix(in srgb, var(--accent, #2f8f6e) 85%, #1b5e20);
+      }
+      .trade-stair.is-down .trade-stair-svg .rail {
+        stroke: #c62828;
+      }
+      .trade-stair.is-flat .trade-stair-svg .rail {
+        stroke: var(--secondary);
+      }
+      .trade-stair-svg .dot {
+        stroke-width: 0;
+      }
+      .trade-stair.is-up .trade-stair-svg .dot {
+        fill: color-mix(in srgb, var(--accent, #2f8f6e) 85%, #1b5e20);
+      }
+      .trade-stair.is-down .trade-stair-svg .dot {
+        fill: #c62828;
+      }
+      .trade-stair.is-flat .trade-stair-svg .dot {
+        fill: var(--secondary);
+      }
       .nail-hold-amount-row {
         display: flex;
         align-items: center;
@@ -18861,6 +18966,82 @@
         };
       }
 
+      /**
+       * 确认框成本→现价楼梯图：起点成本（已成交/预估），终点现价；
+       * 固定 4 阶，只表方向（斜上=现价高于成本，斜下=低于）。
+       */
+      function buildCostSpotStairHtml(costPrice, spotPrice, options) {
+        const opts = options || {};
+        const cost = Number(costPrice);
+        const spot = Number(spotPrice);
+        const hasCost = Number.isFinite(cost) && cost > 0;
+        const hasSpot = Number.isFinite(spot) && spot > 0;
+        if (!hasCost && !hasSpot) return "";
+        if (!hasCost) {
+          return (
+            `<p><span class="trade-confirm-k">【现价】</span>` +
+            `${escapeHtml(formatHoldingsPriceInput(spot))}</p>`
+          );
+        }
+        if (!hasSpot) {
+          return (
+            `<p><span class="trade-confirm-k">【成本】</span>` +
+            `${escapeHtml(formatHoldingsPriceInput(cost))}</p>`
+          );
+        }
+        const eps = Math.max(Math.abs(cost) * 1e-9, 1e-12);
+        const dir =
+          spot > cost + eps ? "up" : spot < cost - eps ? "down" : "flat";
+        const pnlPct = (spot / cost - 1) * 100;
+        const pctText =
+          dir === "flat"
+            ? "持平"
+            : `${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%`;
+        const dirText =
+          dir === "up"
+            ? "上楼梯 · 现价高于成本"
+            : dir === "down"
+              ? "下楼梯 · 现价低于成本"
+              : "持平 · 现价≈成本";
+        const costTag =
+          opts.costKind === "est"
+            ? "预估"
+            : opts.costKind === "basis"
+              ? "止损基准"
+              : "已成交";
+        const costLabel = opts.costLabel || "成本";
+        // 4 阶：上=左下→右上；下=左上→右下；平=横线
+        const path =
+          dir === "up"
+            ? "M8 56 H26 V44 H44 V32 H62 V20 H80 V10"
+            : dir === "down"
+              ? "M8 10 H26 V20 H44 V32 H62 V44 H80 V56"
+              : "M8 34 H80";
+        const startY = dir === "up" ? 56 : dir === "down" ? 10 : 34;
+        const endY = dir === "up" ? 10 : dir === "down" ? 56 : 34;
+        return (
+          `<div class="trade-stair is-${dir}" role="img" aria-label="${escapeHtml(dirText)} ${escapeHtml(pctText)}">` +
+          `<div class="trade-stair-head"><span>${escapeHtml(dirText)}</span>` +
+          `<span class="trade-stair-pct">${escapeHtml(pctText)}</span></div>` +
+          `<div class="trade-stair-row">` +
+          `<div class="trade-stair-side is-start">` +
+          `<span class="k">${escapeHtml(costLabel)}</span>` +
+          `<span class="v">${escapeHtml(formatHoldingsPriceInput(cost))}</span>` +
+          `<span class="t">${escapeHtml(costTag)}</span>` +
+          `</div>` +
+          `<svg class="trade-stair-svg" viewBox="0 0 88 66" aria-hidden="true">` +
+          `<path class="rail" d="${path}" />` +
+          `<circle class="dot" cx="8" cy="${startY}" r="3.2" />` +
+          `<circle class="dot" cx="80" cy="${endY}" r="3.2" />` +
+          `</svg>` +
+          `<div class="trade-stair-side is-end">` +
+          `<span class="k">现价</span>` +
+          `<span class="v">${escapeHtml(formatHoldingsPriceInput(spot))}</span>` +
+          `</div>` +
+          `</div></div>`
+        );
+      }
+
       function buildBuyStopConfirmHtml(symbol, quote, spotPrice) {
         const asset = holdingsBaseAsset(symbol);
         const plan = previewBuyEntryAndStops(symbol, quote, spotPrice);
@@ -18868,19 +19049,22 @@
           plan.stop3 > 0 ? formatHoldingsPriceInput(plan.stop3) : "--";
         const stop5 =
           plan.stop5 > 0 ? formatHoldingsPriceInput(plan.stop5) : "--";
-        const spotText =
-          plan.spot > 0 ? formatHoldingsPriceInput(plan.spot) : "--";
         const spot = Number(plan.spot) || 0;
         const immediate =
           spot > 0 &&
           ((plan.stop5 > 0 && spot <= plan.stop5) ||
             (plan.stop3 > 0 && spot <= plan.stop3));
+        const stairHtml = buildCostSpotStairHtml(plan.entry, plan.spot, {
+          costKind: "est",
+          costLabel: "成本",
+        });
         const html =
           `<p>确认现价买入 <strong>${escapeHtml(asset)}</strong>？</p>` +
           `<p><span class="trade-confirm-k">【花费】</span>${escapeHtml(formatHoldingsUsdt(quote))} USDT</p>` +
-          `<p><span class="trade-confirm-k">【现价】</span>${escapeHtml(spotText)}</p>` +
+          stairHtml +
           `<p class="trade-confirm-stop"><span class="trade-confirm-k">【止损监控】</span>` +
-          `-3% ≈ ${escapeHtml(stop3)}（卖一半），-5% ≈ ${escapeHtml(stop5)}（全出）</p>` +
+          `-3% ≈ ${escapeHtml(stop3)}（卖一半），-5% ≈ ${escapeHtml(stop5)}（全出）` +
+          `<br/><span style="font-weight:500;opacity:.9">按买入后预估成本计算</span></p>` +
           (immediate
             ? `<p class="trade-confirm-stop-immediate"><span class="trade-confirm-k">【警告】</span>「监控会立即卖出」</p>` +
               `<label class="trade-confirm-ack" for="tradeConfirmAck">` +
@@ -22198,33 +22382,42 @@
         }
       }
 
-      function buildQuickTradeCostConfirmBits(symbol, spotPrice) {
-        const entry = holdingsEntryPriceOf(symbol);
+      function buildQuickTradeCostConfirmBits(symbol, spotPrice, options) {
+        const opts = options || {};
+        const entry =
+          Number(opts.costPrice) > 0
+            ? Number(opts.costPrice)
+            : holdingsEntryPriceOf(symbol);
         const spot = Number(spotPrice);
         const hasCost = Number.isFinite(entry) && entry > 0;
         const under =
           hasCost && Number.isFinite(spot) && spot > 0 && spot + 1e-12 < entry;
-        const pnlPct =
-          hasCost && Number.isFinite(spot) && spot > 0
-            ? (spot / entry - 1) * 100
-            : NaN;
-        const costHtml = hasCost
-          ? `<p><span class="trade-confirm-k">【成本】</span>${escapeHtml(formatHoldingsPriceInput(entry))}` +
-            (Number.isFinite(pnlPct)
-              ? `（浮 ${pnlPct >= 0 ? "+" : ""}${pnlPct.toFixed(2)}%）`
-              : "") +
-            `</p>`
-          : "";
-        const spotHtml = `<p><span class="trade-confirm-k">【现价】</span>${
-          Number.isFinite(spot) && spot > 0
-            ? escapeHtml(formatHoldingsPriceInput(spot))
-            : "—"
-        }</p>`;
+        const stairHtml = buildCostSpotStairHtml(entry, spot, {
+          costKind: opts.costKind || "filled",
+          costLabel: opts.costLabel || "成本",
+        });
+        // 兼容旧调用：无楼梯时退回纯文字现价行
+        const spotHtml =
+          stairHtml ||
+          `<p><span class="trade-confirm-k">【现价】</span>${
+            Number.isFinite(spot) && spot > 0
+              ? escapeHtml(formatHoldingsPriceInput(spot))
+              : "—"
+          }</p>`;
+        const costHtml = "";
         const ackHtml = under
           ? `<label class="trade-confirm-ack"><input type="checkbox" id="tradeConfirmAck" />` +
             `<span>已知现价低于成本，仍要继续</span></label>`
           : "";
-        return { costHtml, spotHtml, under, requireAck: under, ackHtml };
+        return {
+          costHtml,
+          spotHtml,
+          stairHtml,
+          under,
+          requireAck: under,
+          ackHtml,
+          entry,
+        };
       }
 
       async function confirmQuickTradeSheet() {
@@ -22256,7 +22449,11 @@
               spot > 0 &&
               costPx > 0 &&
               spot + 1e-12 < costPx;
-            const bits = buildQuickTradeCostConfirmBits(st.symbol, spot);
+            const bits = buildQuickTradeCostConfirmBits(st.symbol, spot, {
+              costPrice: costPx,
+              costKind: entry > 0 ? "filled" : "basis",
+              costLabel: "成本",
+            });
             const ackHtml = under
               ? `<label class="trade-confirm-ack"><input type="checkbox" id="tradeConfirmAck" />` +
                 `<span>已知现价低于成本，仍要继续</span></label>`
@@ -22264,8 +22461,7 @@
             const okStop = await showTradeConfirmDialog({
               bodyHtml:
                 `<p><span class="trade-confirm-k">【挂止损】</span>${escapeHtml(asset)}</p>` +
-                bits.spotHtml +
-                `<p><span class="trade-confirm-k">【成本】</span>${escapeHtml(formatHoldingsPriceInput(costPx))}</p>` +
+                (bits.stairHtml || bits.spotHtml) +
                 `<p>-3% ≈ ${escapeHtml(formatHoldingsPriceInput(costPx * 0.97))}（半仓）· ` +
                 `-5% ≈ ${escapeHtml(formatHoldingsPriceInput(costPx * 0.95))}（全出）</p>` +
                 ackHtml,
@@ -22313,8 +22509,7 @@
               const okLimitSell = await showTradeConfirmDialog({
                 bodyHtml:
                   `<p><span class="trade-confirm-k">【限价卖出】</span>${escapeHtml(asset)}</p>` +
-                  bits.spotHtml +
-                  bits.costHtml +
+                  (bits.stairHtml || bits.spotHtml) +
                   `<p><span class="trade-confirm-k">【委托】</span>≥ ${escapeHtml(formatHoldingsPriceInput(limitPx))}</p>` +
                   `<p><span class="trade-confirm-k">【数量】</span>${escapeHtml(formatHoldingsQty(quantity))}（约 ${pct}%）</p>` +
                   bits.ackHtml,
@@ -22342,8 +22537,7 @@
             const okLimitBuy = await showTradeConfirmDialog({
               bodyHtml:
                 `<p><span class="trade-confirm-k">【限价买入】</span>${escapeHtml(asset)}</p>` +
-                bits.spotHtml +
-                bits.costHtml +
+                (bits.stairHtml || bits.spotHtml) +
                 `<p><span class="trade-confirm-k">【委托】</span>≤ ${escapeHtml(formatHoldingsPriceInput(limitPx))}</p>` +
                 `<p><span class="trade-confirm-k">【花费】</span>${escapeHtml(formatHoldingsUsdt(quote))} USDT（约 ${pct}%）</p>`,
               confirmText: "确认限价买",
@@ -22374,8 +22568,7 @@
               title: "确认卖出",
               bodyHtml:
                 `<p><span class="trade-confirm-k">【现价卖出】</span>${escapeHtml(asset)}</p>` +
-                bits.spotHtml +
-                bits.costHtml +
+                (bits.stairHtml || bits.spotHtml) +
                 `<p><span class="trade-confirm-k">【数量】</span>${escapeHtml(formatHoldingsQty(quantity))}（约 ${pct}%）</p>` +
                 bits.ackHtml,
               confirmText: "确认卖出",
@@ -32624,11 +32817,7 @@
         syncNailNoticeSelectUi();
       }
 
-      /**
-       * 通知 / 自动盯 / 雷达三个分栏的置顶落盘：缺钉则按现价补入，
-       * 且不论新旧，都把该币便签整条改成「此刻起的现价」（noteAt 重置为此刻），
-       * 再统一置顶到钉子页顶部。置顶分栏自己的批量置顶不走这里。
-       */
+      /** 通知页置顶：缺钉则按现价补入，再统一置顶到钉子页顶部。 */
       async function pinNoticeSymbolsToNails(symbols, options) {
         const opts = options || {};
         const keys = [
@@ -32644,19 +32833,8 @@
         }
         const before = existingNailSymbolSet();
         const fresh = keys.filter((symbol) => !before.has(symbol));
-        // USDT 本身不是交易对，批量行情与便签现价都要排除。
-        const tradeKeys = keys.filter(
-          (key) => key !== "USDT" && key !== "USDTUSDT",
-        );
-        // 先单请求刷新这批币的行情，保证写进便签的是「此刻」的现价。
-        // 刷新失败不阻断置顶：沿用 marketMap 缓存，再逐币兜底。
-        try {
-          await fetchBinanceTickersForSymbols(tradeKeys);
-        } catch (_) {
-          /* ignore */
-        }
         const notesBySymbol = {};
-        for (const key of tradeKeys) {
+        for (const key of fresh) {
           let price = Number(marketMap[key]?.price);
           if (!(Number.isFinite(price) && price > 0)) {
             try {
@@ -32666,13 +32844,9 @@
               /* ignore */
             }
           }
-          if (Number.isFinite(price) && price > 0) {
-            notesBySymbol[key] = formatPinPrice(price);
-          }
+          notesBySymbol[key] =
+            Number.isFinite(price) && price > 0 ? formatPinPrice(price) : "";
         }
-        const noteKeys = Object.keys(notesBySymbol);
-        // 同一批共用一个时间戳：便签涨幅 / 荧光绿都从这一刻起算。
-        const noteAt = Date.now();
         await persistNails(
           (list, meta) => {
             let next = list;
@@ -32683,14 +32857,6 @@
                 notesBySymbol,
               );
             }
-            // 整条覆盖已有便签（含手写备注），并重置起始时间。
-            next = noteKeys.reduce(
-              (acc, key) =>
-                WatchFavorites.setNailNote(acc, key, notesBySymbol[key], {
-                  noteAt,
-                }),
-              next,
-            );
             next =
               typeof WatchFavorites.setNailsPinnedBatch === "function"
                 ? WatchFavorites.setNailsPinnedBatch(next, keys, true)
@@ -32713,27 +32879,19 @@
               opts.loadingText || `置顶到钉子 ${keys.length}…`,
           },
         );
-        const noteSuffix = noteKeys.length ? " · 便签现价" : "";
         if (typeof opts.toastOk === "function" && keys.length === 1) {
-          showToast(opts.toastOk(keys[0].replace(/USDT$/i, "")) + noteSuffix);
+          showToast(opts.toastOk(keys[0].replace(/USDT$/i, "")));
         } else {
           const parts = [`已置顶到钉子页 ${keys.length} 个`];
           if (fresh.length) parts.push(`新钉入 ${fresh.length}`);
-          if (noteKeys.length) parts.push(`便签现价 ${noteKeys.length}`);
-          const skippedPrice = tradeKeys.length - noteKeys.length;
-          if (skippedPrice > 0) parts.push(`无现价掠过 ${skippedPrice}`);
           showToast(parts.join(" · "));
         }
-        return {
-          pinned: keys.length,
-          added: fresh.length,
-          notePrice: noteKeys.length,
-        };
+        return { pinned: keys.length, added: fresh.length };
       }
 
       /**
        * 自动盯卡片的一键置顶：只动这一张卡的按钮，不重排列表、不重画 K 线。
-       * 不在抽屉里的按现价补钉；不论新旧都会把便签改成此刻现价，再置顶。
+       * 已钉未置顶的只补 pinned 标记，不在抽屉里的按现价补钉后再置顶。
        */
       async function pinAutoPinSymbol(btn) {
         const key = String(btn.getAttribute("data-autopin-pin-btn") || "")
