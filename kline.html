@@ -4572,6 +4572,17 @@
         font-size: 13px;
         color: rgba(28, 28, 30, 0.5);
       }
+      .nail-hold-stop-basis {
+        display: grid;
+        gap: 2px;
+        padding: 8px 10px;
+        border-radius: 9px;
+        background: color-mix(in srgb, var(--fill, #808080) 40%, transparent);
+      }
+      .nail-hold-stop-basis.is-warn {
+        background: color-mix(in srgb, var(--down, #c45c5c) 10%, transparent);
+        box-shadow: inset 3px 0 0 color-mix(in srgb, var(--down, #c45c5c) 75%, transparent);
+      }
       .nail-hold-cost-edit-btn {
         border: none;
         background: transparent;
@@ -11860,7 +11871,7 @@
         />
       </div>
       <div class="quick-trade-stop-box" id="quickTradeStopBox" hidden>
-        按成本挂 -3% 半仓 / -5% 全出市价止损。无成本时请先填成本价。
+        按止损基准挂 -3% 半仓 / -5% 全出市价止损。无基准时请先填写（不改分笔成本）。
       </div>
       <div class="quick-trade-market-block" id="quickTradeMarketBlock">
         <div class="quick-trade-pct-line">
@@ -18493,6 +18504,43 @@
         return Number.isFinite(price) && price > 0 ? price : null;
       }
 
+      /** 仅分笔 VWAP（成本区展示用）；不动 holdingsEntryPriceOf 的 entryPrices 回退。 */
+      function holdingsLotsVwapOf(symbol) {
+        const lots = holdingsEntryLotsOf(symbol);
+        if (
+          !lots.length ||
+          !WatchFavorites ||
+          typeof WatchFavorites.lotsVwapOf !== "function"
+        ) {
+          return null;
+        }
+        const vwap = WatchFavorites.lotsVwapOf(lots);
+        return vwap > 0 ? vwap : null;
+      }
+
+      /**
+       * 止损基准取自任务 entryPrice：stop3 优先、stop5 兜底；
+       * 两档都有且相对差 > 1e-6 时标 inconsistent。
+       */
+      function holdStopBasisFromTasks(stop3Task, stop5Task) {
+        const p3 = Number(stop3Task && stop3Task.entryPrice);
+        const p5 = Number(stop5Task && stop5Task.entryPrice);
+        const has3 = Number.isFinite(p3) && p3 > 0;
+        const has5 = Number.isFinite(p5) && p5 > 0;
+        if (has3 && has5) {
+          const rel = Math.abs(p3 - p5) / Math.max(p3, p5);
+          return {
+            price: p3,
+            inconsistent: rel > 1e-6,
+            p3,
+            p5,
+          };
+        }
+        if (has3) return { price: p3, inconsistent: false, p3, p5: null };
+        if (has5) return { price: p5, inconsistent: false, p3: null, p5 };
+        return { price: null, inconsistent: false, p3: null, p5: null };
+      }
+
       /** 按剩余各笔 lot 汇总浮动盈亏；无 lot 时回退旧单点成本。 */
       function holdingsPnlOf(symbol) {
         const key = normalizeHoldSymbol(symbol);
@@ -19820,8 +19868,11 @@
               const sellPlanQty = freeNum * (sellPct / 100);
                 const usdtFreeNum = Number(usdtBal.free) || 0;
               const buySpendHint = usdtFreeNum * (buyPct / 100);
-              const entryPx = holdingsEntryPriceOf(symbol);
-              const entryInput = entryPx != null ? String(entryPx) : "";
+              const lotVwap = holdingsLotsVwapOf(symbol);
+              const stopBasis = holdStopBasisFromTasks(stop3Task, stop5Task);
+              // 编辑框默认读止损基准（任务），不预填账本 VWAP，避免误当成改账。
+              const entryInput =
+                stopBasis.price != null ? String(stopBasis.price) : "";
               const lotCount = holdingsEntryLotsOf(symbol).length;
               const holdQtyForPnl = isDust ? 0 : rawTotalQty;
               let pnlHtml = "";
@@ -19846,18 +19897,25 @@
                   pnlHtml = `<span class="nail-hold-pnl" title="按剩余各笔成本汇总的浮动盈亏">${formatHoldingsPnlSignedHtml(pnl.usdt, { unit: false })}${pctHtml}${lotsBit}</span>`;
                 }
               }
+              // 触发价优先读任务；无任务时才用分笔 VWAP 推算展示。
               const stop3Px =
-                entryPx != null
-                  ? formatHoldingsPriceInput(entryPx * 0.97)
-                  : stop3Task && Number(stop3Task.triggerPrice) > 0
-                    ? formatHoldingsPriceInput(stop3Task.triggerPrice)
+                stop3Task && Number(stop3Task.triggerPrice) > 0
+                  ? formatHoldingsPriceInput(stop3Task.triggerPrice)
+                  : lotVwap != null
+                    ? formatHoldingsPriceInput(lotVwap * 0.97)
                     : "--";
               const stop5Px =
-                entryPx != null
-                  ? formatHoldingsPriceInput(entryPx * 0.95)
-                  : stop5Task && Number(stop5Task.triggerPrice) > 0
-                    ? formatHoldingsPriceInput(stop5Task.triggerPrice)
+                stop5Task && Number(stop5Task.triggerPrice) > 0
+                  ? formatHoldingsPriceInput(stop5Task.triggerPrice)
+                  : lotVwap != null
+                    ? formatHoldingsPriceInput(lotVwap * 0.95)
                     : "--";
+              const stopBasisHtml =
+                stopBasis.price != null
+                  ? stopBasis.inconsistent
+                    ? `<div class="nail-hold-stop-basis is-warn"><div class="nail-hold-sec-label">止损基准 · 两档不一致</div><div class="nail-hold-cost-price">-3% ${escapeHtml(formatHoldingsPriceInput(stopBasis.p3))} / -5% ${escapeHtml(formatHoldingsPriceInput(stopBasis.p5))}</div><div class="nail-hold-entry-hint">下次买入成交可能按新成本重挂覆盖</div></div>`
+                    : `<div class="nail-hold-stop-basis"><div class="nail-hold-sec-label">止损基准</div><div class="nail-hold-cost-price">${escapeHtml(formatHoldingsPriceInput(stopBasis.price))}</div><div class="nail-hold-entry-hint">仅用于 -3%/-5% 触发；下次买入成交可能按新成本重挂覆盖</div></div>`
+                  : "";
               const taskPairs = [];
               sells.forEach((task) => taskPairs.push({ side: "sell", task }));
               if (buy) taskPairs.push({ side: "buy", task: buy });
@@ -19883,25 +19941,27 @@
                       : taskPairs.length
                         ? '<span class="nail-hold-status-chip is-task-only">仅任务</span>'
                         : '<span class="nail-hold-status-chip">无持仓</span>';
-              // 规范：成本/止损区始终可见（USDT 除外）；无仓也可先配成本。
+              // 规范：成本/止损区始终可见（USDT 除外）；买入成本只跟分笔 VWAP。
               const showCost = true;
-              const costConfigured = entryPx != null;
+              const costConfigured = lotVwap != null;
+              const stopSeeded = !!(stop3Task || stop5Task);
               // 有成本但无止损任务：只是「未挂任务」，不是排队待挂单。
               const stop3Status = stop3Task
                 ? holdTaskBadgeLabel(stop3Task)
-                : costConfigured
+                : costConfigured || stopSeeded
                   ? "无任务"
                   : "未设置";
               const stop5Status = stop5Task
                 ? holdTaskBadgeLabel(stop5Task)
-                : costConfigured
+                : costConfigured || stopSeeded
                   ? "无任务"
                   : "未设置";
-              const costTag = costConfigured
-                ? hasTaskError
+              const costTag =
+                hasTaskError
                   ? '<span class="nail-hold-sec-tag is-err">异常</span>'
-                  : '<span class="nail-hold-sec-tag is-ok">已配置</span>'
-                : '<span class="nail-hold-sec-tag">未设置</span>';
+                  : costConfigured || stopBasis.price != null
+                    ? '<span class="nail-hold-sec-tag is-ok">已配置</span>'
+                    : '<span class="nail-hold-sec-tag">未设置</span>';
               const ops = canSell
                 ? `<button type="button" class="is-sell" data-hold-open-sell="${escapeHtml(symbol)}">设置卖出<span class="nail-hold-ops-sub">LIMIT</span></button>
                    <button type="button" class="is-buy" data-hold-open-buy="${escapeHtml(symbol)}">买入<span class="nail-hold-ops-sub">LIMIT</span></button>`
@@ -19980,11 +20040,12 @@
                   <div class="nail-hold-cost-main">
                     ${
                       costConfigured
-                        ? `<div><div class="nail-hold-sec-label">买入成本价 P${lotCount > 1 ? ` · ${lotCount}笔均价` : ""}</div><div class="nail-hold-cost-price">${escapeHtml(formatHoldingsPriceInput(entryPx))}</div></div>`
-                        : `<div class="nail-hold-cost-empty">未设置成本</div>`
+                        ? `<div><div class="nail-hold-sec-label">买入成本价 P${lotCount > 1 ? ` · ${lotCount}笔均价` : ""}</div><div class="nail-hold-cost-price">${escapeHtml(formatHoldingsPriceInput(lotVwap))}</div></div>`
+                        : `<div class="nail-hold-cost-empty">无分笔成本（成交后入账）</div>`
                     }
-                    <button type="button" class="nail-hold-cost-edit-btn" data-hold-entry-edit="${escapeHtml(symbol)}">编辑成本 ↗</button>
+                    <button type="button" class="nail-hold-cost-edit-btn" data-hold-entry-edit="${escapeHtml(symbol)}">编辑止损基准 ↗</button>
                   </div>
+                  ${stopBasisHtml}
                   <div class="nail-hold-stop-grid">
                     <div class="nail-hold-stop-card is-stop">
                       <div class="nail-hold-stop-title"><span>止损 -3%</span><span>${escapeHtml(stop3Status)}</span></div>
@@ -19999,17 +20060,17 @@
                   </div>
                 </div>
                 <div class="nail-hold-entry" data-hold-entry-editor hidden>
-                  <label>编辑成本价（USDT）
-                <input type="number" min="0" step="any" value="${escapeHtml(entryInput)}" placeholder="手填成本" data-hold-entry="${escapeHtml(symbol)}" inputmode="decimal" />
+                  <label>止损基准价（USDT）
+                <input type="number" min="0" step="any" value="${escapeHtml(entryInput)}" placeholder="只用于算 -3%/-5%" data-hold-entry="${escapeHtml(symbol)}" inputmode="decimal" />
                   </label>
                   <div class="nail-hold-entry-preview">
                     <div>新的 -3% 触发价<strong data-hold-preview-stop3="${escapeHtml(symbol)}">${escapeHtml(stop3Px)}</strong></div>
                     <div>新的 -5% 触发价<strong data-hold-preview-stop5="${escapeHtml(symbol)}">${escapeHtml(stop5Px)}</strong></div>
               </div>
-                  <div class="nail-hold-entry-hint">保存后按新成本更新（或创建）-3%/-5% 止损任务，不会重复挂两条。</div>
+                  <div class="nail-hold-entry-hint">按此价重挂 -3%/-5% 止损任务，不改分笔买入成本；不会重复挂两条。</div>
                   <div class="nail-hold-entry-actions">
                     <button type="button" data-hold-entry-cancel="${escapeHtml(symbol)}">取消</button>
-                    <button type="button" class="primary" data-hold-entry-save="${escapeHtml(symbol)}" title="保存后自动加 -3%/-5% 止损任务">保存成本</button>
+                    <button type="button" class="primary" data-hold-entry-save="${escapeHtml(symbol)}" title="按此价重挂 -3%/-5%（不改分笔成本）">重挂止损</button>
                   </div>
                 </div>
               </div>`
@@ -20721,6 +20782,34 @@
         }
       }
 
+      /** 仅清 stopCancel；不存在则 skipWrite，零改 entryLots/entryPrices。 */
+      async function clearNailHoldStopCancel(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key || key === "USDT") return { skipped: true };
+        const holdResult = await WatchFavorites.patchHoldings({
+          repo: CONFIG.GITHUB_REPO,
+          message: `Clear stopCancel ${key}`,
+          mutate: (state) => {
+            const stopCancel = { ...(state.stopCancel || {}) };
+            if (!stopCancel[key]) {
+              return { skipWrite: true, state };
+            }
+            delete stopCancel[key];
+            return { ...state, stopCancel };
+          },
+        });
+        if (!holdResult.skipped) {
+          nailHoldingsState = holdResult.state || nailHoldingsState;
+        }
+        return holdResult;
+      }
+
+      /**
+       * 持有「重挂止损」：只更新止损任务 + 清 stopCancel。
+       * 绝不 replaceLots / 写 entryPrices（防 migrate 造假 lot）。
+       */
       async function saveNailHoldEntryPrice(symbol, rawPrice) {
         const key = String(symbol || "")
           .trim()
@@ -20731,60 +20820,41 @@
         }
         const price = Number(rawPrice);
         if (!(Number.isFinite(price) && price > 0)) {
-          showToast("请填写有效买入价 P");
+          showToast("请填写有效止损基准价");
           return false;
         }
-        showToast("保存买入价…");
+        showToast("重挂止损…");
         const now = Date.now();
         try {
-          const holdResult = await WatchFavorites.patchHoldings({
-            repo: CONFIG.GITHUB_REPO,
-            message: `Entry price ${key} ${price}`,
-            mutate: (state) => {
-              // 手填成本 = 该币 lots 收成一笔（覆盖语义保留）
-              if (
-                typeof WatchFavorites.replaceLotsWithSingleInHoldings ===
-                "function"
-              ) {
-                const replaced = WatchFavorites.replaceLotsWithSingleInHoldings(
-                  state,
-                  { symbol: key, price, at: now, source: "manual" },
-                );
-                return replaced.holdings || state;
-              }
-              const entryPrices = { ...(state.entryPrices || {}) };
-              const stopCancel = { ...(state.stopCancel || {}) };
-              entryPrices[key] = {
-                price,
-                at: now,
-                source: "manual",
-              };
-              if (stopCancel[key]) delete stopCancel[key];
-              const symbols = Array.isArray(state.symbols)
-                ? state.symbols.slice()
-                : [];
-              if (!symbols.includes(key)) symbols.push(key);
-              return { ...state, symbols, entryPrices, stopCancel };
-            },
-          });
-          nailHoldingsState = holdResult.state || nailHoldingsState;
-
           const seed = await patchNailStopTasks(key, price, now);
+          if (seed.seeded === 0 && seed.skipped > 0) {
+            showToast("已有挂单止损，请先取消再重挂");
+            return false;
+          }
+          try {
+            await clearNailHoldStopCancel(key);
+          } catch (holdError) {
+            console.warn("saveNailHoldEntryPrice stopCancel failed", holdError);
+            showToast("止损已重挂，状态同步失败，可稍后刷新持有");
+            renderNailHoldList();
+            return true;
+          }
           renderNailHoldList();
-          showToast(formatNailStopSeedToast(key, price, seed, { withCost: true }));
+          showToast(formatNailStopSeedToast(key, price, seed));
           return true;
         } catch (error) {
           console.warn("saveNailHoldEntryPrice failed", error);
-          showToast(error.message || "保存买入价失败");
+          showToast(error.message || "重挂止损失败");
           return false;
         }
       }
 
       /**
-       * 快捷条「止损」专用：先挂止损，成功后再按需写 holdings；绝不碰 entryLots。
-       * options.hasEntry：与 confirm 同源（entry>0）；有则只清 stopCancel，不写 entryPrices。
+       * 快捷条「止损」：先挂任务，成功后再清 stopCancel；绝不写 entryPrices/entryLots。
+       * options 保留兼容（hasEntry 已无分支差异）。
        */
       async function seedNailHoldStops(symbol, rawPrice, options) {
+        void options;
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
@@ -20794,68 +20864,26 @@
         }
         const price = Number(rawPrice);
         if (!(Number.isFinite(price) && price > 0)) {
-          showToast("请填写有效成本价");
+          showToast("请填写有效止损基准价");
           return false;
         }
-        const hasEntry = !!(options && options.hasEntry);
         const now = Date.now();
         try {
-          // 先挂后写：以 patch 实际 {seeded,skipped} 为准，全 skip 则 holdings 零改动。
           const seed = await patchNailStopTasks(key, price, now);
           if (seed.seeded === 0 && seed.skipped > 0) {
             showToast("已有挂单止损，请先取消再重挂");
             return false;
           }
           try {
-            if (hasEntry) {
-              const holdResult = await WatchFavorites.patchHoldings({
-                repo: CONFIG.GITHUB_REPO,
-                message: `Clear stopCancel ${key}`,
-                mutate: (state) => {
-                  const stopCancel = { ...(state.stopCancel || {}) };
-                  if (!stopCancel[key]) {
-                    return { skipWrite: true, state };
-                  }
-                  delete stopCancel[key];
-                  // 有 entry：不改 entryPrices / entryLots / symbols。
-                  return { ...state, stopCancel };
-                },
-              });
-              if (!holdResult.skipped) {
-                nailHoldingsState = holdResult.state || nailHoldingsState;
-              }
-            } else {
-              const holdResult = await WatchFavorites.patchHoldings({
-                repo: CONFIG.GITHUB_REPO,
-                message: `Seed stops ${key} ${price}`,
-                mutate: (state) => {
-                  const entryPrices = { ...(state.entryPrices || {}) };
-                  const stopCancel = { ...(state.stopCancel || {}) };
-                  const prev = entryPrices[key];
-                  entryPrices[key] = {
-                    price,
-                    at: now,
-                    source:
-                      prev && String(prev.source || "").trim()
-                        ? prev.source
-                        : "stop-seed",
-                  };
-                  if (stopCancel[key]) delete stopCancel[key];
-                  // 不 push symbols（ensureHoldSymbol / taskKeep 已保障）；不改 entryLots。
-                  return { ...state, entryPrices, stopCancel };
-                },
-              });
-              nailHoldingsState = holdResult.state || nailHoldingsState;
-            }
+            await clearNailHoldStopCancel(key);
           } catch (holdError) {
-            // 挂单已成功：勿 return false 误导用户再点一次。
-            console.warn("seedNailHoldStops holdings write failed", holdError);
-            showToast("止损已挂上，成本展示同步失败，可稍后刷新持有");
+            console.warn("seedNailHoldStops stopCancel failed", holdError);
+            showToast("止损已挂上，状态同步失败，可稍后刷新持有");
             renderNailHoldList();
             return true;
           }
           renderNailHoldList();
-          showToast(formatNailStopSeedToast(key, price, seed, { withCost: false }));
+          showToast(formatNailStopSeedToast(key, price, seed));
           return true;
         } catch (error) {
           console.warn("seedNailHoldStops failed", error);
@@ -20864,25 +20892,15 @@
         }
       }
 
-      function formatNailStopSeedToast(symbol, price, seed, options) {
-        const opts = options || {};
+      function formatNailStopSeedToast(symbol, price, seed) {
         const asset = holdingsBaseAsset(symbol);
         const px = formatHoldingsPriceInput(price);
         const skipped = Number(seed && seed.skipped) || 0;
         const seeded = Number(seed && seed.seeded) || 0;
-        if (opts.withCost) {
-          if (skipped > 0 && seeded > 0) {
-            return `${asset} 买入价 ${px} · 止损已更新（${skipped} 档因挂单未改）`;
-          }
-          if (skipped > 0 && seeded === 0) {
-            return `${asset} 买入价 ${px} · 已有挂单止损未改动`;
-          }
-          return `${asset} 买入价 ${px} · 已重挂 -3%/-5% 止损`;
-        }
         if (skipped > 0 && seeded > 0) {
           return `${asset} 止损已更新（${skipped} 档因挂单未改）`;
         }
-        return `${asset} 已按成本 ${px} 挂 -3%/-5% 止损`;
+        return `${asset} 已按基准 ${px} 挂 -3%/-5% 止损`;
       }
 
       async function patchNailStopTasks(symbol, price, now) {
@@ -21798,7 +21816,7 @@
                 ` · -5% <strong>${escapeHtml(formatHoldingsPriceInput(base * 0.95))}</strong>（全出）`;
             } else {
               stopBox.textContent =
-                "按成本挂 -3% 半仓 / -5% 全出市价止损。请先填写成本价。";
+                "按止损基准挂 -3% 半仓 / -5% 全出。请先填写基准价（不改分笔成本）。";
             }
           }
         }
@@ -21821,8 +21839,8 @@
           if (hintEl) {
             hintEl.textContent =
               entryPx > 0
-                ? "确认后按现有成本挂 -3%/-5% 止损任务"
-                : "确认后写入成本展示价并挂 -3%/-5% 止损任务";
+                ? "确认后按现有成本挂 -3%/-5% 止损（不改分笔）"
+                : "确认后按填写基准挂 -3%/-5% 止损（不改分笔成本）";
           }
           if (confirmBtn && !busy) {
             const base =
@@ -22160,10 +22178,8 @@
             });
             if (!okStop) return false;
             setQuickTradeBusy(true, "挂止损…");
-            // 不走 saveNailHoldEntryPrice：那会把分笔 lots 收成一笔。
-            const ok = await seedNailHoldStops(st.symbol, costPx, {
-              hasEntry: entry > 0,
-            });
+            // 与持有「重挂止损」同口径：只挂任务 + 清 stopCancel，不改账本。
+            const ok = await seedNailHoldStops(st.symbol, costPx);
             setQuickTradeBusy(false);
             if (ok) closeQuickTradeSheet();
             return !!ok;
@@ -22864,12 +22880,12 @@
                   </div>
                 </div>
                 <div class="nail-hold-entry" data-sim-entry-editor hidden>
-                  <label>编辑成本价（USDT）
+                  <label>编辑成本价（USDT）· 模拟盘仍会改成本基准
                 <input type="number" min="0" step="any" value="${escapeHtml(entryInput)}" placeholder="手填成本" data-sim-entry="${escapeHtml(symbol)}" inputmode="decimal" />
                   </label>
                   <div class="nail-hold-entry-actions">
                     <button type="button" data-sim-entry-cancel="${escapeHtml(symbol)}">取消</button>
-                    <button type="button" class="primary" data-sim-entry-save="${escapeHtml(symbol)}" title="保存后自动加 -3%/-5% 止损">保存成本</button>
+                    <button type="button" class="primary" data-sim-entry-save="${escapeHtml(symbol)}" title="模拟盘：保存成本并重挂 -3%/-5%（会改模拟成本基准）">保存成本</button>
               </div>
                 </div>
               </div>
