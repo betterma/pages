@@ -6601,6 +6601,16 @@
           color-mix(in srgb, var(--elevated, var(--bg)) 36%, transparent)
         );
       }
+      /* 常看段打开钉子菜单时抬高该行，避免毛玻璃兄弟行盖住浮窗；4 < .nail-saving(5) / 焦点栏 */
+      .nail-kcard[data-nail-in-section="always"]:has(
+          .nail-pin-menu:not([hidden])
+        ),
+      .nail-prow-tbody[data-nail-in-section="always"]:has(
+          .nail-pin-menu:not([hidden])
+        ) {
+        position: relative;
+        z-index: 4;
+      }
       #nailList.is-always-collapsed
         .nail-kcard[data-nail-in-section="always"],
       #nailList.is-always-collapsed
@@ -32833,8 +32843,15 @@
         }
         const before = existingNailSymbolSet();
         const fresh = keys.filter((symbol) => !before.has(symbol));
+        // 其它分栏点置顶：便签整条覆盖为「此刻起现价」；无价跳过便签，仍置顶。
+        try {
+          await fetchBinanceTickersForSymbols(keys);
+        } catch (_) {
+          /* ignore */
+        }
+        const now = Date.now();
         const notesBySymbol = {};
-        for (const key of fresh) {
+        for (const key of keys) {
           let price = Number(marketMap[key]?.price);
           if (!(Number.isFinite(price) && price > 0)) {
             try {
@@ -32844,17 +32861,28 @@
               /* ignore */
             }
           }
-          notesBySymbol[key] =
-            Number.isFinite(price) && price > 0 ? formatPinPrice(price) : "";
+          if (Number.isFinite(price) && price > 0) {
+            notesBySymbol[key] = formatPinPrice(price);
+          }
         }
         await persistNails(
           (list, meta) => {
             let next = list;
             if (fresh.length) {
-              next = WatchFavorites.upsertNailsBatch(
+              const freshNotes = {};
+              for (const key of fresh) {
+                freshNotes[key] =
+                  notesBySymbol[key] != null ? notesBySymbol[key] : "";
+              }
+              next = WatchFavorites.upsertNailsBatch(next, fresh, freshNotes);
+            }
+            for (const key of keys) {
+              if (notesBySymbol[key] == null) continue;
+              next = WatchFavorites.setNailNote(
                 next,
-                fresh,
-                notesBySymbol,
+                key,
+                notesBySymbol[key],
+                { noteAt: now },
               );
             }
             next =
@@ -37932,6 +37960,10 @@
         let startX = 0;
         let startY = 0;
         let moved = false;
+        // 双击 = 单击行为 + 刷新；单击零延迟，不用 setTimeout 判双击。
+        const NAIL_DOUBLE_TAP_MS = 300;
+        let lastTapKey = "";
+        let lastTapAt = 0;
         // 捕获阶段优先处理名称复制，避免被其它冒泡逻辑抢走。
         listEl.addEventListener(
           "click",
@@ -37988,10 +38020,23 @@
           if (!card || moved) return;
           event.preventDefault();
           event.stopPropagation();
-          toggleFocusActionSymbol(
-            card.getAttribute("data-nail-symbol"),
-            "nail",
-          );
+          const key = String(card.getAttribute("data-nail-symbol") || "")
+            .trim()
+            .toUpperCase();
+          if (!key) return;
+          const now = Date.now();
+          const isDouble =
+            key === lastTapKey && now - lastTapAt <= NAIL_DOUBLE_TAP_MS;
+          if (isDouble) {
+            // 第二击必须 force-set：两次 toggle 会互相抵消、操作栏收起。
+            setFocusActionSymbol(key, "nail");
+            void runFocusBarAction("refresh");
+            lastTapAt = 0;
+            return;
+          }
+          lastTapKey = key;
+          lastTapAt = now;
+          toggleFocusActionSymbol(key, "nail");
         });
       }
 
