@@ -1,29 +1,31 @@
 {
-  "updatedAt": 1795671934593,
-  "lastRunAt": 1795671900664,
-  "ok": true,
-  "error": null,
-  "durationMs": 33929,
+  "updatedAt": 1795672230824,
+  "lastRunAt": 1795672200949,
+  "ok": false,
+  "error": "balance×1:notices:GitHub PUT watch-balance-notices.json failed: 409 {\"message\":\"is at a510f2f13c8e563ab64b18e9a73615eb71d99b83 but expected e2f54082fe3b5ccb115d7191bae1a84d9fd1201d\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":",
+  "durationMs": 29875,
   "autoPins": 168,
   "balance": {
     "skipped": false,
     "reason": null,
     "autoPins": 168,
-    "due": 118,
-    "checked": 118,
-    "hits": 54,
-    "sent": 12,
-    "wecomDue": 12,
-    "wecomQueued": 12,
+    "due": 125,
+    "checked": 125,
+    "hits": 60,
+    "sent": 0,
+    "wecomDue": 14,
+    "wecomQueued": 14,
     "wecomDeferred": 0,
-    "skippedWecomWindow": 42,
+    "skippedWecomWindow": 46,
     "checkMax": 0,
     "sendMax": 0,
     "checkCursor": 0,
     "cooldownMs": 1800000,
-    "cooldownSkipped": 50,
-    "errorCount": 0,
-    "errors": []
+    "cooldownSkipped": 43,
+    "errorCount": 1,
+    "errors": [
+      "notices:GitHub PUT watch-balance-notices.json failed: 409 {\"message\":\"is at a510f2f13c8e563ab64b18e9a73615eb71d99b83 but expected e2f54082fe3b5ccb115d7191bae1a84d9fd1201d\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":"
+    ]
   },
   "nailGreen": {
     "skipped": false,
@@ -45,5 +47,6 @@
     "checked": 12,
     "candidate": 123,
     "removed": 0
-  }
+  },
+  "degraded": true
 }
