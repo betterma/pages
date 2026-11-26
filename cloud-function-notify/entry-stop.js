@@ -1,16 +1,16 @@
 'use strict';
 
 /**
- * 持仓买入价 P → 固定止损任务（-3% 卖一半 / -5% 卖剩余，市价）。
+ * 持仓买入价 → 固定止损任务（-3% 卖一半 / -5% 卖剩余，市价）。
  * 与限价「设置卖出」并存；取消记在 holdings.stopCancel。
- * 买入成交：加一笔 open lot，entryPrices 写剩余 VWAP 供止损；页面手填 P 仍为覆盖成单笔。
- * 成交 / 保存 P 都会清 stopCancel 并按新 P 重挂两档。
+ * 买入成交（fillQty>0）：加一笔 open lot，entryPrices 写剩余 VWAP 供止损。
+ * 无成交量（fillQty<=0）：绝不覆盖已有分笔；只清 stopCancel / 补 symbols，再按现有 VWAP（或成交价）重挂止损。
+ * 页面「重挂止损 / 编辑止损基准」只改卖出任务，不经本模块改账本。
  */
 
 const { loadJson, saveJson } = require('./github-wecom');
 const {
   addBuyLot,
-  replaceLotsWithSingle,
   lotsVwap,
   migrateEntryLotsFromPrices,
 } = require('./trade-pnl');
@@ -165,16 +165,16 @@ function computeWeightedEntryPrice(prevPrice, prevQty, fillPrice, fillQty) {
 }
 
 /**
- * 买入成交后：加 open lot（或无 qty 时覆盖成单笔），清空 stopCancel，种固定止损。
- * source=buy-fill 且提供 fillQty 时走 addBuyLot；页面手填 P 走 kline 自己的 patch。
+ * 买入成交后：有 qty 则加 open lot；无 qty 则不改分笔，只清 stopCancel / 补 symbols，再种固定止损。
  * fillQty 应为钱包净到账量（已扣标的币手续费）；由 buy-tasks.resolveBuyNetQty 或页面 order.netQty 传入。
+ * 页面「重挂止损」不走本函数。
  */
 async function applyEntryPriceAndSeedStops(options) {
   const opts = options || {};
   const symbol = normalizeSymbol(opts.symbol);
   const fillPrice = Number(opts.price);
   const now = Number(opts.now) || Date.now();
-  const source = opts.source ? String(opts.source) : 'manual';
+  const source = opts.source ? String(opts.source) : 'buy-fill';
   const fillQty = Number(opts.fillQty);
   const result = {
     ok: false,
@@ -209,6 +209,7 @@ async function applyEntryPriceAndSeedStops(options) {
   holdings.entryLots = migrateEntryLotsFromPrices(holdings);
 
   let nextHoldings;
+  let holdingsDirty = false;
   if (result.fillQty > 0) {
     const prevLots =
       holdings.entryLots && holdings.entryLots[symbol]
@@ -229,44 +230,66 @@ async function applyEntryPriceAndSeedStops(options) {
     nextHoldings = added.holdings;
     result.lotAdded = !!added.lot;
     result.averaged = !!(result.prevQty > 0);
+    holdingsDirty = true;
   } else {
-    const replaced = replaceLotsWithSingle(holdings, {
-      symbol,
-      price: fillPrice,
-      at: now,
-      source,
-    });
-    nextHoldings = replaced.holdings;
+    // 对齐页面 applyMarketBuyCostAndStops：无成交量绝不覆盖已有分笔
+    nextHoldings = { ...holdings };
+    const stopCancelMap =
+      nextHoldings.stopCancel && typeof nextHoldings.stopCancel === 'object'
+        ? { ...nextHoldings.stopCancel }
+        : {};
+    if (stopCancelMap[symbol]) {
+      delete stopCancelMap[symbol];
+      nextHoldings.stopCancel = stopCancelMap;
+      holdingsDirty = true;
+    }
+    const symbols = Array.isArray(nextHoldings.symbols)
+      ? nextHoldings.symbols.slice()
+      : [];
+    if (!symbols.includes(symbol)) {
+      symbols.push(symbol);
+      nextHoldings.symbols = symbols;
+      holdingsDirty = true;
+    }
+    nextHoldings.updatedAt = now;
   }
 
   const stopCancel =
     nextHoldings.stopCancel && typeof nextHoldings.stopCancel === 'object'
       ? nextHoldings.stopCancel
       : {};
+  const lotsNow =
+    (nextHoldings.entryLots && nextHoldings.entryLots[symbol]) || [];
+  const vwapNow = lotsVwap(lotsNow);
+  const pricedNow = Number(
+    nextHoldings.entryPrices &&
+      nextHoldings.entryPrices[symbol] &&
+      nextHoldings.entryPrices[symbol].price,
+  );
   const nextPrice =
-    Number(
-      nextHoldings.entryPrices &&
-        nextHoldings.entryPrices[symbol] &&
-        nextHoldings.entryPrices[symbol].price,
-    ) || fillPrice;
+    (vwapNow > 0 ? vwapNow : 0) ||
+    (pricedNow > 0 ? pricedNow : 0) ||
+    fillPrice;
   result.price = nextPrice;
 
-  try {
-    await saveJson(
-      HOLDINGS_PATH,
-      nextHoldings,
-      holdingsFile.sha,
-      result.lotAdded
-        ? `Entry lot ${symbol} ${fillPrice} → VWAP ${nextPrice}`
-        : `Entry price ${symbol} ${nextPrice}`,
-    );
-  } catch (error) {
-    const message = error && error.message ? error.message : String(error);
-    if (/409|conflict|sha/i.test(message)) {
-      result.reason = 'holdings-conflict';
-      return result;
+  if (holdingsDirty) {
+    try {
+      await saveJson(
+        HOLDINGS_PATH,
+        nextHoldings,
+        holdingsFile.sha,
+        result.lotAdded
+          ? `Entry lot ${symbol} ${fillPrice} → VWAP ${nextPrice}`
+          : `Clear stopCancel ${symbol} (no fill qty)`,
+      );
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      if (/409|conflict|sha/i.test(message)) {
+        result.reason = 'holdings-conflict';
+        return result;
+      }
+      throw error;
     }
-    throw error;
   }
 
   let sellFile;

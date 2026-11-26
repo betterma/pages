@@ -85,7 +85,8 @@ async function recordSellFillFifo(task) {
       ? { ...holdingsFile.data }
       : {};
   holdings.entryLots = migrateEntryLotsFromPrices(holdings);
-  // 若持仓同步已先清掉 lots/成本，用任务上的 entryPrice 兜底，避免漏记已实现
+  // 不再用 task.entryPrice 写入 entryPrices：止损任务上的 entryPrice 是触发基准，
+  // 不是真实买入成本；写成 task-entry 会污染已实现盈亏。无 lots / 无成本时如实漏记。
   const hasLots =
     Array.isArray(holdings.entryLots && holdings.entryLots[symbol]) &&
     holdings.entryLots[symbol].length > 0;
@@ -93,14 +94,17 @@ async function recordSellFillFifo(task) {
     holdings.entryPrices &&
     Number(holdings.entryPrices[symbol] && holdings.entryPrices[symbol].price) >
       0;
-  const taskEntry = Number(task.entryPrice);
-  if (!hasLots && !priced && taskEntry > 0) {
-    holdings.entryPrices = {
-      ...(holdings.entryPrices && typeof holdings.entryPrices === 'object'
-        ? holdings.entryPrices
-        : {}),
-      [symbol]: { price: taskEntry, at, source: 'task-entry' },
-    };
+  if (!hasLots && !priced) {
+    console.warn(
+      'sell fifo skip inventing cost from task.entryPrice',
+      JSON.stringify({
+        symbol,
+        kind: task && task.kind,
+        taskEntry: Number(task && task.entryPrice) || null,
+        qty,
+        sellPrice,
+      }),
+    );
   }
   const consumed = consumeSellFifo(holdings, {
     symbol,
