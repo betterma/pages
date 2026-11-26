@@ -3,8 +3,10 @@
 /**
  * 持仓余额同步：网页指定关注币种 → 云函数拉账户余额写回 GitHub。
  * 卖光或名义 < HOLDINGS_DUST_USDT：清成本 P、移出关注、清全部买卖监控任务
- *（已挂单标 cancel_requested）。签名支持 HMAC / Ed25519/RSA PEM。
- * 本文件仍不做下单；交易权限 Key 也可用于只读 account。
+ *（已挂单标 cancel_requested）。
+ * 例外：仍有进行中的买/卖任务（含限价买等跌、armed 止损）时保留关注与任务，
+ * 避免「无仓限价买」被当成卖光误清（对齐页面 taskKeep）。
+ * 签名支持 HMAC / Ed25519/RSA PEM。本文件仍不做下单。
  */
 
 const https = require('https');
@@ -518,7 +520,31 @@ async function runHoldingsSync(options) {
   const clearedSymbols = [];
   const priceMap = await fetchSpotPrices(state.symbols, context);
 
-  // 仍有挂单的卖出：暂留 lots/成本，供随后 FIFO 入账（避免先清后成交漏记）
+  /** 与页面 holdTaskKeepsSymbol 对齐：终态 / 已关闭不 keep。 */
+  function tradeTaskKeepsSymbol(task) {
+    if (!task || !task.symbol) return false;
+    const st = String(task.status || '').toLowerCase();
+    if (
+      st === 'filled' ||
+      st === 'done' ||
+      st === 'canceled' ||
+      st === 'cancelled'
+    ) {
+      return false;
+    }
+    if (
+      task.enabled === false &&
+      st !== 'paused' &&
+      st !== 'cancel_requested'
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  // 进行中买/卖任务：无仓也保留关注，避免限价买等跌被误清。
+  // 仍有挂单的卖出：另记 openSellSymbols，暂留 lots/成本供 FIFO。
+  const taskKeep = new Set();
   const openSellSymbols = new Set();
   try {
     const sellFile = await loadJson(SELL_TASKS_PATH);
@@ -529,7 +555,8 @@ async function runHoldingsSync(options) {
     tasks.forEach((task) => {
       if (!task || typeof task !== 'object') return;
       const sym = normalizeSymbol(task.symbol);
-      if (!sym) return;
+      if (!sym || sym === 'USDT') return;
+      if (tradeTaskKeepsSymbol(task)) taskKeep.add(sym);
       const st = String(task.status || '').toLowerCase();
       if (
         task.openOrderId ||
@@ -543,10 +570,34 @@ async function runHoldingsSync(options) {
   } catch (error) {
     /* 读卖出任务失败则仍按原逻辑清成本 */
   }
+  try {
+    const buyFile = await loadJson(BUY_TASKS_PATH);
+    const tasks =
+      buyFile.data && Array.isArray(buyFile.data.tasks)
+        ? buyFile.data.tasks
+        : [];
+    tasks.forEach((task) => {
+      if (!task || typeof task !== 'object') return;
+      const sym = normalizeSymbol(task.symbol);
+      if (!sym || sym === 'USDT') return;
+      if (tradeTaskKeepsSymbol(task)) taskKeep.add(sym);
+    });
+  } catch (error) {
+    /* 读买入任务失败则不 keep，避免读失败时误留脏关注 */
+  }
 
   const nextSymbols = [];
+  const seenNext = new Set();
+  const pushNext = (symbol) => {
+    const key = normalizeSymbol(symbol);
+    if (!key || seenNext.has(key)) return;
+    seenNext.add(key);
+    nextSymbols.push(key);
+  };
+
   state.symbols.forEach((symbol) => {
-    const asset = baseAssetOf(symbol);
+    const key = normalizeSymbol(symbol);
+    const asset = baseAssetOf(key || symbol);
     const row = byAsset.get(asset) || { free: 0, locked: 0 };
     balances[asset] = {
       free: row.free,
@@ -554,27 +605,43 @@ async function runHoldingsSync(options) {
       at: now,
     };
     result.updated += 1;
-    if (symbol === 'USDT') {
-      nextSymbols.push(symbol);
+    if (!key || key === 'USDT') {
+      pushNext('USDT');
       return;
     }
     const qty = (Number(row.free) || 0) + (Number(row.locked) || 0);
     const isFlat = qty <= 0;
-    const px = Number(priceMap[symbol]);
+    const px = Number(priceMap[key]);
     const notional = Number.isFinite(px) && px > 0 ? qty * px : NaN;
     const isDust =
       !isFlat && Number.isFinite(notional) && notional < HOLDINGS_DUST_USDT;
-    // 卖光 / 灰尘：移出关注并清监控；无未完成卖单时才清 lots/成本
+    // 卖光 / 灰尘：默认移出关注并清监控；有进行中任务则保留（限价买等跌）。
     if (isFlat || isDust) {
-      if (!openSellSymbols.has(symbol)) {
-        if (entryPrices[symbol]) delete entryPrices[symbol];
-        if (entryLots[symbol]) delete entryLots[symbol];
+      if (taskKeep.has(key)) {
+        pushNext(key);
+        return;
       }
-      if (stopCancel[symbol]) delete stopCancel[symbol];
-      clearedSymbols.push(symbol);
+      if (!openSellSymbols.has(key)) {
+        if (entryPrices[key]) delete entryPrices[key];
+        if (entryLots[key]) delete entryLots[key];
+      }
+      if (stopCancel[key]) delete stopCancel[key];
+      clearedSymbols.push(key);
       return;
     }
-    nextSymbols.push(symbol);
+    pushNext(key);
+  });
+  // 任务币不在 symbols 里时也并入（例如只挂了限价买、尚未进关注）。
+  taskKeep.forEach((sym) => {
+    if (seenNext.has(sym)) return;
+    const asset = baseAssetOf(sym);
+    const row = byAsset.get(asset) || { free: 0, locked: 0 };
+    balances[asset] = {
+      free: row.free,
+      locked: row.locked,
+      at: now,
+    };
+    pushNext(sym);
   });
   // 买入任务需要 USDT 可用额；无论关注列表是否含 USDT 都回填。
   {
@@ -585,7 +652,7 @@ async function runHoldingsSync(options) {
       at: now,
     };
   }
-  if (!nextSymbols.includes('USDT')) nextSymbols.unshift('USDT');
+  if (!seenNext.has('USDT')) nextSymbols.unshift('USDT');
 
   const nextState = {
     updatedAt: now,

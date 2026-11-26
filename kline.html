@@ -37474,10 +37474,14 @@
               : isAlways
                 ? '<span class="nail-always-tag">常看</span>'
                 : "";
-          // 币名列：置顶图标 + 币名 左右排列
+          // 币名列：置顶图标 + 币名；pin 必须包在 .nail-pin-wrap 里，
+          // 否则二次点击会被「点 wrap 外关菜单」先清掉再被 open 立刻打开。
+          const pinMenu = pinned || isAlways;
           const nameCell = [
             check,
-            nailSelectMode ? "" : `<button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" title="${pinned ? "置顶选项" : isAlways ? "常看选项" : isGuest ? "加入钉子并置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button>`,
+            nailSelectMode
+              ? ""
+              : `<span class="nail-pin-wrap"><button type="button" class="nail-pin${pinned ? " is-on" : ""}" data-nail-pin="${symbol}" aria-haspopup="${pinMenu ? "menu" : "false"}" aria-expanded="false" title="${pinned ? "置顶选项" : isAlways ? "常看选项" : isGuest ? "加入钉子并置顶" : "置顶"}">${pinned ? "顶" : "↑"}</button></span>`,
             `<button type="button" class="nail-name" data-nail-copy-name="${label}" data-copy="${label}" title="点击复制名称">${label}${nameTag}</button>`,
           ].join("");
           // 打通的信息行：盈亏在前，其次盯幅、便签（现价只走 K 线角标）
@@ -38654,6 +38658,11 @@
           ? WatchFavorites.nailSymbolKey(symbol)
           : String(symbol || "").toUpperCase();
         if (!key) return;
+        // 再点同一按钮：关菜单（不依赖 wrap 内是否还能找到 menu 节点）。
+        if (pinBtn.getAttribute("aria-expanded") === "true") {
+          closeNailPinMenus();
+          return;
+        }
         const wrap = pinBtn.closest(".nail-pin-wrap") || pinBtn.parentElement;
         if (!wrap) return;
         const already = wrap.querySelector(".nail-pin-menu");
@@ -41079,7 +41088,12 @@
             openNailPinReview();
             return;
           }
-          if (!event.target.closest(".nail-pin-wrap")) {
+          // 点在置顶按钮/菜单上时不要先关：否则二次点「顶」会关完又立刻打开。
+          if (
+            !event.target.closest(
+              ".nail-pin-wrap, [data-nail-pin], .nail-pin-menu",
+            )
+          ) {
             closeNailPinMenus(nailDrawer);
           }
           const copyPxBtn = event.target.closest("[data-nail-copy-price]");
@@ -42142,7 +42156,11 @@
         if (event.target.closest(".nail-hold-more")) return;
         closeNailHoldMoreMenus(document.getElementById("nailHoldList"));
         closeNailHoldMoreMenus(document.getElementById("simHoldList"));
-        if (!event.target.closest(".nail-pin-wrap")) {
+        if (
+          !event.target.closest(
+            ".nail-pin-wrap, [data-nail-pin], .nail-pin-menu",
+          )
+        ) {
           closeNailPinMenus();
         }
       });
