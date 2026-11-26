@@ -6611,6 +6611,12 @@
         position: relative;
         z-index: 4;
       }
+      /* 列表视图：菜单挂在 tr 上，tbody 抬高不够；须抬含菜单的 prow-row，否则后绘信息行/下一行会盖住 */
+      .nail-prow-tbody[data-nail-in-section="always"]
+        .nail-prow-row:has(.nail-pin-menu:not([hidden])) {
+        position: relative;
+        z-index: 4;
+      }
       #nailList.is-always-collapsed
         .nail-kcard[data-nail-in-section="always"],
       #nailList.is-always-collapsed
