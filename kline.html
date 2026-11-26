@@ -9506,6 +9506,101 @@
       .kline-zoom-gate[hidden] {
         display: none !important;
       }
+      .mainstream-zoom-gate {
+        position: fixed;
+        inset: 0;
+        z-index: 181;
+        display: flex;
+        flex-direction: column;
+        background: color-mix(in srgb, var(--bg) 78%, transparent);
+        backdrop-filter: blur(10px) saturate(140%);
+        -webkit-backdrop-filter: blur(10px) saturate(140%);
+        padding: max(8px, env(safe-area-inset-top, 0px)) 8px
+          max(8px, env(safe-area-inset-bottom, 0px));
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+      .mainstream-zoom-gate[hidden] {
+        display: none !important;
+      }
+      .mainstream-zoom-panel {
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        border: 0.5px solid var(--separator);
+        border-radius: 14px;
+        background: color-mix(in srgb, var(--elevated) 92%, transparent);
+        overflow: hidden;
+      }
+      .mainstream-zoom-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 8px 10px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .mainstream-zoom-symbol {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .mainstream-zoom-symbol-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .mainstream-zoom-symbol-head h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      .mainstream-zoom-symbol-meta {
+        color: var(--secondary);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .mainstream-zoom-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-height: 28px;
+      }
+      .mainstream-zoom-chart-meta {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--secondary);
+        font-size: 10px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .mainstream-zoom-chart {
+        position: relative;
+        height: 200px;
+        border-radius: 10px;
+        border: 0.5px solid var(--separator);
+        background: color-mix(in srgb, var(--bg) 55%, transparent);
+        overflow: hidden;
+      }
+      .mainstream-zoom-chart canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      @media (min-width: 900px) {
+        .mainstream-zoom-chart {
+          height: 240px;
+        }
+      }
       .notice-review-gate {
         position: fixed;
         inset: 0;
@@ -10786,6 +10881,14 @@
             <div class="nail-radar-popover-head">
               <div class="nail-auto-pin-popover-title">冲榜雷达</div>
               <span id="nailRadarUpdated" class="nail-radar-updated"></span>
+              <button
+                type="button"
+                id="nailRadarMainstreamBtn"
+                class="nail-radar-toggle"
+                title="BTC / ETH / SOL 按天·周·月放大视图"
+              >
+                主流
+              </button>
               <button
                 type="button"
                 id="nailRadarAllKlineBtn"
@@ -12276,6 +12379,28 @@
             </div>
           </div>
         </section>
+      </div>
+    </div>
+
+    <div
+      id="mainstreamZoomGate"
+      class="mainstream-zoom-gate"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mainstreamZoomTitle"
+    >
+      <div class="mainstream-zoom-panel">
+        <div class="kline-zoom-head">
+          <div>
+            <h2 id="mainstreamZoomTitle">主流</h2>
+            <p id="mainstreamZoomMeta">BTC · ETH · SOL · 天 / 周 / 月</p>
+          </div>
+          <div class="kline-zoom-head-actions">
+            <button type="button" id="mainstreamZoomClose">关闭</button>
+          </div>
+        </div>
+        <div class="mainstream-zoom-body" id="mainstreamZoomBody"></div>
       </div>
     </div>
 
@@ -30255,6 +30380,7 @@
           .toUpperCase();
         if (!key) return;
         closeCardActions(true);
+        closeMainstreamZoom();
         const gate = document.getElementById("klineZoomGate");
         const title = document.getElementById("klineZoomTitle");
         const metaEl = document.getElementById("klineZoomMeta");
@@ -30286,6 +30412,226 @@
           console.error(error);
           if (metaEl) metaEl.textContent = error.message || "K 线加载失败";
           showToast(error.message || "放大 K 线失败");
+        }
+      }
+
+      /** 雷达「主流」：BTC → ETH → SOL 各一张图，单个币可切一天/一周/一月。 */
+      const MAINSTREAM_ZOOM_SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
+      const MAINSTREAM_ZOOM_DEFAULT_RANGE = "week";
+      let mainstreamZoomPaintToken = 0;
+      /** @type {Map<string, string>} */
+      const mainstreamZoomRangeBySymbol = new Map();
+
+      function isMainstreamZoomOpen() {
+        const gate = document.getElementById("mainstreamZoomGate");
+        return !!(gate && !gate.hidden);
+      }
+
+      function closeMainstreamZoom() {
+        const gate = document.getElementById("mainstreamZoomGate");
+        if (gate) gate.hidden = true;
+        mainstreamZoomPaintToken += 1;
+        mainstreamZoomRangeBySymbol.clear();
+        const body = document.getElementById("mainstreamZoomBody");
+        if (body) body.innerHTML = "";
+        document.body.classList.remove("is-mainstream-zoom");
+        syncBodyScrollLock();
+      }
+
+      function mainstreamRangeOf(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const cur = mainstreamZoomRangeBySymbol.get(key);
+        if (cur === "day" || cur === "week" || cur === "month") return cur;
+        return MAINSTREAM_ZOOM_DEFAULT_RANGE;
+      }
+
+      function syncMainstreamRangeButtons(block, rangeKey) {
+        if (!block) return;
+        block.querySelectorAll("[data-mainstream-range]").forEach((button) => {
+          const active = button.dataset.mainstreamRange === rangeKey;
+          button.classList.toggle("is-active", active);
+          button.setAttribute("aria-pressed", String(active));
+        });
+      }
+
+      async function paintMainstreamZoomSymbol(symbol, token) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const body = document.getElementById("mainstreamZoomBody");
+        if (!body || !key) return;
+        const block = body.querySelector(
+          `[data-mainstream-block="${key}"]`,
+        );
+        if (!block) return;
+        const canvas = block.querySelector("[data-mainstream-canvas]");
+        const metaEl = block.querySelector("[data-mainstream-chart-meta]");
+        const rangeKey = mainstreamRangeOf(key);
+        syncMainstreamRangeButtons(block, rangeKey);
+        const range = klineZoomLongRangeConfig(rangeKey);
+        if (metaEl) metaEl.textContent = `加载${range.label}…`;
+        try {
+          const candles = await fetchKlines(
+            key,
+            range.interval,
+            undefined,
+            range.limit,
+          );
+          if (
+            token !== mainstreamZoomPaintToken ||
+            !isMainstreamZoomOpen() ||
+            mainstreamRangeOf(key) !== rangeKey
+          ) {
+            return;
+          }
+          const pinItem = pinItemBySymbol(key);
+          drawKline(
+            canvas,
+            candles,
+            pinItem ? pinItem.pinPrice : null,
+            pinItem ? pinItem.pinnedAt : null,
+            notesMarksForSymbol(key),
+          );
+          if (metaEl) {
+            metaEl.textContent = `${range.label} · ${candles.length} 根`;
+          }
+        } catch (error) {
+          console.error(error);
+          if (
+            token === mainstreamZoomPaintToken &&
+            isMainstreamZoomOpen() &&
+            mainstreamRangeOf(key) === rangeKey &&
+            metaEl
+          ) {
+            metaEl.textContent = error.message || `${range.label}加载失败`;
+          }
+        }
+      }
+
+      function setMainstreamZoomRange(symbol, rangeKey) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        const next =
+          rangeKey === "month"
+            ? "month"
+            : rangeKey === "day"
+              ? "day"
+              : "week";
+        if (mainstreamRangeOf(key) === next) return;
+        mainstreamZoomRangeBySymbol.set(key, next);
+        void paintMainstreamZoomSymbol(key, mainstreamZoomPaintToken);
+      }
+
+      function buildMainstreamZoomMarkup() {
+        return MAINSTREAM_ZOOM_SYMBOLS.map((symbol) => {
+          const label = symbol.replace(/USDT$/i, "");
+          const px = Number(marketMap[symbol]?.price);
+          const chg = Number(marketMap[symbol]?.change24h);
+          const priceBit = Number.isFinite(px) ? formatPinPrice(px) : "—";
+          const chgBit = Number.isFinite(chg) ? formatPercent(chg) : "";
+          const rangeBtns = ["day", "week", "month"]
+            .map((rangeKey) => {
+              const active = rangeKey === MAINSTREAM_ZOOM_DEFAULT_RANGE;
+              const title =
+                rangeKey === "month"
+                  ? "一月"
+                  : rangeKey === "day"
+                    ? "一天"
+                    : "一周";
+              return `<button type="button" data-mainstream-range="${escapeHtml(rangeKey)}" class="${active ? "is-active" : ""}" aria-pressed="${active ? "true" : "false"}">${escapeHtml(title)}</button>`;
+            })
+            .join("");
+          return `<section class="mainstream-zoom-symbol" data-mainstream-block="${escapeHtml(symbol)}">
+            <div class="mainstream-zoom-symbol-head">
+              <h3>${escapeHtml(label)}</h3>
+              <span class="mainstream-zoom-symbol-meta">${escapeHtml(priceBit)}${chgBit ? ` · ${escapeHtml(chgBit)}` : ""}</span>
+            </div>
+            <div class="mainstream-zoom-toolbar">
+              <span class="mainstream-zoom-chart-meta" data-mainstream-chart-meta>等待…</span>
+              <div class="kline-zoom-range" role="group" aria-label="${escapeHtml(label)} 长周期范围">
+                ${rangeBtns}
+              </div>
+            </div>
+            <div class="mainstream-zoom-chart">
+              <canvas data-mainstream-canvas></canvas>
+            </div>
+          </section>`;
+        }).join("");
+      }
+
+      function bindMainstreamZoomBodyOnce(body) {
+        if (!body || body.dataset.mainstreamBound === "1") return;
+        body.dataset.mainstreamBound = "1";
+        body.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-mainstream-range]");
+          if (!btn || !body.contains(btn)) return;
+          const block = btn.closest("[data-mainstream-block]");
+          const symbol = block && block.getAttribute("data-mainstream-block");
+          if (!symbol) return;
+          setMainstreamZoomRange(symbol, btn.dataset.mainstreamRange);
+        });
+      }
+
+      async function openMainstreamZoom() {
+        const gate = document.getElementById("mainstreamZoomGate");
+        const body = document.getElementById("mainstreamZoomBody");
+        const metaEl = document.getElementById("mainstreamZoomMeta");
+        if (!gate || !body) return;
+        closeCardActions(true);
+        closeKlineZoom();
+        const token = ++mainstreamZoomPaintToken;
+        mainstreamZoomRangeBySymbol.clear();
+        MAINSTREAM_ZOOM_SYMBOLS.forEach((symbol) => {
+          mainstreamZoomRangeBySymbol.set(
+            symbol,
+            MAINSTREAM_ZOOM_DEFAULT_RANGE,
+          );
+        });
+        body.innerHTML = buildMainstreamZoomMarkup();
+        bindMainstreamZoomBodyOnce(body);
+        if (metaEl) metaEl.textContent = "按顺序加载 BTC → ETH → SOL…";
+        gate.hidden = false;
+        document.body.classList.add("is-mainstream-zoom");
+        syncBodyScrollLock();
+        try {
+          try {
+            await fetchBinanceTickersForSymbols(MAINSTREAM_ZOOM_SYMBOLS);
+          } catch (_) {
+            /* ignore：无现价仍画 K */
+          }
+          if (token !== mainstreamZoomPaintToken) return;
+          MAINSTREAM_ZOOM_SYMBOLS.forEach((symbol) => {
+            const headMeta = body.querySelector(
+              `[data-mainstream-block="${symbol}"] .mainstream-zoom-symbol-meta`,
+            );
+            if (!headMeta) return;
+            const px = Number(marketMap[symbol]?.price);
+            const chg = Number(marketMap[symbol]?.change24h);
+            const priceBit = Number.isFinite(px) ? formatPinPrice(px) : "—";
+            const chgBit = Number.isFinite(chg) ? formatPercent(chg) : "";
+            headMeta.textContent = chgBit
+              ? `${priceBit} · ${chgBit}`
+              : priceBit;
+          });
+          for (const symbol of MAINSTREAM_ZOOM_SYMBOLS) {
+            if (token !== mainstreamZoomPaintToken) return;
+            const label = symbol.replace(/USDT$/i, "");
+            if (metaEl) metaEl.textContent = `加载 ${label}…`;
+            await paintMainstreamZoomSymbol(symbol, token);
+          }
+          if (token === mainstreamZoomPaintToken && metaEl) {
+            metaEl.textContent = "BTC · ETH · SOL · 各币可切天 / 周 / 月";
+          }
+        } catch (error) {
+          console.error(error);
+          if (token === mainstreamZoomPaintToken && metaEl) {
+            metaEl.textContent = error.message || "主流视图加载失败";
+          }
+          showToast(error.message || "主流视图加载失败");
         }
       }
 
@@ -31810,6 +32156,7 @@
           nailOpen ||
           noticeOpen ||
           isKlineZoomOpen() ||
+          isMainstreamZoomOpen() ||
           isNoticeReviewOpen()
             ? "hidden"
             : "";
@@ -36109,13 +36456,19 @@
             target &&
             target.closest &&
             target.closest(
-              'input, textarea, select, [contenteditable="true"], button, a, .notes-rank-gate, .kline-zoom-gate, .stop-loss-gate, .buy-sl-gate, .boot-init-gate, .card-actions, .notify-float, .momentum-float, .float-tabs, .app-chrome, .nail-tab, .hidden-pin-tab, .nail-pin-review, #nailAutoPinPopover, #nailRadarPopover, #nailHoldPopover, #simHoldFloat',
+              'input, textarea, select, [contenteditable="true"], button, a, .notes-rank-gate, .kline-zoom-gate, .mainstream-zoom-gate, .stop-loss-gate, .buy-sl-gate, .boot-init-gate, .card-actions, .notify-float, .momentum-float, .float-tabs, .app-chrome, .nail-tab, .hidden-pin-tab, .nail-pin-review, #nailAutoPinPopover, #nailRadarPopover, #nailHoldPopover, #simHoldFloat',
             )
           );
         }
 
         function canSwipeOpenNail() {
-          if (isJijiView() || isNotesRankOpen() || isKlineZoomOpen()) return false;
+          if (
+            isJijiView() ||
+            isNotesRankOpen() ||
+            isKlineZoomOpen() ||
+            isMainstreamZoomOpen()
+          )
+            return false;
           if (isNailPinReviewOpen()) return false;
           if (isNailDrawerOpen() || isHiddenPinDrawerOpen() || isNailNoticeOpen())
             return false;
@@ -42227,6 +42580,14 @@
           void pinFocusedRadarSymbol();
         });
       }
+      const nailRadarMainstreamBtn = document.getElementById(
+        "nailRadarMainstreamBtn",
+      );
+      if (nailRadarMainstreamBtn) {
+        nailRadarMainstreamBtn.addEventListener("click", () => {
+          void openMainstreamZoom();
+        });
+      }
       const nailRadarRefreshBtn = document.getElementById(
         "nailRadarRefreshBtn",
       );
@@ -42244,6 +42605,14 @@
             nailRadarRefreshBtn.disabled = false;
             syncNailRadarUpdatedUi();
           }
+        });
+      }
+      const mainstreamZoomClose = document.getElementById(
+        "mainstreamZoomClose",
+      );
+      if (mainstreamZoomClose) {
+        mainstreamZoomClose.addEventListener("click", () => {
+          closeMainstreamZoom();
         });
       }
       if (nailRadarBody) {
@@ -43426,6 +43795,10 @@
           }
           if (isNoticeReviewOpen()) {
             closeNoticeReviewCompare();
+            return;
+          }
+          if (isMainstreamZoomOpen()) {
+            closeMainstreamZoom();
             return;
           }
           if (isKlineZoomOpen()) {
