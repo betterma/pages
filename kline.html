@@ -6183,9 +6183,44 @@
             color-mix(in srgb, var(--accent, #2f8f6e) 45%, transparent);
         }
       }
+      /* 双击刷新成功后：底色闪一下 + 币名原地左右抖两下 */
+      @keyframes nail-name-refresh-shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        12% {
+          transform: translateX(-2px);
+        }
+        26% {
+          transform: translateX(2px);
+        }
+        40% {
+          transform: translateX(-1.6px);
+        }
+        54% {
+          transform: translateX(1.6px);
+        }
+        68% {
+          transform: translateX(-1px);
+        }
+        82% {
+          transform: translateX(1px);
+        }
+        92% {
+          transform: translateX(-0.4px);
+        }
+      }
       .nail-name.is-refresh-flash {
         border-radius: 4px;
-        animation: nail-name-refresh-flash 0.85s ease-in-out 1;
+        animation:
+          nail-name-refresh-flash 0.85s ease-in-out 1,
+          nail-name-refresh-shake 0.62s cubic-bezier(0.36, 0.07, 0.19, 0.97) 1;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .nail-name.is-refresh-flash {
+          animation: nail-name-refresh-flash 0.85s ease-in-out 1;
+        }
       }
       .nail-prow-kline-cell canvas.nail-kline {
         display: block;
