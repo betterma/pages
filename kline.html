@@ -11260,12 +11260,13 @@
                 aria-label="钉子排序"
                 title="默认：置顶/拖拽顺序；便签涨幅：相对便签价的现价涨跌幅；24h：置顶区保持手动序，仅「其余」按涨幅排"
               >
-                <button type="button" data-nail-sort="order" class="is-active">
+                <button type="button" data-nail-sort="order">
                   默认
                 </button>
                 <button
                   type="button"
                   data-nail-sort="alertGreen"
+                  class="is-active"
                   title="置顶区与「其余」都按现价相对便签价涨幅从高到低；无便签沉底；切回「默认」恢复手动拖拽序"
                 >
                   便签涨幅
@@ -11286,7 +11287,7 @@
                 class="nail-switch"
                 id="nailPinnedOnlySwitch"
                 role="switch"
-                aria-checked="false"
+                aria-checked="true"
                 title="开启后钉子页只显示置顶的币；「持有」段仍由顶栏持有开关控制，与本开关无关"
                 aria-label="只看置顶区"
               ></button>
@@ -11298,7 +11299,7 @@
                 class="nail-switch"
                 id="nailRisingFilter"
                 role="switch"
-                aria-checked="true"
+                aria-checked="false"
                 title="只显示当前窗口上涨：对置顶 / 通知 / 自动盯生效；持有币始终显示"
                 aria-label="当前窗口上涨"
               ></button>
@@ -11327,7 +11328,7 @@
                 class="nail-switch"
                 id="nailSimFloatVisibleSwitch"
                 role="switch"
-                aria-checked="true"
+                aria-checked="false"
                 title="关闭后隐藏钉子页「模拟」入口"
                 aria-label="显示模拟盘"
               ></button>
@@ -11339,13 +11340,13 @@
                 class="nail-switch"
                 id="nailShowBstockSwitch"
                 role="switch"
-                aria-checked="true"
-                title="关闭后置顶/通知/自动盯/雷达各分栏都不绘制也不显示 bStock 代币化美股。仅本机，默认显示"
+                aria-checked="false"
+                title="关闭后置顶/通知/自动盯/雷达各分栏都不绘制也不显示 bStock 代币化美股。仅本机，默认隐藏"
                 aria-label="显示 bStock 美股"
               ></button>
             </div>
             <div class="nail-rising-row nail-pool-rank-row">
-              <span title="24h 涨幅前 N 进入观察池 / 自动盯；与云函数共用，默认 30">观察池前 N</span>
+              <span title="24h 涨幅前 N 进入观察池 / 自动盯；与云函数共用，默认 35">观察池前 N</span>
               <div class="nail-pool-rank-edit">
                 <input
                   type="number"
@@ -11353,10 +11354,10 @@
                   min="10"
                   max="100"
                   step="1"
-                  value="30"
+                  value="35"
                   inputmode="numeric"
                   aria-label="观察池前 N"
-                  title="10–100，默认 30；保存后页面立刻生效，云函数约 5 分钟内跟上"
+                  title="10–100，默认 35；保存后页面立刻生效，云函数约 5 分钟内跟上"
                 />
                 <button type="button" id="nailWatchPoolRankSave" title="保存到 GitHub（手机桌面同步）">
                   保存
@@ -11372,24 +11373,22 @@
                 aria-label="自动盯样式"
                 title="卡片：现状大方块；列表：币名 / K线 / 24h（类似雷达）"
               >
-                <button type="button" data-autopin-view="card" class="is-active">
-                  卡片
-                </button>
-                <button type="button" data-autopin-view="list">列表</button>
+                <button type="button" data-autopin-view="card">卡片</button>
+                <button type="button" data-autopin-view="list" class="is-active">列表</button>
               </div>
             </div>
             <div class="nail-rising-row nail-sort-row">
               <span title="仅本机：置顶分栏用卡片还是雷达式列表">置顶样式</span>
               <div class="mode-switch pin-sort-switch" id="nailPinViewSwitch" role="group" aria-label="置顶样式" title="卡片：现状大方块；列表：币名 / K线 / 24h">
-                <button type="button" data-pin-view="card" class="is-active">卡片</button>
-                <button type="button" data-pin-view="list">列表</button>
+                <button type="button" data-pin-view="card">卡片</button>
+                <button type="button" data-pin-view="list" class="is-active">列表</button>
               </div>
             </div>
             <div class="nail-rising-row nail-sort-row">
               <span title="仅本机：通知分栏用卡片还是雷达式列表">通知样式</span>
               <div class="mode-switch pin-sort-switch" id="nailNoticeViewSwitch" role="group" aria-label="通知样式" title="卡片：现状大方块；列表：币名 / K线 / 24h">
-                <button type="button" data-notice-view="card" class="is-active">卡片</button>
-                <button type="button" data-notice-view="list">列表</button>
+                <button type="button" data-notice-view="card">卡片</button>
+                <button type="button" data-notice-view="list" class="is-active">列表</button>
               </div>
             </div>
             <div class="nail-auto-refresh-block">
@@ -11432,7 +11431,7 @@
                 class="nail-switch"
                 id="nailHeldRefresh"
                 role="switch"
-                aria-checked="false"
+                aria-checked="true"
                 title="开启后每 8 秒刷新钉子页「持有」段现价与未实现盈亏"
                 aria-label="持有区定时刷新"
               ></button>
@@ -12709,7 +12708,7 @@
         OVERLOOK_PATH: KLINE_PATHS.OVERLOOK_PATH || "watch-overlook.json",
         NAIL_DAILY_RESET_PATH:
           KLINE_PATHS.NAIL_DAILY_RESET_PATH || "watch-nail-daily-reset.json",
-        WATCH_POOL_RANK: 30,
+        WATCH_POOL_RANK: 35,
         WINDOW_TOLERANCE_MS: 2 * 60 * 1000,
         KLINE_MAX_LIMIT: 1000,
         KLINE_INTERVAL: "4h",
@@ -12816,20 +12815,20 @@
       let nailPinReviewBusy = false;
       let nailPinReviewKlineAbort = null;
       const NAIL_RISING_FILTER_KEY = "kline-nail-rising-filter-v1";
-      let nailRisingFilterOn = true;
+      let nailRisingFilterOn = false;
       try {
         const savedNailRising = localStorage.getItem(NAIL_RISING_FILTER_KEY);
         if (savedNailRising === "0") nailRisingFilterOn = false;
         else if (savedNailRising === "1") nailRisingFilterOn = true;
       } catch (_) {
-        nailRisingFilterOn = true;
+        nailRisingFilterOn = false;
       }
       const NAIL_PINNED_ONLY_KEY = "kline-nail-pinned-only-v1";
-      let nailPinnedOnlyOn = false;
+      let nailPinnedOnlyOn = true;
       try {
-        nailPinnedOnlyOn = localStorage.getItem(NAIL_PINNED_ONLY_KEY) === "1";
+        nailPinnedOnlyOn = localStorage.getItem(NAIL_PINNED_ONLY_KEY) !== "0";
       } catch (_) {
-        nailPinnedOnlyOn = false;
+        nailPinnedOnlyOn = true;
       }
       /** 从其它分栏跳到置顶时：临时露出目标币，不改筛选开关。guest=不在钉子名单。 */
       let nailJumpReveal = null;
@@ -12859,7 +12858,7 @@
         nailNoteTimeMode = "original";
       }
       /** alertGreen/change24h are display-only sorts; order preserves drag order. */
-      let nailSortMode = "order";
+      let nailSortMode = "alertGreen";
       const NAIL_AUTO_REFRESH_KEY = "kline-nail-auto-refresh-v1";
       let nailAutoRefreshEnabled = false;
       try {
@@ -12870,12 +12869,12 @@
       }
       const NAIL_HELD_REFRESH_KEY = "kline-nail-held-refresh-v1";
       const NAIL_HELD_REFRESH_MS = 8000;
-      let nailHeldRefreshEnabled = false;
+      let nailHeldRefreshEnabled = true;
       try {
         nailHeldRefreshEnabled =
-          localStorage.getItem(NAIL_HELD_REFRESH_KEY) === "1";
+          localStorage.getItem(NAIL_HELD_REFRESH_KEY) !== "0";
       } catch (_) {
-        nailHeldRefreshEnabled = false;
+        nailHeldRefreshEnabled = true;
       }
       let nailHeldRefreshTimer = null;
       let nailHeldRefreshBusy = false;
@@ -12892,26 +12891,26 @@
       } catch (_) {
         nailSkinMode = "normal";
       }
-      /** 自动盯分栏展示：card 卡片（默认）/ list 雷达式列表；仅本机。 */
+      /** 自动盯分栏展示：card 卡片 / list 雷达式列表（默认）；仅本机。 */
       const NAIL_AUTOPIN_VIEW_KEY = "kline-nail-autopin-view-v1";
-      let nailAutoPinViewMode = "card";
+      let nailAutoPinViewMode = "list";
       try {
         const savedView = localStorage.getItem(NAIL_AUTOPIN_VIEW_KEY);
         if (savedView === "list" || savedView === "card") {
           nailAutoPinViewMode = savedView;
         }
       } catch (_) {
-        nailAutoPinViewMode = "card";
+        nailAutoPinViewMode = "list";
       }
-      /** 置顶 / 通知分栏展示：card 卡片（默认）/ list 列表；仅本机。 */
+      /** 置顶 / 通知分栏展示：card 卡片 / list 列表（默认）；仅本机。 */
       const NAIL_PIN_VIEW_KEY = "kline-nail-pin-view-v1";
       const NAIL_NOTICE_VIEW_KEY = "kline-nail-notice-view-v1";
       function readNailViewMode(key) {
         try {
           const saved = localStorage.getItem(key);
-          return saved === "list" || saved === "card" ? saved : "card";
+          return saved === "list" || saved === "card" ? saved : "list";
         } catch (_) {
-          return "card";
+          return "list";
         }
       }
       let nailPinViewMode = readNailViewMode(NAIL_PIN_VIEW_KEY);
@@ -12955,13 +12954,13 @@
        * 标志来自币安 exchangeInfo：交易对 permissionSets 含 TRD_GRP_261 即为 bStock。
        * 关闭后，钉子页置顶/通知/自动盯/雷达四个分栏都不绘制也不显示 bStock。 */
       const NAIL_SHOW_BSTOCK_KEY = "kline-nail-show-bstock-v1";
-      let nailShowBstock = true;
+      let nailShowBstock = false;
       try {
         const savedBstock = localStorage.getItem(NAIL_SHOW_BSTOCK_KEY);
-        if (savedBstock === "0") nailShowBstock = false;
-        else if (savedBstock === "1") nailShowBstock = true;
+        if (savedBstock === "1") nailShowBstock = true;
+        else if (savedBstock === "0") nailShowBstock = false;
       } catch (_) {
-        nailShowBstock = true;
+        nailShowBstock = false;
       }
       /** 币安 exchangeInfo 标记的 bStock symbol 全集；未拉到前为 null。 */
       let bstockSymbolSet = null;
@@ -13079,7 +13078,7 @@
           nailSortMode = savedNailSort;
         }
       } catch (_) {
-        nailSortMode = "order";
+        nailSortMode = "alertGreen";
       }
       /** symbol -> 绿色K线占用面积（canvas CSS 像素平方）；无阈值为 null。 */
       const nailAlertGreenScores = new Map();
@@ -18757,7 +18756,7 @@
               lastError: null,
             };
       let simSellTasksState = { updatedAt: 0, live: false, tasks: [] };
-      let simFloatVisible = true;
+      let simFloatVisible = false;
       let simHoldBusy = false;
 
       function syncNailHoldLiveSwitches() {
