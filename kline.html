@@ -2529,6 +2529,22 @@
         opacity: 0.5;
         cursor: wait;
       }
+      .nail-settings-action-btn {
+        height: 28px;
+        padding: 0 12px;
+        border: none;
+        border-radius: 8px;
+        background: var(--fill);
+        color: var(--label);
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .nail-settings-action-btn:disabled {
+        opacity: 0.5;
+        cursor: wait;
+      }
       .nail-head-actions {
         display: flex;
         flex-wrap: wrap;
@@ -11451,6 +11467,20 @@
                 <button type="button" data-nail-skin="calm">护眼</button>
               </div>
             </div>
+            <div class="nail-rising-row">
+              <div class="nail-auto-refresh-label">
+                <span>一键平简</span>
+                <small>置顶分栏全部 + 常看 · 现价便签（忽略窗上涨过滤）</small>
+              </div>
+              <button
+                type="button"
+                class="nail-settings-action-btn"
+                id="nailFlatSimplifyBtn"
+                title="对置顶分栏全部币种与常看名单写入现价便签，荧光绿从此刻起算；不过滤当前窗口是否上涨"
+              >
+                执行
+              </button>
+            </div>
           </div>
         </div>
         <div
@@ -17236,7 +17266,9 @@
       }
 
       function setNailAlwaysSectionCollapsed(on) {
-        nailAlwaysSectionCollapsed = !!on;
+        const next = !!on;
+        const changed = next !== nailAlwaysSectionCollapsed;
+        nailAlwaysSectionCollapsed = next;
         try {
           localStorage.setItem(
             NAIL_ALWAYS_COLLAPSE_KEY,
@@ -17245,7 +17277,19 @@
         } catch (_) {
           /* ignore */
         }
-        syncNailAlwaysSectionCollapseUi();
+        // 折叠=常看币并入置顶/其余并排序；展开=抽回独立常看段。须重排 DOM。
+        if (changed && nailSegment === "pinned") {
+          if (typeof applyNailListOrder === "function") {
+            applyNailListOrder();
+          } else {
+            syncNailAlwaysSectionCollapseUi();
+          }
+          if (typeof paintNailKlines === "function") {
+            void paintNailKlines();
+          }
+        } else {
+          syncNailAlwaysSectionCollapseUi();
+        }
       }
 
       function syncNailAlwaysSectionCollapseUi() {
@@ -36448,6 +36492,7 @@
           (card.closest("[data-nail-in-section]") || card).getAttribute(
             "data-nail-in-section",
           ) || "";
+        // 常看展开时目标在折叠段才需要先展开；折叠时币已并入置顶/其余，可直接滚。
         if (sectionOwner === "always" && nailAlwaysSectionCollapsed) {
           setNailAlwaysSectionCollapsed(false);
         }
@@ -37183,11 +37228,14 @@
             showToast("选中币种暂无现价");
             return;
           }
+          const noteAt = Date.now();
           await persistNails(
             (list) =>
               toUpdate.reduce(
                 (acc, key) =>
-                  WatchFavorites.setNailNote(acc, key, notesBySymbol[key]),
+                  WatchFavorites.setNailNote(acc, key, notesBySymbol[key], {
+                    noteAt,
+                  }),
                 list,
               ),
             `Nail notes to live price x${toUpdate.length}`,
@@ -37201,6 +37249,109 @@
         } catch (error) {
           console.warn(error);
           showToast(error.message || "批量便签现价失败");
+        }
+      }
+
+      /** 一键平简：置顶区全部币（忽略窗上涨过滤）+ 常看名单 → 现价便签。 */
+      function listNailFlatSimplifySymbols() {
+        const keys = new Set();
+        (Array.isArray(nailItems) ? nailItems : []).forEach((item) => {
+          if (!item || !item.pinned) return;
+          const key = String(item.symbol || "")
+            .trim()
+            .toUpperCase();
+          if (!key || !nailBstockVisible(key)) return;
+          keys.add(key);
+        });
+        getAlwaysWatchSymbols().forEach((symbol) => {
+          const key = String(symbol || "")
+            .trim()
+            .toUpperCase();
+          if (!key || !nailBstockVisible(key)) return;
+          keys.add(key);
+        });
+        return [...keys];
+      }
+
+      async function applyOneClickFlatSimplifyNotes() {
+        if (nailSaving) {
+          showToast("钉子保存中…");
+          return;
+        }
+        const symbols = listNailFlatSimplifySymbols();
+        if (!symbols.length) {
+          showToast("置顶分栏没有可平简的币");
+          return;
+        }
+        const btn = document.getElementById("nailFlatSimplifyBtn");
+        if (btn) btn.disabled = true;
+        try {
+          try {
+            await fetchBinanceTickersForSymbols(symbols);
+          } catch (error) {
+            console.warn("flat-simplify ticker refresh failed", error);
+            try {
+              await loadBinanceTicker();
+            } catch (_) {
+              /* ignore */
+            }
+          }
+          const notesBySymbol = {};
+          let withPrice = 0;
+          let noPrice = 0;
+          for (const key of symbols) {
+            const price = Number(marketMap[key]?.price);
+            if (Number.isFinite(price) && price > 0) {
+              notesBySymbol[key] = formatPinPrice(price);
+              withPrice += 1;
+            } else {
+              noPrice += 1;
+            }
+          }
+          const toUpdate = Object.keys(notesBySymbol);
+          if (!toUpdate.length) {
+            showToast("暂无现价，平简未写入");
+            return;
+          }
+          const existing = existingNailSymbolSet();
+          const missing = toUpdate.filter((key) => !existing.has(key));
+          const noteAt = Date.now();
+          await persistNails(
+            (list) => {
+              let next = list;
+              if (missing.length) {
+                const freshNotes = {};
+                missing.forEach((key) => {
+                  freshNotes[key] = notesBySymbol[key];
+                });
+                next = WatchFavorites.upsertNailsBatch(
+                  next,
+                  missing,
+                  freshNotes,
+                );
+              }
+              return toUpdate.reduce(
+                (acc, key) =>
+                  WatchFavorites.setNailNote(acc, key, notesBySymbol[key], {
+                    noteAt,
+                  }),
+                next,
+              );
+            },
+            `Flat simplify nail notes x${toUpdate.length}`,
+            { loadingText: `一键平简 ${toUpdate.length}…` },
+          );
+          setNailSettingsOpen(false);
+          const parts = [`已平简 ${withPrice} 个`];
+          if (missing.length) parts.push(`新补钉 ${missing.length}`);
+          if (noPrice > 0) parts.push(`无现价掠过 ${noPrice}`);
+          showToast(parts.join(" · "));
+          if (isNailDrawerOpen()) void paintNailKlines();
+        } catch (error) {
+          console.warn(error);
+          showToast(error.message || "一键平简失败");
+        } finally {
+          if (btn) btn.disabled = false;
         }
       }
 
@@ -38002,7 +38153,9 @@
       }
 
       /** 只挪 DOM 重排（持有优先 / 展示排序），避免整表重绘打断已画好的 K 线。 */
-      /** 钉子列表视觉分段：持有 → 常看 → 置顶 → 其余。 */
+      /** 钉子列表视觉分段：持有 → 常看 → 置顶 → 其余。
+       * 常看展开：独立成段，段内固定 24h 排序。
+       * 常看折叠：币并入置顶/其余（仍显示），跟各段排序；标题栏保留可再展开。 */
       function nailDrawerSectionParts(items) {
         const jump = [];
         const held = [];
@@ -38011,6 +38164,8 @@
         const rest = [];
         const revealKey = nailJumpRevealKey();
         const alwaysSet = new Set(getAlwaysWatchSymbols());
+        const alwaysExpanded = !nailAlwaysSectionCollapsed;
+        let alwaysEligible = 0;
         for (const item of items || []) {
           const key = String((item && item.symbol) || "").toUpperCase();
           if (revealKey && key === revealKey) {
@@ -38018,16 +38173,23 @@
             continue;
           }
           // 关闭「持有」开关：不单独成段，按常看/置顶/其余归入，币仍可见。
-          // 常看独立成段（可折叠）；持有优先于常看，避免同一币两段。
+          // 持有优先于常看，避免同一币两段。
           if (nailShowHeldSection && nailSymbolIsHeld(item && item.symbol)) {
             held.push(item);
           } else if (alwaysSet.has(key)) {
-            always.push(item);
+            alwaysEligible += 1;
+            if (alwaysExpanded) {
+              always.push(item);
+            } else if (item && item.pinned) {
+              pinned.push(item);
+            } else {
+              rest.push(item);
+            }
           } else if (item && item.pinned) {
             pinned.push(item);
           } else rest.push(item);
         }
-        // 常看固定按 24h 涨幅从高到低（与全局排序开关无关）。
+        // 常看独立段：固定按 24h 涨幅从高到低（与全局排序开关无关）。
         always.sort((a, b) => {
           const ka = String((a && a.symbol) || "").toUpperCase();
           const kb = String((b && b.symbol) || "").toUpperCase();
@@ -38057,6 +38219,31 @@
           }
           return (a.order || 0) - (b.order || 0);
         });
+        // 折叠并入「其余」时：跟全局 24h / 便签涨幅规则排，与可见列表一致。
+        if (!alwaysExpanded && (nailSortMode === "change24h" || nailSortMode === "alertGreen")) {
+          rest.sort((a, b) => {
+            const ka = String((a && a.symbol) || "").toUpperCase();
+            const kb = String((b && b.symbol) || "").toUpperCase();
+            if (nailSortMode === "alertGreen") {
+              const ga = nailNoteGainPercent(ka);
+              const gb = nailNoteGainPercent(kb);
+              const hasA = Number.isFinite(ga);
+              const hasB = Number.isFinite(gb);
+              if (!hasA && !hasB) return (a.order || 0) - (b.order || 0);
+              if (!hasA) return 1;
+              if (!hasB) return -1;
+              if (gb !== ga) return gb - ga;
+              return (a.order || 0) - (b.order || 0);
+            }
+            const changeA = Number(marketMap[ka] && marketMap[ka].change24h);
+            const changeB = Number(marketMap[kb] && marketMap[kb].change24h);
+            const hasA = Number.isFinite(changeA);
+            const hasB = Number.isFinite(changeB);
+            if (hasA && hasB && changeA !== changeB) return changeB - changeA;
+            if (hasA !== hasB) return hasA ? -1 : 1;
+            return (a.order || 0) - (b.order || 0);
+          });
+        }
         return [
           {
             id: "jump",
@@ -38070,10 +38257,15 @@
             label: "常看",
             className: "is-always",
             items: always,
+            // 折叠时 items 为空，仍用 eligible 数显示角标，方便再展开。
+            count: alwaysEligible,
           },
           { id: "pin", label: "置顶", className: "is-pin", items: pinned },
           { id: "rest", label: "其余", className: "is-rest", items: rest },
-        ].filter((section) => section.items.length > 0);
+        ].filter((section) => {
+          if (section.id === "always") return (section.count || 0) > 0;
+          return section.items.length > 0;
+        });
       }
 
       function nailDrawerShowSectionLabels(sections) {
@@ -38123,7 +38315,11 @@
         return (
           `<div class="nail-section-label ${section.className}${collapsedCls}" data-nail-section="${section.id}"${toggleAttrs}>` +
           `<span class="nail-section-label-title">${caret}<span>${section.label}</span>${pnlBit}</span>` +
-          `<span class="nail-section-label-end">${eye}<span class="nail-section-count">${section.items.length}</span></span>` +
+          `<span class="nail-section-label-end">${eye}<span class="nail-section-count">${
+            Number.isFinite(Number(section.count))
+              ? Number(section.count)
+              : section.items.length
+          }</span></span>` +
           `</div>`
         );
       }
@@ -38150,6 +38346,8 @@
               );
               secRow = secRow && secRow.closest("tr.nail-section-row");
               if (secRow) {
+                const cell = secRow.querySelector("td");
+                if (cell) cell.innerHTML = nailSectionLabelHtml(section);
                 table.appendChild(secRow);
               } else {
                 const wrap = document.createElement("tbody");
@@ -42613,6 +42811,14 @@
       if (nailBatchNotePriceBtn) {
         nailBatchNotePriceBtn.addEventListener("click", () => {
           void applyCurrentPriceNotesToSelectedNails();
+        });
+      }
+      const nailFlatSimplifyBtn = document.getElementById(
+        "nailFlatSimplifyBtn",
+      );
+      if (nailFlatSimplifyBtn) {
+        nailFlatSimplifyBtn.addEventListener("click", () => {
+          void applyOneClickFlatSimplifyNotes();
         });
       }
       const nailBatchDeleteBtn = document.getElementById("nailBatchDeleteBtn");
