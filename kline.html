@@ -6162,6 +6162,23 @@
       .nail-prow-name { white-space: nowrap; }
       .nail-prow-name .nail-pin { padding: 1px 6px; }
       .nail-prow-name .nail-name { font-weight: 600; padding: 0; }
+      @keyframes nail-name-refresh-flash {
+        0%,
+        100% {
+          background: transparent;
+          box-shadow: none;
+        }
+        18%,
+        55% {
+          background: color-mix(in srgb, var(--accent, #2f8f6e) 28%, transparent);
+          box-shadow: 0 0 0 1px
+            color-mix(in srgb, var(--accent, #2f8f6e) 45%, transparent);
+        }
+      }
+      .nail-name.is-refresh-flash {
+        border-radius: 4px;
+        animation: nail-name-refresh-flash 0.85s ease-in-out 1;
+      }
       .nail-prow-kline-cell canvas.nail-kline {
         display: block;
         width: 168px;
@@ -8027,7 +8044,8 @@
       .nail-row-float-mask {
         position: fixed;
         inset: 0;
-        z-index: 84;
+        /* 必须高于 .nail-drawer(122)，否则整页钉子层会盖住遮罩/菜单 */
+        z-index: 132;
         background: color-mix(in srgb, var(--bg, #000) 28%, transparent);
         backdrop-filter: blur(1.5px);
         -webkit-backdrop-filter: blur(1.5px);
@@ -8037,7 +8055,7 @@
       }
       .nail-row-float-menu {
         position: fixed;
-        z-index: 86;
+        z-index: 133;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -38407,6 +38425,25 @@
         }
       }
 
+      function flashNailNameAfterRefresh(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        if (!key) return;
+        const esc = CSS.escape ? CSS.escape(key) : key;
+        const nameBtn = document.querySelector(
+          `#nailList .nail-kcard[data-nail-symbol="${esc}"] .nail-name`,
+        );
+        if (!nameBtn) return;
+        nameBtn.classList.remove("is-refresh-flash");
+        // 强制重启动画
+        void nameBtn.offsetWidth;
+        nameBtn.classList.add("is-refresh-flash");
+        window.setTimeout(() => {
+          nameBtn.classList.remove("is-refresh-flash");
+        }, 900);
+      }
+
       async function refreshSingleNailKline(symbol) {
         const key = String(symbol || "")
           .trim()
@@ -38445,6 +38482,7 @@
           ),
         );
         if (nailSortMode !== "order") applyNailListOrder();
+        flashNailNameAfterRefresh(key);
         return true;
       }
 
