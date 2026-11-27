@@ -5726,6 +5726,14 @@
         touch-action: pan-y;
         padding: 10px 12px 16px;
       }
+      /* 长按置顶行 = 开操作浮层：禁掉文字选择与 iOS 系统长按菜单，
+         否则「复制/全选/网页搜索/分享」会盖在浮层上（复制走币名按钮）。 */
+      #nailList,
+      #nailList * {
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        user-select: none;
+      }
       /* ===== 钉子页分栏：置顶 / 通知 / 自动盯 / 雷达 平铺在同一层 ===== */
       .nail-segments {
         display: flex;
@@ -31736,6 +31744,10 @@
         });
         menu.dataset.symbol = key;
         nailRowFloatMenuSymbol = key;
+        // 兜底：若长按已带出一段系统选中（老 Safari / CSS 未生效），先清掉，
+        // 否则「复制/全选」气泡会盖在浮层上。
+        const sel = window.getSelection && window.getSelection();
+        if (sel && !sel.isCollapsed) sel.removeAllRanges();
         mask.hidden = false;
         menu.hidden = false;
         positionNailRowFloatMenu(key);
