@@ -137,6 +137,28 @@
       body.is-notes-view .kline-card.is-notes-filtered-out {
         display: none !important;
       }
+      /* 长按只走页面手势：全站禁掉文字选择与长按 callout（安卓 Chrome 长按
+         也会弹「复制/全选/网页搜索/分享」）。输入类元素仍可正常选中/编辑。 */
+      html,
+      body {
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        user-select: none;
+      }
+      body * {
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        user-select: none;
+      }
+      input,
+      textarea,
+      select,
+      [contenteditable="true"],
+      [contenteditable=""] {
+        -webkit-user-select: text;
+        -webkit-touch-callout: default;
+        user-select: text;
+      }
       .page {
         width: min(1400px, calc(100% - 20px));
         margin: 8px auto 24px;
@@ -43844,6 +43866,23 @@
           closeNailRowFloatMenu();
         });
       }
+      // CSS 之外再兜一层：安卓 Chrome 长按有时仍会进入选择态，
+      // 这里只放过输入类元素，其余 selectstart 一律拦掉。
+      document.addEventListener(
+        "selectstart",
+        (event) => {
+          const target = event.target;
+          const editable =
+            target && target.closest
+              ? target.closest(
+                  'input, textarea, select, [contenteditable="true"], [contenteditable=""]',
+                )
+              : null;
+          if (editable) return;
+          event.preventDefault();
+        },
+        true,
+      );
       const nailRowFloatMenu = document.getElementById("nailRowFloatMenu");
       if (nailRowFloatMenu) {
         nailRowFloatMenu.addEventListener("click", (event) => {
