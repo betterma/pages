@@ -1,49 +1,52 @@
 {
-  "updatedAt": 1795737333428,
-  "lastRunAt": 1795737300442,
-  "ok": true,
-  "error": null,
-  "durationMs": 32986,
-  "autoPins": 175,
+  "updatedAt": 1795737643714,
+  "lastRunAt": 1795737601160,
+  "ok": false,
+  "error": "balance×1:notices:GitHub PUT watch-balance-notices.json failed: 409 {\"message\":\"is at 8e03572c3a0e897dbba879370ef594cabb92216c but expected b4b32f4d18c2f31ee9d380a2820c1d4947b670ab\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":",
+  "durationMs": 42554,
+  "autoPins": 173,
   "balance": {
     "skipped": false,
     "reason": null,
-    "autoPins": 175,
-    "due": 136,
-    "checked": 136,
-    "hits": 53,
-    "sent": 3,
-    "wecomDue": 3,
-    "wecomQueued": 3,
+    "autoPins": 173,
+    "due": 154,
+    "checked": 154,
+    "hits": 76,
+    "sent": 0,
+    "wecomDue": 15,
+    "wecomQueued": 15,
     "wecomDeferred": 0,
-    "skippedWecomWindow": 50,
+    "skippedWecomWindow": 61,
     "checkMax": 0,
     "sendMax": 0,
     "checkCursor": 0,
     "cooldownMs": 1800000,
-    "cooldownSkipped": 39,
-    "errorCount": 0,
-    "errors": []
+    "cooldownSkipped": 19,
+    "errorCount": 1,
+    "errors": [
+      "notices:GitHub PUT watch-balance-notices.json failed: 409 {\"message\":\"is at 8e03572c3a0e897dbba879370ef594cabb92216c but expected b4b32f4d18c2f31ee9d380a2820c1d4947b670ab\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":"
+    ]
   },
   "nailGreen": {
     "skipped": false,
     "reason": null,
-    "nails": 194,
-    "pending": 42,
-    "checked": 42,
-    "hits": 0,
+    "nails": 192,
+    "pending": 192,
+    "checked": 192,
+    "hits": 75,
     "sent": 0,
     "checkMax": 0,
     "checkCursor": 0,
-    "bucketSkipped": 152,
+    "bucketSkipped": 0,
     "errorCount": 0,
     "errors": []
   },
   "staleNailPrune": {
     "skipped": false,
-    "reason": "none-stale",
+    "reason": null,
     "checked": 12,
     "candidate": 89,
-    "removed": 0
-  }
+    "removed": 2
+  },
+  "degraded": true
 }
