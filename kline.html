@@ -8023,63 +8023,72 @@
         opacity: 0.45;
         cursor: not-allowed;
       }
-      /* 置顶贴行条：右对齐；右→左 刷新/卖出/买入/便签；plain 无色底 */
-      .nail-row-action-bar {
+      /* 置顶长按浮层：遮罩 + 行内浮动菜单（不插入表格流，避免抖动） */
+      .nail-row-float-mask {
+        position: fixed;
+        inset: 0;
+        z-index: 84;
+        background: color-mix(in srgb, var(--bg, #000) 28%, transparent);
+        backdrop-filter: blur(1.5px);
+        -webkit-backdrop-filter: blur(1.5px);
+      }
+      .nail-row-float-mask[hidden] {
+        display: none !important;
+      }
+      .nail-row-float-menu {
+        position: fixed;
+        z-index: 86;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 2px;
+        gap: 4px;
         flex-wrap: wrap;
-        padding: 2px 0;
         min-width: 0;
+        max-width: min(92vw, 360px);
+        padding: 8px 10px;
+        border-radius: 12px;
+        border: 0.5px solid var(--separator, rgba(0, 0, 0, 0.12));
+        background: color-mix(in srgb, var(--elevated, #fff) 94%, transparent);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
       }
-      .nail-row-action-bar[hidden] {
+      .nail-row-float-menu[hidden] {
         display: none !important;
       }
-      .nail-row-action-tr td {
-        padding: 2px 8px 8px;
-        border-bottom: 0.5px solid
-          color-mix(in srgb, var(--separator) 70%, transparent);
-        background: transparent;
-      }
-      .nail-row-action-bar button {
+      .nail-row-float-menu button {
         border: none;
         background: transparent;
         color: var(--label);
-        height: 28px;
-        padding: 0 8px;
-        border-radius: 6px;
-        font-size: 12px;
-        font-weight: 600;
+        height: 32px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 650;
         cursor: pointer;
         white-space: nowrap;
       }
-      .nail-row-action-bar button:hover {
+      .nail-row-float-menu button:hover {
         background: color-mix(in srgb, var(--fill) 55%, transparent);
       }
-      .nail-row-action-bar button.is-buy {
+      .nail-row-float-menu button.is-buy {
         color: var(--accent, #2f8f6e);
       }
-      .nail-row-action-bar button.is-sell {
+      .nail-row-float-menu button.is-sell {
         color: #c45c5c;
       }
-      .nail-row-action-bar button:disabled {
+      .nail-row-float-menu button:disabled {
         opacity: 0.45;
         cursor: not-allowed;
       }
-      .nail-row-action-bar .nail-row-action-close {
-        min-width: 28px;
-        padding: 0 6px;
+      .nail-row-float-menu .nail-row-action-close {
+        min-width: 30px;
+        padding: 0 8px;
         font-size: 16px;
         font-weight: 500;
         color: var(--secondary);
       }
-      .nail-grid > .nail-row-action-bar {
-        margin: -2px 0 10px;
-        padding: 4px 8px;
-        border-radius: 0 0 10px 10px;
-        border: none;
-        background: transparent;
+      .nail-row-float-menu.is-busy {
+        pointer-events: none;
+        opacity: 0.72;
       }
       /* 有买卖栏时：操作栏紧贴其上方，无空隙 */
       body.has-nail-trade-dock .card-focus-bar {
@@ -12095,21 +12104,43 @@
       <button type="button" class="is-sell" data-nail-trade="sell">卖出</button>
     </div>
 
-    <!-- 仅置顶分栏贴行条：整组居中；× / 便签 / 买入 / 卖出 / 刷新 -->
-    <div id="nailRowActionBar" class="nail-row-action-bar" hidden>
+    <!-- 置顶长按浮层：遮罩 + 行内菜单（× / 便签 / 买入 / 有余额才卖出；刷新改双击） -->
+    <div id="nailRowFloatMask" class="nail-row-float-mask" hidden></div>
+    <div
+      id="nailRowFloatMenu"
+      class="nail-row-float-menu"
+      hidden
+      role="menu"
+      aria-label="置顶行操作"
+    >
       <button
         type="button"
         class="nail-row-action-close"
         data-nail-row-close
         title="收起"
-        aria-label="收起操作条"
+        aria-label="收起操作菜单"
       >
         ×
       </button>
-      <button type="button" data-focus-action="nail-note">便签</button>
-      <button type="button" class="is-buy" data-nail-trade="buy">买入</button>
-      <button type="button" class="is-sell" data-nail-trade="sell">卖出</button>
-      <button type="button" data-focus-action="refresh">刷新</button>
+      <button type="button" data-focus-action="nail-note" role="menuitem">
+        便签
+      </button>
+      <button
+        type="button"
+        class="is-buy"
+        data-nail-trade="buy"
+        role="menuitem"
+      >
+        买入
+      </button>
+      <button
+        type="button"
+        class="is-sell"
+        data-nail-trade="sell"
+        role="menuitem"
+      >
+        卖出
+      </button>
     </div>
 
     <div id="tradeConfirmDialog" class="trade-confirm-dialog" hidden>
@@ -31549,14 +31580,7 @@
         }
         const tradeDock = document.getElementById("nailTradeDock");
         const tradeDockSym = document.getElementById("nailTradeDockSym");
-        // 置顶分栏改贴行浮条；底栏买卖条不再用于置顶选中。
-        const useNailRowBar =
-          !!key &&
-          scope === "nail" &&
-          nailSegment === "pinned" &&
-          isNailDrawerOpen() &&
-          !pinSelectMode &&
-          !document.body.classList.contains("has-quick-trade");
+        // 置顶分栏：单击只高亮；完整操作改长按浮层。底栏买卖条不再用于置顶选中。
         if (tradeDock) {
           tradeDock.hidden = true;
           document.body.classList.remove("has-nail-trade-dock");
@@ -31566,18 +31590,24 @@
               : "—";
           }
         }
-        if (useNailRowBar) {
+        if (scope === "nail") {
           bar.hidden = true;
           document.body.classList.remove("has-card-focus");
-          mountNailRowActionBar(key);
+          // 高亮可保留；浮层菜单只由长按打开，选中切换时若币变了就关。
+          if (
+            !key ||
+            !isNailRowFloatMenuOpen() ||
+            String(nailRowFloatMenuSymbol || "").toUpperCase() !== key
+          ) {
+            closeNailRowFloatMenu();
+          }
           return;
         }
-        unmountNailRowActionBar();
+        closeNailRowFloatMenu();
         if (
           !key ||
           pinSelectMode ||
           nailNoticeSelectMode ||
-          (scope === "nail" && !isNailDrawerOpen()) ||
           (scope === "notice" && nailNoticeMode !== "open") ||
           (scope === "pullback" && nailNoticeMode !== "open") ||
           ((scope === "overlook" || scope === "autopin") &&
@@ -31595,98 +31625,145 @@
         }
       }
 
-      function unmountNailRowActionBar() {
-        const rowBar = document.getElementById("nailRowActionBar");
-        if (!rowBar) return;
-        rowBar.hidden = true;
-        const park =
-          document.getElementById("nailDrawer") || document.body;
-        if (rowBar.parentElement !== park) park.appendChild(rowBar);
+      let nailRowFloatMenuSymbol = null;
+
+      function isNailRowFloatMenuOpen() {
+        const menu = document.getElementById("nailRowFloatMenu");
+        return !!(menu && !menu.hidden);
+      }
+
+      function nailSymbolCanSell(symbol) {
+        return holdingsFreeQty(symbol) > 0;
+      }
+
+      function closeNailRowFloatMenu() {
+        const mask = document.getElementById("nailRowFloatMask");
+        const menu = document.getElementById("nailRowFloatMenu");
+        if (mask) mask.hidden = true;
+        if (menu) {
+          menu.hidden = true;
+          menu.classList.remove("is-busy");
+          delete menu.dataset.symbol;
+        }
+        nailRowFloatMenuSymbol = null;
+        // 清掉历史插入行（旧版贴行条残留）
         document
           .querySelectorAll("#nailList .nail-row-action-tr")
           .forEach((tr) => tr.remove());
       }
 
-      function mountNailRowActionBar(symbol) {
+      /** 兼容旧调用名：重绘列表前关掉浮层。 */
+      function unmountNailRowActionBar() {
+        closeNailRowFloatMenu();
+      }
+
+      function positionNailRowFloatMenu(symbol) {
+        const menu = document.getElementById("nailRowFloatMenu");
+        if (!menu || menu.hidden) return;
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
-        const rowBar = document.getElementById("nailRowActionBar");
-        if (!rowBar || !key) {
-          unmountNailRowActionBar();
-          return;
-        }
         const esc = CSS.escape ? CSS.escape(key) : key;
-        document.querySelectorAll("#nailList .nail-row-action-tr").forEach((tr) => {
-          const host = tr.closest(".nail-prow-tbody[data-nail-symbol]");
-          const hostKey = String(
-            (host && host.getAttribute("data-nail-symbol")) || "",
-          )
-            .trim()
-            .toUpperCase();
-          if (hostKey !== key) tr.remove();
-        });
-        rowBar.querySelectorAll("[data-nail-trade]").forEach((btn) => {
-          btn.disabled = !isManualTradeConfigured();
-        });
-        const tbody = document.querySelector(
-          `#nailList .nail-prow-tbody[data-nail-symbol="${esc}"]`,
+        const anchor =
+          document.querySelector(
+            `#nailList .nail-kcard[data-nail-symbol="${esc}"]`,
+          ) ||
+          document.querySelector(
+            `#nailList .nail-prow-tbody[data-nail-symbol="${esc}"]`,
+          );
+        if (!anchor) return;
+        const rect = anchor.getBoundingClientRect();
+        const pad = 8;
+        // 先放到视野内再量自身尺寸
+        menu.style.left = "0px";
+        menu.style.top = "0px";
+        const mw = menu.offsetWidth || 200;
+        const mh = menu.offsetHeight || 48;
+        let left = rect.left + (rect.width - mw) / 2;
+        let top = rect.top + (rect.height - mh) / 2;
+        left = Math.max(
+          pad,
+          Math.min(left, window.innerWidth - mw - pad),
         );
-        if (tbody) {
-          let tr = tbody.querySelector(".nail-row-action-tr");
-          if (!tr) {
-            tr = document.createElement("tr");
-            tr.className = "nail-row-action-tr";
-            const td = document.createElement("td");
-            td.colSpan = 4;
-            tr.appendChild(td);
-            tbody.appendChild(tr);
-          }
-          const td = tr.querySelector("td");
-          if (td && rowBar.parentElement !== td) td.appendChild(rowBar);
-          rowBar.hidden = false;
+        top = Math.max(
+          pad,
+          Math.min(top, window.innerHeight - mh - pad),
+        );
+        menu.style.left = `${Math.round(left)}px`;
+        menu.style.top = `${Math.round(top)}px`;
+      }
+
+      function openNailRowFloatMenu(symbol) {
+        const key = String(symbol || "")
+          .trim()
+          .toUpperCase();
+        const mask = document.getElementById("nailRowFloatMask");
+        const menu = document.getElementById("nailRowFloatMenu");
+        if (!mask || !menu || !key) return;
+        if (nailSegment !== "pinned" || !isNailDrawerOpen() || pinSelectMode) {
+          closeNailRowFloatMenu();
           return;
         }
-        const card = document.querySelector(
-          `#nailList .nail-grid .nail-kcard[data-nail-symbol="${esc}"]`,
-        );
-        if (card && card.parentElement) {
-          if (rowBar.previousElementSibling !== card) {
-            card.after(rowBar);
+        const tradeReady = isManualTradeConfigured();
+        const canSell = nailSymbolCanSell(key);
+        menu.querySelectorAll("[data-nail-trade]").forEach((btn) => {
+          const side = btn.getAttribute("data-nail-trade");
+          if (side === "sell") {
+            btn.hidden = !canSell;
+            btn.disabled = !canSell || !tradeReady;
+          } else {
+            btn.hidden = false;
+            btn.disabled = !tradeReady;
           }
-          rowBar.hidden = false;
-          return;
-        }
-        unmountNailRowActionBar();
+        });
+        menu.dataset.symbol = key;
+        nailRowFloatMenuSymbol = key;
+        mask.hidden = false;
+        menu.hidden = false;
+        positionNailRowFloatMenu(key);
       }
 
       function setFocusBarBusy(on, activeBtn, busyLabel) {
         const bars = [
           document.getElementById("cardFocusBar"),
-          document.getElementById("nailRowActionBar"),
+          document.getElementById("nailRowFloatMenu"),
         ].filter(Boolean);
         if (!bars.length) return;
         bars.forEach((bar) => {
           bar.classList.toggle("is-busy", !!on);
-          bar.querySelectorAll("button[data-focus-action], button[data-nail-trade]").forEach((btn) => {
-            if (btn.hasAttribute("data-nail-row-close")) return;
-            btn.disabled = !!on || (btn.hasAttribute("data-nail-trade") && !isManualTradeConfigured());
-            if (!on) {
-              if (btn.classList.contains("is-loading")) {
-                btn.classList.remove("is-loading");
-                if (btn.dataset.labelBefore) {
-                  btn.textContent = btn.dataset.labelBefore;
-                  delete btn.dataset.labelBefore;
+          bar
+            .querySelectorAll(
+              "button[data-focus-action], button[data-nail-trade]",
+            )
+            .forEach((btn) => {
+              if (btn.hasAttribute("data-nail-row-close")) return;
+              const isTrade = btn.hasAttribute("data-nail-trade");
+              const tradeSide = btn.getAttribute("data-nail-trade");
+              if (isTrade && tradeSide === "sell" && btn.hidden) return;
+              btn.disabled =
+                !!on ||
+                (isTrade && !isManualTradeConfigured()) ||
+                (isTrade &&
+                  tradeSide === "sell" &&
+                  !nailSymbolCanSell(
+                    nailRowFloatMenuSymbol || focusActionSymbol,
+                  ));
+              if (!on) {
+                if (btn.classList.contains("is-loading")) {
+                  btn.classList.remove("is-loading");
+                  if (btn.dataset.labelBefore) {
+                    btn.textContent = btn.dataset.labelBefore;
+                    delete btn.dataset.labelBefore;
+                  }
                 }
+                return;
               }
-              return;
-            }
-            if (activeBtn && btn === activeBtn) {
-              btn.classList.add("is-loading");
-              btn.dataset.labelBefore = btn.textContent;
-              btn.textContent = busyLabel || "处理中";
-            }
-          });
+              if (activeBtn && btn === activeBtn) {
+                btn.classList.add("is-loading");
+                btn.dataset.labelBefore = btn.textContent;
+                btn.textContent = busyLabel || "处理中";
+              }
+            });
         });
       }
 
@@ -31821,7 +31898,7 @@
         const symbol = focusActionSymbol;
         if (!symbol) return;
         const bar = document.getElementById("cardFocusBar");
-        const rowBar = document.getElementById("nailRowActionBar");
+        const rowBar = document.getElementById("nailRowFloatMenu");
         if (
           (bar && bar.classList.contains("is-busy")) ||
           (rowBar && rowBar.classList.contains("is-busy"))
@@ -32040,6 +32117,7 @@
         }
         if (action === "nail-note") {
           if (focusActionScope !== "nail") return;
+          closeNailRowFloatMenu();
           openNailNoteEditor(symbol);
           return;
         }
@@ -36456,7 +36534,7 @@
             target &&
             target.closest &&
             target.closest(
-              'input, textarea, select, [contenteditable="true"], button, a, .notes-rank-gate, .kline-zoom-gate, .mainstream-zoom-gate, .stop-loss-gate, .buy-sl-gate, .boot-init-gate, .card-actions, .notify-float, .momentum-float, .float-tabs, .app-chrome, .nail-tab, .hidden-pin-tab, .nail-pin-review, #nailAutoPinPopover, #nailRadarPopover, #nailHoldPopover, #simHoldFloat',
+              'input, textarea, select, [contenteditable="true"], button, a, .notes-rank-gate, .kline-zoom-gate, .mainstream-zoom-gate, .stop-loss-gate, .buy-sl-gate, .boot-init-gate, .card-actions, .notify-float, .momentum-float, .float-tabs, .app-chrome, .nail-tab, .hidden-pin-tab, .nail-pin-review, .nail-row-float-mask, .nail-row-float-menu, #nailAutoPinPopover, #nailRadarPopover, #nailHoldPopover, #simHoldFloat',
             )
           );
         }
@@ -38377,10 +38455,21 @@
         let startX = 0;
         let startY = 0;
         let moved = false;
-        // 双击 = 单击行为 + 刷新；单击零延迟，不用 setTimeout 判双击。
+        // 单击高亮（零延迟）/ 双击刷新 / 长按浮层菜单。
         const NAIL_DOUBLE_TAP_MS = 300;
+        const NAIL_LONG_PRESS_MS = 450;
         let lastTapKey = "";
         let lastTapAt = 0;
+        let longPressTimer = 0;
+        let longPressKey = "";
+        let longPressFired = false;
+        const clearLongPress = () => {
+          if (longPressTimer) {
+            window.clearTimeout(longPressTimer);
+            longPressTimer = 0;
+          }
+          longPressKey = "";
+        };
         // 捕获阶段优先处理名称复制，避免被其它冒泡逻辑抢走。
         listEl.addEventListener(
           "click",
@@ -38406,12 +38495,40 @@
           "pointerdown",
           (event) => {
             if (event.pointerType === "mouse" && event.button !== 0) return;
-            if (event.target.closest("button, a, input, label")) return;
+            if (
+              event.target.closest(
+                "button, a, input, label, .nail-row-float-menu",
+              )
+            ) {
+              clearLongPress();
+              return;
+            }
             const card = event.target.closest(".nail-kcard[data-nail-symbol]");
-            if (!card) return;
+            if (!card) {
+              clearLongPress();
+              return;
+            }
             startX = event.clientX;
             startY = event.clientY;
             moved = false;
+            longPressFired = false;
+            const key = String(card.getAttribute("data-nail-symbol") || "")
+              .trim()
+              .toUpperCase();
+            if (!key || nailSelectMode) {
+              clearLongPress();
+              return;
+            }
+            clearLongPress();
+            longPressKey = key;
+            longPressTimer = window.setTimeout(() => {
+              longPressTimer = 0;
+              if (moved || longPressKey !== key) return;
+              longPressFired = true;
+              lastTapAt = 0;
+              setFocusActionSymbol(key, "nail");
+              openNailRowFloatMenu(key);
+            }, NAIL_LONG_PRESS_MS);
           },
           { passive: true },
         );
@@ -38420,21 +38537,43 @@
           (event) => {
             const dx = event.clientX - startX;
             const dy = event.clientY - startY;
-            if (dx * dx + dy * dy > 64) moved = true;
+            if (dx * dx + dy * dy > 64) {
+              moved = true;
+              clearLongPress();
+            }
           },
           { passive: true },
+        );
+        const endPress = () => {
+          clearLongPress();
+        };
+        listEl.addEventListener("pointerup", endPress);
+        listEl.addEventListener("pointercancel", endPress);
+        listEl.addEventListener(
+          "contextmenu",
+          (event) => {
+            if (event.target.closest(".nail-kcard[data-nail-symbol]")) {
+              event.preventDefault();
+            }
+          },
         );
         listEl.addEventListener("click", (event) => {
           if (nailSelectMode) return;
           if (
             event.target.closest(
-              "button, a, input, label, .nail-row-action-bar, .nail-row-action-tr",
+              "button, a, input, label, .nail-row-float-menu, .nail-row-float-mask",
             )
           ) {
             return;
           }
           const card = event.target.closest(".nail-kcard[data-nail-symbol]");
           if (!card || moved) return;
+          if (longPressFired) {
+            longPressFired = false;
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
           event.preventDefault();
           event.stopPropagation();
           const key = String(card.getAttribute("data-nail-symbol") || "")
@@ -38445,7 +38584,8 @@
           const isDouble =
             key === lastTapKey && now - lastTapAt <= NAIL_DOUBLE_TAP_MS;
           if (isDouble) {
-            // 第二击必须 force-set：两次 toggle 会互相抵消、操作栏收起。
+            // 双击只刷新，不打开操作菜单。
+            closeNailRowFloatMenu();
             setFocusActionSymbol(key, "nail");
             void runFocusBarAction("refresh");
             lastTapAt = 0;
@@ -38453,6 +38593,8 @@
           }
           lastTapKey = key;
           lastTapAt = now;
+          // 单击：仅高亮/取消高亮，不展开菜单。
+          closeNailRowFloatMenu();
           toggleFocusActionSymbol(key, "nail");
         });
       }
@@ -43579,10 +43721,14 @@
         });
       }
       function handleNailTradeClick(btn) {
-        if (!btn || btn.disabled) return;
+        if (!btn || btn.disabled || btn.hidden) return;
         const mode =
           btn.getAttribute("data-nail-trade") === "sell" ? "sell" : "buy";
-        const symbol = focusActionSymbol;
+        const menu = document.getElementById("nailRowFloatMenu");
+        const symbol =
+          focusActionSymbol ||
+          (menu && menu.dataset.symbol) ||
+          nailRowFloatMenuSymbol;
         if (!symbol) {
           showToast("请先点选置顶区的币");
           return;
@@ -43591,7 +43737,12 @@
           showToast("快捷买卖仅在置顶分栏可用");
           return;
         }
+        if (mode === "sell" && !nailSymbolCanSell(symbol)) {
+          showToast("无可用余额，无法卖出");
+          return;
+        }
         btn.disabled = true;
+        closeNailRowFloatMenu();
         void openQuickTradeSheet(symbol, mode).finally(() => {
           applyFocusActionChrome();
         });
@@ -43602,12 +43753,18 @@
           handleNailTradeClick(event.target.closest("[data-nail-trade]"));
         });
       }
-      const nailRowActionBar = document.getElementById("nailRowActionBar");
-      if (nailRowActionBar) {
-        nailRowActionBar.addEventListener("click", (event) => {
+      const nailRowFloatMask = document.getElementById("nailRowFloatMask");
+      if (nailRowFloatMask) {
+        nailRowFloatMask.addEventListener("click", () => {
+          closeNailRowFloatMenu();
+        });
+      }
+      const nailRowFloatMenu = document.getElementById("nailRowFloatMenu");
+      if (nailRowFloatMenu) {
+        nailRowFloatMenu.addEventListener("click", (event) => {
           if (event.target.closest("[data-nail-row-close]")) {
             event.preventDefault();
-            setFocusActionSymbol(null);
+            closeNailRowFloatMenu();
             return;
           }
           const tradeBtn = event.target.closest("[data-nail-trade]");
@@ -43623,6 +43780,15 @@
           }
         });
       }
+      window.addEventListener(
+        "resize",
+        () => {
+          if (isNailRowFloatMenuOpen() && nailRowFloatMenuSymbol) {
+            positionNailRowFloatMenu(nailRowFloatMenuSymbol);
+          }
+        },
+        { passive: true },
+      );
       const quickTradeSheet = document.getElementById("quickTradeSheet");
       if (quickTradeSheet) {
         const quickTradeClose = document.getElementById("quickTradeClose");
@@ -43803,6 +43969,10 @@
           }
           if (isKlineZoomOpen()) {
             closeKlineZoom();
+            return;
+          }
+          if (isNailRowFloatMenuOpen()) {
+            closeNailRowFloatMenu();
             return;
           }
           closeCardActions();
