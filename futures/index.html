@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>合约 · 置顶 / 自动盯 / 雷达</title>
+    <style>
+      :root {
+        --bg: #0f1419;
+        --panel: #1a222c;
+        --line: #2a3542;
+        --text: #e7eef6;
+        --muted: #8b9aab;
+        --up: #3dcf8e;
+        --down: #f07178;
+        --accent: #5b9fd4;
+        --pool: #2a3d2f;
+        --pin-bg: #243040;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: radial-gradient(
+          1200px 600px at 10% -10%,
+          #1c2a38 0%,
+          var(--bg) 55%
+        );
+        color: var(--text);
+      }
+      header {
+        padding: 18px 16px 6px;
+        max-width: 960px;
+        margin: 0 auto;
+      }
+      header h1 {
+        margin: 0 0 4px;
+        font-size: 20px;
+        font-weight: 700;
+      }
+      header p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .tabs {
+        display: flex;
+        gap: 6px;
+        max-width: 960px;
+        margin: 12px auto 0;
+        padding: 0 16px;
+      }
+      .tabs button {
+        flex: 1;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--muted);
+        border-radius: 10px;
+        padding: 10px 8px;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .tabs button.is-active {
+        color: var(--text);
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        max-width: 960px;
+        margin: 10px auto 0;
+        padding: 0 16px;
+        position: relative;
+      }
+      .toolbar button,
+      .ops button,
+      .toolbar-inline button,
+      .fut-settings-action {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--text);
+        border-radius: 8px;
+        padding: 7px 10px;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .toolbar button:disabled,
+      .fut-settings-action:disabled {
+        opacity: 0.5;
+        cursor: wait;
+      }
+      .fut-settings-wrap {
+        position: relative;
+        margin-left: auto;
+      }
+      .fut-settings-popover {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 6px);
+        width: min(360px, calc(100vw - 32px));
+        background: #15202b;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 8px 0;
+        z-index: 30;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+      }
+      .fut-settings-popover[hidden] {
+        display: none;
+      }
+      .fut-set-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 14px;
+        border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      }
+      .fut-set-row:last-child {
+        border-bottom: 0;
+      }
+      .fut-set-label {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .fut-set-label span {
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .fut-set-label small {
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.35;
+      }
+      .fut-mode-switch {
+        display: inline-flex;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+      .fut-mode-switch button {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: var(--muted);
+        padding: 6px 8px;
+        font-size: 11px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .fut-mode-switch button.is-active {
+        background: color-mix(in srgb, var(--accent) 22%, transparent);
+        color: var(--text);
+      }
+      .fut-switch {
+        width: 42px;
+        height: 24px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: #243040;
+        position: relative;
+        cursor: pointer;
+        flex-shrink: 0;
+        padding: 0;
+      }
+      .fut-switch::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #9aabbc;
+        transition: transform 0.15s ease, background 0.15s ease;
+      }
+      .fut-switch[aria-checked="true"] {
+        background: color-mix(in srgb, var(--accent) 35%, #243040);
+      }
+      .fut-switch[aria-checked="true"]::after {
+        transform: translateX(18px);
+        background: var(--accent);
+      }
+      .fut-rank-edit {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .fut-rank-edit input {
+        width: 56px;
+        height: 28px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--bg);
+        color: var(--text);
+        text-align: center;
+        font: inherit;
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+      .meta,
+      .muted {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .err {
+        color: var(--down);
+        font-size: 12px;
+        max-width: 960px;
+        margin: 8px auto 0;
+        padding: 0 16px;
+      }
+      main {
+        max-width: 960px;
+        margin: 12px auto 48px;
+        padding: 0 16px;
+      }
+      .sec {
+        background: color-mix(in srgb, var(--panel) 90%, transparent);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        margin-bottom: 12px;
+      }
+      .sec h3 {
+        margin: 0;
+        padding: 10px 12px;
+        font-size: 13px;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .sec h3 span {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .table-wrap {
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-variant-numeric: tabular-nums;
+      }
+      th,
+      td {
+        padding: 8px 10px;
+        text-align: left;
+        font-size: 12px;
+        border-bottom: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
+        vertical-align: middle;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 11px;
+        position: sticky;
+        top: 0;
+        background: var(--panel);
+      }
+      tr:last-child td {
+        border-bottom: 0;
+      }
+      tr.is-pool {
+        background: color-mix(in srgb, var(--pool) 55%, transparent);
+      }
+      tr.is-pinned {
+        background: color-mix(in srgb, var(--pin-bg) 70%, transparent);
+      }
+      .sym {
+        font-weight: 700;
+      }
+      .up {
+        color: var(--up);
+      }
+      .down {
+        color: var(--down);
+      }
+      .ops {
+        white-space: nowrap;
+      }
+      .ops button {
+        margin: 0 2px 2px 0;
+        padding: 5px 8px;
+      }
+      .tag {
+        display: inline-block;
+        font-size: 11px;
+        color: var(--accent);
+        border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+        border-radius: 999px;
+        padding: 1px 7px;
+      }
+      .mini-k {
+        width: 120px;
+        height: 36px;
+        display: block;
+      }
+      #paneRadar .mini-k {
+        width: 140px;
+        height: 40px;
+      }
+      .empty {
+        padding: 16px 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .toolbar-inline {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .events {
+        margin: 0;
+        padding: 10px 14px 14px 28px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.55;
+      }
+      .events time {
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+      }
+      #toast {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        background: #223041;
+        border: 1px solid var(--line);
+        color: var(--text);
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-size: 13px;
+        z-index: 20;
+        max-width: 90vw;
+      }
+      @media (max-width: 640px) {
+        th:nth-child(2),
+        td:nth-child(2) {
+          /* keep kline on pin pane */
+        }
+        .mini-k {
+          width: 96px;
+          height: 32px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>合约</h1>
+      <p>
+        置顶（常看 / 置顶 / 其余 · 便签）· 自动盯 · 雷达。只读发现 + 置顶，无买卖 /
+        无账本。数据仅本目录 JSON，与现货 kline 无关。
+      </p>
+    </header>
+
+    <nav class="tabs" aria-label="分栏">
+      <button type="button" data-fut-tab="pin" class="is-active">置顶</button>
+      <button type="button" data-fut-tab="auto">自动盯</button>
+      <button type="button" data-fut-tab="radar">雷达</button>
+    </nav>
+
+    <div class="toolbar">
+      <button type="button" id="refreshBtn">刷新</button>
+      <button type="button" id="pinNoteAllBtn" title="常看+置顶写现价便签">
+        便签现价
+      </button>
+      <span class="meta" id="statusMeta">尚未加载</span>
+      <div class="fut-settings-wrap">
+        <button
+          type="button"
+          id="futSettingsBtn"
+          aria-haspopup="dialog"
+          aria-controls="futSettingsPopover"
+          aria-expanded="false"
+          title="置顶排序、筛选与观察池"
+        >
+          设置
+        </button>
+        <div
+          class="fut-settings-popover"
+          id="futSettingsPopover"
+          hidden
+          role="dialog"
+          aria-label="合约置顶设置"
+        >
+          <div class="fut-set-row">
+            <div class="fut-set-label">
+              <span>排序</span>
+              <small>默认顺序 / 便签涨幅 / 24h</small>
+            </div>
+            <div class="fut-mode-switch" id="futSortSwitch" role="group" aria-label="排序">
+              <button type="button" data-fut-sort="order">默认</button>
+              <button type="button" data-fut-sort="noteGain" class="is-active">便签涨幅</button>
+              <button type="button" data-fut-sort="change24h">24h</button>
+            </div>
+          </div>
+          <div class="fut-set-row">
+            <div class="fut-set-label">
+              <span>只看置顶区</span>
+              <small>隐藏「其余」段</small>
+            </div>
+            <button
+              type="button"
+              class="fut-switch"
+              id="futPinnedOnlySwitch"
+              role="switch"
+              aria-checked="false"
+              aria-label="只看置顶区"
+            ></button>
+          </div>
+          <div class="fut-set-row">
+            <div class="fut-set-label">
+              <span>定时刷新</span>
+              <small>约 15 秒刷现价与 K</small>
+            </div>
+            <button
+              type="button"
+              class="fut-switch"
+              id="futAutoRefreshSwitch"
+              role="switch"
+              aria-checked="false"
+              aria-label="定时刷新"
+            ></button>
+          </div>
+          <div class="fut-set-row">
+            <div class="fut-set-label">
+              <span>观察池前 N</span>
+              <small>写 futures/fut-prefs · 云约 5 分钟跟上</small>
+            </div>
+            <div class="fut-rank-edit">
+              <input
+                type="number"
+                id="futWatchPoolRankInput"
+                min="10"
+                max="100"
+                step="1"
+                value="35"
+                inputmode="numeric"
+                aria-label="观察池前 N"
+              />
+              <button type="button" class="fut-settings-action" id="futWatchPoolRankSave">
+                保存
+              </button>
+            </div>
+          </div>
+          <div class="fut-set-row">
+            <div class="fut-set-label">
+              <span>一键平简</span>
+              <small>常看+置顶全部写现价便签</small>
+            </div>
+            <button type="button" class="fut-settings-action" id="futFlatSimplifyBtn">
+              执行
+            </button>
+          </div>
+          <div class="fut-set-row">
+            <div class="fut-set-label">
+              <span>现货 kline</span>
+              <small>钉子页 · 与合约共用 GitHub 密码入口</small>
+            </div>
+            <a
+              class="fut-settings-action"
+              id="futSpotJump"
+              href="../kline.html"
+              title="回到现货钉子页"
+            >
+              打开
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="err" id="errBox" hidden></p>
+
+    <main>
+      <div data-fut-pane="pin" id="panePin"></div>
+      <div data-fut-pane="auto" id="paneAuto" hidden></div>
+      <div data-fut-pane="radar" id="paneRadar" hidden></div>
+    </main>
+
+    <div id="toast" hidden></div>
+
+    <script src="../github-token-vault.js"></script>
+    <script src="./fut-config.js"></script>
+    <script src="./fut-store.js"></script>
+    <script src="./fut-app.js"></script>
+  </body>
+</html>

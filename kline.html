@@ -2540,6 +2540,10 @@
         font-weight: 650;
         cursor: pointer;
         white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
       }
       .nail-settings-action-btn:disabled {
         opacity: 0.5;
@@ -11480,6 +11484,20 @@
               >
                 执行
               </button>
+            </div>
+            <div class="nail-rising-row">
+              <div class="nail-auto-refresh-label">
+                <span>合约模块</span>
+                <small>U 本位只读 · 置顶 / 自动盯 / 雷达（独立目录，无买卖）</small>
+              </div>
+              <a
+                class="nail-settings-action-btn"
+                id="nailFuturesJump"
+                href="./futures/"
+                title="打开合约只读页（与现货共用 GitHub 密码入口）"
+              >
+                打开
+              </a>
             </div>
           </div>
         </div>
