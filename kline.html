@@ -5578,7 +5578,8 @@
         gap: 4px;
         flex: 0 0 auto;
       }
-      .nail-notice-new {
+      .nail-notice-new,
+      .nail-auto-pin-new {
         display: inline-block;
         padding: 1px 4px;
         border-radius: 4px;
@@ -5587,6 +5588,10 @@
         font-size: 9px;
         font-weight: 700;
         line-height: 1.25;
+      }
+      /* 自动盯卡头是 flex，标签别被币名挤没。 */
+      .nail-auto-pin-new {
+        flex-shrink: 0;
       }
       .nail-notice-name {
         border: none;
@@ -16165,6 +16170,11 @@
             ? `<span class="nail-auto-pin-overpct">${escapeHtml(formatOverlookPct(opts.overPct))}</span>`
             : "";
         const label = escapeHtml(key.replace(/USDT$/i, "")) + repeat;
+        // 本次查看里新打的钉：卡片上标「新」，与通知分栏口径一致。
+        const newTag =
+          !overlook && nailAutoPinIsNewAt(at)
+            ? '<span class="nail-auto-pin-new">新</span>'
+            : "";
         const pin = pinItemBySymbol(key);
         const pinPrice =
           pin && Number(pin.pinPrice) > 0 ? Number(pin.pinPrice) : 0;
@@ -16190,6 +16200,7 @@
           `<article class="nail-auto-pin-card${overlook ? " is-overlook" : ""}${selected ? " is-selected" : ""}" data-autopin-card="${escapeHtml(key)}"${overlook ? ` data-autopin-overlook="1"` : ""}>`,
           `<div class="nail-auto-pin-card-head">`,
           `<button type="button" class="nail-auto-pin-card-name" data-nail-auto-symbol="${escapeHtml(key)}">${label}</button>`,
+          newTag,
           overPctText,
           pinBtn,
           `<span class="nail-auto-pin-card-time">${escapeHtml(formatActionLogTime(at))}</span>`,
@@ -16216,6 +16227,10 @@
             ? `<i class="nail-auto-pin-repeat">×${repeatN}</i>`
             : "";
         const label = escapeHtml(key.replace(/USDT$/i, "")) + repeat;
+        const newTag =
+          !overlook && nailAutoPinIsNewAt(at)
+            ? '<span class="nail-auto-pin-new">新</span>'
+            : "";
         const change24h = Number(
           marketMap[key] && marketMap[key].change24h,
         );
@@ -16245,7 +16260,7 @@
             : "";
         return [
           `<tr class="nail-auto-pin-row${overlook ? " is-overlook" : ""}${selected ? " is-selected" : ""}" data-autopin-card="${escapeHtml(key)}"${overlook ? ` data-autopin-overlook="1"` : ""}>`,
-          `<td>${check}<button type="button" class="nail-auto-pin-card-name" data-nail-auto-symbol="${escapeHtml(key)}">${label}</button>${meta}</td>`,
+          `<td>${check}<button type="button" class="nail-auto-pin-card-name" data-nail-auto-symbol="${escapeHtml(key)}">${label}</button>${newTag}${meta}</td>`,
           `<td><canvas class="nail-auto-pin-kline is-loading" data-kline="${escapeHtml(key)}" data-autopin-chart="${escapeHtml(key)}"></canvas></td>`,
           `<td class="${chCls}">${escapeHtml(formatPercent(change24h))}</td>`,
           `</tr>`,
@@ -16444,6 +16459,21 @@
         }
         list.innerHTML = parts.join("");
         bindNailAutoPinOverlookToggle(list);
+      }
+
+      /** 打开自动盯时把第一条带「新」的卡片滚进视野；已在视野内就不动。 */
+      function scrollNailAutoPinToFirstNew() {
+        const list = document.getElementById("nailAutoPinList");
+        if (!list) return;
+        const tag = list.querySelector(".nail-auto-pin-new");
+        if (!tag) return;
+        const card =
+          tag.closest(".nail-auto-pin-card, .nail-auto-pin-row") || tag;
+        requestAnimationFrame(() => {
+          if (typeof card.scrollIntoView === "function") {
+            card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          }
+        });
       }
 
       function bindNailAutoPinOverlookToggle(root) {
@@ -16685,6 +16715,9 @@
           await setNailHoldPopoverOpen(false);
         } else if (wasOpen) {
           captureNailAutoPinScroll();
+          // 只有「从打开变关闭」才算看完这一趟：清空冻结基线。
+          // 别处幂等调 setNailAutoPinPopoverOpen(false) 收尾时不算离开，别误清。
+          nailAutoPinViewBaseline = null;
         }
         popover.hidden = !next;
         if (button) {
@@ -16695,6 +16728,9 @@
           layoutNailHeadSheet(popover);
           // 已经打开时再点进自动盯（例如俯瞰摘要跳转）：只校正布局，不整页重载。
           if (wasOpen) return;
+          // 进门先冻结本次查看的 seenAt：随后标已读 / 另一台设备同步进度
+          // 只改真实水位，停留期间卡片上的「新」仍按进门那一刻算。
+          nailAutoPinViewBaseline = nailAutoPinSeenAtNow();
           const keepAlive = nailAutoPinHasKeepaliveContent();
           if (!keepAlive) {
             const listEl = document.getElementById("nailAutoPinList");
@@ -16707,7 +16743,17 @@
           // 保活：静默重渲并还原滚动，避免「加载中」闪一下丢位置。
           renderNailAutoPinList();
           nailAutoPinContentReady = true;
-          restoreNailAutoPinScroll();
+          // 有「新」优先定位：丢掉 pending scroll，避免 restore 与 scrollIntoView 同帧互抢。
+          // （不防后续 list.innerHTML 重渲丢位——那是预存行为，另做滚动保持才管得着。）
+          const listEl = document.getElementById("nailAutoPinList");
+          const hasNewTag =
+            !!(listEl && listEl.querySelector(".nail-auto-pin-new"));
+          if (hasNewTag) {
+            nailAutoPinPendingScrollTop = null;
+            scrollNailAutoPinToFirstNew();
+          } else {
+            restoreNailAutoPinScroll();
+          }
           writeNailAutoPinSeenAt(Date.now());
           syncNailAutoPinBadge();
           void paintNailAutoPinCharts();
@@ -29282,6 +29328,19 @@
         priceAlertReadAt =
           Number(localStorage.getItem(PRICE_ALERT_READ_KEY)) || 0;
       } catch (_) {}
+      /**
+       * 本次查看冻结的价格提醒「新」基线（与 nailNoticeViewBaseline 同进同出）：
+       * 只解耦展示，不合并 priceAlertReadAt / nailGreenNoticesReadAt 两套已读水位。
+       * 声明放在 buildPriceAlertNoticeHtml 之前，避免初始化期撞 TDZ。
+       */
+      let priceAlertViewBaseline = null;
+      function priceAlertIsNewAt(at) {
+        const base =
+          priceAlertViewBaseline != null
+            ? priceAlertViewBaseline
+            : Number(priceAlertReadAt) || 0;
+        return Number(at) > base;
+      }
       let priceAlertsLoadedAt = 0;
       // 仅页面提醒：记录已提示过的 hitAt，新一轮命中弹一次 toast（首轮加载不弹）。
       let priceAlertHitSeen = null;
@@ -30023,7 +30082,7 @@
         const target = Number(item.target) || 0;
         const dir = item.direction === "below" ? "跌破" : "涨到";
         const at = Number(item.hitAt) || 0;
-        const isNew = at > (Number(priceAlertReadAt) || 0);
+        const isNew = priceAlertIsNewAt(at);
         const spot = Number(marketMap[key] && marketMap[key].price);
         return [
           `<article class="nail-price-alert-card" data-price-alert-id="${escapeHtml(item.id || "")}">`,
@@ -32024,6 +32083,39 @@
 
       let nailGreenNotices = [];
       let nailGreenNoticesReadAt = 0;
+      /**
+       * 本次查看冻结的「新」判定基线：
+       * 进门那一刻记下当时的已读水位，停留分栏期间列表上的「新」一律按它算，
+       * 之后任何「标为已读」或另一台设备同步过来的进度都不会把「新」字擦掉；
+       * 离开分栏才清空，下次进来重新按最新水位算（= 看过之后才消）。
+       */
+      let nailNoticeViewBaseline = null;
+      function nailNoticeIsNewAt(at) {
+        const base =
+          nailNoticeViewBaseline != null
+            ? nailNoticeViewBaseline
+            : Number(nailGreenNoticesReadAt) || 0;
+        return Number(at) > base;
+      }
+      /** 自动盯同理：进门冻结 seenAt，离开清空；只认近 24h，与角标口径一致。 */
+      let nailAutoPinViewBaseline = null;
+      function nailAutoPinSeenAtNow() {
+        let raw = null;
+        try {
+          raw = localStorage.getItem(AUTO_PIN_SEEN_KEY);
+        } catch (_) {
+          /* ignore */
+        }
+        return Number(raw) || 0;
+      }
+      function nailAutoPinIsNewAt(at) {
+        const base =
+          nailAutoPinViewBaseline != null
+            ? nailAutoPinViewBaseline
+            : nailAutoPinSeenAtNow();
+        const n = Number(at) || 0;
+        return n > base && n >= Date.now() - AUTO_PIN_BADGE_MS;
+      }
       let nailNoticeMode = "closed"; // closed | open
       const NAIL_NOTICE_AUTO_REFRESH_MS = 10 * 1000;
       /** 通知页打开时固定 10 秒刷新（UI 开关已去掉）。 */
@@ -32422,7 +32514,7 @@
                   ? `pb-focus:${item.symbol}:${item.at}`
                   : `${item.symbol}:${item.openTime}`),
             );
-            const isNew = Number(item.at) > (Number(nailGreenNoticesReadAt) || 0);
+            const isNew = nailNoticeIsNewAt(item.at);
         const kinds = Array.isArray(item.kinds)
           ? item.kinds.map(String).filter(Boolean)
           : [];
@@ -32484,7 +32576,7 @@
         const symbol = escapeHtml(item.symbol);
         const label = escapeHtml(item.label || String(item.symbol || "").replace(/USDT$/i, ""));
         const id = escapeHtml(item.id || (pullbackFocus ? `pb-focus:${item.symbol}:${item.at}` : `${item.symbol}:${item.openTime}`));
-        const isNew = Number(item.at) > (Number(nailGreenNoticesReadAt) || 0);
+        const isNew = nailNoticeIsNewAt(item.at);
         const kinds = Array.isArray(item.kinds) ? item.kinds.map(String).filter(Boolean) : [];
         const hitBal = kinds.includes("天平");
         const hitStraight = kinds.includes("直拉");
@@ -32684,7 +32776,9 @@
 
       /** 形态分组的展开状态：双命中默认展开，其余默认折叠；跨重渲保留。 */
       const nailNoticeGroupOpen = new Map();
-      function isNoticeGroupOpen(key, kind) {
+      function isNoticeGroupOpen(key, kind, hasFresh) {
+        // 本次查看里新来的条目所在组：默认展开，别让「新」折在里面看不见。
+        if (hasFresh) return true;
         if (!nailNoticeGroupOpen.has(key)) nailNoticeGroupOpen.set(key, kind === "双命中");
         return nailNoticeGroupOpen.get(key);
       }
@@ -32694,16 +32788,20 @@
         const metaEl = document.getElementById("nailNoticeMeta");
         if (!listEl) return;
         const scrollSnap = captureNailNoticeScroll(listEl);
-        const risingOk = (symbol) =>
-          nailBstockVisible(symbol) && nailSymbolPassesRisingFilter(symbol);
+        // 本次查看里新来的通知：优先露脸，不被「只看当前窗口上涨」等筛选挡掉。
+        const isFreshNotice = (at) =>
+          nailNoticeViewBaseline != null && nailNoticeIsNewAt(at);
+        const risingOk = (symbol, at) =>
+          isFreshNotice(at) ||
+          (nailBstockVisible(symbol) && nailSymbolPassesRisingFilter(symbol));
         const items = (Array.isArray(nailGreenNotices) ? nailGreenNotices : []).filter(
-          (item) => risingOk(item && item.symbol),
+          (item) => risingOk(item && item.symbol, item && item.at),
         );
         const alerts = priceAlertNoticeItems().filter((item) =>
-          risingOk(item && item.symbol),
+          risingOk(item && item.symbol, item && item.hitAt),
         );
         const pullbackFocusRows = visiblePullbackFocusRows().filter((row) =>
-          risingOk(row && row.symbol),
+          risingOk(row && row.symbol, row && row.at),
         );
         const pullbackFocusSet = new Set(
           pullbackFocusRows.map((row) =>
@@ -32794,7 +32892,11 @@
         const kindGroups = groupNailNoticesByKind(listItems);
         kindGroups.forEach((g) => {
           const key = `${g.kind}|${g.window}`;
-          const open = isNoticeGroupOpen(key, g.kind);
+          const open = isNoticeGroupOpen(
+            key,
+            g.kind,
+            g.items.some((item) => isFreshNotice(item && item.at)),
+          );
           const strongest = g.kind === "双命中";
           parts.push(
             `<section class="nail-notice-batch${open ? "" : " is-collapsed"}" data-notice-kind-group="${escapeHtml(key)}">`,
@@ -33307,6 +33409,22 @@
         const patternOn = balanceOn || straightOn || pullbackOn;
         let visible = 0;
         listEl.querySelectorAll(".nail-notice-card").forEach((card) => {
+          // 本次查看里新来的通知：强制可见，不被任何筛选藏掉，
+          // 也不连累整组 / 时间头因为「这一批全被筛掉」而收起。
+          if (
+            nailNoticeViewBaseline != null &&
+            nailNoticeIsNewAt(Number(card.getAttribute("data-notice-at")) || 0)
+          ) {
+            card.classList.remove("is-delta-filtered");
+            const tbody =
+              card.parentElement &&
+              card.parentElement.classList.contains("nail-notice-tbody")
+                ? card.parentElement
+                : null;
+            if (tbody) tbody.classList.remove("is-delta-filtered");
+            visible += 1;
+            return;
+          }
           // 回踩置顶区不受筛选隐藏，始终可见。
           if (card.classList.contains("is-pullback-focus")) {
             card.classList.remove("is-delta-filtered");
@@ -34495,6 +34613,12 @@
         const opts = options || {};
         const alreadyOpen =
           nailSegment === "notice" && nailNoticeMode === "open";
+        // 进门先冻结本次查看的「新」基线（用当时的已读水位）：随后标已读、
+        // 另一台设备同步进度都只改真实水位，不再擦掉列表上这一趟要给你看的「新」字。
+        if (!alreadyOpen) {
+          nailNoticeViewBaseline = Number(nailGreenNoticesReadAt) || 0;
+          priceAlertViewBaseline = Number(priceAlertReadAt) || 0;
+        }
         // 通知已是钉子页的一个分栏：任何入口进来都先切到该分栏，保证看得见。
         if (nailSegment !== "notice") {
           nailSegment = "notice";
@@ -34588,6 +34712,9 @@
       }
 
       function closeNailNoticeDrawer() {
+        // 看完了、离开这一趟：清空冻结基线，下次进来按最新已读水位重算「新」。
+        nailNoticeViewBaseline = null;
+        priceAlertViewBaseline = null;
         setNailNoticeDrawerMode("closed");
         setNailNoticeHealthPanelOpen(false);
         hideNailNoticeScrollPct(true);
