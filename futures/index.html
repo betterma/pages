@@ -30,6 +30,7 @@
         --fill: #2a2e35;
         --up: #3dcf8e;
         --down: #f07178;
+        --chrome-blur: rgba(17, 18, 20, 0.78);
       }
       html[data-theme="daylight"] {
         --bg: #f2f3f5;
@@ -42,6 +43,7 @@
         --fill: #eef0f3;
         --up: #16a34a;
         --down: #dc2626;
+        --chrome-blur: rgba(242, 243, 245, 0.82);
       }
       html[data-theme="night"] {
         --bg: #0b0c0f;
@@ -54,6 +56,7 @@
         --fill: #232833;
         --up: #3dcf8e;
         --down: #f07178;
+        --chrome-blur: rgba(8, 10, 13, 0.86);
       }
       * {
         box-sizing: border-box;
@@ -495,10 +498,6 @@
             0 0;
         }
       }
-      .fut-focus-bar.is-busy button:not(.fut-focus-close) {
-        pointer-events: none;
-        opacity: 0.7;
-      }
       .fut-shell.is-booting .fut-seg-host {
         opacity: 0.55;
       }
@@ -524,10 +523,14 @@
         overflow-y: scroll;
         -webkit-overflow-scrolling: touch;
         overscroll-behavior: contain;
-        padding: 8px 10px 72px;
+        /* 置顶：批量栏已流式贴底；自动盯给悬浮操作栏留空 */
+        padding: 8px 10px 16px;
         -webkit-user-select: none;
         user-select: none;
         -webkit-touch-callout: none;
+      }
+      #autoList {
+        padding-bottom: 72px;
       }
       .fut-scroll-pct {
         position: absolute;
@@ -657,6 +660,7 @@
       .fut-prow-row.is-selected,
       .fut-prow-row.is-focus {
         background: color-mix(in srgb, var(--accent) 12%, transparent);
+        outline: none;
       }
       .fut-prow-row.is-jump-target,
       .fut-kline-cell.is-jump-target {
@@ -804,26 +808,44 @@
         text-align: right;
       }
       .fut-prow-ops button {
+        padding: 2px 6px;
+        font-size: 11px;
         border: none;
         background: var(--fill);
         color: var(--label);
-        height: 22px;
-        min-width: 22px;
-        padding: 0 6px;
         border-radius: 6px;
-        font-size: 11px;
         font-weight: 650;
         cursor: pointer;
-        margin-left: 6px;
+      }
+      .fut-prow-ops button + button {
+        margin-left: 8px;
+      }
+      .fut-prow-ops button.fut-zoom {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        min-width: 22px;
+        padding: 0;
+        color: var(--secondary);
+        line-height: 0;
+      }
+      .fut-prow-ops button.fut-zoom:active {
+        color: var(--accent);
+      }
+      .fut-prow-ops button.fut-zoom svg {
+        width: 12px;
+        height: 12px;
+        display: block;
       }
       .fut-prow-ops button.fut-del {
         color: var(--down);
         background: color-mix(in srgb, var(--down) 12%, transparent);
+        height: 22px;
+        min-width: 22px;
       }
-      .fut-prow-row.is-focus {
-        box-shadow: inset 0 0 0 2px
-          color-mix(in srgb, var(--accent) 55%, transparent);
-      }
+      /* 对齐钉子 nail-prow-row.is-focus：只铺底，不用 inset 描边 */
       .fut-chg {
         text-align: right;
         font-weight: 650;
@@ -1200,24 +1222,21 @@
         color: var(--down);
       }
 
-      /* 多选底栏 */
+      /* 多选底栏：对齐钉子 .nail-batch-bar（贴列表底、流式，非 fixed） */
       .fut-batch-bar {
-        position: fixed;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 40;
+        flex: 0 0 auto;
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 8px;
-        padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
-        background: color-mix(in srgb, var(--elevated) 92%, transparent);
+        gap: 6px;
+        padding: 8px 12px max(10px, env(safe-area-inset-bottom, 0px));
         border-top: 0.5px solid var(--separator);
-        backdrop-filter: blur(8px);
+        background: color-mix(in srgb, var(--elevated) 94%, transparent);
       }
       .fut-batch-bar[hidden] {
         display: none !important;
       }
+      .fut-batch-bar .fut-batch-count,
       .fut-batch-bar .count {
         font-size: 12px;
         color: var(--secondary);
@@ -1225,28 +1244,38 @@
         font-variant-numeric: tabular-nums;
       }
       .fut-batch-bar button {
-        border: 0.5px solid var(--separator);
+        border: none;
         background: var(--fill);
         color: var(--label);
+        height: 32px;
+        padding: 0 12px;
         border-radius: 8px;
-        padding: 7px 10px;
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 650;
         cursor: pointer;
       }
+      .fut-batch-bar button.is-primary {
+        background: color-mix(in srgb, var(--accent) 18%, transparent);
+        color: var(--accent);
+      }
+      .fut-batch-bar button.is-danger {
+        color: var(--down, #a05a52);
+      }
       .fut-batch-bar button:disabled {
-        opacity: 0.45;
+        opacity: 0.4;
+        cursor: wait;
       }
 
-      /* 长按浮层（无买卖） */
+      /* 长按浮层：对齐钉子 .nail-row-float-*（居中贴行，非跟手指） */
       .fut-row-float-mask {
         position: fixed;
         inset: 0;
         z-index: 132;
-        background: color-mix(in srgb, var(--bg) 28%, transparent);
+        background: color-mix(in srgb, var(--bg, #000) 28%, transparent);
+        backdrop-filter: blur(1.5px);
+        -webkit-backdrop-filter: blur(1.5px);
       }
-      .fut-row-float-mask[hidden],
-      .fut-row-float-menu[hidden] {
+      .fut-row-float-mask[hidden] {
         display: none !important;
       }
       .fut-row-float-menu {
@@ -1254,14 +1283,19 @@
         z-index: 133;
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: 4px;
         flex-wrap: wrap;
+        min-width: 0;
         max-width: min(92vw, 360px);
         padding: 8px 10px;
         border-radius: 12px;
-        border: 0.5px solid var(--separator);
-        background: color-mix(in srgb, var(--elevated) 94%, transparent);
+        border: 0.5px solid var(--separator, rgba(0, 0, 0, 0.12));
+        background: color-mix(in srgb, var(--elevated, #fff) 94%, transparent);
         box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+      }
+      .fut-row-float-menu[hidden] {
+        display: none !important;
       }
       .fut-row-float-menu button {
         border: none;
@@ -1273,61 +1307,134 @@
         font-size: 13px;
         font-weight: 650;
         cursor: pointer;
+        white-space: nowrap;
       }
       .fut-row-float-menu button:hover {
         background: color-mix(in srgb, var(--fill) 55%, transparent);
       }
-      .fut-row-float-menu .close {
-        color: var(--secondary);
+      .fut-row-float-menu button.is-danger {
+        color: var(--down, #c45c5c);
+      }
+      .fut-row-float-menu button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .fut-row-float-menu .fut-row-action-close {
         min-width: 30px;
+        padding: 0 8px;
+        font-size: 16px;
+        font-weight: 500;
+        color: var(--secondary);
+      }
+      .fut-row-float-menu.is-busy {
+        pointer-events: none;
+        opacity: 0.72;
       }
 
+      /* 操作底栏：对齐钉子 .card-focus-bar（自动盯/雷达；置顶不弹） */
       .fut-focus-bar {
+        --fut-focus-bar-h: 52px;
         position: fixed;
         left: 50%;
-        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        bottom: calc(10px + env(safe-area-inset-bottom, 0px));
         transform: translateX(-50%);
-        z-index: 90;
+        z-index: 145;
         display: flex;
         align-items: center;
         gap: 8px;
         width: min(420px, calc(100vw - 16px));
-        min-height: 52px;
-        padding: 8px 28px 8px 12px;
+        max-width: calc(100vw - 16px);
+        min-height: var(--fut-focus-bar-h);
+        padding: 8px 28px 8px 10px;
         border-radius: 12px;
-        border: 0.5px solid var(--separator);
-        background: color-mix(in srgb, var(--elevated) 92%, transparent);
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
-        backdrop-filter: blur(16px);
+        border: 0.5px solid
+          color-mix(in srgb, var(--separator, rgba(200, 208, 204, 0.85)) 55%, transparent);
+        background: var(--chrome-blur);
+        color: var(--label);
+        box-shadow: 0 6px 18px rgba(40, 50, 48, 0.1);
+        backdrop-filter: saturate(180%) blur(20px);
+        -webkit-backdrop-filter: saturate(180%) blur(20px);
+        box-sizing: border-box;
       }
       .fut-focus-bar[hidden] {
         display: none !important;
+      }
+      .fut-focus-bar.is-busy {
+        pointer-events: none;
+      }
+      .fut-focus-bar.is-busy .fut-focus-close {
+        pointer-events: auto;
       }
       .fut-focus-close {
         position: absolute;
         top: 4px;
         right: 4px;
-        border: none;
-        background: transparent;
-        color: var(--secondary);
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         width: 22px;
         height: 22px;
-        cursor: pointer;
+        padding: 0;
+        border: none;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--secondary);
         font-size: 16px;
+        font-weight: 500;
+        line-height: 1;
+        cursor: pointer;
+        flex: none !important;
       }
-      .fut-focus-bar button:not(.fut-focus-close) {
-        border: 0.5px solid var(--separator);
-        background: var(--fill);
+      .fut-focus-close:hover,
+      .fut-focus-close:active {
         color: var(--label);
-        height: 30px;
-        padding: 0 10px;
-        border-radius: 8px;
-        font-size: 12px;
+        background: var(--fill);
+      }
+      .fut-focus-bar .fut-focus-label {
+        flex: 0 1 auto;
+        min-width: 3.5em;
+        max-width: 8em;
+        height: 36px;
+        padding: 0 8px;
+        border: none;
+        border-radius: 9px;
+        background: transparent;
+        color: inherit;
+        font-size: 14px;
+        font-weight: 700;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      .fut-focus-bar .fut-focus-label:hover {
+        background: var(--fill);
+      }
+      .fut-focus-bar button:not(.fut-focus-close):not(.fut-focus-label) {
+        flex: 1 1 0;
+        border: none;
+        background: var(--fill);
+        color: inherit;
+        height: 36px;
+        padding: 0 12px;
+        border-radius: 9px;
+        font-size: 14px;
         font-weight: 650;
         cursor: pointer;
+        white-space: nowrap;
       }
+      .fut-focus-bar button.is-primary {
+        background: color-mix(in srgb, var(--accent) 18%, transparent);
+        color: var(--accent);
+      }
+      .fut-focus-bar button.is-already-pinned,
       .fut-focus-bar button:disabled {
         opacity: 0.5;
+      }
+      body.has-fut-focus .fut-toast,
+      body.has-fut-focus #toast {
+        bottom: calc(90px + env(safe-area-inset-bottom, 0px));
       }
       /* 放大：对齐钉子 kline-zoom-gate（全屏门 + 主图 + 长周期） */
       .fut-zoom-overlay {
@@ -1868,6 +1975,38 @@
           >
             0%
           </div>
+          <!-- 对齐钉子：多选栏贴列表底流式，不 fixed 盖全屏 -->
+          <div class="fut-batch-bar" id="futBatchBar" hidden>
+            <span class="fut-batch-count" id="futBatchCount">0</span>
+            <button type="button" id="futBatchSelectAllBtn">全选</button>
+            <button
+              type="button"
+              class="is-primary"
+              id="futBatchPinBtn"
+              title="置顶选中"
+            >
+              置顶
+            </button>
+            <button type="button" id="futBatchUnpinBtn" title="取消置顶选中">
+              取消置顶
+            </button>
+            <button
+              type="button"
+              id="futBatchNoteBtn"
+              title="以当前现价写入便签"
+            >
+              便签现价
+            </button>
+            <button
+              type="button"
+              class="is-danger"
+              id="futBatchDeleteBtn"
+              title="删除选中"
+            >
+              删除
+            </button>
+            <button type="button" id="futBatchExitBtn">取消</button>
+          </div>
         </section>
         <section
           class="fut-seg-panel"
@@ -1930,6 +2069,7 @@
       </div>
     </div>
 
+    <!-- 对齐钉子 cardFocusBar：置顶不弹；自动盯/雷达只要置顶+刷新 -->
     <div
       id="futFocusBar"
       class="fut-focus-bar"
@@ -1937,11 +2077,23 @@
       role="toolbar"
       aria-label="行操作"
     >
-      <button type="button" class="fut-focus-close" id="futFocusClose" title="关闭">
+      <button
+        type="button"
+        class="fut-focus-close"
+        id="futFocusClose"
+        title="关闭"
+        aria-label="关闭操作栏"
+      >
         ×
       </button>
-      <strong id="futFocusSym">—</strong>
-      <!-- 置顶分栏焦点：便签（对齐钉子 nail-scope）；自动盯/雷达：置顶+刷新 -->
+      <button
+        type="button"
+        class="fut-focus-label"
+        id="futFocusSym"
+        title="点击复制名称"
+      >
+        —
+      </button>
       <button type="button" id="futFocusNoteBtn" data-fut-focus="note" hidden>
         便签
       </button>
@@ -2009,30 +2161,33 @@
       </div>
     </div>
 
-    <div class="fut-batch-bar" id="futBatchBar" hidden>
-      <span class="count">已选 <strong id="futBatchCount">0</strong></span>
-      <button type="button" id="futBatchSelectAllBtn">全选</button>
-      <button type="button" id="futBatchPinBtn">置顶</button>
-      <button type="button" id="futBatchUnpinBtn">取消置顶</button>
-      <button type="button" id="futBatchNoteBtn">便签现价</button>
-      <button type="button" id="futBatchDeleteBtn">删除</button>
-      <button type="button" id="futBatchExitBtn">完成</button>
-    </div>
-
     <div id="futRowFloatMask" class="fut-row-float-mask" hidden></div>
     <div
       id="futRowFloatMenu"
       class="fut-row-float-menu"
       hidden
       role="menu"
-      aria-label="行操作"
+      aria-label="置顶行操作"
     >
-      <button type="button" class="close" data-fut-row-close>×</button>
-      <!-- 对齐钉子长按浮层：便签为主；放大走行内按钮，不放浮层 -->
-      <button type="button" data-fut-float="note">便签</button>
-      <button type="button" data-fut-float="pin">置顶</button>
-      <button type="button" data-fut-float="always">常看</button>
-      <button type="button" data-fut-float="unpin" class="is-danger">
+      <button
+        type="button"
+        class="fut-row-action-close"
+        data-fut-row-close
+        title="收起"
+        aria-label="收起操作菜单"
+      >
+        ×
+      </button>
+      <!-- 合约无买卖：便签 / 置顶 / 常看；放大仍走行内按钮 -->
+      <button type="button" data-fut-float="note" role="menuitem">便签</button>
+      <button type="button" data-fut-float="pin" role="menuitem">置顶</button>
+      <button type="button" data-fut-float="always" role="menuitem">常看</button>
+      <button
+        type="button"
+        data-fut-float="unpin"
+        class="is-danger"
+        role="menuitem"
+      >
         取消置顶
       </button>
     </div>

@@ -43,7 +43,8 @@
   const PINNED_ONLY_KEY = "fut_pinned_only";
   const AUTO_REFRESH_KEY = "fut_auto_refresh";
   const AUTO_REFRESH_MS = 15 * 1000;
-  const LONG_PRESS_MS = 480;
+  /* 对齐钉子 NAIL_LONG_PRESS_MS（bindNailFocusSelect 实值） */
+  const LONG_PRESS_MS = 450;
   const ALWAYS_COLLAPSE_KEY = "fut_always_collapsed";
   const NOTE_TIME_MODE_KEY = "fut_nail_note_time_mode_v1";
   /* 对齐钉子页 drawKline 默认（normal 皮肤）：涨灰绿 / 跌灰褐，非行情红绿 */
@@ -636,8 +637,19 @@
     return state.marketMap[symKey(symbol)] || {};
   }
 
+  /** 对齐钉子 parseNailNoteAlertPrice：便签里从左到右第一个数字。 */
+  function parseNoteAlertPrice(note) {
+    const text = String(note || "").replace(/,/g, "").trim();
+    if (!text) return 0;
+    const match = text.match(/(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/);
+    if (!match) return 0;
+    const n = Number(match[1]);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
   function noteGain(n) {
-    const note = Number(String(n && n.note).replace(/,/g, ""));
+    // 必须与画线水位同一解析，否则「1.23 低吸」排序 NaN、线却画得出
+    const note = parseNoteAlertPrice(n && n.note);
     const price = Number(liveOf(n && n.symbol).price);
     if (!(note > 0) || !(price > 0)) return NaN;
     return ((price / note) - 1) * 100;
@@ -1269,7 +1281,12 @@
     const bodyW = Math.max(1.2, slot * 0.62);
     const yOf = (price) =>
       pad + ((max - price) / (max - min)) * (cssH - pad * 2);
-    const pinIndex = hasPin ? findCandleIndexAt(candles, pinnedAt) : -1;
+    // pinnedAt 缺失时：对齐「能画线就要能分割」——从可见窗左缘起算（否则 pinSplitGreen 全废）
+    const pinIndex = hasPin
+      ? pinnedAt > 0
+        ? findCandleIndexAt(candles, pinnedAt)
+        : 0
+      : -1;
     const alertFromIndex =
       hasAlert && noteAt > 0
         ? findCandleIndexAt(candles, noteAt)
@@ -1451,11 +1468,7 @@
   function notePinPrice(symbol) {
     const n = nailMap().get(symKey(symbol));
     if (!n) return 0;
-    // 对齐钉子：取便签里第一个数字
-    const match = String(n.note || "").match(/(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/);
-    if (!match) return 0;
-    const note = Number(match[1]);
-    return Number.isFinite(note) && note > 0 ? note : 0;
+    return parseNoteAlertPrice(n.note);
   }
 
   function noteAtOf(symbol) {
@@ -2181,7 +2194,11 @@
     state.focusSymbol = null;
     state.focusScope = null;
     const bar = $("futFocusBar");
-    if (bar) bar.hidden = true;
+    if (bar) {
+      bar.hidden = true;
+      bar.classList.remove("is-busy");
+    }
+    document.body.classList.remove("has-fut-focus");
     document
       .querySelectorAll(
         "#pinList .fut-prow-row.is-focus, #autoList .fut-prow-row.is-focus, #radarBody tr.is-radar-selected",
@@ -2210,16 +2227,34 @@
     const pinBtn = $("futFocusPinBtn");
     const noteBtn = $("futFocusNoteBtn");
     const refreshBtn = $("futFocusRefreshBtn");
-    if (symEl) symEl.textContent = labelOf(key);
-    if (noteBtn) noteBtn.hidden = sc !== "pin";
+    if (symEl) {
+      symEl.textContent = labelOf(key);
+      symEl.setAttribute("data-fut-copy", labelOf(key));
+      symEl.title = "点击复制名称";
+    }
+    // 对齐钉子：置顶分栏不弹底栏（操作改长按浮层）；自动盯/雷达仍用底栏置顶+刷新
+    if (noteBtn) noteBtn.hidden = true;
     if (pinBtn) {
       pinBtn.hidden = sc === "pin";
       const pinned = isUserPinned(key);
-      pinBtn.textContent = pinned ? "已置顶" : "置顶";
-      pinBtn.disabled = pinned;
+      if (pinned) {
+        pinBtn.textContent = "已置顶";
+        pinBtn.title = "已在置顶区";
+        pinBtn.disabled = true;
+        pinBtn.classList.add("is-already-pinned");
+      } else {
+        pinBtn.textContent = "置顶";
+        pinBtn.title = "置顶";
+        pinBtn.disabled = false;
+        pinBtn.classList.remove("is-already-pinned");
+      }
     }
-    if (refreshBtn) refreshBtn.hidden = false;
-    if (bar) bar.hidden = false;
+    if (refreshBtn) refreshBtn.hidden = sc === "pin";
+    if (bar) {
+      bar.hidden = sc === "pin";
+      if (sc === "pin") document.body.classList.remove("has-fut-focus");
+      else document.body.classList.add("has-fut-focus");
+    }
     document.querySelectorAll("#pinList .fut-prow-row").forEach((row) => {
       row.classList.toggle(
         "is-focus",
@@ -2240,7 +2275,7 @@
     });
   }
 
-  /** 置顶列表单击：切换焦点（再点同一行取消），底栏出便签。 */
+  /** 置顶列表单击：只高亮/取消高亮，不弹底栏（对齐钉子；操作走长按）。 */
   function togglePinFocus(symbol) {
     const key = symKey(symbol);
     if (!key) return;
@@ -2536,12 +2571,49 @@
     const mask = $("futRowFloatMask");
     const menu = $("futRowFloatMenu");
     if (mask) mask.hidden = true;
-    if (menu) menu.hidden = true;
+    if (menu) {
+      menu.hidden = true;
+      menu.classList.remove("is-busy");
+      delete menu.dataset.symbol;
+    }
   }
 
-  function openFloatMenu(symbol, clientX, clientY) {
+  /** 对齐钉子 positionNailRowFloatMenu：浮层居中贴行，不跟手指。 */
+  function positionFloatMenu(symbol) {
+    const menu = $("futRowFloatMenu");
+    if (!menu || menu.hidden) return;
     const key = symKey(symbol);
     if (!key) return;
+    const esc = CSS.escape ? CSS.escape(key) : key;
+    const anchor =
+      document.querySelector(
+        `#pinList .fut-prow-row[data-symbol="${esc}"]`,
+      ) ||
+      document.querySelector(
+        `#pinList [data-fut-row][data-symbol="${esc}"]`,
+      );
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const pad = 8;
+    menu.style.left = "0px";
+    menu.style.top = "0px";
+    const mw = menu.offsetWidth || 200;
+    const mh = menu.offsetHeight || 48;
+    let left = rect.left + (rect.width - mw) / 2;
+    let top = rect.top + (rect.height - mh) / 2;
+    left = Math.max(pad, Math.min(left, window.innerWidth - mw - pad));
+    top = Math.max(pad, Math.min(top, window.innerHeight - mh - pad));
+    menu.style.left = `${Math.round(left)}px`;
+    menu.style.top = `${Math.round(top)}px`;
+  }
+
+  function openFloatMenu(symbol) {
+    const key = symKey(symbol);
+    if (!key) return;
+    if (state.selectMode || state.tab !== "pin") {
+      closeFloatMenu();
+      return;
+    }
     state.floatSymbol = key;
     const mask = $("futRowFloatMask");
     const menu = $("futRowFloatMenu");
@@ -2558,14 +2630,15 @@
       alwaysBtn.hidden = !(pinned || alwaysOn);
       alwaysBtn.textContent = alwaysOn ? "取消常看" : "常看";
     }
+    menu.dataset.symbol = key;
+    // 对齐钉子：清掉长按带出的系统选中，避免复制气泡盖浮层
+    const sel = window.getSelection && window.getSelection();
+    if (sel && !sel.isCollapsed) sel.removeAllRanges();
+    // 长按同时高亮该行（底栏仍隐藏）
+    openFocusBar(key, "pin");
     mask.hidden = false;
     menu.hidden = false;
-    const mw = menu.offsetWidth || 220;
-    const mh = menu.offsetHeight || 48;
-    const x = Math.max(8, Math.min(window.innerWidth - mw - 8, clientX - mw / 2));
-    const y = Math.max(8, Math.min(window.innerHeight - mh - 8, clientY - mh - 12));
-    menu.style.left = `${x}px`;
-    menu.style.top = `${y}px`;
+    positionFloatMenu(key);
   }
 
   function syncSelectUi() {
@@ -2575,6 +2648,7 @@
     const n = state.selected.size;
     if (btn) {
       btn.classList.toggle("is-active", state.selectMode);
+      btn.setAttribute("aria-pressed", state.selectMode ? "true" : "false");
       btn.textContent = state.selectMode ? "选中" : "多选";
       btn.hidden = state.tab !== "pin";
     }
@@ -2582,12 +2656,20 @@
     if (countEl) countEl.textContent = String(n);
     const selectAllBtn = $("futBatchSelectAllBtn");
     if (selectAllBtn) selectAllBtn.disabled = state.saving;
-    ["futBatchPinBtn", "futBatchUnpinBtn", "futBatchNoteBtn", "futBatchDeleteBtn"].forEach(
-      (id) => {
-        const el = $(id);
-        if (el) el.disabled = n === 0 || state.saving;
-      },
-    );
+    const pinBtn = $("futBatchPinBtn");
+    if (pinBtn) {
+      pinBtn.disabled = n === 0 || state.saving;
+      pinBtn.textContent = n > 0 ? `置顶 (${n})` : "置顶";
+    }
+    const unpinBtn = $("futBatchUnpinBtn");
+    if (unpinBtn) {
+      unpinBtn.disabled = n === 0 || state.saving;
+      unpinBtn.textContent = n > 0 ? `取消置顶 (${n})` : "取消置顶";
+    }
+    ["futBatchNoteBtn", "futBatchDeleteBtn"].forEach((id) => {
+      const el = $(id);
+      if (el) el.disabled = n === 0 || state.saving;
+    });
     document.querySelectorAll("#pinList .fut-prow-row").forEach((row) => {
       const sym = symKey(row.getAttribute("data-symbol"));
       const on = state.selectMode && state.selected.has(sym);
@@ -3484,59 +3566,92 @@
     let startY = 0;
     let symbol = "";
     let longFired = false;
+    let moved = false;
     let lastTapKey = "";
     let lastTapAt = 0;
-    const clear = () => {
+    const clearTimer = () => {
       if (timer) {
         clearTimeout(timer);
         timer = 0;
       }
+    };
+    const clear = () => {
+      clearTimer();
       symbol = "";
     };
     const onStart = (ev) => {
+      if (ev.pointerType === "mouse" && ev.button !== 0) return;
       if (state.selectMode || state.tab !== "pin") return;
       const row = ev.target.closest("[data-fut-row]");
       if (!row) return;
       if (
         ev.target.closest(
-          "button, input, .fut-pin-menu, .fut-check, a, .fut-ops",
+          "button, input, .fut-pin-menu, .fut-check, a, .fut-ops, .fut-row-float-menu",
+        )
+      ) {
+        clear();
+        return;
+      }
+      longFired = false;
+      moved = false;
+      startX = ev.clientX;
+      startY = ev.clientY;
+      symbol = symKey(row.getAttribute("data-symbol"));
+      clearTimer();
+      const key = symbol;
+      timer = window.setTimeout(() => {
+        timer = 0;
+        if (!key || moved) return;
+        longFired = true;
+        lastTapAt = 0;
+        openFloatMenu(key);
+      }, LONG_PRESS_MS);
+    };
+    const onMove = (ev) => {
+      if (!timer && !symbol) return;
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      if (dx * dx + dy * dy > 64) {
+        moved = true;
+        clearTimer();
+      }
+    };
+    const onEnd = () => {
+      clearTimer();
+    };
+    root.addEventListener("pointerdown", onStart, { passive: true });
+    root.addEventListener("pointermove", onMove, { passive: true });
+    root.addEventListener("pointerup", onEnd);
+    root.addEventListener("pointercancel", onEnd);
+    root.addEventListener("contextmenu", (ev) => {
+      if (ev.target.closest("[data-fut-row]")) ev.preventDefault();
+    });
+    root.addEventListener("click", (ev) => {
+      if (state.selectMode || state.tab !== "pin") return;
+      if (
+        ev.target.closest(
+          "button, input, .fut-pin-menu, .fut-check, a, .fut-ops, .fut-row-float-menu, .fut-row-float-mask",
         )
       ) {
         return;
       }
-      longFired = false;
-      const point = ev.touches ? ev.touches[0] : ev;
-      startX = point.clientX;
-      startY = point.clientY;
-      symbol = symKey(row.getAttribute("data-symbol"));
-      timer = window.setTimeout(() => {
-        timer = 0;
-        if (!symbol) return;
-        longFired = true;
-        openFloatMenu(symbol, startX, startY);
-      }, LONG_PRESS_MS);
-    };
-    const onMove = (ev) => {
-      if (!timer) return;
-      const point = ev.touches ? ev.touches[0] : ev;
-      if (
-        Math.abs(point.clientX - startX) > 10 ||
-        Math.abs(point.clientY - startY) > 10
-      ) {
-        clear();
+      const row = ev.target.closest("[data-fut-row]");
+      if (!row || moved) return;
+      if (longFired) {
+        longFired = false;
+        ev.preventDefault();
+        ev.stopPropagation();
+        return;
       }
-    };
-    const onEnd = () => {
-      const key = symbol;
-      const wasLong = longFired;
-      const shortTap = !!timer && !wasLong;
-      clear();
-      if (!key || wasLong || !shortTap || state.selectMode) return;
-      // 短按抬起：双击刷新；单击切换焦点+便签底栏（对齐钉子）
+      const key = symKey(row.getAttribute("data-symbol"));
+      if (!key) return;
+      ev.preventDefault();
+      ev.stopPropagation();
       const now = Date.now();
       if (key === lastTapKey && now - lastTapAt <= DOUBLE_TAP_MS) {
         lastTapKey = "";
         lastTapAt = 0;
+        closeFloatMenu();
         closeFocusBar();
         void refreshOneSymbol(key)
           .then(() => toast(`已刷新 ${labelOf(key)}`))
@@ -3545,15 +3660,10 @@
       }
       lastTapKey = key;
       lastTapAt = now;
+      // 单击：只高亮/取消；关掉浮层（对齐钉子）
+      closeFloatMenu();
       togglePinFocus(key);
-    };
-    root.addEventListener("touchstart", onStart, { passive: true });
-    root.addEventListener("mousedown", onStart);
-    root.addEventListener("touchmove", onMove, { passive: true });
-    root.addEventListener("mousemove", onMove);
-    root.addEventListener("touchend", onEnd);
-    root.addEventListener("mouseup", onEnd);
-    root.addEventListener("mouseleave", clear);
+    });
   }
 
   function bind() {
@@ -3947,6 +4057,7 @@
       pinList.addEventListener(
         "scroll",
         () => {
+          if (state.floatSymbol) positionFloatMenu(state.floatSymbol);
           if (state.tab === "pin" && state.sort === "change24h") {
             updateFutScrollPct();
           }
@@ -3954,6 +4065,13 @@
         { passive: true },
       );
     }
+    window.addEventListener(
+      "resize",
+      () => {
+        if (state.floatSymbol) positionFloatMenu(state.floatSymbol);
+      },
+      { passive: true },
+    );
 
     const noteEditor = $("futNoteEditor");
     const noteEditorForm = $("futNoteEditorForm");
