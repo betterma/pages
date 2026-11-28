@@ -175,39 +175,106 @@
     return n > 0 ? "fut-radar-up" : "fut-radar-down";
   }
 
-  function getRadarFixedSymbols() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(RADAR_FIXED_KEY) || "null");
-      if (!Array.isArray(raw)) return [];
-      const seen = new Set();
-      const out = [];
-      raw.forEach((s) => {
-        const key = symKey(s);
-        if (!key || seen.has(key)) return;
-        seen.add(key);
-        out.push(key);
-      });
-      return out;
-    } catch (_) {
-      return [];
-    }
+  function normalizeRadarFixedList(raw) {
+    const seen = new Set();
+    const out = [];
+    (Array.isArray(raw) ? raw : []).forEach((s) => {
+      const key = symKey(s);
+      if (!key || !/USDT$/.test(key) || seen.has(key)) return;
+      seen.add(key);
+      out.push(key);
+    });
+    return out;
   }
 
-  function setRadarFixedSymbols(list) {
-    const keys = [];
-    const seen = new Set();
-    (Array.isArray(list) ? list : []).forEach((s) => {
-      const key = symKey(s);
-      if (!key || seen.has(key)) return;
-      seen.add(key);
-      keys.push(key);
-    });
+  let radarFixedState = { symbols: [], at: 0 };
+  let radarFixedSyncing = false;
+
+  function loadLocalRadarFixed() {
     try {
-      localStorage.setItem(RADAR_FIXED_KEY, JSON.stringify(keys));
+      const raw = JSON.parse(localStorage.getItem(RADAR_FIXED_KEY) || "null");
+      if (raw && Array.isArray(raw.symbols)) {
+        return {
+          symbols: normalizeRadarFixedList(raw.symbols),
+          at: Number(raw.at) || 0,
+        };
+      }
+      if (Array.isArray(raw)) {
+        return { symbols: normalizeRadarFixedList(raw), at: 0 };
+      }
     } catch (_) {
       /* ignore */
     }
-    return keys;
+    return { symbols: [], at: 0 };
+  }
+
+  function setLocalRadarFixed(symbols, at) {
+    radarFixedState = {
+      symbols: normalizeRadarFixedList(symbols),
+      at: Number(at) || Date.now(),
+    };
+    try {
+      localStorage.setItem(RADAR_FIXED_KEY, JSON.stringify(radarFixedState));
+    } catch (_) {
+      /* ignore */
+    }
+    return radarFixedState.symbols.slice();
+  }
+
+  function getRadarFixedSymbols() {
+    return radarFixedState.symbols.slice();
+  }
+
+  async function patchRadarFixedPrefs(symbols, at) {
+    if (radarFixedSyncing) return;
+    if (!window.FutStore || typeof window.FutStore.patchJson !== "function") {
+      return;
+    }
+    radarFixedSyncing = true;
+    try {
+      await window.FutStore.patchJson(
+        PATHS.prefs,
+        (data) => {
+          const cloudAt = Number(data && data.radarFixedAt) || 0;
+          if (cloudAt >= at) return { data };
+          return {
+            data: {
+              ...data,
+              radarFixedSymbols: normalizeRadarFixedList(symbols),
+              radarFixedAt: at,
+              updatedAt: Date.now(),
+              market: "usdt-perp",
+            },
+          };
+        },
+        `Fut radar fixed ${symbols.length}`,
+      );
+    } catch (error) {
+      console.warn("patchRadarFixedPrefs failed", error);
+    } finally {
+      radarFixedSyncing = false;
+    }
+  }
+
+  function mergeRadarFixedFromPrefs(prefsData) {
+    const cloudSyms = normalizeRadarFixedList(
+      prefsData && prefsData.radarFixedSymbols,
+    );
+    const cloudAt = Number(prefsData && prefsData.radarFixedAt) || 0;
+    const local = loadLocalRadarFixed();
+    if (cloudAt > local.at) {
+      setLocalRadarFixed(cloudSyms, cloudAt);
+      return;
+    }
+    if (local.at > cloudAt && local.symbols.length) {
+      setLocalRadarFixed(local.symbols, local.at);
+      void patchRadarFixedPrefs(local.symbols, local.at);
+      return;
+    }
+    setLocalRadarFixed(
+      local.symbols.length ? local.symbols : cloudSyms,
+      Math.max(local.at, cloudAt),
+    );
   }
 
   function toggleRadarFixed(symbol) {
@@ -217,7 +284,15 @@
     const idx = cur.indexOf(key);
     if (idx >= 0) cur.splice(idx, 1);
     else cur.push(key);
-    setRadarFixedSymbols(cur);
+    const at = Date.now();
+    setLocalRadarFixed(cur, at);
+    void patchRadarFixedPrefs(cur, at);
+  }
+
+  try {
+    radarFixedState = loadLocalRadarFixed();
+  } catch (_) {
+    radarFixedState = { symbols: [], at: 0 };
   }
 
   function normalizeNails(raw) {
@@ -312,6 +387,7 @@
     state.poolRank = prefRank;
     const rankInput = $("futWatchPoolRankInput");
     if (rankInput) rankInput.value = String(prefRank);
+    mergeRadarFixedFromPrefs(prefsFile.data || {});
     state.events = Array.isArray(stateFile.data && stateFile.data.events)
       ? stateFile.data.events
       : [];
@@ -483,7 +559,7 @@
   async function persistNails(mutator, message) {
     if (state.saving) {
       toast("保存中…");
-      return;
+      return false;
     }
     state.saving = true;
     try {
@@ -518,6 +594,7 @@
       state.nails = normalizeNails(result.data.nails);
       state.alwaysWatch = normalizeAlways(result.data.alwaysWatch);
       render();
+      return true;
     } finally {
       state.saving = false;
       syncSelectUi();
@@ -526,10 +603,11 @@
 
   async function pinToBoard(symbols, opts) {
     const keys = [...new Set((symbols || []).map(symKey).filter(Boolean))];
-    if (!keys.length) return;
+    if (!keys.length) return false;
     await refreshTickers(keys);
     const now = Date.now();
-    await persistNails((ctx) => {
+    const keySet = new Set(keys);
+    const ok = await persistNails((ctx) => {
       let nails = ctx.nails.slice();
       const by = new Map(nails.map((n) => [n.symbol, n]));
       keys.forEach((key) => {
@@ -555,47 +633,76 @@
         order: keys.includes(n.symbol) ? keys.indexOf(n.symbol) : 1000 + i,
       }));
       nails.sort((a, b) => (a.order || 0) - (b.order || 0));
-      return { ...ctx, nails };
+      // 手动置顶清 dismissed，避免删后再钉仍被云端补漏跳过
+      const dismissedNails = (ctx.dismissedNails || []).filter(
+        (s) => !keySet.has(symKey(s)),
+      );
+      return { ...ctx, nails, dismissedNails };
     }, (opts && opts.message) || `Fut pin ${keys.join(",")}`);
-    toast(`已置顶 ${keys.map(labelOf).join(" · ")}`);
+    if (ok) toast(`已置顶 ${keys.map(labelOf).join(" · ")}`);
+    return ok;
   }
 
   async function unpinFromBoard(symbols) {
     const keys = new Set((symbols || []).map(symKey).filter(Boolean));
-    if (!keys.size) return;
-    await persistNails((ctx) => {
+    if (!keys.size) return false;
+    const ok = await persistNails((ctx) => {
       const nails = ctx.nails.map((n) =>
         keys.has(n.symbol) ? { ...n, pinned: false, pinnedAt: 0 } : n,
       );
       const alwaysWatch = ctx.alwaysWatch.filter((s) => !keys.has(s));
       return { ...ctx, nails, alwaysWatch };
     }, `Fut unpin ${[...keys].join(",")}`);
-    toast(`已取消置顶 ${[...keys].map(labelOf).join(" · ")}`);
+    if (ok) toast(`已取消置顶 ${[...keys].map(labelOf).join(" · ")}`);
+    return ok;
   }
 
   async function pinFirst(symbol) {
     const key = symKey(symbol);
-    if (!key) return;
-    await persistNails((ctx) => {
-      const nails = ctx.nails.map((n) =>
-        n.symbol === key
-          ? { ...n, pinned: true, pinnedAt: n.pinnedAt || Date.now(), order: -1 }
-          : n,
+    if (!key) return false;
+    const ok = await persistNails((ctx) => {
+      const by = new Map(ctx.nails.map((n) => [n.symbol, n]));
+      const prev = by.get(key);
+      if (!prev) {
+        by.set(key, {
+          id: `${key}:${Date.now()}`,
+          symbol: key,
+          label: labelOf(key),
+          note: "",
+          noteAt: 0,
+          pinned: true,
+          pinnedAt: Date.now(),
+          order: -1,
+          at: Date.now(),
+        });
+      } else {
+        by.set(key, {
+          ...prev,
+          pinned: true,
+          pinnedAt: prev.pinnedAt || Date.now(),
+          order: -1,
+        });
+      }
+      const nails = [...by.values()].sort(
+        (a, b) => (a.order || 0) - (b.order || 0),
       );
-      nails.sort((a, b) => (a.order || 0) - (b.order || 0));
       return {
         ...ctx,
         nails: nails.map((n, i) => ({ ...n, order: i })),
+        dismissedNails: (ctx.dismissedNails || []).filter(
+          (s) => symKey(s) !== key,
+        ),
       };
     }, `Fut pin first ${key}`);
+    return ok;
   }
 
   async function setNoteNow(symbols) {
     const keys = [...new Set((symbols || []).map(symKey).filter(Boolean))];
-    if (!keys.length) return;
+    if (!keys.length) return false;
     await refreshTickers(keys);
     const noteAt = Date.now();
-    await persistNails((ctx) => {
+    const ok = await persistNails((ctx) => {
       const by = new Map(ctx.nails.map((n) => [n.symbol, n]));
       keys.forEach((key) => {
         const price = Number(liveOf(key).price);
@@ -617,7 +724,8 @@
       });
       return { ...ctx, nails: [...by.values()] };
     }, `Fut notes ${keys.length}`);
-    toast(`已写现价便签 ${keys.length} 个`);
+    if (ok) toast(`已写现价便签 ${keys.length} 个`);
+    return ok;
   }
 
   async function toggleAlways(symbol, force) {
@@ -638,8 +746,8 @@
 
   async function deleteNails(symbols) {
     const keys = new Set((symbols || []).map(symKey).filter(Boolean));
-    if (!keys.size) return;
-    await persistNails((ctx) => {
+    if (!keys.size) return false;
+    const ok = await persistNails((ctx) => {
       const nails = ctx.nails.filter((n) => !keys.has(n.symbol));
       const alwaysWatch = ctx.alwaysWatch.filter((s) => !keys.has(s));
       const dismissed = [
@@ -650,7 +758,8 @@
       ];
       return { ...ctx, nails, alwaysWatch, dismissedNails: dismissed };
     }, `Fut delete ${[...keys].join(",")}`);
-    toast(`已删除 ${[...keys].map(labelOf).join(" · ")}`);
+    if (ok) toast(`已删除 ${[...keys].map(labelOf).join(" · ")}`);
+    return ok;
   }
 
   async function addNailByInput(rawName, rawNote) {
@@ -667,7 +776,7 @@
     const price = Number(liveOf(base).price);
     const noteText = String(rawNote || "").trim() || fmtPrice(price);
     const now = Date.now();
-    await persistNails((ctx) => {
+    const ok = await persistNails((ctx) => {
       const by = new Map(ctx.nails.map((n) => [n.symbol, n]));
       const prev = by.get(base);
       by.set(base, {
@@ -686,8 +795,10 @@
       );
       return { ...ctx, nails: [...by.values()], dismissedNails: dismissed };
     }, `Fut add ${base}`);
-    toast(`已加入 ${labelOf(base)}`);
-    setAddOpen(false);
+    if (ok) {
+      toast(`已加入 ${labelOf(base)}`);
+      setAddOpen(false);
+    }
   }
 
   function setAddOpen(open) {
