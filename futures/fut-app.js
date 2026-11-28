@@ -51,7 +51,11 @@
   const KLINE_DOWN = "#9a8e88";
   /* 对齐钉子页 NAIL_ALERT_GREEN：便签荧光绿 */
   const KLINE_ALERT_GREEN = "#3ecf8e";
+  /** 对齐钉子：实线=自动盯价，虚线=便签水位 */
+  const KLINE_AUTO_PIN_LINE = "rgba(62, 207, 142, 0.5)";
   const KLINE_BAR_MS = 4 * 60 * 60 * 1000;
+  const NAIL_ALERT_GREEN_DOWN_STREAK = 4;
+  const NAIL_ALERT_GREEN_NO_NEW_HIGH = 4;
   const DOUBLE_TAP_MS = 300;
   let noteTimeMode = "original";
   let noteEditorSymbol = null;
@@ -1134,6 +1138,85 @@
     }
   }
 
+  function autoPinOf(symbol) {
+    const key = symKey(symbol);
+    if (!key) return null;
+    return (
+      (state.autoPins || []).find((p) => p && symKey(p.symbol) === key) || null
+    );
+  }
+
+  function strokeCandleWick(ctx, x, high, low, splitAt, yOf, below, above) {
+    const yH = yOf(high);
+    const yL = yOf(low);
+    if (!Number.isFinite(splitAt) || high <= splitAt) {
+      ctx.strokeStyle = below;
+      ctx.beginPath();
+      ctx.moveTo(x, yH);
+      ctx.lineTo(x, yL);
+      ctx.stroke();
+      return;
+    }
+    if (low >= splitAt) {
+      ctx.strokeStyle = above;
+      ctx.beginPath();
+      ctx.moveTo(x, yH);
+      ctx.lineTo(x, yL);
+      ctx.stroke();
+      return;
+    }
+    const yA = yOf(splitAt);
+    ctx.strokeStyle = above;
+    ctx.beginPath();
+    ctx.moveTo(x, yH);
+    ctx.lineTo(x, yA);
+    ctx.stroke();
+    ctx.strokeStyle = below;
+    ctx.beginPath();
+    ctx.moveTo(x, yA);
+    ctx.lineTo(x, yL);
+    ctx.stroke();
+  }
+
+  function fillCandleBody(ctx, x, bodyW, open, close, splitAt, yOf, below, above) {
+    const lo = Math.min(open, close);
+    const hi = Math.max(open, close);
+    const yOpen = yOf(open);
+    const yClose = yOf(close);
+    if (!Number.isFinite(splitAt) || hi <= splitAt) {
+      ctx.fillStyle = below;
+      ctx.fillRect(
+        x - bodyW / 2,
+        Math.min(yOpen, yClose),
+        bodyW,
+        Math.max(1, Math.abs(yClose - yOpen)),
+      );
+      return;
+    }
+    if (lo >= splitAt) {
+      ctx.fillStyle = above;
+      ctx.fillRect(
+        x - bodyW / 2,
+        Math.min(yOpen, yClose),
+        bodyW,
+        Math.max(1, Math.abs(yClose - yOpen)),
+      );
+      return;
+    }
+    const yA = yOf(splitAt);
+    const yLo = yOf(lo);
+    const yHi = yOf(hi);
+    ctx.fillStyle = below;
+    ctx.fillRect(x - bodyW / 2, yA, bodyW, Math.max(1, yLo - yA));
+    ctx.fillStyle = above;
+    ctx.fillRect(x - bodyW / 2, yHi, bodyW, Math.max(1, yA - yHi));
+  }
+
+  /**
+   * 对齐钉子 drawKline：
+   * - 置顶：便签虚线 + 会话染绿（仅水位以上）；若有自动盯再画实线+白心绿点
+   * - 自动盯/雷达：盯价实线 + pinSplitGreen（盯后上涨柱、水位以上染绿）+ 圆点
+   */
   function paintMiniKline(canvas, candles, opts) {
     if (!canvas || !candles || !candles.length) return;
     const options = opts || {};
@@ -1153,8 +1236,17 @@
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
+
     const pin = Number(options.pinPrice);
     const hasPin = Number.isFinite(pin) && pin > 0;
+    const alertPrice = Number(options.alertPrice);
+    const hasAlert = Number.isFinite(alertPrice) && alertPrice > 0;
+    const pinnedAt = Number(options.pinnedAt) || 0;
+    const noteAt = Number(options.noteAt) || 0;
+    const pinSplitGreen = !!options.pinSplitGreen;
+    const pinSplitGreenUpOnly = !!options.pinSplitGreenUpOnly;
+    const autoPinLine = !!options.autoPinLine;
+
     let min = Infinity;
     let max = -Infinity;
     candles.forEach((c) => {
@@ -1165,63 +1257,144 @@
       if (pin < min) min = pin;
       if (pin > max) max = pin;
     }
-    if (!(max > min)) {
-      max = min + 1e-9;
+    if (hasAlert) {
+      if (alertPrice < min) min = alertPrice;
+      if (alertPrice > max) max = alertPrice;
     }
-    const upColor = KLINE_UP;
-    const downColor = KLINE_DOWN;
+    if (!(max > min)) max = min + 1e-9;
+
     const pad = options.pad != null ? Number(options.pad) : 2;
     const n = candles.length;
     const slot = (cssW - pad * 2) / n;
     const bodyW = Math.max(1.2, slot * 0.62);
-    const yOf = (price) => pad + ((max - price) / (max - min)) * (cssH - pad * 2);
-    const noteAt = Number(options.noteAt) || 0;
-    const greenRange =
-      hasPin && noteAt > 0
+    const yOf = (price) =>
+      pad + ((max - price) / (max - min)) * (cssH - pad * 2);
+    const pinIndex = hasPin ? findCandleIndexAt(candles, pinnedAt) : -1;
+    const alertFromIndex =
+      hasAlert && noteAt > 0
+        ? findCandleIndexAt(candles, noteAt)
+        : hasAlert
+          ? 0
+          : -1;
+    const alertGreenRange =
+      hasAlert && alertFromIndex >= 0
         ? noteGreenActiveRange(
             candles,
-            pin,
-            findCandleIndexAt(candles, noteAt),
+            alertPrice,
+            alertFromIndex,
             options.barMs,
           )
         : { from: -1, until: -1 };
+
+    // 自动盯实线
     if (hasPin) {
       const y = yOf(pin);
       ctx.save();
-      ctx.strokeStyle = "rgba(120, 130, 126, 0.75)";
+      ctx.strokeStyle = autoPinLine
+        ? KLINE_AUTO_PIN_LINE
+        : "rgba(120, 130, 126, 0.75)";
       ctx.lineWidth = 1;
-      ctx.setLineDash([4, 3]);
+      ctx.setLineDash([]);
       ctx.beginPath();
       ctx.moveTo(pad, y);
       ctx.lineTo(cssW - pad, y);
       ctx.stroke();
       ctx.restore();
     }
+    // 便签虚线
+    if (hasAlert) {
+      const y = yOf(alertPrice);
+      ctx.save();
+      ctx.strokeStyle = KLINE_AUTO_PIN_LINE;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(pad, y);
+      ctx.lineTo(cssW - pad, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    const splitFrom = pinSplitGreen && hasPin ? pinIndex : -1;
+
     candles.forEach((c, i) => {
       const x = pad + i * slot + slot / 2;
-      const yHigh = yOf(c.high);
-      const yLow = yOf(c.low);
-      const yOpen = yOf(c.open);
-      const yClose = yOf(c.close);
       const up = c.close >= c.open;
-      const inGreen =
-        up &&
-        greenRange.from >= 0 &&
-        i >= greenRange.from &&
-        i < greenRange.until;
-      const tone = inGreen ? KLINE_ALERT_GREEN : up ? upColor : downColor;
-      ctx.strokeStyle = tone;
-      ctx.fillStyle = tone;
+      const base = up ? KLINE_UP : KLINE_DOWN;
+      const splitAt =
+        splitFrom >= 0 &&
+        i >= splitFrom &&
+        (!pinSplitGreenUpOnly || up)
+          ? pin
+          : NaN;
+      const aboveTone = Number.isFinite(splitAt) ? KLINE_ALERT_GREEN : base;
       ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(x, yHigh);
-      ctx.lineTo(x, yLow);
-      ctx.stroke();
-      const top = Math.min(yOpen, yClose);
-      const h = Math.max(1, Math.abs(yClose - yOpen));
-      ctx.fillRect(x - bodyW / 2, top, bodyW, h);
+      strokeCandleWick(ctx, x, c.high, c.low, splitAt, yOf, base, aboveTone);
+      fillCandleBody(
+        ctx,
+        x,
+        bodyW,
+        c.open,
+        c.close,
+        splitAt,
+        yOf,
+        base,
+        aboveTone,
+      );
+
+      // 置顶便签会话绿：只重画水位以上（对齐钉子 useAlert）
+      const useAlert =
+        hasAlert &&
+        up &&
+        alertGreenRange.from >= 0 &&
+        i >= alertGreenRange.from &&
+        i < alertGreenRange.until;
+      if (useAlert && c.high > alertPrice) {
+        ctx.save();
+        ctx.strokeStyle = KLINE_ALERT_GREEN;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, yOf(c.high));
+        ctx.lineTo(x, yOf(Math.max(c.low, alertPrice)));
+        ctx.stroke();
+        ctx.restore();
+        const bodyLo = Math.min(c.open, c.close);
+        const bodyHi = Math.max(c.open, c.close);
+        if (bodyHi > alertPrice) {
+          const yTop = yOf(bodyHi);
+          const yBot = yOf(Math.max(bodyLo, alertPrice));
+          ctx.save();
+          ctx.fillStyle = KLINE_ALERT_GREEN;
+          ctx.fillRect(x - bodyW / 2, yTop, bodyW, Math.max(1, yBot - yTop));
+          ctx.restore();
+        }
+      }
     });
-    // 现价角标：左上淡字，对齐钉子 data-price-label
+
+    // 自动盯圆点：白心绿边 + 竖虚线
+    if (hasPin && pinIndex >= 0) {
+      const x = pad + pinIndex * slot + slot / 2;
+      const y = yOf(pin);
+      ctx.save();
+      ctx.strokeStyle = "rgba(130, 140, 136, 0.7)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x, pad);
+      ctx.lineTo(x, cssH - pad);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(2.5, Math.min(4, slot * 0.35)), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#2f8f6e";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+
     if (options.priceLabel && cssW >= 96) {
       let livePrice = Number(options.livePrice);
       if (!(livePrice > 0)) {
@@ -1278,7 +1451,10 @@
   function notePinPrice(symbol) {
     const n = nailMap().get(symKey(symbol));
     if (!n) return 0;
-    const note = Number(String(n.note || "").replace(/,/g, ""));
+    // 对齐钉子：取便签里第一个数字
+    const match = String(n.note || "").match(/(\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/);
+    if (!match) return 0;
+    const note = Number(match[1]);
     return Number.isFinite(note) && note > 0 ? note : 0;
   }
 
@@ -1300,31 +1476,56 @@
     return idx;
   }
 
-  /** 简化版荧光绿区间：从 noteAt 起，破水位收盘则清；不做自动改便签。 */
+  function candleIsClosed(candle, index, candles, durationMs, now) {
+    if (!candle || index < 0) return false;
+    if (index < candles.length - 1) return true;
+    const openAt = Number(candle.time);
+    const dur = Number(durationMs);
+    if (!Number.isFinite(openAt) || !Number.isFinite(dur) || dur <= 0) {
+      return false;
+    }
+    return openAt + dur <= now;
+  }
+
+  /** 对齐钉子 nailAlertGreenActiveRange：破水位 / 四连阴 / 四未创新高清绿。 */
   function noteGreenActiveRange(candles, notePrice, fromIndex, barMs) {
     const empty = { from: -1, until: -1 };
     if (!Array.isArray(candles) || !candles.length) return empty;
     if (!(notePrice > 0)) return empty;
     const start = Math.max(0, Number(fromIndex) || 0);
     if (start >= candles.length) return empty;
-    const duration =
-      Number(barMs) > 0 ? Number(barMs) : KLINE_BAR_MS;
+    const duration = Number(barMs) > 0 ? Number(barMs) : KLINE_BAR_MS;
+    const now = Date.now();
     let active = false;
     let greenFrom = -1;
     let greenUntil = -1;
-    const now = Date.now();
+    let sessionHigh = NaN;
+    let noNewHighCount = 0;
+    let downStreak = 0;
+    const clearSession = () => {
+      active = false;
+      greenFrom = -1;
+      greenUntil = -1;
+      sessionHigh = NaN;
+      noNewHighCount = 0;
+      downStreak = 0;
+    };
     for (let i = start; i < candles.length; i += 1) {
       const c = candles[i];
       if (!c) continue;
+      const open = Number(c.open);
       const high = Number(c.high);
       const close = Number(c.close);
-      const openT = Number(c.time) || 0;
-      const closed = openT > 0 ? openT + duration <= now : true;
+      if (!Number.isFinite(close) || !Number.isFinite(high)) continue;
+      const closed = candleIsClosed(c, i, candles, duration, now);
       if (!active) {
-        if (Number.isFinite(high) && high > notePrice) {
+        if (high > notePrice) {
           active = true;
           greenFrom = i;
           greenUntil = i + 1;
+          sessionHigh = high;
+          noNewHighCount = 0;
+          downStreak = 0;
         }
         continue;
       }
@@ -1332,16 +1533,62 @@
         greenUntil = i + 1;
         continue;
       }
-      if (Number.isFinite(close) && close < notePrice) {
-        active = false;
-        greenFrom = -1;
-        greenUntil = -1;
+      if (Number.isFinite(open) && close < open) downStreak += 1;
+      else downStreak = 0;
+      if (close < notePrice) {
+        clearSession();
         continue;
+      }
+      if (downStreak >= NAIL_ALERT_GREEN_DOWN_STREAK) {
+        clearSession();
+        continue;
+      }
+      if (high > sessionHigh) {
+        sessionHigh = high;
+        noNewHighCount = 0;
+      } else {
+        noNewHighCount += 1;
+        if (noNewHighCount >= NAIL_ALERT_GREEN_NO_NEW_HIGH) {
+          clearSession();
+          continue;
+        }
       }
       greenUntil = i + 1;
     }
     if (!active || greenFrom < 0 || greenUntil <= greenFrom) return empty;
     return { from: greenFrom, until: greenUntil };
+  }
+
+  /** 按分栏组装画图参数（对齐钉子置顶 / 自动盯 / 雷达）。 */
+  function klinePaintOptsForSymbol(symbol, canvas) {
+    const sym = symKey(symbol);
+    const auto = autoPinOf(sym);
+    const autoPrice = Number(auto && auto.pinPrice);
+    const hasAuto = Number.isFinite(autoPrice) && autoPrice > 0;
+    const base = {
+      priceLabel: canvas && canvas.getAttribute("data-price-label") === "1",
+      livePrice: Number(liveOf(sym).price),
+      barMs: KLINE_BAR_MS,
+    };
+    if (state.tab === "auto" || state.tab === "radar") {
+      return {
+        ...base,
+        pinPrice: hasAuto ? autoPrice : 0,
+        pinnedAt: Number(auto && auto.pinnedAt) || 0,
+        pinSplitGreen: true,
+        pinSplitGreenUpOnly: true,
+        autoPinLine: hasAuto,
+      };
+    }
+    // 置顶：便签虚线+会话绿；有自动盯则叠加实线+圆点
+    return {
+      ...base,
+      alertPrice: notePinPrice(sym),
+      noteAt: noteAtOf(sym),
+      pinPrice: hasAuto ? autoPrice : 0,
+      pinnedAt: Number(auto && auto.pinnedAt) || 0,
+      autoPinLine: hasAuto,
+    };
   }
 
   function zoomLongRangeConfig(range) {
@@ -1418,12 +1665,11 @@
     if (!canvas || !canvas.isConnected) return;
     const sym = canvas.getAttribute("data-kline");
     if (!sym) return;
-    paintMiniKline(canvas, state.klineCache[sym] || [], {
-      pinPrice: notePinPrice(sym),
-      noteAt: noteAtOf(sym),
-      priceLabel: canvas.getAttribute("data-price-label") === "1",
-      livePrice: Number(liveOf(sym).price),
-    });
+    paintMiniKline(
+      canvas,
+      state.klineCache[sym] || [],
+      klinePaintOptsForSymbol(sym, canvas),
+    );
     canvas.classList.remove("is-loading");
   }
 
@@ -2917,20 +3163,24 @@
     if (!canvas || !symbol) return;
     const candles = await fetchKlines(symbol, KLINE_INTERVAL, KLINE_LIMIT);
     if (state.zoomSymbol !== symbol) return;
-    const pin = notePinPrice(symbol);
-    paintMiniKline(canvas, candles, {
-      pinPrice: pin,
-      noteAt: noteAtOf(symbol),
-      barMs: KLINE_BAR_MS,
+    const opts = {
+      ...klinePaintOptsForSymbol(symbol, canvas),
       pad: 6,
-    });
+    };
+    paintMiniKline(canvas, candles, opts);
     const live = liveOf(symbol);
+    const note = notePinPrice(symbol);
+    const auto = autoPinOf(symbol);
+    const autoPrice = Number(auto && auto.pinPrice);
     if (meta) {
       meta.textContent = [
         "4h",
         Number.isFinite(live.price) ? `现价 ${fmtPrice(live.price)}` : "",
         Number.isFinite(live.change24h) ? `24h ${fmtPct(live.change24h)}` : "",
-        pin > 0 ? `便签 ${fmtPrice(pin)}` : "",
+        note > 0 ? `便签 ${fmtPrice(note)}` : "",
+        Number.isFinite(autoPrice) && autoPrice > 0
+          ? `盯价 ${fmtPrice(autoPrice)}`
+          : "",
       ]
         .filter(Boolean)
         .join(" · ");
@@ -2958,8 +3208,7 @@
             ? 30 * 24 * 60 * 60 * 1000
             : 7 * 24 * 60 * 60 * 1000;
       paintMiniKline(canvas, candles, {
-        pinPrice: notePinPrice(symbol),
-        noteAt: noteAtOf(symbol),
+        ...klinePaintOptsForSymbol(symbol, canvas),
         barMs,
         pad: 6,
       });

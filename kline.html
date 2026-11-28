@@ -28166,6 +28166,8 @@
       }
 
       function notesMarksForSymbol(symbol) {
+        // 记一笔已减负下线：K 线不再画小红点（即便 JSON 里还有旧 notes）
+        if (!MOM_NOTES_FEATURE) return [];
         const key = String(symbol || "")
           .trim()
           .toUpperCase();
