@@ -614,6 +614,15 @@
         );
         color: color-mix(in srgb, var(--accent) 70%, var(--label));
       }
+      .fut-section-label.is-jump {
+        border-color: color-mix(in srgb, #c47a2a 40%, var(--separator));
+        background: color-mix(
+          in srgb,
+          #c47a2a 12%,
+          var(--grouped, var(--bg))
+        );
+        color: color-mix(in srgb, #c47a2a 75%, var(--label));
+      }
       .fut-section-label.is-always {
         margin-top: 4px;
         padding: 6px 10px;
@@ -648,6 +657,26 @@
       .fut-prow-row.is-selected,
       .fut-prow-row.is-focus {
         background: color-mix(in srgb, var(--accent) 12%, transparent);
+      }
+      .fut-prow-row.is-jump-target,
+      .fut-kline-cell.is-jump-target {
+        outline: 2px solid transparent;
+        outline-offset: 2px;
+        animation: fut-jump-flash 2.8s ease-in-out 1;
+      }
+      @keyframes fut-jump-flash {
+        0%,
+        100% {
+          outline-color: transparent;
+          box-shadow: 0 0 0 0 transparent;
+        }
+        12%,
+        37%,
+        62%,
+        87% {
+          outline-color: var(--accent);
+          box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 28%, transparent);
+        }
       }
       .fut-prow-row.is-pool {
         background: color-mix(in srgb, var(--accent, #2f8f6e) 8%, transparent);
@@ -745,6 +774,15 @@
         color: color-mix(in srgb, var(--accent, #2f8f6e) 85%, var(--label));
         background: color-mix(in srgb, var(--accent, #2f8f6e) 14%, transparent);
         vertical-align: middle;
+      }
+      .fut-prow-row.is-jump-reveal,
+      .fut-prow-row.is-jump-guest {
+        background: color-mix(in srgb, var(--label, #808080) 7%, transparent);
+      }
+      .fut-prow-row.is-jump-reveal .fut-tag,
+      .fut-prow-row.is-jump-guest .fut-tag {
+        color: color-mix(in srgb, var(--label) 90%, #c47a2a);
+        background: color-mix(in srgb, #c47a2a 16%, transparent);
       }
       .fut-check {
         width: 16px;
@@ -1903,7 +1941,10 @@
         ×
       </button>
       <strong id="futFocusSym">—</strong>
-      <!-- 对齐钉子自动盯：只要置顶 / 刷新；便签走置顶列表长按，放大走行内按钮 -->
+      <!-- 置顶分栏焦点：便签（对齐钉子 nail-scope）；自动盯/雷达：置顶+刷新 -->
+      <button type="button" id="futFocusNoteBtn" data-fut-focus="note" hidden>
+        便签
+      </button>
       <button type="button" id="futFocusPinBtn" data-fut-focus="pin">置顶</button>
       <button type="button" id="futFocusRefreshBtn" data-fut-focus="refresh">
         刷新
@@ -1970,6 +2011,7 @@
 
     <div class="fut-batch-bar" id="futBatchBar" hidden>
       <span class="count">已选 <strong id="futBatchCount">0</strong></span>
+      <button type="button" id="futBatchSelectAllBtn">全选</button>
       <button type="button" id="futBatchPinBtn">置顶</button>
       <button type="button" id="futBatchUnpinBtn">取消置顶</button>
       <button type="button" id="futBatchNoteBtn">便签现价</button>
