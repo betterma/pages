@@ -15,6 +15,7 @@ const CONFIG = {
   PINS_PATH: process.env.FUT_PINS_PATH || 'futures/fut-auto-pins.json',
   POOL_PATH: process.env.FUT_POOL_PATH || 'futures/fut-watch-pool.json',
   STATE_PATH: process.env.FUT_STATE_PATH || 'futures/fut-notify-state.json',
+  NAILS_PATH: process.env.FUT_NAILS_PATH || 'futures/fut-nails.json',
   BLACKLIST_PATH:
     process.env.FUT_BLACKLIST_PATH || 'futures/fut-blacklist.json',
   PREFS_PATH: process.env.FUT_PREFS_PATH || 'futures/fut-prefs.json',
@@ -29,7 +30,16 @@ const CONFIG = {
         ? '1'
         : process.env.FUT_AUTO_PIN_ENABLED,
     ) !== '0',
+  /** 自动盯 → 未置顶钉子（其余段）；对齐现货 notify.saveAutoPinNails */
+  NAILS_WRITE_ENABLED:
+    String(
+      process.env.FUT_AUTO_PIN_NAILS_ENABLED === undefined
+        ? '1'
+        : process.env.FUT_AUTO_PIN_NAILS_ENABLED,
+    ) !== '0',
 };
+
+const AUTO_PIN_NAIL_SOURCES = new Set(['auto-fut']);
 
 /** 内置过滤：稳定币 / 法币计价伪合约基名 */
 const BUILTIN_BLOCK_BASES = new Set([
@@ -108,6 +118,189 @@ function hasPin(list, symbol) {
     .trim()
     .toUpperCase();
   return normalizePinList(list).some((item) => item.symbol === key);
+}
+
+function isAutoPinSource(source) {
+  return AUTO_PIN_NAIL_SOURCES.has(String(source || '').trim());
+}
+
+function labelOf(symbol) {
+  return String(symbol || '').replace(/USDT$/i, '');
+}
+
+function formatNailNotePrice(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || !(n > 0)) return '';
+  if (n >= 1000) return n.toFixed(2);
+  if (n >= 1) return n.toFixed(4);
+  if (n >= 0.01) return n.toFixed(5);
+  return n.toPrecision(4);
+}
+
+function pinPriceOf(pins, symbol) {
+  const key = String(symbol || '')
+    .trim()
+    .toUpperCase();
+  const row = normalizePinList(pins).find((item) => item.symbol === key);
+  const price = row && Number(row.pinPrice);
+  return Number.isFinite(price) && price > 0 ? price : null;
+}
+
+/**
+ * 本轮新自动盯 → 写/刷新 fut-nails（pinned:false，进置顶分栏「其余」）；
+ * 并补齐「已自动盯、钉子页却没有」的旧漏钉。
+ * 补漏尊重 dismissedNails；新自动盯会清掉 dismissed 再钉入。
+ * 对齐现货 cloud-function-notify/notify.js#saveAutoPinNails。
+ */
+async function saveFutAutoPinNails(now, newcomers, pins, priceBySymbol) {
+  if (!CONFIG.NAILS_WRITE_ENABLED) {
+    return { skipped: true, reason: 'disabled', added: 0, updated: 0 };
+  }
+  const forceSet = new Set(
+    (newcomers || [])
+      .map((symbol) => String(symbol || '').trim().toUpperCase())
+      .filter(Boolean),
+  );
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const file = await loadJson(CONFIG.NAILS_PATH);
+    const prev = Array.isArray(file.data && file.data.nails)
+      ? file.data.nails
+      : [];
+    const bySymbol = new Map();
+    prev.forEach((item) => {
+      const key = String((item && item.symbol) || '')
+        .trim()
+        .toUpperCase();
+      if (key) bySymbol.set(key, item);
+    });
+    const dismissed = new Set(
+      (Array.isArray(file.data && file.data.dismissedNails)
+        ? file.data.dismissedNails
+        : []
+      )
+        .map((symbol) => String(symbol || '').trim().toUpperCase())
+        .filter(Boolean),
+    );
+    const backfillSet = new Set();
+    (pins || []).forEach((row) => {
+      if (!row || !isAutoPinSource(row.source)) return;
+      const key = String(row.symbol || '')
+        .trim()
+        .toUpperCase();
+      if (!key || bySymbol.has(key) || dismissed.has(key)) return;
+      backfillSet.add(key);
+    });
+    const symbols = [...new Set([...forceSet, ...backfillSet])];
+    if (!symbols.length) {
+      return { skipped: false, added: 0, updated: 0, backfill: 0 };
+    }
+
+    const prices =
+      priceBySymbol && typeof priceBySymbol === 'object' ? priceBySymbol : {};
+    const added = [];
+    const updated = [];
+    for (const symbol of symbols) {
+      const force = forceSet.has(symbol);
+      if (force) {
+        dismissed.delete(symbol);
+      } else if (dismissed.has(symbol) || bySymbol.has(symbol)) {
+        continue;
+      }
+      const live = prices[symbol] && Number(prices[symbol].price);
+      const price =
+        Number.isFinite(live) && live > 0 ? live : pinPriceOf(pins, symbol);
+      const note = formatNailNotePrice(price);
+      const existing = bySymbol.get(symbol) || null;
+      if (existing) {
+        if (!force) continue;
+        // 已在钉子里：只刷新便签，不改 pinned / alwaysWatch。
+        updated.push({
+          ...existing,
+          symbol,
+          label: existing.label || labelOf(symbol),
+          note,
+          noteAt: note ? now : Number(existing.noteAt) || 0,
+          at: now,
+        });
+      } else {
+        added.push({
+          id: `${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+          at: now,
+          symbol,
+          label: labelOf(symbol),
+          note,
+          noteAt: note ? now : 0,
+          pinned: false,
+          pinnedAt: 0,
+          order: 0,
+        });
+      }
+    }
+    if (!added.length && !updated.length) {
+      return { skipped: false, added: 0, updated: 0, backfill: 0 };
+    }
+    const updatedMap = new Map(updated.map((item) => [item.symbol, item]));
+    const rest = prev.map((item) => {
+      const key = String((item && item.symbol) || '')
+        .trim()
+        .toUpperCase();
+      return updatedMap.get(key) || item;
+    });
+    const addedKeys = new Set(added.map((row) => row.symbol));
+    const restWithoutDup = rest.filter((item) => {
+      const key = String((item && item.symbol) || '')
+        .trim()
+        .toUpperCase();
+      return !addedKeys.has(key);
+    });
+    const nails = [...added, ...restWithoutDup].map((item, order) => ({
+      ...item,
+      order,
+    }));
+    const backfillCount = added.filter((row) => !forceSet.has(row.symbol))
+      .length;
+    const alwaysWatch = Array.isArray(file.data && file.data.alwaysWatch)
+      ? file.data.alwaysWatch
+      : [];
+    try {
+      await saveJson(
+        CONFIG.NAILS_PATH,
+        {
+          nails,
+          alwaysWatch,
+          alwaysWatchAt: Number(file.data && file.data.alwaysWatchAt) || 0,
+          dismissedNails: [...dismissed],
+          updatedAt: Date.now(),
+          market: 'usdt-perp',
+        },
+        file.sha,
+        `Fut auto-pin nails +${added.length} ~${updated.length}` +
+          (backfillCount ? ` backfill ${backfillCount}` : ''),
+      );
+      return {
+        skipped: false,
+        added: added.length,
+        updated: updated.length,
+        backfill: backfillCount,
+      };
+    } catch (error) {
+      lastError = error;
+      const message = error && error.message ? error.message : String(error);
+      if (!/409|conflict|sha/i.test(message)) break;
+    }
+  }
+  console.warn(
+    'save fut auto-pin nails failed',
+    lastError && lastError.message ? lastError.message : lastError,
+  );
+  return {
+    skipped: true,
+    reason: 'save-failed',
+    added: 0,
+    updated: 0,
+    error: lastError && lastError.message,
+  };
 }
 
 function addPin(list, symbol, price, change24h, source, now) {
@@ -359,6 +552,31 @@ async function runFutAutoPin(options) {
     );
   }
 
+  // 对齐现货：自动盯 → fut-nails（pinned:false → 置顶分栏「其余」）；
+  // 含本轮 newcomers 强制写入 + 历史 auto-fut 漏钉补齐。
+  let nailsWrite = { skipped: true, reason: 'not-run', added: 0, updated: 0 };
+  try {
+    nailsWrite = await saveFutAutoPinNails(
+      now,
+      newcomers,
+      normalizePinList(pins),
+      marketMap,
+    );
+    console.log('fut-auto-pin nails', JSON.stringify(nailsWrite));
+  } catch (error) {
+    console.warn(
+      'fut-auto-pin nails failed',
+      error && error.message ? error.message : error,
+    );
+    nailsWrite = {
+      skipped: true,
+      reason: 'exception',
+      added: 0,
+      updated: 0,
+      error: error && error.message,
+    };
+  }
+
   await withConflictRetry(
     CONFIG.POOL_PATH,
     () => ({
@@ -396,11 +614,16 @@ async function runFutAutoPin(options) {
     dropped: dropped.length,
     pins: normalizePinList(pins).length,
     pinsChanged,
+    nailsAdded: nailsWrite.added || 0,
+    nailsUpdated: nailsWrite.updated || 0,
+    nailsBackfill: nailsWrite.backfill || 0,
+    nailsWrite,
   };
 }
 
 module.exports = {
   runFutAutoPin,
+  saveFutAutoPinNails,
   normalizePinList,
   CONFIG,
 };

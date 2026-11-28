@@ -7,8 +7,9 @@
 1. 拉 U 本位 `exchangeInfo`（永续 + TRADING）+ `/fapi/v1/ticker/24hr`
 2. 按 24h 涨幅取前 N（默认 35）→ `futures/fut-watch-pool.json`
 3. 相对上轮 zone 快照的**新进**写入 `futures/fut-auto-pins.json`（首次只播种，不整池钉满）
-4. 状态：`futures/fut-notify-state.json`；黑名单：`futures/fut-blacklist.json`
-5. **不**下单、**不**读持仓、**不**写根目录 `watch-*.json`
+4. **自动盯 → 写入 `futures/fut-nails.json`（`pinned: false`）**，进合约置顶分栏「其余」；补齐历史漏钉；尊重 `dismissedNails`（对齐现货 `saveAutoPinNails`）
+5. 状态：`futures/fut-notify-state.json`；黑名单：`futures/fut-blacklist.json`
+6. **不**下单、**不**读持仓、**不**写根目录 `watch-*.json`
 
 ## 部署（华为云事件函数）
 
@@ -23,6 +24,8 @@
 | `GITHUB_REPO` | 默认 `betterma/pages` |
 | `FUT_WATCH_POOL_RANK` | 观察池前 N 默认值 `35`；页面写入的 `futures/fut-prefs.json` 优先 |
 | `FUT_AUTO_PIN_ENABLED` | 默认开；`0` 关闭 |
+| `FUT_AUTO_PIN_NAILS_ENABLED` | 默认开；`0` 关闭「自动盯→未置顶钉子」写入 |
+| `FUT_NAILS_PATH` | 默认 `futures/fut-nails.json` |
 | `FAPI_BASE_URLS` | 可选，逗号分隔 fapi 根地址 |
 
 5. **定时触发器**：建议 **5 分钟**（与现货那套分开建函数，不要挂到现货函数上）
@@ -36,5 +39,5 @@
 
 | 动作 | 谁做 |
 |------|------|
-| 扫市场 / 写池 / 写自动盯 | 本云函数 |
-| 展示列表 / 补拉现价 | `futures/index.html` |
+| 扫市场 / 写池 / 写自动盯 / 写未置顶钉子 | 本云函数 |
+| 展示列表（置顶/其余/自动盯/雷达）/ 补拉现价 | `futures/index.html` |

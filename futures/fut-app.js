@@ -26,11 +26,16 @@
   const KLINE_INTERVAL = "4h";
   const KLINE_LIMIT = 42;
   const SHOW_ALL_KEY = "fut_radar_show_all_klines";
+  const RADAR_FIXED_KEY = "fut_radar_fixed_v1";
+  const RADAR_GROUP_KEY = "fut_radar_group_on";
   const SORT_KEY = "fut_pin_sort";
   const PINNED_ONLY_KEY = "fut_pinned_only";
   const AUTO_REFRESH_KEY = "fut_auto_refresh";
   const AUTO_REFRESH_MS = 15 * 1000;
   const LONG_PRESS_MS = 480;
+  const ALWAYS_COLLAPSE_KEY = "fut_always_collapsed";
+  const ZOOM_ICON =
+    '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>';
 
   const state = {
     tab: "pin",
@@ -43,15 +48,21 @@
     marketMap: {},
     klineCache: {},
     showAllKlines: false,
+    radarGroupOn: false,
+    radarTickerAt: 0,
     sort: "noteGain",
     pinnedOnly: false,
     autoRefresh: false,
     saving: false,
     radarRows: [],
+    radarRankMap: new Map(),
     autoRefreshTimer: 0,
     selectMode: false,
     selected: new Set(),
     floatSymbol: null,
+    alwaysCollapsed: false,
+    focusSymbol: null,
+    addOpen: false,
   };
 
   function readLocalFlag(key, fallback) {
@@ -66,6 +77,7 @@
 
   try {
     state.showAllKlines = readLocalFlag(SHOW_ALL_KEY, "0") === "1";
+    state.radarGroupOn = readLocalFlag(RADAR_GROUP_KEY, "0") === "1";
     const sort = readLocalFlag(SORT_KEY, "noteGain");
     state.sort =
       sort === "order" || sort === "change24h" || sort === "noteGain"
@@ -73,6 +85,7 @@
         : "noteGain";
     state.pinnedOnly = readLocalFlag(PINNED_ONLY_KEY, "0") === "1";
     state.autoRefresh = readLocalFlag(AUTO_REFRESH_KEY, "0") === "1";
+    state.alwaysCollapsed = readLocalFlag(ALWAYS_COLLAPSE_KEY, "0") === "1";
   } catch (_) {
     /* ignore */
   }
@@ -140,9 +153,71 @@
     }
   }
 
+  function fmtClock(ms) {
+    const t = Number(ms) || 0;
+    if (!(t > 0)) return "--";
+    try {
+      const d = new Date(t);
+      const pad = (v) => String(v).padStart(2, "0");
+      return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    } catch (_) {
+      return "--";
+    }
+  }
+
   function pctClass(n) {
     if (!Number.isFinite(n) || n === 0) return "";
     return n > 0 ? "is-up" : "is-down";
+  }
+
+  function radarPctClass(n) {
+    if (!Number.isFinite(n) || n === 0) return "";
+    return n > 0 ? "fut-radar-up" : "fut-radar-down";
+  }
+
+  function getRadarFixedSymbols() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(RADAR_FIXED_KEY) || "null");
+      if (!Array.isArray(raw)) return [];
+      const seen = new Set();
+      const out = [];
+      raw.forEach((s) => {
+        const key = symKey(s);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        out.push(key);
+      });
+      return out;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function setRadarFixedSymbols(list) {
+    const keys = [];
+    const seen = new Set();
+    (Array.isArray(list) ? list : []).forEach((s) => {
+      const key = symKey(s);
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      keys.push(key);
+    });
+    try {
+      localStorage.setItem(RADAR_FIXED_KEY, JSON.stringify(keys));
+    } catch (_) {
+      /* ignore */
+    }
+    return keys;
+  }
+
+  function toggleRadarFixed(symbol) {
+    const key = symKey(symbol);
+    if (!key) return;
+    const cur = getRadarFixedSymbols();
+    const idx = cur.indexOf(key);
+    if (idx >= 0) cur.splice(idx, 1);
+    else cur.push(key);
+    setRadarFixedSymbols(cur);
   }
 
   function normalizeNails(raw) {
@@ -286,6 +361,7 @@
       };
     });
     state.marketMap = full ? map : { ...state.marketMap, ...map };
+    if (full || state.tab === "radar") state.radarTickerAt = Date.now();
   }
 
   async function fetchKlines(symbol) {
@@ -318,11 +394,11 @@
     const cssW =
       canvas.clientWidth ||
       Number(canvas.getAttribute("width")) ||
-      120;
+      168;
     const cssH =
       canvas.clientHeight ||
       Number(canvas.getAttribute("height")) ||
-      40;
+      62;
     if (!(cssW > 0) || !(cssH > 0)) return;
     canvas.width = Math.floor(cssW * dpr);
     canvas.height = Math.floor(cssH * dpr);
@@ -339,10 +415,13 @@
     if (!(max > min)) {
       max = min + 1e-9;
     }
+    /* 与钉子雷达一致：固定绿/红，不跟主题 --up/--down 漂移 */
+    const upColor = "#2f8f6e";
+    const downColor = "#c04545";
     const pad = 2;
     const n = candles.length;
     const slot = (cssW - pad * 2) / n;
-    const bodyW = Math.max(1, slot * 0.55);
+    const bodyW = Math.max(1.2, slot * 0.62);
     candles.forEach((c, i) => {
       const x = pad + i * slot + slot / 2;
       const yHigh = pad + ((max - c.high) / (max - min)) * (cssH - pad * 2);
@@ -350,8 +429,8 @@
       const yOpen = pad + ((max - c.open) / (max - min)) * (cssH - pad * 2);
       const yClose = pad + ((max - c.close) / (max - min)) * (cssH - pad * 2);
       const up = c.close >= c.open;
-      ctx.strokeStyle = up ? "#3dcf8e" : "#f07178";
-      ctx.fillStyle = up ? "#3dcf8e" : "#f07178";
+      ctx.strokeStyle = up ? upColor : downColor;
+      ctx.fillStyle = up ? upColor : downColor;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(x, yHigh);
@@ -416,7 +495,9 @@
           const ctx = {
             nails,
             alwaysWatch,
-            dismissedNails: data.dismissedNails,
+            dismissedNails: Array.isArray(data.dismissedNails)
+              ? data.dismissedNails.map(symKey).filter(Boolean)
+              : [],
           };
           const next = mutator(ctx);
           return {
@@ -425,8 +506,8 @@
               alwaysWatch: normalizeAlways(next.alwaysWatch),
               alwaysWatchAt: Date.now(),
               dismissedNails: Array.isArray(next.dismissedNails)
-                ? next.dismissedNails
-                : data.dismissedNails || [],
+                ? [...new Set(next.dismissedNails.map(symKey).filter(Boolean))]
+                : ctx.dismissedNails,
               updatedAt: Date.now(),
               market: "usdt-perp",
             },
@@ -555,9 +636,86 @@
     }, `Fut always ${key}`);
   }
 
+  async function deleteNails(symbols) {
+    const keys = new Set((symbols || []).map(symKey).filter(Boolean));
+    if (!keys.size) return;
+    await persistNails((ctx) => {
+      const nails = ctx.nails.filter((n) => !keys.has(n.symbol));
+      const alwaysWatch = ctx.alwaysWatch.filter((s) => !keys.has(s));
+      const dismissed = [
+        ...new Set([
+          ...(Array.isArray(ctx.dismissedNails) ? ctx.dismissedNails : []),
+          ...keys,
+        ]),
+      ];
+      return { ...ctx, nails, alwaysWatch, dismissedNails: dismissed };
+    }, `Fut delete ${[...keys].join(",")}`);
+    toast(`已删除 ${[...keys].map(labelOf).join(" · ")}`);
+  }
+
+  async function addNailByInput(rawName, rawNote) {
+    let base = String(rawName || "")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "");
+    if (!base) {
+      toast("请输入币名");
+      return;
+    }
+    if (!base.endsWith("USDT")) base += "USDT";
+    await refreshTickers([base]);
+    const price = Number(liveOf(base).price);
+    const noteText = String(rawNote || "").trim() || fmtPrice(price);
+    const now = Date.now();
+    await persistNails((ctx) => {
+      const by = new Map(ctx.nails.map((n) => [n.symbol, n]));
+      const prev = by.get(base);
+      by.set(base, {
+        id: (prev && prev.id) || `${base}:${now}`,
+        symbol: base,
+        label: labelOf(base),
+        note: noteText || (prev && prev.note) || "",
+        noteAt: noteText ? now : (prev && prev.noteAt) || 0,
+        pinned: prev ? !!prev.pinned : false,
+        pinnedAt: (prev && prev.pinnedAt) || 0,
+        order: prev ? prev.order : 0,
+        at: (prev && prev.at) || now,
+      });
+      const dismissed = (ctx.dismissedNails || []).filter(
+        (s) => symKey(s) !== base,
+      );
+      return { ...ctx, nails: [...by.values()], dismissedNails: dismissed };
+    }, `Fut add ${base}`);
+    toast(`已加入 ${labelOf(base)}`);
+    setAddOpen(false);
+  }
+
+  function setAddOpen(open) {
+    state.addOpen = !!open;
+    const form = $("futAddForm");
+    if (form) form.hidden = !state.addOpen;
+    if (state.addOpen) {
+      const input = $("futAddSymbol");
+      if (input) {
+        input.value = "";
+        input.focus();
+      }
+    }
+  }
+
+  function updateHeadMeta() {
+    const meta = $("futMeta");
+    if (!meta) return;
+    const { always, pinned, rest } = splitPinSections();
+    const n = state.nails.length;
+    meta.textContent = `${n} 个 · 置顶 ${pinned.length} · 常看 ${always.length} · 其余 ${rest.length}`;
+  }
+
   function setTab(tab) {
     state.tab = tab;
     if (tab !== "pin" && state.selectMode) setSelectMode(false);
+    if (tab !== "auto" && tab !== "radar") closeFocusBar();
+    if (tab !== "pin") setAddOpen(false);
     document.querySelectorAll("[data-fut-tab]").forEach((btn) => {
       const on = btn.getAttribute("data-fut-tab") === tab;
       btn.classList.toggle("is-active", on);
@@ -566,9 +724,49 @@
     document.querySelectorAll("[data-fut-pane]").forEach((pane) => {
       pane.hidden = pane.getAttribute("data-fut-pane") !== tab;
     });
-    const selectBtn = $("futSelectBtn");
-    if (selectBtn) selectBtn.hidden = tab !== "pin";
     void refreshView();
+  }
+
+  function closeFocusBar() {
+    state.focusSymbol = null;
+    const bar = $("futFocusBar");
+    if (bar) bar.hidden = true;
+    document
+      .querySelectorAll(
+        "#autoList .fut-prow-row.is-focus, #radarBody tr.is-radar-selected",
+      )
+      .forEach((row) => {
+        row.classList.remove("is-focus");
+        row.classList.remove("is-radar-selected");
+      });
+  }
+
+  function openFocusBar(symbol) {
+    const key = symKey(symbol);
+    if (!key) return;
+    state.focusSymbol = key;
+    const bar = $("futFocusBar");
+    const symEl = $("futFocusSym");
+    const pinBtn = $("futFocusPinBtn");
+    if (symEl) symEl.textContent = labelOf(key);
+    if (pinBtn) {
+      const pinned = isUserPinned(key);
+      pinBtn.textContent = pinned ? "已置顶" : "置顶";
+      pinBtn.disabled = pinned;
+    }
+    if (bar) bar.hidden = false;
+    document.querySelectorAll("#autoList .fut-prow-row").forEach((row) => {
+      row.classList.toggle(
+        "is-focus",
+        symKey(row.getAttribute("data-symbol")) === key,
+      );
+    });
+    document.querySelectorAll("#radarBody tr[data-symbol]").forEach((row) => {
+      row.classList.toggle(
+        "is-radar-selected",
+        symKey(row.getAttribute("data-symbol")) === key,
+      );
+    });
   }
 
   function sortNailRows(list) {
@@ -713,10 +911,12 @@
     }
     if (bar) bar.hidden = !state.selectMode;
     if (countEl) countEl.textContent = String(n);
-    ["futBatchPinBtn", "futBatchUnpinBtn", "futBatchNoteBtn"].forEach((id) => {
-      const el = $(id);
-      if (el) el.disabled = n === 0 || state.saving;
-    });
+    ["futBatchPinBtn", "futBatchUnpinBtn", "futBatchNoteBtn", "futBatchDeleteBtn"].forEach(
+      (id) => {
+        const el = $(id);
+        if (el) el.disabled = n === 0 || state.saving;
+      },
+    );
     document.querySelectorAll("#pinList .fut-prow-row").forEach((row) => {
       const sym = symKey(row.getAttribute("data-symbol"));
       const on = state.selectMode && state.selected.has(sym);
@@ -744,7 +944,7 @@
   }
 
   function pinRowHtml(n, opts) {
-    const showK = !!(opts && opts.kline);
+    const showK = opts && opts.kline !== false;
     const live = liveOf(n.symbol);
     const ch = Number(live.change24h);
     const gain = noteGain(n);
@@ -759,8 +959,11 @@
       : `<span class="fut-pin-wrap"><button type="button" class="fut-pin${n.pinned ? " is-on" : ""}" data-fut-pin="${escapeHtml(key)}" aria-haspopup="menu" aria-expanded="false" title="${n.pinned ? "置顶选项" : "置顶"}">${n.pinned ? "顶" : "↑"}</button></span>`;
     const tag = alwaysOn ? '<span class="fut-tag">常看</span>' : "";
     const kHtml = showK
-      ? `<canvas class="fut-kline" data-kline="${escapeHtml(key)}" width="120" height="40"></canvas>`
+      ? `<canvas class="fut-kline" data-kline="${escapeHtml(key)}" width="168" height="62"></canvas>`
       : '<span class="fut-status">—</span>';
+    const opsCell = state.selectMode
+      ? `<td class="fut-prow-ops"></td>`
+      : `<td class="fut-prow-ops"><button type="button" class="fut-zoom" data-fut-zoom="${escapeHtml(key)}" title="放大 K 线">${ZOOM_ICON}</button><button type="button" class="fut-del" data-fut-del="${escapeHtml(key)}" title="删除钉子">删</button></td>`;
     const info = [];
     if (Number.isFinite(gain)) {
       info.push(
@@ -773,19 +976,40 @@
     return `
       <tr class="fut-prow-row${selected ? " is-selected" : ""}" data-symbol="${escapeHtml(key)}" data-fut-row="1">
         <td class="fut-name-cell">${check}${pinBtn}<button type="button" class="fut-name" data-fut-copy="${escapeHtml(labelOf(key))}">${escapeHtml(n.label || labelOf(key))}${tag}</button></td>
-        <td>${kHtml}</td>
+        <td class="fut-kline-cell">${kHtml}</td>
         <td class="fut-chg ${pctClass(ch)}">${escapeHtml(fmtPct(ch))}</td>
+        ${opsCell}
       </tr>
-      <tr class="fut-sub" data-symbol="${escapeHtml(key)}"><td colspan="3"><div class="fut-info">${info.join("")}</div></td></tr>`;
+      <tr class="fut-sub" data-symbol="${escapeHtml(key)}"><td colspan="4"><div class="fut-info">${info.join("")}</div></td></tr>`;
   }
 
   function sectionHtml(title, rows, opts) {
+    const kind = (opts && opts.kind) || "rest";
+    const cls =
+      kind === "always"
+        ? "is-always"
+        : kind === "pin"
+          ? "is-pin"
+          : "is-rest";
+    const collapsed = kind === "always" && state.alwaysCollapsed;
+    const caret =
+      kind === "always"
+        ? `<span class="fut-sec-caret" aria-hidden="true">▾</span>`
+        : "";
+    const labelAttrs =
+      kind === "always"
+        ? ` data-fut-sec-toggle="always" role="button" aria-expanded="${collapsed ? "false" : "true"}"`
+        : "";
+    const label = `<div class="fut-section-label ${cls}${collapsed ? " is-collapsed" : ""}"${labelAttrs}>${caret}<span>${escapeHtml(title)}</span> <span class="fut-section-count">${rows.length}</span></div>`;
     if (!rows.length) {
-      return `<tbody><tr class="fut-section-row"><td colspan="3"><div class="fut-section-label">${escapeHtml(title)} <span>0</span></div></td></tr></tbody>`;
+      return `<tbody data-fut-sec="${escapeHtml(kind)}"><tr class="fut-section-row"><td colspan="4">${label}</td></tr></tbody>`;
+    }
+    if (collapsed) {
+      return `<tbody data-fut-sec="${escapeHtml(kind)}"><tr class="fut-section-row"><td colspan="4">${label}</td></tr></tbody>`;
     }
     const body = rows.map((n) => pinRowHtml(n, opts)).join("");
-    return `<tbody>
-      <tr class="fut-section-row"><td colspan="3"><div class="fut-section-label">${escapeHtml(title)} <span>${rows.length}</span></div></td></tr>
+    return `<tbody data-fut-sec="${escapeHtml(kind)}">
+      <tr class="fut-section-row"><td colspan="4">${label}</td></tr>
       ${body}
     </tbody>`;
   }
@@ -795,17 +1019,49 @@
     if (!root) return;
     const { always, pinned, rest } = splitPinSections();
     let html = `<table class="fut-prow-table">
-      <thead><tr><th>币</th><th>K线</th><th>24h</th></tr></thead>
-      ${sectionHtml("常看", always, { kline: true })}
-      ${sectionHtml("置顶", pinned, { kline: true })}`;
+      <thead><tr><th>币</th><th>K线</th><th>24h</th><th>操作</th></tr></thead>
+      ${sectionHtml("常看", always, { kline: true, kind: "always" })}
+      ${sectionHtml("置顶", pinned, { kline: true, kind: "pin" })}`;
     if (!state.pinnedOnly) {
-      html += sectionHtml("其余", rest, { kline: false });
+      html += sectionHtml("其余", rest, { kline: true, kind: "rest" });
     }
     html += "</table>";
     if (!always.length && !pinned.length && (state.pinnedOnly || !rest.length)) {
-      html = '<div class="fut-empty">暂无置顶。从自动盯 / 雷达点置顶，或等云函数写入。</div>';
+      html =
+        '<div class="fut-empty">暂无置顶。点「新增」，或从自动盯 / 雷达置顶；云函数写入后会出现在「其余」。</div>';
     }
     root.innerHTML = html;
+  }
+
+  function autoRowHtml(p) {
+    const sym = symKey(p.symbol);
+    const live = liveOf(sym);
+    const ch = Number.isFinite(live.change24h)
+      ? live.change24h
+      : Number(p.change24h);
+    const focus = state.focusSymbol === sym ? " is-focus" : "";
+    const timeShort = (() => {
+      const t = Number(p.pinnedAt) || 0;
+      if (!(t > 0)) return "--";
+      try {
+        return new Date(t).toLocaleTimeString("zh-CN", {
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } catch (_) {
+        return "--";
+      }
+    })();
+    const kHtml = `<canvas class="fut-kline" data-kline="${escapeHtml(sym)}" width="168" height="62"></canvas>`;
+    return `<tr class="fut-prow-row${focus}" data-symbol="${escapeHtml(sym)}" data-fut-auto-row="1">
+      <td class="fut-name-cell">
+        <button type="button" class="fut-name" data-fut-copy="${escapeHtml(labelOf(sym))}">${escapeHtml(labelOf(sym))}</button>
+        <span class="fut-status" style="margin-left:6px">${escapeHtml(timeShort)}</span>
+      </td>
+      <td class="fut-kline-cell">${kHtml}</td>
+      <td class="fut-chg ${pctClass(ch)}">${escapeHtml(fmtPct(ch))}</td>
+    </tr>`;
   }
 
   function renderAutoPane() {
@@ -819,44 +1075,28 @@
         '<div class="fut-empty">暂无云端自动盯。部署 futures/cloud-function-fut 后约 5 分钟写入。</div>';
       return;
     }
-    const rows = list
-      .map((p) => {
-        const sym = symKey(p.symbol);
-        const live = liveOf(sym);
-        const ch = Number.isFinite(live.change24h)
-          ? live.change24h
-          : Number(p.change24h);
-        const already = isUserPinned(sym);
-        const kHtml = `<canvas class="fut-kline" data-kline="${escapeHtml(sym)}" width="120" height="40"></canvas>`;
-        return `<tr class="fut-prow-row" data-symbol="${escapeHtml(sym)}" data-fut-row="1">
-          <td class="fut-name-cell"><button type="button" class="fut-name" data-fut-copy="${escapeHtml(labelOf(sym))}">${escapeHtml(labelOf(sym))}</button></td>
-          <td>${kHtml}</td>
-          <td class="fut-chg ${pctClass(ch)}">${escapeHtml(fmtPct(ch))}</td>
-        </tr>
-        <tr class="fut-sub"><td colspan="3"><div class="fut-info">
-          <span>钉入 ${escapeHtml(fmtTime(p.pinnedAt))}</span>
-          <span>现价 ${escapeHtml(fmtPrice(live.price || p.pinPrice))}</span>
-          <span class="fut-ops">${
-            already
-              ? '<span class="fut-tag">已置顶</span>'
-              : `<button type="button" data-fut-act="pin" data-symbol="${escapeHtml(sym)}">置顶</button>`
-          }</span>
-        </div></td></tr>`;
-      })
-      .join("");
-    const ev = state.events
-      .slice(0, 8)
-      .map((e) => {
-        const syms = (e.symbols || []).map(labelOf).join(", ");
-        return `<li><time>${escapeHtml(fmtTime(e.at))}</time> ${escapeHtml(e.kind || "")} · ${escapeHtml(syms)}</li>`;
-      })
-      .join("");
+    const dayMs = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const recent = [];
+    const older = [];
+    list.forEach((p) => {
+      const at = Number(p.pinnedAt) || 0;
+      if (at > 0 && now - at <= dayMs) recent.push(p);
+      else older.push(p);
+    });
+    const block = (title, rows) => {
+      if (!rows.length) return "";
+      return `<tbody>
+        <tr class="fut-section-row"><td colspan="3"><div class="fut-section-label">${escapeHtml(title)} <span class="fut-section-count">${rows.length}</span></div></td></tr>
+        ${rows.map(autoRowHtml).join("")}
+      </tbody>`;
+    };
     root.innerHTML = `<table class="fut-prow-table">
       <thead><tr><th>币</th><th>K线</th><th>24h</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div class="fut-section-label" style="margin-top:12px">最近事件</div>
-    ${ev ? `<ul style="margin:8px 0 0;padding-left:18px;color:var(--secondary);font-size:12px;line-height:1.55">${ev}</ul>` : '<div class="fut-empty">无</div>'}`;
+      ${block("近 24h", recent)}
+      ${block("更早", older)}
+    </table>`;
+    if (state.focusSymbol) openFocusBar(state.focusSymbol);
   }
 
   function buildRadarRows() {
@@ -868,6 +1108,9 @@
         change24h: row.change24h,
       }))
       .sort((a, b) => (b.change24h || 0) - (a.change24h || 0));
+    const rankMap = new Map();
+    entries.forEach((row, index) => rankMap.set(row.symbol, index + 1));
+    state.radarRankMap = rankMap;
     const poolSet = new Set(state.pool);
     const pinnedSet = new Set(
       state.nails.filter((n) => n.pinned).map((n) => n.symbol),
@@ -880,62 +1123,175 @@
     }));
   }
 
+  function radarPinnedExtras() {
+    const inTop = new Set(state.radarRows.map((r) => r.symbol));
+    return state.nails
+      .filter((n) => n.pinned && !inTop.has(n.symbol))
+      .map((n) => n.symbol);
+  }
+
+  function syncRadarChromeUi() {
+    const allBtn = $("radarAllKlineBtn");
+    if (allBtn) {
+      allBtn.setAttribute(
+        "aria-pressed",
+        state.showAllKlines ? "true" : "false",
+      );
+      allBtn.classList.toggle("is-active", state.showAllKlines);
+      allBtn.title = state.showAllKlines
+        ? "当前：全部币都画 K 线，点一下只看置顶"
+        : "当前：只画置顶币，点一下全部币都画";
+    }
+    const groupBtn = $("radarGroupBtn");
+    if (groupBtn) {
+      groupBtn.setAttribute(
+        "aria-pressed",
+        state.radarGroupOn ? "true" : "false",
+      );
+      groupBtn.classList.toggle("is-active", state.radarGroupOn);
+      groupBtn.title = state.radarGroupOn
+        ? "当前：归集币在顶部；点一下恢复原排名"
+        : "当前：已点「归集」的行留在原排名；点一下把它们提到列表顶部";
+    }
+    const el = $("radarUpdated");
+    if (el) {
+      const at = Number(state.radarTickerAt) || 0;
+      if (!(at > 0)) {
+        el.textContent = "";
+        el.classList.remove("is-stale");
+      } else {
+        const stale = Date.now() - at > 90 * 1000;
+        el.textContent = `更新 ${fmtClock(at)}${stale ? " · 偏旧" : ""}`;
+        el.classList.toggle("is-stale", stale);
+      }
+    }
+  }
+
   function renderRadarPane() {
     buildRadarRows();
-    const root = $("radarList");
-    if (!root) return;
-    const toggle = state.showAllKlines ? "全部K线 · 开" : "全部K线 · 关";
+    syncRadarChromeUi();
+    const body = $("radarBody");
+    const empty = $("radarEmpty");
+    const table = body && body.closest("table");
+    if (!body) return;
     if (!state.radarRows.length) {
-      root.innerHTML = `<div class="fut-toolbar-inline">
-        <button type="button" class="fut-tool-btn" id="radarShowAllBtn">${toggle}</button>
-      </div><div class="fut-empty">雷达暂无数据</div>`;
-      bindRadarChrome();
+      body.innerHTML = "";
+      if (table) table.hidden = true;
+      if (empty) empty.hidden = false;
       return;
     }
-    const rows = state.radarRows
-      .map((r) => {
-        const needK = state.showAllKlines || r.pinned;
-        const kHtml = needK
-          ? `<canvas class="fut-kline" data-kline="${escapeHtml(r.symbol)}" width="120" height="40"></canvas>`
-          : '<span class="fut-status">—</span>';
-        return `<tr class="fut-prow-row${r.inPool ? " is-pool" : ""}" data-symbol="${escapeHtml(r.symbol)}" data-fut-row="1">
-          <td class="fut-name-cell">
-            <span class="fut-status">#${r.rank}</span>
-            <button type="button" class="fut-name" data-fut-copy="${escapeHtml(labelOf(r.symbol))}">${escapeHtml(labelOf(r.symbol))}${r.inPool ? '<span class="fut-tag">池</span>' : ""}</button>
-          </td>
-          <td>${kHtml}</td>
-          <td class="fut-chg ${pctClass(r.change24h)}">${escapeHtml(fmtPct(r.change24h))}</td>
-        </tr>
-        <tr class="fut-sub"><td colspan="3"><div class="fut-info">
-          <span>现价 ${escapeHtml(fmtPrice(r.price))}</span>
-          <span class="fut-ops">${
-            r.pinned
-              ? `<button type="button" data-fut-act="unpin" data-symbol="${escapeHtml(r.symbol)}">取消置顶</button>`
-              : `<button type="button" data-fut-act="pin" data-symbol="${escapeHtml(r.symbol)}">置顶</button>`
-          }</span>
-        </div></td></tr>`;
-      })
-      .join("");
-    root.innerHTML = `<div class="fut-toolbar-inline">
-      <button type="button" class="fut-tool-btn" id="radarShowAllBtn">${toggle}</button>
-      <span class="fut-status">前 ${RADAR_TOP} · 池 ${state.pool.length}/${state.poolRank} · 置顶行默认画 K</span>
-    </div>
-    <table class="fut-prow-table">
-      <thead><tr><th>币</th><th>K线</th><th>24h</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-    bindRadarChrome();
+    if (table) table.hidden = false;
+    if (empty) empty.hidden = true;
+
+    const poolSet = new Set(state.pool);
+    const pinnedSet = new Set(
+      state.nails.filter((n) => n.pinned).map((n) => n.symbol),
+    );
+    const markedSet = new Set(getRadarFixedSymbols());
+    const rankOf = (symbol) => state.radarRankMap.get(symbol) || 0;
+    const live = (symbol) => state.marketMap[symbol] || {};
+
+    const buildRow = (symbol, rank, options) => {
+      const opts = options || {};
+      const key = symKey(symbol);
+      const rowLive = live(key);
+      const change24h = Number(rowLive.change24h);
+      const isMarked = markedSet.has(key);
+      const isPinned = pinnedSet.has(key);
+      const isFocused = state.focusSymbol === key;
+      const rowClass = [
+        poolSet.has(key) ? "is-pool" : "",
+        rank && rank <= 20 ? "is-top20" : "",
+        opts.extra ? "is-radar-extra" : "",
+        isMarked ? "is-radar-fixed" : "",
+        isFocused ? "is-radar-selected" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const showKline =
+        state.showAllKlines || isMarked || isPinned;
+      const kHtml = showKline
+        ? `<canvas class="fut-kline fut-radar-kline" data-kline="${escapeHtml(key)}" width="168" height="62"></canvas>`
+        : "";
+      const unpinHtml = isPinned
+        ? `<button type="button" class="fut-radar-act is-danger" data-fut-act="unpin" data-symbol="${escapeHtml(key)}" title="取消置顶该币">取消置顶</button>`
+        : "";
+      const markHtml = `<button type="button" class="fut-radar-act${isMarked ? " is-fixed" : ""}" data-radar-fixed-toggle="${escapeHtml(key)}" title="${isMarked ? "不归集" : "归集"}">${isMarked ? "不归集" : "归集"}</button>`;
+      return `<tr class="${rowClass}" data-symbol="${escapeHtml(key)}" data-fut-radar-row="1"><td><span class="fut-radar-rank-mini">${rank ? `#${rank}` : "—"}</span><button type="button" class="fut-radar-symbol" data-fut-radar-sym="${escapeHtml(key)}">${escapeHtml(labelOf(key))}</button></td><td class="fut-kline-cell">${kHtml}</td><td class="${radarPctClass(change24h)}">${escapeHtml(fmtPct(change24h))}</td><td>${markHtml}${unpinHtml}</td></tr>`;
+    };
+
+    const rows = [];
+    const grouped = state.radarGroupOn
+      ? getRadarFixedSymbols()
+          .slice()
+          .sort((a, b) => {
+            const ra = rankOf(a) || Number.MAX_SAFE_INTEGER;
+            const rb = rankOf(b) || Number.MAX_SAFE_INTEGER;
+            return ra - rb || a.localeCompare(b);
+          })
+      : [];
+    const groupedSet = new Set(grouped);
+    if (grouped.length) {
+      rows.push(
+        `<tr class="is-radar-sep"><td colspan="4">已归集（${grouped.length}）</td></tr>`,
+      );
+      grouped.forEach((symbol) => {
+        rows.push(buildRow(symbol, rankOf(symbol) || 0));
+      });
+    }
+    state.radarRows.forEach((r) => {
+      if (groupedSet.has(r.symbol)) return;
+      rows.push(buildRow(r.symbol, r.rank));
+    });
+    const extras = radarPinnedExtras().filter((s) => !groupedSet.has(s));
+    if (extras.length) {
+      rows.push(
+        `<tr class="is-radar-sep"><td colspan="4">榜单外 · 已置顶（${extras.length}）</td></tr>`,
+      );
+      extras
+        .slice()
+        .sort((a, b) => (rankOf(a) || 1e9) - (rankOf(b) || 1e9))
+        .forEach((symbol) => {
+          rows.push(buildRow(symbol, rankOf(symbol) || 0, { extra: true }));
+        });
+    }
+    body.innerHTML = rows.join("");
+    if (state.focusSymbol) openFocusBar(state.focusSymbol);
   }
 
   function bindRadarChrome() {
-    const btn = $("radarShowAllBtn");
-    if (!btn) return;
-    btn.onclick = () => {
-      state.showAllKlines = !state.showAllKlines;
-      writeLocal(SHOW_ALL_KEY, state.showAllKlines ? "1" : "0");
-      renderRadarPane();
-      void paintVisibleKlines();
-    };
+    const allBtn = $("radarAllKlineBtn");
+    if (allBtn && !allBtn._bound) {
+      allBtn._bound = true;
+      allBtn.addEventListener("click", () => {
+        state.showAllKlines = !state.showAllKlines;
+        writeLocal(SHOW_ALL_KEY, state.showAllKlines ? "1" : "0");
+        renderRadarPane();
+        void paintVisibleKlines();
+      });
+    }
+    const groupBtn = $("radarGroupBtn");
+    if (groupBtn && !groupBtn._bound) {
+      groupBtn._bound = true;
+      groupBtn.addEventListener("click", () => {
+        state.radarGroupOn = !state.radarGroupOn;
+        writeLocal(RADAR_GROUP_KEY, state.radarGroupOn ? "1" : "0");
+        renderRadarPane();
+        void paintVisibleKlines();
+      });
+    }
+    const refreshBtn = $("radarRefreshBtn");
+    if (refreshBtn && !refreshBtn._bound) {
+      refreshBtn._bound = true;
+      refreshBtn.addEventListener("click", () => void refreshView());
+    }
+    const mainstreamBtn = $("radarMainstreamBtn");
+    if (mainstreamBtn && !mainstreamBtn._bound) {
+      mainstreamBtn._bound = true;
+      mainstreamBtn.addEventListener("click", () => {
+        toast("合约暂无主流放大");
+      });
+    }
   }
 
   function render() {
@@ -943,7 +1299,30 @@
     else if (state.tab === "auto") renderAutoPane();
     else renderRadarPane();
     syncSelectUi();
+    updateHeadMeta();
     void paintVisibleKlines();
+  }
+
+  async function openZoom(symbol) {
+    const key = symKey(symbol);
+    if (!key) return;
+    const overlay = $("futZoomOverlay");
+    const title = $("futZoomTitle");
+    const canvas = $("futZoomCanvas");
+    if (!overlay || !canvas) return;
+    if (title) title.textContent = labelOf(key);
+    overlay.hidden = false;
+    try {
+      await ensureKlines([key]);
+      paintMiniKline(canvas, state.klineCache[key] || []);
+    } catch (error) {
+      toast((error && error.message) || "K 线加载失败");
+    }
+  }
+
+  function closeZoom() {
+    const overlay = $("futZoomOverlay");
+    if (overlay) overlay.hidden = true;
   }
 
   async function refreshView() {
@@ -971,6 +1350,7 @@
           ? "数据 " + fmtTime(updated)
           : "已刷新 · 等云函数写入池/自动盯";
       }
+      updateHeadMeta();
     } catch (error) {
       console.warn(error);
       if (errBox) {
@@ -978,6 +1358,7 @@
         errBox.textContent = (error && error.message) || "刷新失败";
       }
       if (status) status.textContent = "刷新失败";
+      updateHeadMeta();
     } finally {
       if (btn) btn.disabled = false;
     }
@@ -1105,6 +1486,8 @@
       );
     });
 
+    bindRadarChrome();
+
     const refreshBtn = $("refreshBtn");
     if (refreshBtn) {
       refreshBtn.addEventListener("click", () => void refreshView());
@@ -1143,8 +1526,122 @@
           .catch((e) => toast(e.message || "失败"));
       });
     }
+    const batchDelete = $("futBatchDeleteBtn");
+    if (batchDelete) {
+      batchDelete.addEventListener("click", () => {
+        void deleteNails([...state.selected])
+          .then(() => setSelectMode(false))
+          .catch((e) => toast(e.message || "失败"));
+      });
+    }
+
+    const addBtn = $("futAddBtn");
+    if (addBtn) {
+      addBtn.addEventListener("click", () => setAddOpen(!state.addOpen));
+    }
+    const addCancel = $("futAddCancel");
+    if (addCancel) {
+      addCancel.addEventListener("click", () => setAddOpen(false));
+    }
+    const addForm = $("futAddForm");
+    if (addForm) {
+      addForm.addEventListener("submit", (ev) => {
+        ev.preventDefault();
+        const name = ($("futAddSymbol") && $("futAddSymbol").value) || "";
+        const note = ($("futAddNote") && $("futAddNote").value) || "";
+        void addNailByInput(name, note).catch((e) =>
+          toast(e.message || "新增失败"),
+        );
+      });
+    }
+
+    const focusClose = $("futFocusClose");
+    if (focusClose) {
+      focusClose.addEventListener("click", () => closeFocusBar());
+    }
+    const focusPin = $("futFocusPinBtn");
+    if (focusPin) {
+      focusPin.addEventListener("click", () => {
+        if (!state.focusSymbol || isUserPinned(state.focusSymbol)) return;
+        void pinToBoard([state.focusSymbol])
+          .then(() => openFocusBar(state.focusSymbol))
+          .catch((e) => toast(e.message || "失败"));
+      });
+    }
+    const focusRefresh = $("futFocusRefreshBtn");
+    if (focusRefresh) {
+      focusRefresh.addEventListener("click", () => {
+        if (!state.focusSymbol) return;
+        void (async () => {
+          try {
+            await refreshTickers([state.focusSymbol]);
+            delete state.klineCache[state.focusSymbol];
+            await ensureKlines([state.focusSymbol]);
+            render();
+            toast(`已刷新 ${labelOf(state.focusSymbol)}`);
+          } catch (error) {
+            toast((error && error.message) || "刷新失败");
+          }
+        })();
+      });
+    }
+    const zoomClose = $("futZoomClose");
+    if (zoomClose) zoomClose.addEventListener("click", () => closeZoom());
+    const zoomOverlay = $("futZoomOverlay");
+    if (zoomOverlay) {
+      zoomOverlay.addEventListener("click", (ev) => {
+        if (ev.target === zoomOverlay) closeZoom();
+      });
+    }
 
     document.body.addEventListener("click", (ev) => {
+      const secToggle = ev.target.closest("[data-fut-sec-toggle='always']");
+      if (secToggle) {
+        state.alwaysCollapsed = !state.alwaysCollapsed;
+        writeLocal(ALWAYS_COLLAPSE_KEY, state.alwaysCollapsed ? "1" : "0");
+        render();
+        return;
+      }
+
+      const delBtn = ev.target.closest("[data-fut-del]");
+      if (delBtn) {
+        const sym = delBtn.getAttribute("data-fut-del");
+        void deleteNails([sym]).catch((e) => toast(e.message || "删除失败"));
+        return;
+      }
+
+      const zoomBtn = ev.target.closest("[data-fut-zoom]");
+      if (zoomBtn) {
+        void openZoom(zoomBtn.getAttribute("data-fut-zoom"));
+        return;
+      }
+
+      const autoRow = ev.target.closest("#autoList [data-fut-auto-row]");
+      if (autoRow && !ev.target.closest("button, a, input")) {
+        openFocusBar(autoRow.getAttribute("data-symbol"));
+        return;
+      }
+
+      const radarFixedBtn = ev.target.closest("[data-radar-fixed-toggle]");
+      if (radarFixedBtn) {
+        toggleRadarFixed(radarFixedBtn.getAttribute("data-radar-fixed-toggle"));
+        renderRadarPane();
+        void paintVisibleKlines();
+        return;
+      }
+
+      const radarSym = ev.target.closest("[data-fut-radar-sym]");
+      if (radarSym) {
+        openFocusBar(radarSym.getAttribute("data-fut-radar-sym"));
+        return;
+      }
+
+      const radarRow = ev.target.closest("#radarBody [data-fut-radar-row]");
+      if (radarRow && !ev.target.closest("button, a, input")) {
+        openFocusBar(radarRow.getAttribute("data-symbol"));
+        return;
+      }
+
       const copyBtn = ev.target.closest("[data-fut-copy]");
       if (copyBtn) {
         const text = copyBtn.getAttribute("data-fut-copy") || "";

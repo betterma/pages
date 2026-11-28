@@ -129,11 +129,10 @@
         color: var(--secondary);
         line-height: 1.4;
       }
-      .fut-head-actions {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
+      .fut-status {
+        font-size: 12px;
+        color: var(--secondary);
+        font-variant-numeric: tabular-nums;
       }
       .fut-tool-btn {
         border: 0.5px solid var(--separator);
@@ -145,18 +144,76 @@
         font-weight: 650;
         cursor: pointer;
       }
-      .fut-tool-btn.is-active {
-        border-color: var(--accent);
-        background: color-mix(in srgb, var(--accent) 18%, var(--elevated));
+      .fut-pin-toolbar {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 12px 6px;
+        border-bottom: 0.5px solid var(--separator);
       }
-      .fut-tool-btn:disabled {
-        opacity: 0.5;
+      .fut-pin-toolbar-left,
+      .fut-pin-toolbar-right {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .fut-pin-toolbar button {
+        border: 0.5px solid color-mix(in srgb, var(--label) 22%, transparent);
+        background: color-mix(in srgb, var(--fill) 55%, transparent);
+        color: var(--label);
+        height: 26px;
+        padding: 0 10px;
+        border-radius: 7px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .fut-pin-toolbar button.is-active,
+      .fut-pin-toolbar button[aria-pressed="true"] {
+        border-color: color-mix(in srgb, var(--label) 38%, transparent);
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+        color: var(--accent);
+      }
+      .fut-pin-toolbar button:disabled {
+        opacity: 0.45;
         cursor: wait;
       }
-      .fut-status {
+      .fut-add-form {
+        flex: 0 0 auto;
+        display: grid;
+        gap: 8px;
+        padding: 10px 12px;
+        border-bottom: 0.5px solid var(--separator);
+        background: var(--elevated);
+      }
+      .fut-add-form[hidden] {
+        display: none !important;
+      }
+      .fut-add-form input {
+        width: 100%;
+        height: 34px;
+        border: 0.5px solid var(--separator);
+        border-radius: 8px;
+        background: var(--bg);
+        color: var(--label);
+        padding: 0 10px;
+      }
+      .fut-add-form-row {
+        display: flex;
+        gap: 8px;
+      }
+      .fut-add-form-row button {
+        border: 0.5px solid var(--separator);
+        background: var(--fill);
+        color: var(--label);
+        height: 30px;
+        padding: 0 12px;
+        border-radius: 8px;
         font-size: 12px;
-        color: var(--secondary);
-        font-variant-numeric: tabular-nums;
+        font-weight: 650;
+        cursor: pointer;
       }
       .fut-err {
         margin: 0;
@@ -382,14 +439,53 @@
       }
       .fut-section-label {
         display: flex;
-        margin: 6px 0 2px;
-        padding: 9px 10px;
-        border-radius: 8px;
-        background: color-mix(in srgb, var(--fill) 70%, transparent);
-        font-size: 12px;
-        font-weight: 650;
-        color: var(--secondary);
+        align-items: baseline;
         justify-content: space-between;
+        gap: 8px;
+        margin: 6px 0 2px;
+        padding: 10px 10px 9px;
+        border-radius: 8px;
+        border: 0.5px solid var(--separator);
+        background: color-mix(in srgb, var(--grouped, var(--bg)) 92%, transparent);
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+      }
+      .fut-section-label.is-pin {
+        border-color: color-mix(in srgb, var(--accent) 42%, var(--separator));
+        background: color-mix(
+          in srgb,
+          var(--accent) 14%,
+          var(--grouped, var(--bg))
+        );
+        color: color-mix(in srgb, var(--accent) 70%, var(--label));
+      }
+      .fut-section-label.is-always {
+        margin-top: 4px;
+        padding: 6px 10px;
+        border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+        background: color-mix(in srgb, var(--elevated, var(--bg)) 42%, transparent);
+        color: color-mix(in srgb, var(--accent) 55%, var(--secondary));
+        font-size: 10px;
+        font-weight: 650;
+        cursor: pointer;
+        user-select: none;
+      }
+      .fut-section-label.is-always .fut-sec-caret {
+        display: inline-block;
+        margin-right: 2px;
+        transition: transform 0.15s ease;
+      }
+      .fut-section-label.is-always.is-collapsed .fut-sec-caret {
+        transform: rotate(-90deg);
+      }
+      .fut-section-label.is-rest {
+        border-style: dashed;
+      }
+      .fut-section-count {
+        font-variant-numeric: tabular-nums;
+        opacity: 0.85;
       }
       .fut-prow-row td {
         padding: 6px;
@@ -402,7 +498,7 @@
         background: color-mix(in srgb, var(--accent) 12%, transparent);
       }
       .fut-prow-row.is-pool {
-        background: color-mix(in srgb, #2a3d2f 40%, transparent);
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 8%, transparent);
       }
       .fut-name-cell {
         white-space: nowrap;
@@ -452,10 +548,39 @@
         margin: 0 2px 0 0;
       }
       .fut-kline-cell canvas.fut-kline {
-        width: 120px;
-        height: 40px;
+        width: 168px;
+        height: 62px;
         display: block;
-        background: transparent;
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--label, #808080) 4%, transparent);
+      }
+      .fut-prow-table thead th:nth-child(4) {
+        text-align: right;
+      }
+      .fut-prow-ops {
+        white-space: nowrap;
+        text-align: right;
+      }
+      .fut-prow-ops button {
+        border: none;
+        background: var(--fill);
+        color: var(--label);
+        height: 22px;
+        min-width: 22px;
+        padding: 0 6px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 650;
+        cursor: pointer;
+        margin-left: 6px;
+      }
+      .fut-prow-ops button.fut-del {
+        color: var(--down);
+        background: color-mix(in srgb, var(--down) 12%, transparent);
+      }
+      .fut-prow-row.is-focus {
+        box-shadow: inset 0 0 0 2px
+          color-mix(in srgb, var(--accent) 55%, transparent);
       }
       .fut-chg {
         text-align: right;
@@ -505,6 +630,227 @@
         align-items: center;
         margin-bottom: 8px;
         flex-wrap: wrap;
+      }
+
+      /* 雷达：对齐钉子页 nail-radar-* */
+      .fut-radar-pane {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        height: 100%;
+      }
+      .fut-radar-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        flex: 0 0 auto;
+        padding: 8px 10px;
+        border-bottom: 0.5px solid var(--separator);
+      }
+      .fut-radar-updated {
+        flex: 0 0 auto;
+        color: var(--secondary);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .fut-radar-updated.is-stale {
+        color: var(--warn, #b07030);
+      }
+      .fut-radar-toggle {
+        flex: 0 0 auto;
+        border: 0.5px solid var(--separator);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1;
+        padding: 4px 8px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .fut-radar-toggle.is-active,
+      .fut-radar-toggle[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 16%, transparent);
+        color: var(--accent);
+      }
+      .fut-radar-refresh {
+        flex: 0 0 auto;
+        border: none;
+        background: none;
+        color: var(--accent);
+        font-size: 11px;
+        font-weight: 650;
+        padding: 0;
+        cursor: pointer;
+      }
+      .fut-radar-refresh:hover {
+        text-decoration: underline;
+      }
+      .fut-radar-refresh:disabled {
+        opacity: 0.5;
+        cursor: default;
+        text-decoration: none;
+      }
+      .fut-radar-wrap {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        overscroll-behavior: contain;
+        padding-bottom: 72px;
+      }
+      .fut-radar-table {
+        width: 100%;
+        min-width: 520px;
+        border-collapse: collapse;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      .fut-radar-table th,
+      .fut-radar-table td {
+        padding: 7px 8px;
+        border-bottom: 0.5px solid var(--separator);
+        text-align: left;
+        white-space: nowrap;
+      }
+      .fut-radar-table th {
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 650;
+        background: transparent;
+      }
+      .fut-radar-table th:nth-child(1),
+      .fut-radar-table td:nth-child(1) {
+        width: 52px;
+        min-width: 52px;
+        max-width: 52px;
+        padding-left: 4px;
+        padding-right: 2px;
+        overflow: hidden;
+      }
+      .fut-radar-rank-mini {
+        display: block;
+        font-size: 9.5px;
+        line-height: 1.25;
+        color: var(--secondary);
+        opacity: 0.85;
+      }
+      .fut-radar-table th:nth-child(2),
+      .fut-radar-table td:nth-child(2) {
+        width: 182px;
+        padding-left: 4px;
+        padding-right: 4px;
+      }
+      .fut-radar-table th:nth-child(3),
+      .fut-radar-table td:nth-child(3) {
+        text-align: right;
+        font-size: 10.5px;
+        padding-left: 4px;
+        padding-right: 4px;
+      }
+      .fut-radar-table th:nth-child(4),
+      .fut-radar-table td:nth-child(4) {
+        text-align: left;
+        padding-left: 4px;
+        padding-right: 4px;
+      }
+      .fut-radar-table tr.is-pool {
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 8%, transparent);
+      }
+      .fut-radar-table tr.is-top20 .fut-radar-rank-mini {
+        color: var(--warn, #b07030);
+        font-weight: 700;
+        opacity: 1;
+      }
+      .fut-radar-symbol {
+        border: none;
+        background: transparent;
+        color: var(--accent);
+        padding: 0;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .fut-radar-symbol:hover {
+        text-decoration: underline;
+      }
+      .fut-radar-up {
+        color: #2f8f6e;
+        font-weight: 650;
+      }
+      .fut-radar-down {
+        color: #c04545;
+        font-weight: 650;
+      }
+      .fut-radar-act {
+        display: inline-block;
+        border: 0.5px solid var(--separator);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--secondary);
+        font-size: 10.5px;
+        font-weight: 600;
+        line-height: 1;
+        padding: 4px 7px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .fut-radar-act + .fut-radar-act {
+        margin-left: 4px;
+      }
+      .fut-radar-act:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .fut-radar-act.is-danger:hover {
+        border-color: #c04545;
+        color: #c04545;
+      }
+      .fut-radar-act.is-fixed {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+      }
+      .fut-radar-table tr.is-radar-sep td {
+        padding: 8px 8px 6px;
+        color: var(--secondary);
+        font-size: 11px;
+        font-weight: 650;
+        background: transparent;
+        border-bottom-color: transparent;
+      }
+      .fut-radar-table tr.is-radar-extra td {
+        opacity: 0.92;
+      }
+      .fut-radar-table tr.is-radar-fixed td {
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 18%, transparent);
+      }
+      .fut-radar-table tr.is-radar-selected td {
+        background: color-mix(in srgb, var(--accent) 12%, transparent);
+      }
+      .fut-radar-table tr.is-radar-selected {
+        box-shadow: inset 0 0 0 2px
+          color-mix(in srgb, var(--accent) 55%, transparent);
+      }
+      .fut-radar-kline {
+        display: block;
+        width: 168px;
+        height: 62px;
+        border-radius: 4px;
+        background: color-mix(in srgb, var(--label, #808080) 4%, transparent);
+        pointer-events: none;
+      }
+      .fut-radar-empty {
+        padding: 18px 12px;
+        color: var(--secondary);
+        font-size: 12px;
+        text-align: center;
       }
 
       /* ↑/顶 菜单 */
@@ -623,6 +969,95 @@
         min-width: 30px;
       }
 
+      .fut-focus-bar {
+        position: fixed;
+        left: 50%;
+        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        transform: translateX(-50%);
+        z-index: 90;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: min(420px, calc(100vw - 16px));
+        min-height: 52px;
+        padding: 8px 28px 8px 12px;
+        border-radius: 12px;
+        border: 0.5px solid var(--separator);
+        background: color-mix(in srgb, var(--elevated) 92%, transparent);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+        backdrop-filter: blur(16px);
+      }
+      .fut-focus-bar[hidden] {
+        display: none !important;
+      }
+      .fut-focus-close {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        border: none;
+        background: transparent;
+        color: var(--secondary);
+        width: 22px;
+        height: 22px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      .fut-focus-bar button:not(.fut-focus-close) {
+        border: 0.5px solid var(--separator);
+        background: var(--fill);
+        color: var(--label);
+        height: 30px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .fut-focus-bar button:disabled {
+        opacity: 0.5;
+      }
+      .fut-zoom-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 160;
+        background: color-mix(in srgb, var(--bg) 55%, transparent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 16px;
+      }
+      .fut-zoom-overlay[hidden] {
+        display: none !important;
+      }
+      .fut-zoom-card {
+        width: min(420px, 100%);
+        background: var(--elevated);
+        border: 0.5px solid var(--separator);
+        border-radius: 12px;
+        padding: 12px;
+      }
+      .fut-zoom-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .fut-zoom-head button {
+        border: 0.5px solid var(--separator);
+        background: var(--fill);
+        color: var(--label);
+        border-radius: 8px;
+        padding: 4px 10px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      #futZoomCanvas {
+        width: 100%;
+        height: auto;
+        display: block;
+        background: color-mix(in srgb, var(--label) 4%, transparent);
+        border-radius: 6px;
+      }
       #toast {
         position: fixed;
         left: 50%;
@@ -673,17 +1108,9 @@
             </svg>
           </button>
         </div>
-        <p class="fut-head-meta" id="futMeta">
-          U 本位只读 · 置顶 / 自动盯 / 雷达 · 数据与现货分离
-        </p>
-        <div class="fut-head-actions">
-          <button type="button" class="fut-tool-btn" id="futSelectBtn">
-            多选
-          </button>
-          <button type="button" class="fut-tool-btn" id="refreshBtn">刷新</button>
-          <span class="fut-status" id="statusMeta">尚未加载</span>
-        </div>
+        <p class="fut-head-meta" id="futMeta">加载中…</p>
         <p class="fut-err" id="errBox" hidden></p>
+        <span class="fut-status" id="statusMeta" hidden>尚未加载</span>
 
         <div
           class="fut-settings-popover"
@@ -811,6 +1238,44 @@
           id="panePin"
           role="tabpanel"
         >
+          <div class="fut-pin-toolbar" id="futPinToolbar">
+            <div class="fut-pin-toolbar-left">
+              <button type="button" id="futAddBtn" title="钉一个新币种">新增</button>
+              <button
+                type="button"
+                id="futSelectBtn"
+                title="多选后批量置顶 / 写便签 / 删除"
+                aria-pressed="false"
+              >
+                多选
+              </button>
+            </div>
+            <div class="fut-pin-toolbar-right">
+              <button type="button" id="refreshBtn" title="重新拉取列表与 K 线">
+                刷新
+              </button>
+            </div>
+          </div>
+          <form class="fut-add-form" id="futAddForm" hidden>
+            <input
+              id="futAddSymbol"
+              type="text"
+              autocomplete="off"
+              placeholder="名称，如 BTC"
+              aria-label="币名"
+            />
+            <input
+              id="futAddNote"
+              type="text"
+              autocomplete="off"
+              placeholder="备注（可选，默认现价）"
+              aria-label="便签"
+            />
+            <div class="fut-add-form-row">
+              <button type="submit">保存</button>
+              <button type="button" id="futAddCancel">取消</button>
+            </div>
+          </form>
           <div class="fut-list" id="pinList"></div>
         </section>
         <section
@@ -823,14 +1288,88 @@
           <div class="fut-list" id="autoList"></div>
         </section>
         <section
-          class="fut-seg-panel"
+          class="fut-seg-panel fut-radar-pane"
           data-fut-pane="radar"
           id="paneRadar"
           role="tabpanel"
           hidden
         >
-          <div class="fut-list" id="radarList"></div>
+          <div class="fut-radar-head" id="radarHead">
+            <span id="radarUpdated" class="fut-radar-updated"></span>
+            <button
+              type="button"
+              id="radarMainstreamBtn"
+              class="fut-radar-toggle"
+              title="合约暂无主流放大"
+            >
+              主流
+            </button>
+            <button
+              type="button"
+              id="radarAllKlineBtn"
+              class="fut-radar-toggle"
+              aria-pressed="false"
+              title="当前：只画置顶币，点一下全部币都画"
+            >
+              全部K线
+            </button>
+            <button
+              type="button"
+              id="radarGroupBtn"
+              class="fut-radar-toggle"
+              aria-pressed="false"
+              title="当前：已点「归集」的行留在原排名；点一下把它们提到列表顶部"
+            >
+              归集
+            </button>
+            <button type="button" id="radarRefreshBtn" class="fut-radar-refresh">
+              刷新
+            </button>
+          </div>
+          <div class="fut-radar-wrap" id="radarTableWrap">
+            <table class="fut-radar-table">
+              <thead>
+                <tr>
+                  <th>币</th>
+                  <th>K线</th>
+                  <th>24h</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="radarBody"></tbody>
+            </table>
+            <div class="fut-radar-empty" id="radarEmpty" hidden>
+              雷达暂无数据
+            </div>
+          </div>
         </section>
+      </div>
+    </div>
+
+    <div
+      id="futFocusBar"
+      class="fut-focus-bar"
+      hidden
+      role="toolbar"
+      aria-label="行操作"
+    >
+      <button type="button" class="fut-focus-close" id="futFocusClose" title="关闭">
+        ×
+      </button>
+      <strong id="futFocusSym">—</strong>
+      <button type="button" id="futFocusPinBtn" data-fut-focus="pin">置顶</button>
+      <button type="button" id="futFocusRefreshBtn" data-fut-focus="refresh">
+        刷新
+      </button>
+    </div>
+
+    <div id="futZoomOverlay" class="fut-zoom-overlay" hidden>
+      <div class="fut-zoom-card">
+        <div class="fut-zoom-head">
+          <strong id="futZoomTitle">K 线</strong>
+          <button type="button" id="futZoomClose">关闭</button>
+        </div>
+        <canvas id="futZoomCanvas" width="360" height="200"></canvas>
       </div>
     </div>
 
@@ -839,6 +1378,7 @@
       <button type="button" id="futBatchPinBtn">置顶</button>
       <button type="button" id="futBatchUnpinBtn">取消置顶</button>
       <button type="button" id="futBatchNoteBtn">便签现价</button>
+      <button type="button" id="futBatchDeleteBtn">删除</button>
       <button type="button" id="futBatchExitBtn">完成</button>
     </div>
 
