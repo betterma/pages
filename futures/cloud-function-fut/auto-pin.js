@@ -403,11 +403,15 @@ async function runFutAutoPin(options) {
     return { skipped: true, reason: 'disabled' };
   }
 
-  const [tradingSet, blacklist, prefRank] = await Promise.all([
-    fetchUsdtPerpTradingSet(),
-    loadBlacklistSet(),
-    loadWatchPoolRankFromPrefs(),
-  ]);
+  // 并行：币安 exchangeInfo / 黑名单 / prefs / pins / state；行情另拉（依赖 tradingSet）
+  const [tradingSet, blacklist, prefRank, pinsFile, stateFile] =
+    await Promise.all([
+      fetchUsdtPerpTradingSet(),
+      loadBlacklistSet(),
+      loadWatchPoolRankFromPrefs(),
+      loadJson(CONFIG.PINS_PATH),
+      loadJson(CONFIG.STATE_PATH),
+    ]);
   const rank = normalizeWatchPoolRank(
     (options && options.watchPoolRank) || prefRank || CONFIG.WATCH_POOL_RANK,
   );
@@ -427,9 +431,7 @@ async function runFutAutoPin(options) {
     }),
   );
 
-  const pinsFile = await loadJson(CONFIG.PINS_PATH);
   let pins = normalizePinList(pinsFile.data && pinsFile.data.pins);
-  const stateFile = await loadJson(CONFIG.STATE_PATH);
   const prevState =
     stateFile.data && typeof stateFile.data === 'object' ? stateFile.data : {};
   const prevSnap = Array.isArray(prevState.risingZoneSnap)
@@ -448,23 +450,26 @@ async function runFutAutoPin(options) {
       autoPinEvents: [],
       updatedAt: now,
     };
-    await saveJson(
-      CONFIG.STATE_PATH,
-      seedState,
-      stateFile.sha,
-      `Fut seed zone snap ${pool.length}`,
-    );
-    await saveJson(
-      CONFIG.POOL_PATH,
-      {
-        watchPool: pool.slice(),
-        rank,
-        updatedAt: now,
-        market: 'usdt-perp',
-      },
-      (await loadJson(CONFIG.POOL_PATH)).sha,
-      `Fut watch pool ${pool.length}`,
-    );
+    const poolFile = await loadJson(CONFIG.POOL_PATH);
+    await Promise.all([
+      saveJson(
+        CONFIG.STATE_PATH,
+        seedState,
+        stateFile.sha,
+        `Fut seed zone snap ${pool.length}`,
+      ),
+      saveJson(
+        CONFIG.POOL_PATH,
+        {
+          watchPool: pool.slice(),
+          rank,
+          updatedAt: now,
+          market: 'usdt-perp',
+        },
+        poolFile.sha,
+        `Fut watch pool ${pool.length}`,
+      ),
+    ]);
     return {
       skipped: false,
       seeded: true,
@@ -552,56 +557,73 @@ async function runFutAutoPin(options) {
     );
   }
 
-  // 对齐现货：自动盯 → fut-nails（pinned:false → 置顶分栏「其余」）；
-  // 含本轮 newcomers 强制写入 + 历史 auto-fut 漏钉补齐。
+  // 对齐现货：自动盯 → fut-nails（pinned:false → 置顶分栏「其余」）。
+  // 无 newcomers 时默认跳过（省一次 GitHub GET）；补漏开 FUT_NAILS_IDLE_BACKFILL=1。
+  const idleBackfill = /^(1|true|yes)$/i.test(
+    String(process.env.FUT_NAILS_IDLE_BACKFILL || ''),
+  );
   let nailsWrite = { skipped: true, reason: 'not-run', added: 0, updated: 0 };
-  try {
-    nailsWrite = await saveFutAutoPinNails(
-      now,
-      newcomers,
-      normalizePinList(pins),
-      marketMap,
-    );
-    console.log('fut-auto-pin nails', JSON.stringify(nailsWrite));
-  } catch (error) {
-    console.warn(
-      'fut-auto-pin nails failed',
-      error && error.message ? error.message : error,
-    );
+  if (newcomers.length || idleBackfill) {
+    try {
+      nailsWrite = await saveFutAutoPinNails(
+        now,
+        newcomers,
+        normalizePinList(pins),
+        marketMap,
+      );
+      console.log('fut-auto-pin nails', JSON.stringify(nailsWrite));
+    } catch (error) {
+      console.warn(
+        'fut-auto-pin nails failed',
+        error && error.message ? error.message : error,
+      );
+      nailsWrite = {
+        skipped: true,
+        reason: 'exception',
+        added: 0,
+        updated: 0,
+        error: error && error.message,
+      };
+    }
+  } else {
     nailsWrite = {
       skipped: true,
-      reason: 'exception',
+      reason: 'no-newcomers',
       added: 0,
       updated: 0,
-      error: error && error.message,
+      backfill: 0,
     };
+    console.log('fut-auto-pin nails', JSON.stringify(nailsWrite));
   }
 
-  await withConflictRetry(
-    CONFIG.POOL_PATH,
-    () => ({
-      data: {
-        watchPool: pool.slice(),
-        rank,
-        updatedAt: now,
-        market: 'usdt-perp',
-      },
-    }),
-    `Fut watch pool ${pool.length}`,
-  );
-
-  await withConflictRetry(
-    CONFIG.STATE_PATH,
-    () => ({
-      data: {
-        risingZoneSnap: pool.slice(),
-        risingZoneSnapSeeded: true,
-        autoPinEvents: events,
-        updatedAt: now,
-      },
-    }),
-    `Fut notify state zone=${pool.length}`,
-  );
+  // 池 + 状态并行写，避免串行 GitHub 在 3s 超时配额里叠爆
+  console.log('fut-auto-pin write pool+state');
+  await Promise.all([
+    withConflictRetry(
+      CONFIG.POOL_PATH,
+      () => ({
+        data: {
+          watchPool: pool.slice(),
+          rank,
+          updatedAt: now,
+          market: 'usdt-perp',
+        },
+      }),
+      `Fut watch pool ${pool.length}`,
+    ),
+    withConflictRetry(
+      CONFIG.STATE_PATH,
+      () => ({
+        data: {
+          risingZoneSnap: pool.slice(),
+          risingZoneSnapSeeded: true,
+          autoPinEvents: events,
+          updatedAt: now,
+        },
+      }),
+      `Fut notify state zone=${pool.length}`,
+    ),
+  ]);
 
   return {
     skipped: false,

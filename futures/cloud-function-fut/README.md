@@ -15,7 +15,7 @@
 
 1. **整包上传**本目录（`index.js` + `auto-pin.js` + `binance-fapi.js` + `github.js`）
 2. Handler：`index.handler`，Node.js 18+
-3. 超时建议 ≥ 60s；内存 256MB 即可
+3. **超时务必 ≥ 60s**（华为云新建默认常是 3s，不够一轮 GitHub 读写；日志里 `invoke Timeout` / `call invoke timeout 3s` 就是这个）。内存 256MB 即可
 4. 环境变量：
 
 | 变量 | 说明 |
@@ -25,6 +25,7 @@
 | `FUT_WATCH_POOL_RANK` | 观察池前 N 默认值 `35`；页面写入的 `futures/fut-prefs.json` 优先 |
 | `FUT_AUTO_PIN_ENABLED` | 默认开；`0` 关闭 |
 | `FUT_AUTO_PIN_NAILS_ENABLED` | 默认开；`0` 关闭「自动盯→未置顶钉子」写入 |
+| `FUT_NAILS_IDLE_BACKFILL` | 默认关；`1` 时无 newcomers 也扫一遍漏钉（更慢） |
 | `FUT_NAILS_PATH` | 默认 `futures/fut-nails.json` |
 | `FAPI_BASE_URLS` | 可选，逗号分隔 fapi 根地址 |
 
