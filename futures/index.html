@@ -1,140 +1,210 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="terminal">
   <head>
     <meta charset="UTF-8" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <title>合约 · 置顶 / 自动盯 / 雷达</title>
+    <title>合约 · 钉子</title>
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("kline-theme-v1");
+          if (t === "daylight" || t === "night" || t === "terminal") {
+            document.documentElement.setAttribute("data-theme", t);
+          }
+        } catch (e) {}
+      })();
+    </script>
     <style>
-      :root {
-        --bg: #0f1419;
-        --panel: #1a222c;
-        --line: #2a3542;
-        --text: #e7eef6;
-        --muted: #8b9aab;
+      :root,
+      html[data-theme="terminal"] {
+        --bg: #111214;
+        --grouped: #181a1e;
+        --elevated: #22252a;
+        --label: #f5f7fa;
+        --secondary: #9aa1ac;
+        --separator: #30343b;
+        --accent: #4c9aff;
+        --fill: #2a2e35;
         --up: #3dcf8e;
         --down: #f07178;
+      }
+      html[data-theme="daylight"] {
+        --bg: #f2f3f5;
+        --grouped: #ffffff;
+        --elevated: #ffffff;
+        --label: #17181a;
+        --secondary: #6b7280;
+        --separator: #e5e7eb;
+        --accent: #2563eb;
+        --fill: #eef0f3;
+        --up: #16a34a;
+        --down: #dc2626;
+      }
+      html[data-theme="night"] {
+        --bg: #0b0c0f;
+        --grouped: #12141a;
+        --elevated: #1a1d24;
+        --label: #eef1f6;
+        --secondary: #8b93a3;
+        --separator: #2a2f3a;
         --accent: #5b9fd4;
-        --pool: #2a3d2f;
-        --pin-bg: #243040;
+        --fill: #232833;
+        --up: #3dcf8e;
+        --down: #f07178;
       }
       * {
         box-sizing: border-box;
       }
+      html,
       body {
         margin: 0;
-        min-height: 100vh;
-        font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-        background: radial-gradient(
-          1200px 600px at 10% -10%,
-          #1c2a38 0%,
-          var(--bg) 55%
-        );
-        color: var(--text);
+        height: 100%;
+        background: var(--bg);
+        color: var(--label);
+        font-family: "SF Pro Text", "PingFang SC", "Segoe UI", "Microsoft YaHei",
+          sans-serif;
+        -webkit-tap-highlight-color: transparent;
       }
-      header {
-        padding: 18px 16px 6px;
-        max-width: 960px;
-        margin: 0 auto;
+      button,
+      input,
+      a {
+        font: inherit;
       }
-      header h1 {
-        margin: 0 0 4px;
-        font-size: 20px;
-        font-weight: 700;
-      }
-      header p {
-        margin: 0;
-        color: var(--muted);
-        font-size: 12px;
-        line-height: 1.45;
-      }
-      .tabs {
+      /* 全屏钉子壳（合约无行情底页） */
+      .fut-shell {
+        position: fixed;
+        inset: 0;
         display: flex;
-        gap: 6px;
-        max-width: 960px;
-        margin: 12px auto 0;
-        padding: 0 16px;
+        flex-direction: column;
+        background: var(--grouped);
+        overflow: hidden;
       }
-      .tabs button {
-        flex: 1;
-        border: 1px solid var(--line);
-        background: var(--panel);
-        color: var(--muted);
-        border-radius: 10px;
-        padding: 10px 8px;
-        font-size: 14px;
-        font-weight: 700;
-        cursor: pointer;
-      }
-      .tabs button.is-active {
-        color: var(--text);
-        border-color: var(--accent);
-        background: color-mix(in srgb, var(--accent) 18%, var(--panel));
-      }
-      .toolbar {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: center;
-        max-width: 960px;
-        margin: 10px auto 0;
-        padding: 0 16px;
+      .fut-head {
         position: relative;
+        flex: 0 0 auto;
+        padding: 14px 14px 10px;
+        border-bottom: 0.5px solid var(--separator);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
       }
-      .toolbar button,
-      .ops button,
-      .toolbar-inline button,
-      .fut-settings-action {
-        border: 1px solid var(--line);
-        background: var(--panel);
-        color: var(--text);
+      .fut-head-title-line {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .fut-head h1 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 700;
+      }
+      .fut-settings-btn {
+        width: 32px;
+        height: 32px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--secondary);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        padding: 0;
+      }
+      .fut-settings-btn[aria-expanded="true"],
+      .fut-settings-btn:hover {
+        background: var(--fill);
+        color: var(--label);
+      }
+      .fut-settings-btn svg {
+        width: 18px;
+        height: 18px;
+      }
+      .fut-head-meta {
+        margin: 0;
+        font-size: 12px;
+        color: var(--secondary);
+        line-height: 1.4;
+      }
+      .fut-head-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .fut-tool-btn {
+        border: 0.5px solid var(--separator);
+        background: var(--elevated);
+        color: var(--label);
         border-radius: 8px;
         padding: 7px 10px;
         font-size: 12px;
         font-weight: 650;
         cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        text-decoration: none;
-        white-space: nowrap;
       }
-      .toolbar button:disabled,
-      .fut-settings-action:disabled {
+      .fut-tool-btn.is-active {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 18%, var(--elevated));
+      }
+      .fut-tool-btn:disabled {
         opacity: 0.5;
         cursor: wait;
       }
-      .fut-settings-wrap {
-        position: relative;
-        margin-left: auto;
+      .fut-status {
+        font-size: 12px;
+        color: var(--secondary);
+        font-variant-numeric: tabular-nums;
       }
+      .fut-err {
+        margin: 0;
+        font-size: 12px;
+        color: var(--down);
+      }
+      .fut-err[hidden] {
+        display: none !important;
+      }
+
+      /* 设置浮窗（对齐钉子：限高可滚） */
       .fut-settings-popover {
         position: absolute;
-        right: 0;
-        top: calc(100% + 6px);
-        width: min(360px, calc(100vw - 32px));
-        background: #15202b;
-        border: 1px solid var(--line);
+        top: calc(100% - 2px);
+        left: 10px;
+        right: 10px;
+        z-index: 1000;
         border-radius: 12px;
-        padding: 8px 0;
-        z-index: 30;
-        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+        border: 0.5px solid var(--separator);
+        background: var(--elevated);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+        max-height: min(
+          72vh,
+          calc(100dvh - env(safe-area-inset-bottom, 0px) - 96px)
+        );
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
       }
       .fut-settings-popover[hidden] {
-        display: none;
+        display: none !important;
       }
       .fut-set-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 10px;
-        padding: 10px 14px;
-        border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+        padding: 12px 14px;
+        border-bottom: 0.5px solid var(--separator);
       }
       .fut-set-row:last-child {
         border-bottom: 0;
+      }
+      .fut-set-row > span,
+      .fut-set-label span {
+        font-size: 13px;
+        font-weight: 650;
       }
       .fut-set-label {
         display: flex;
@@ -142,27 +212,22 @@
         gap: 2px;
         min-width: 0;
       }
-      .fut-set-label span {
-        font-size: 13px;
-        font-weight: 650;
-      }
       .fut-set-label small {
-        color: var(--muted);
+        color: var(--secondary);
         font-size: 11px;
         line-height: 1.35;
       }
       .fut-mode-switch {
         display: inline-flex;
-        border: 1px solid var(--line);
+        border: 0.5px solid var(--separator);
         border-radius: 8px;
         overflow: hidden;
         flex-shrink: 0;
       }
       .fut-mode-switch button {
         border: 0;
-        border-radius: 0;
         background: transparent;
-        color: var(--muted);
+        color: var(--secondary);
         padding: 6px 8px;
         font-size: 11px;
         font-weight: 650;
@@ -170,14 +235,14 @@
       }
       .fut-mode-switch button.is-active {
         background: color-mix(in srgb, var(--accent) 22%, transparent);
-        color: var(--text);
+        color: var(--label);
       }
       .fut-switch {
         width: 42px;
         height: 24px;
         border-radius: 999px;
-        border: 1px solid var(--line);
-        background: #243040;
+        border: 0.5px solid var(--separator);
+        background: var(--fill);
         position: relative;
         cursor: pointer;
         flex-shrink: 0;
@@ -191,11 +256,8 @@
         width: 18px;
         height: 18px;
         border-radius: 50%;
-        background: #9aabbc;
-        transition: transform 0.15s ease, background 0.15s ease;
-      }
-      .fut-switch[aria-checked="true"] {
-        background: color-mix(in srgb, var(--accent) 35%, #243040);
+        background: var(--secondary);
+        transition: transform 0.15s ease;
       }
       .fut-switch[aria-checked="true"]::after {
         transform: translateX(18px);
@@ -209,223 +271,439 @@
       .fut-rank-edit input {
         width: 56px;
         height: 28px;
-        border: 1px solid var(--line);
+        border: 0.5px solid var(--separator);
         border-radius: 8px;
         background: var(--bg);
-        color: var(--text);
+        color: var(--label);
         text-align: center;
-        font: inherit;
-        font-size: 13px;
         font-variant-numeric: tabular-nums;
       }
-      .meta,
-      .muted {
-        color: var(--muted);
+      .fut-settings-action {
+        border: 0.5px solid var(--separator);
+        background: var(--fill);
+        color: var(--label);
+        border-radius: 8px;
+        padding: 6px 10px;
         font-size: 12px;
+        font-weight: 650;
+        text-decoration: none;
+        cursor: pointer;
       }
-      .err {
-        color: var(--down);
-        font-size: 12px;
-        max-width: 960px;
-        margin: 8px auto 0;
-        padding: 0 16px;
-      }
-      main {
-        max-width: 960px;
-        margin: 12px auto 48px;
-        padding: 0 16px;
-      }
-      .sec {
-        background: color-mix(in srgb, var(--panel) 90%, transparent);
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        overflow: hidden;
-        margin-bottom: 12px;
-      }
-      .sec h3 {
-        margin: 0;
-        padding: 10px 12px;
-        font-size: 13px;
-        border-bottom: 1px solid var(--line);
+
+      /* 分栏 */
+      .fut-segments {
         display: flex;
-        justify-content: space-between;
-        gap: 8px;
+        align-items: stretch;
+        gap: 2px;
+        padding: 0 6px;
+        border-bottom: 0.5px solid var(--separator);
+        flex: 0 0 auto;
       }
-      .sec h3 span {
-        color: var(--muted);
-        font-weight: 500;
+      .fut-seg-tab {
+        position: relative;
+        flex: 1 1 0;
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 2px 10px;
+        border: 0;
+        background: transparent;
+        color: var(--secondary);
+        font-size: 13px;
+        cursor: pointer;
       }
-      .table-wrap {
-        overflow: auto;
+      .fut-seg-tab.is-active {
+        color: var(--label);
+        font-weight: 650;
+      }
+      .fut-seg-tab.is-active::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: 3px;
+        width: 24px;
+        height: 2px;
+        border-radius: 2px;
+        background: var(--accent);
+        transform: translateX(-50%);
+      }
+      .fut-seg-host {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        position: relative;
+      }
+      .fut-seg-panel {
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .fut-seg-panel[hidden] {
+        display: none !important;
+      }
+      .fut-list {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: auto;
+        overflow-y: scroll;
         -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        padding: 8px 10px 72px;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
       }
-      table {
+
+      /* 列表表（对齐钉子 nail-prow） */
+      .fut-prow-table {
         width: 100%;
+        min-width: 320px;
         border-collapse: collapse;
+        font-size: 12px;
         font-variant-numeric: tabular-nums;
       }
-      th,
-      td {
-        padding: 8px 10px;
-        text-align: left;
-        font-size: 12px;
-        border-bottom: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
-        vertical-align: middle;
-      }
-      th {
-        color: var(--muted);
-        font-weight: 600;
+      .fut-prow-table thead th {
+        color: var(--secondary);
         font-size: 11px;
-        position: sticky;
-        top: 0;
-        background: var(--panel);
+        font-weight: 600;
+        text-align: left;
+        padding: 5px 6px;
+        border-bottom: 0.5px solid var(--separator);
       }
-      tr:last-child td {
-        border-bottom: 0;
+      .fut-prow-table thead th:nth-child(3) {
+        text-align: right;
       }
-      tr.is-pool {
-        background: color-mix(in srgb, var(--pool) 55%, transparent);
+      .fut-section-row td {
+        padding: 0;
       }
-      tr.is-pinned {
-        background: color-mix(in srgb, var(--pin-bg) 70%, transparent);
+      .fut-section-label {
+        display: flex;
+        margin: 6px 0 2px;
+        padding: 9px 10px;
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--fill) 70%, transparent);
+        font-size: 12px;
+        font-weight: 650;
+        color: var(--secondary);
+        justify-content: space-between;
       }
-      .sym {
+      .fut-prow-row td {
+        padding: 6px;
+        vertical-align: middle;
+        border-bottom: 0.5px solid
+          color-mix(in srgb, var(--separator) 55%, transparent);
+      }
+      .fut-prow-row.is-selected,
+      .fut-prow-row.is-focus {
+        background: color-mix(in srgb, var(--accent) 12%, transparent);
+      }
+      .fut-prow-row.is-pool {
+        background: color-mix(in srgb, #2a3d2f 40%, transparent);
+      }
+      .fut-name-cell {
+        white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .fut-pin-wrap {
+        position: relative;
+        display: inline-flex;
+      }
+      .fut-pin {
+        border: 0;
+        background: var(--fill);
+        color: var(--secondary);
+        border-radius: 6px;
+        min-width: 22px;
+        height: 22px;
+        padding: 0 5px;
+        font-size: 11px;
         font-weight: 700;
+        cursor: pointer;
       }
+      .fut-pin.is-on {
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 18%, var(--fill));
+      }
+      .fut-name {
+        border: 0;
+        background: transparent;
+        color: var(--label);
+        font-weight: 650;
+        padding: 0;
+        cursor: pointer;
+      }
+      .fut-tag {
+        margin-left: 4px;
+        font-size: 10px;
+        color: var(--accent);
+        border: 0.5px solid color-mix(in srgb, var(--accent) 45%, transparent);
+        border-radius: 999px;
+        padding: 0 5px;
+      }
+      .fut-check {
+        width: 16px;
+        height: 16px;
+        margin: 0 2px 0 0;
+      }
+      .fut-kline-cell canvas.fut-kline {
+        width: 120px;
+        height: 40px;
+        display: block;
+        background: transparent;
+      }
+      .fut-chg {
+        text-align: right;
+        font-weight: 650;
+      }
+      .fut-chg.is-up,
       .up {
         color: var(--up);
       }
+      .fut-chg.is-down,
       .down {
         color: var(--down);
       }
-      .ops {
-        white-space: nowrap;
-      }
-      .ops button {
-        margin: 0 2px 2px 0;
-        padding: 5px 8px;
-      }
-      .tag {
-        display: inline-block;
+      .fut-sub td {
+        padding: 0 6px 8px;
+        border-bottom: 0.5px solid
+          color-mix(in srgb, var(--separator) 55%, transparent);
+        color: var(--secondary);
         font-size: 11px;
-        color: var(--accent);
-        border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
-        border-radius: 999px;
-        padding: 1px 7px;
       }
-      .mini-k {
-        width: 120px;
-        height: 36px;
-        display: block;
-      }
-      #paneRadar .mini-k {
-        width: 140px;
-        height: 40px;
-      }
-      .empty {
-        padding: 16px 12px;
-        color: var(--muted);
-        font-size: 13px;
-      }
-      .toolbar-inline {
+      .fut-info {
         display: flex;
         flex-wrap: wrap;
         gap: 8px;
+      }
+      .fut-ops {
+        white-space: nowrap;
+      }
+      .fut-ops button {
+        border: 0.5px solid var(--separator);
+        background: var(--elevated);
+        color: var(--label);
+        border-radius: 7px;
+        padding: 4px 8px;
+        font-size: 11px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .fut-empty {
+        padding: 20px 12px;
+        color: var(--secondary);
+        font-size: 13px;
+      }
+      .fut-toolbar-inline {
+        display: flex;
+        gap: 8px;
         align-items: center;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
       }
-      .events {
-        margin: 0;
-        padding: 10px 14px 14px 28px;
-        color: var(--muted);
+
+      /* ↑/顶 菜单 */
+      .fut-pin-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        z-index: 20;
+        min-width: 132px;
+        padding: 4px;
+        border-radius: 10px;
+        background: var(--bg);
+        border: 1px solid var(--separator);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+        display: grid;
+        gap: 2px;
+      }
+      .fut-pin-menu button {
+        border: none;
+        background: transparent;
+        text-align: left;
+        padding: 8px 10px;
+        border-radius: 7px;
         font-size: 12px;
-        line-height: 1.55;
+        font-weight: 650;
+        color: var(--label);
+        cursor: pointer;
+        white-space: nowrap;
       }
-      .events time {
-        color: var(--text);
+      .fut-pin-menu button:hover {
+        background: var(--fill);
+      }
+      .fut-pin-menu button.is-danger {
+        color: var(--down);
+      }
+
+      /* 多选底栏 */
+      .fut-batch-bar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 40;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+        background: color-mix(in srgb, var(--elevated) 92%, transparent);
+        border-top: 0.5px solid var(--separator);
+        backdrop-filter: blur(8px);
+      }
+      .fut-batch-bar[hidden] {
+        display: none !important;
+      }
+      .fut-batch-bar .count {
+        font-size: 12px;
+        color: var(--secondary);
+        margin-right: auto;
         font-variant-numeric: tabular-nums;
       }
+      .fut-batch-bar button {
+        border: 0.5px solid var(--separator);
+        background: var(--fill);
+        color: var(--label);
+        border-radius: 8px;
+        padding: 7px 10px;
+        font-size: 12px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .fut-batch-bar button:disabled {
+        opacity: 0.45;
+      }
+
+      /* 长按浮层（无买卖） */
+      .fut-row-float-mask {
+        position: fixed;
+        inset: 0;
+        z-index: 132;
+        background: color-mix(in srgb, var(--bg) 28%, transparent);
+      }
+      .fut-row-float-mask[hidden],
+      .fut-row-float-menu[hidden] {
+        display: none !important;
+      }
+      .fut-row-float-menu {
+        position: fixed;
+        z-index: 133;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+        max-width: min(92vw, 360px);
+        padding: 8px 10px;
+        border-radius: 12px;
+        border: 0.5px solid var(--separator);
+        background: color-mix(in srgb, var(--elevated) 94%, transparent);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+      }
+      .fut-row-float-menu button {
+        border: none;
+        background: transparent;
+        color: var(--label);
+        height: 32px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .fut-row-float-menu button:hover {
+        background: color-mix(in srgb, var(--fill) 55%, transparent);
+      }
+      .fut-row-float-menu .close {
+        color: var(--secondary);
+        min-width: 30px;
+      }
+
       #toast {
         position: fixed;
         left: 50%;
         bottom: 24px;
         transform: translateX(-50%);
-        background: #223041;
-        border: 1px solid var(--line);
-        color: var(--text);
+        background: var(--elevated);
+        border: 0.5px solid var(--separator);
+        color: var(--label);
         padding: 10px 14px;
         border-radius: 10px;
         font-size: 13px;
-        z-index: 20;
+        z-index: 200;
         max-width: 90vw;
       }
-      @media (max-width: 640px) {
-        th:nth-child(2),
-        td:nth-child(2) {
-          /* keep kline on pin pane */
-        }
-        .mini-k {
-          width: 96px;
-          height: 32px;
-        }
+      #toast[hidden] {
+        display: none !important;
       }
     </style>
   </head>
   <body>
-    <header>
-      <h1>合约</h1>
-      <p>
-        置顶（常看 / 置顶 / 其余 · 便签）· 自动盯 · 雷达。只读发现 + 置顶，无买卖 /
-        无账本。数据仅本目录 JSON，与现货 kline 无关。
-      </p>
-    </header>
+    <div class="fut-shell" id="futShell">
+      <header class="fut-head">
+        <div class="fut-head-title-line">
+          <h1>合约</h1>
+          <button
+            type="button"
+            class="fut-settings-btn"
+            id="futSettingsBtn"
+            aria-haspopup="dialog"
+            aria-controls="futSettingsPopover"
+            aria-expanded="false"
+            title="筛选、排序与定时刷新"
+            aria-label="设置"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M12 3.5v2.2M12 18.3v2.2M4.9 6.4l1.6 1.6M17.5 16l1.6 1.6M3.5 12h2.2M18.3 12h2.2M4.9 17.6l1.6-1.6M17.5 8l1.6-1.6"
+              />
+            </svg>
+          </button>
+        </div>
+        <p class="fut-head-meta" id="futMeta">
+          U 本位只读 · 置顶 / 自动盯 / 雷达 · 数据与现货分离
+        </p>
+        <div class="fut-head-actions">
+          <button type="button" class="fut-tool-btn" id="futSelectBtn">
+            多选
+          </button>
+          <button type="button" class="fut-tool-btn" id="refreshBtn">刷新</button>
+          <span class="fut-status" id="statusMeta">尚未加载</span>
+        </div>
+        <p class="fut-err" id="errBox" hidden></p>
 
-    <nav class="tabs" aria-label="分栏">
-      <button type="button" data-fut-tab="pin" class="is-active">置顶</button>
-      <button type="button" data-fut-tab="auto">自动盯</button>
-      <button type="button" data-fut-tab="radar">雷达</button>
-    </nav>
-
-    <div class="toolbar">
-      <button type="button" id="refreshBtn">刷新</button>
-      <button type="button" id="pinNoteAllBtn" title="常看+置顶写现价便签">
-        便签现价
-      </button>
-      <span class="meta" id="statusMeta">尚未加载</span>
-      <div class="fut-settings-wrap">
-        <button
-          type="button"
-          id="futSettingsBtn"
-          aria-haspopup="dialog"
-          aria-controls="futSettingsPopover"
-          aria-expanded="false"
-          title="置顶排序、筛选与观察池"
-        >
-          设置
-        </button>
         <div
           class="fut-settings-popover"
           id="futSettingsPopover"
           hidden
           role="dialog"
-          aria-label="合约置顶设置"
+          aria-label="合约设置"
         >
           <div class="fut-set-row">
-            <div class="fut-set-label">
-              <span>排序</span>
-              <small>默认顺序 / 便签涨幅 / 24h</small>
-            </div>
-            <div class="fut-mode-switch" id="futSortSwitch" role="group" aria-label="排序">
+            <span>排序</span>
+            <div class="fut-mode-switch" id="futSortSwitch" role="group">
               <button type="button" data-fut-sort="order">默认</button>
-              <button type="button" data-fut-sort="noteGain" class="is-active">便签涨幅</button>
+              <button type="button" data-fut-sort="noteGain" class="is-active">
+                便签涨幅
+              </button>
               <button type="button" data-fut-sort="change24h">24h</button>
             </div>
           </div>
           <div class="fut-set-row">
-            <div class="fut-set-label">
-              <span>只看置顶区</span>
-              <small>隐藏「其余」段</small>
-            </div>
+            <span>只看置顶区</span>
             <button
               type="button"
               class="fut-switch"
@@ -452,7 +730,7 @@
           <div class="fut-set-row">
             <div class="fut-set-label">
               <span>观察池前 N</span>
-              <small>写 futures/fut-prefs · 云约 5 分钟跟上</small>
+              <small>写 fut-prefs · 云约 5 分钟跟上</small>
             </div>
             <div class="fut-rank-edit">
               <input
@@ -463,9 +741,12 @@
                 step="1"
                 value="35"
                 inputmode="numeric"
-                aria-label="观察池前 N"
               />
-              <button type="button" class="fut-settings-action" id="futWatchPoolRankSave">
+              <button
+                type="button"
+                class="fut-settings-action"
+                id="futWatchPoolRankSave"
+              >
                 保存
               </button>
             </div>
@@ -473,36 +754,110 @@
           <div class="fut-set-row">
             <div class="fut-set-label">
               <span>一键平简</span>
-              <small>常看+置顶全部写现价便签</small>
+              <small>常看+置顶写现价便签</small>
             </div>
-            <button type="button" class="fut-settings-action" id="futFlatSimplifyBtn">
+            <button
+              type="button"
+              class="fut-settings-action"
+              id="futFlatSimplifyBtn"
+            >
               执行
             </button>
           </div>
           <div class="fut-set-row">
             <div class="fut-set-label">
-              <span>现货 kline</span>
-              <small>钉子页 · 与合约共用 GitHub 密码入口</small>
+              <span>现货钉子</span>
+              <small>共用 GitHub 密码入口</small>
             </div>
-            <a
-              class="fut-settings-action"
-              id="futSpotJump"
-              href="../kline.html"
-              title="回到现货钉子页"
-            >
-              打开
-            </a>
+            <a class="fut-settings-action" href="../kline.html">打开</a>
           </div>
         </div>
+      </header>
+
+      <nav class="fut-segments" role="tablist" aria-label="合约分栏">
+        <button
+          type="button"
+          class="fut-seg-tab is-active"
+          data-fut-tab="pin"
+          role="tab"
+          aria-selected="true"
+        >
+          置顶
+        </button>
+        <button
+          type="button"
+          class="fut-seg-tab"
+          data-fut-tab="auto"
+          role="tab"
+          aria-selected="false"
+        >
+          自动盯
+        </button>
+        <button
+          type="button"
+          class="fut-seg-tab"
+          data-fut-tab="radar"
+          role="tab"
+          aria-selected="false"
+        >
+          雷达
+        </button>
+      </nav>
+
+      <div class="fut-seg-host">
+        <section
+          class="fut-seg-panel"
+          data-fut-pane="pin"
+          id="panePin"
+          role="tabpanel"
+        >
+          <div class="fut-list" id="pinList"></div>
+        </section>
+        <section
+          class="fut-seg-panel"
+          data-fut-pane="auto"
+          id="paneAuto"
+          role="tabpanel"
+          hidden
+        >
+          <div class="fut-list" id="autoList"></div>
+        </section>
+        <section
+          class="fut-seg-panel"
+          data-fut-pane="radar"
+          id="paneRadar"
+          role="tabpanel"
+          hidden
+        >
+          <div class="fut-list" id="radarList"></div>
+        </section>
       </div>
     </div>
-    <p class="err" id="errBox" hidden></p>
 
-    <main>
-      <div data-fut-pane="pin" id="panePin"></div>
-      <div data-fut-pane="auto" id="paneAuto" hidden></div>
-      <div data-fut-pane="radar" id="paneRadar" hidden></div>
-    </main>
+    <div class="fut-batch-bar" id="futBatchBar" hidden>
+      <span class="count">已选 <strong id="futBatchCount">0</strong></span>
+      <button type="button" id="futBatchPinBtn">置顶</button>
+      <button type="button" id="futBatchUnpinBtn">取消置顶</button>
+      <button type="button" id="futBatchNoteBtn">便签现价</button>
+      <button type="button" id="futBatchExitBtn">完成</button>
+    </div>
+
+    <div id="futRowFloatMask" class="fut-row-float-mask" hidden></div>
+    <div
+      id="futRowFloatMenu"
+      class="fut-row-float-menu"
+      hidden
+      role="menu"
+      aria-label="行操作"
+    >
+      <button type="button" class="close" data-fut-row-close>×</button>
+      <button type="button" data-fut-float="note">便签</button>
+      <button type="button" data-fut-float="pin">置顶</button>
+      <button type="button" data-fut-float="always">常看</button>
+      <button type="button" data-fut-float="unpin" class="is-danger">
+        取消置顶
+      </button>
+    </div>
 
     <div id="toast" hidden></div>
 

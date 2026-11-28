@@ -79,7 +79,8 @@
 
 排序维度读 `watch-notes-rank-prefs.json`（网页改 notes-rank 表头多选时写入；与页面同一套 hitCount + 主序逻辑）。默认：`keys=["change2h","noteAt","change1h"]`，`last="change2h"`（近2h + 记时 + 近1h，优先近2h）。需要 1h/2h 时拉 15m K 线计算。
 
-- `NOTES_RANK_SNAP_ENABLED`：默认 `1`；`0` 关闭。
+- `NOTES_RANK_SNAP_ENABLED`：默认 `0`（记一笔旁路已减负关闭）；`1` 可临时恢复。
+- `MOM_NOTES_AUTO_WRITE`：默认 `0`；`1` 时自动盯仍会写 `watch-mom-notes.json`。
 - `NOTES_RANK_SNAP_INTERVAL_MS`：默认 `1800000`（30 分钟）。
 
 ## 钉子荧光绿（仅网页，不发企微）
@@ -131,7 +132,8 @@
 | `PUSHPLUS_TOKEN` | 否* | 仅当 `AUTO_PIN_PUSHPLUS=1` |
 | `BALANCE_ALERT` | 否 | 默认 `1` |
 | `PRICE_ALERTS_PUSH` | 否 | 默认 `false`：价格提醒**仅页面提醒**（只写 `hitAt` 给网页，不推企微/微信）。设为 `true` 才恢复企微/PushPlus 连推 |
-| `NOTES_RANK_SNAP_ENABLED` | 否 | 默认 `1` |
+| `NOTES_RANK_SNAP_ENABLED` | 否 | 默认 `0`（记一笔排序快照关闭） |
+| `MOM_NOTES_AUTO_WRITE` | 否 | 默认 `0`；`1` 时自动盯写 mom-notes |
 | `BINANCE_API_KEY` / `BINANCE_API_SECRET` | 持有/卖出 | 现货 Key（可读账户；真下单还需交易权限）。支持 HMAC 或 Ed25519 PEM |
 
 \* 默认不推自动盯时可不配 PushPlus。

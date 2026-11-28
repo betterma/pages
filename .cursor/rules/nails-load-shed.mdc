@@ -5,27 +5,48 @@ alwaysApply: true
 
 # 减负任务（钉子优先）
 
-**状态：Phase A 已落地，等 workbuddy review；Phase B 暂缓。**
+**状态：Phase A 已落地；Phase B step1–step3 已做。**
 
 用户固定只看钉子页，目标是**减负**：弱化/去掉首页 UI，**不**另起一套钉子数据。
 
 ## Phase A（已做）
 
 1. `homePref` / `activeView` 默认 `nails`；`<body data-active-view="nails">` 防首帧闪行情。
-2. 有 localStorage 首页偏好时仍尊重（旧 market 记录会进行情）。
-3. `getHomePref()==="nails"` 时跳过 WAVE2 `renderKlines`；仍跑 `updateWatchPool()` + `syncStopLossGate()`（后者只读持仓+行情，不依赖卡片）。
-4. `marketGridPainted`：跳过时 false；切回行情 `ensureHomeMarketKlines()` 补画，**await 成功后**才置 true；带顶栏进度。
+2. 旧 market 本地首页偏好 → **已被 B1 覆盖**。
+3. `getHomePref()==="nails"` 时跳过 WAVE2 `renderKlines`；仍跑 `updateWatchPool()` + `syncStopLossGate()`。
+4. `marketGridPainted` / `ensureHomeMarketKlines` 补画路径仍在（B1 下进不了行情）。
 5. `nailFastOpened` 防重入未改。
+
+## Phase B step1（已做 · 锁死钉子）
+
+1. `NAILS_ONLY_UI = true`；`body[data-nails-only="1"]`。
+2. 启动强制钉子；`setActiveView("market")` / 关抽屉回行情拦截。
+3. CSS 藏行情壳、记一笔门闩、系统首页切换行。
+
+## Phase B step2（已做 · 拆记一笔旁路）
+
+1. 页面：`MOM_NOTES_FEATURE = false` — 记一笔模式/过滤/捕捉排序门闩/写入入口全部停用；**钉子便签 `note/noteAt` 不动**。
+2. 云：`MOM_NOTES_AUTO_WRITE` 默认关（自动盯不再写 mom-notes）；`NOTES_RANK_SNAP_ENABLED` 默认 `0`。
+3. 代码与 JSON 文件暂留，便于回滚；未做大段删除。
+4. **需重新部署** `cloud-function-notify` 整包后云侧才生效。
+
+## Phase B step3（已做 · 拆行情主页 DOM）
+
+1. 删除行情主页壳：`#appChrome` / `.page`（上涨/盯一下/收藏网格）/ `#hiddenPin*` / 批量条 / 区间选择等。
+2. `renderKlines` 在 `NAILS_ONLY_UI` 下直接 return；`fillGrid` / `setStatus` / 刷新与批量监听对缺失 DOM 全部 null-safe。
+3. **仍保留**：`#nailDrawer`、止损门、浮窗 DOM（CSS 藏）、企微/日志/模拟浮层、vault 门、进度条。
+4. 大段死 JS（`renderKlines` 体、模式切换、首页卡片交互）暂留不删，避免一次 diff 过大；后续可再清。
 
 ## 强依赖（砍首页时也必须留）
 
-- JSON：`watch-nails`、`watch-pins`、`watch-mom-notes`、`watch-data`、`watch-holdings`、`watch-notify-state`、`watch-action-log`、`watch-balance-notices`、`watch-overlook`、`watch-ui-read-state`
+- JSON：`watch-nails`、`watch-pins`、`watch-data`、`watch-holdings`、`watch-notify-state`、`watch-action-log`、`watch-balance-notices`、`watch-overlook`、`watch-ui-read-state`（`watch-mom-notes` 可逐步弃用）
 - 运行时：`marketMap`、`history`→`hasWindowGain`、`fetchKlines` / `paintNailKlines`
 - 云：monitor + notify（auto-pin / 写钉 / overlook / balance / pullback / holdings）
 
-## Phase B（暂缓）
+## 后续可选
 
-删/隐藏首页 DOM 与死代码（收藏主路径、float-tabs UI 等）。
+- 清 `renderKlines` 死代码与 float-tabs 相关旁路。
+- 重新部署 `cloud-function-notify`（step2 云开关）。
 
 ## 禁止
 

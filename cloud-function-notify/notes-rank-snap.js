@@ -27,12 +27,13 @@ const CONFIG = {
   NOTES_RANK_SNAP_INTERVAL_MS: Number(
     process.env.NOTES_RANK_SNAP_INTERVAL_MS || 30 * 60 * 1000,
   ),
+  // Phase B step2：默认关闭记一笔排序快照；NOTES_RANK_SNAP_ENABLED=1 可临时恢复。
   NOTES_RANK_SNAP_ENABLED:
     String(
       process.env.NOTES_RANK_SNAP_ENABLED === undefined
-        ? '1'
+        ? '0'
         : process.env.NOTES_RANK_SNAP_ENABLED,
-    ) !== '0',
+    ) === '1',
   NOTES_RANK_KLINE_TOP: Number(process.env.NOTES_RANK_KLINE_TOP || 10),
   NOTES_RANK_KLINE_LIMIT: Number(process.env.NOTES_RANK_KLINE_LIMIT || 24),
   NOTES_RANK_SNAP_CONCURRENCY: Number(

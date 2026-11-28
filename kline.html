@@ -2263,6 +2263,19 @@
         visibility: hidden;
         pointer-events: none;
       }
+      /* Phase B step1：行情主页减负下线，只留钉子；门闩/记一笔全屏等一并藏。 */
+      body[data-nails-only="1"] .app-chrome,
+      body[data-nails-only="1"] .page,
+      body[data-nails-only="1"] .float-tabs,
+      body[data-nails-only="1"] .nail-tab,
+      body[data-nails-only="1"] .hidden-pin-tab,
+      body[data-nails-only="1"] .notes-rank-gate,
+      body[data-nails-only="1"] .section-jump {
+        display: none !important;
+      }
+      body[data-nails-only="1"] .nail-home-row {
+        display: none !important;
+      }
       .nail-head {
         position: relative;
         display: flex;
@@ -2353,7 +2366,15 @@
         border: 0.5px solid var(--separator);
         background: var(--elevated, var(--grouped));
         box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
-        overflow: hidden;
+        /* 项多时限制在视口内，内部可滚；否则底部（合约入口等）永远够不到 */
+        max-height: min(
+          72vh,
+          calc(100dvh - env(safe-area-inset-bottom, 0px) - 96px)
+        );
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
       }
       .nail-settings-popover[hidden] {
         display: none !important;
@@ -10274,7 +10295,7 @@
       }
     </style>
   </head>
-  <body data-active-view="nails">
+  <body data-active-view="nails" data-nails-only="1">
     <div
       id="modeProgressBar"
       class="mode-progress-bar"
@@ -10408,485 +10429,7 @@
         </div>
       </div>
     </div>
-    <div
-      id="notesRankGate"
-      class="notes-rank-gate"
-      hidden
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="notesRankTitle"
-    >
-      <div class="notes-rank-head">
-        <div class="notes-rank-head-row">
-          <div class="notes-rank-head-text">
-            <h2 id="notesRankTitle">捕捉精选</h2>
-            <p class="notes-rank-meta" id="notesRankPageMeta">有延续</p>
-          </div>
-          <div class="notes-rank-head-actions">
-            <button
-              type="button"
-              class="notes-rank-select"
-              id="notesRankSelectBtn"
-              title="三个模块一起多选，再加入钉子"
-              aria-pressed="false"
-            >
-              多选
-            </button>
-            <button
-              type="button"
-              class="notes-rank-close"
-              id="notesRankClose"
-              title="关闭"
-              aria-label="关闭捕捉精选"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-        <div class="notes-rank-batch-bar" id="notesRankBatchBar" hidden>
-          <span class="notes-rank-batch-count" id="notesRankBatchCount">0</span>
-          <button type="button" id="notesRankSelectAllBtn">全选</button>
-          <button
-            type="button"
-            class="is-primary"
-            id="notesRankAddNailsBtn"
-            title="把已选币加入钉子抽屉"
-          >
-            加入钉子
-          </button>
-          <button type="button" id="notesRankSelectCancelBtn">取消</button>
-        </div>
-      </div>
-      <div class="notes-rank-scroll" id="notesRankScroll">
-        <section class="rank-panel" id="capturePickPanel" aria-label="捕捉精选">
-          <div class="rank-panel-head">
-            <div class="rank-panel-head-text">
-              <div class="rank-panel-title-row">
-                <button
-                  type="button"
-                  class="rank-panel-collapse"
-                  data-rank-collapse="capturePickPanel"
-                  aria-expanded="true"
-                  title="折叠 / 展开"
-                  aria-label="折叠或展开捕捉精选"
-                >
-                  ▾
-                </button>
-                <h3>捕捉精选</h3>
-              </div>
-            </div>
-            <div class="rank-panel-actions">
-              <button
-                type="button"
-                class="notes-rank-view"
-                id="capturePickViewBtn"
-                title="列表与 K 线互斥显示"
-              >
-                切换K线
-              </button>
-              <button
-                type="button"
-                class="notes-rank-refresh"
-                id="capturePickRefresh"
-                title="重算 W1–W4 并拉取近2h/1h"
-              >
-                刷新
-              </button>
-            </div>
-          </div>
-          <div class="rank-panel-body" id="capturePickBody">
-            <div class="notes-rank-loading">加载中…</div>
-          </div>
-        </section>
-        <section class="rank-panel" id="notesRankPanel" aria-label="记一笔排序">
-          <div class="rank-panel-head">
-            <div class="rank-panel-head-text">
-              <div class="rank-panel-title-row">
-                <button
-                  type="button"
-                  class="rank-panel-collapse"
-                  data-rank-collapse="notesRankPanel"
-                  aria-expanded="true"
-                  title="折叠 / 展开"
-                  aria-label="折叠或展开记一笔排序"
-                >
-                  ▾
-                </button>
-                <h3>记一笔排序</h3>
-              </div>
-              <p id="notesRankMeta">此刻热度</p>
-            </div>
-            <div class="rank-panel-actions">
-              <button
-                type="button"
-                class="notes-rank-view"
-                id="notesRankViewBtn"
-                title="列表与 K 线互斥显示"
-              >
-                切换K线
-              </button>
-              <button
-                type="button"
-                class="notes-rank-refresh"
-                id="notesRankRefresh"
-                title="重新拉取近2h/1h 和 K 线"
-              >
-                刷新
-              </button>
-            </div>
-          </div>
-          <div class="rank-panel-body" id="notesRankBody">
-            <div class="notes-rank-loading">加载中…</div>
-          </div>
-        </section>
-        <section
-          class="rank-panel"
-          id="breakthrough24hPanel"
-          aria-label="突破24h正涨"
-        >
-          <div class="rank-panel-head">
-            <div class="rank-panel-head-text">
-              <div class="rank-panel-title-row">
-                <button
-                  type="button"
-                  class="rank-panel-collapse"
-                  data-rank-collapse="breakthrough24hPanel"
-                  aria-expanded="true"
-                  title="折叠 / 展开"
-                  aria-label="折叠或展开突破24h正涨"
-                >
-                  ▾
-                </button>
-                <h3>突破24h正涨</h3>
-              </div>
-              <p id="breakthrough24hMeta">
-                瘦身池 · 本窗涨 · 此刻24h&gt;0 · 翻正距今≤3窗 · 最多25
-              </p>
-            </div>
-            <div class="rank-panel-actions">
-              <button
-                type="button"
-                class="notes-rank-view"
-                id="breakthrough24hViewBtn"
-                title="列表与 K 线互斥显示"
-              >
-                切换K线
-              </button>
-              <button
-                type="button"
-                class="notes-rank-refresh"
-                id="breakthrough24hRefresh"
-                title="重算当前窗是否终于翻正24h"
-              >
-                刷新
-              </button>
-            </div>
-          </div>
-          <div class="rank-panel-body" id="breakthrough24hBody">
-            <div class="notes-rank-loading">加载中…</div>
-          </div>
-        </section>
-      </div>
-    </div>
-    <div class="app-chrome" id="appChrome">
-      <div class="app-chrome-left">
-        <aside id="sortRail" class="sort-rail" aria-label="排序控件">
-          <button
-            type="button"
-            id="sortRailToggle"
-            class="sort-rail-toggle"
-            aria-expanded="false"
-            aria-controls="sortRailPanel"
-            title="展开排序选项"
-          >
-            <span id="sortRailSummary" class="sort-rail-summary">盯幅</span>
-            <span class="sort-rail-caret" aria-hidden="true">▾</span>
-          </button>
-          <div id="sortRailPanel" class="sort-rail-panel" hidden>
-            <div class="sort-rail-group" id="sortRailRecentGroup" hidden>
-              <span class="sort-rail-label">置顶</span>
-              <div
-                class="mode-switch pin-sort-switch"
-                id="recentAutoSortSwitch"
-                role="group"
-                aria-label="置顶排序"
-                title="时间：点按切换早→新 / 新→早；盯幅：相对盯住价；24h：24小时涨幅降序"
-              >
-                <button
-                  type="button"
-                  data-recent-sort="time"
-                  class="is-active"
-                  title="点击切换时间正序/倒序"
-                >
-                  时间·早
-                </button>
-                <button type="button" data-recent-sort="pin">盯幅</button>
-                <button
-                  type="button"
-                  data-recent-sort="change24h"
-                  title="按 24h 涨幅从高到低"
-                >
-                  24h
-                </button>
-              </div>
-            </div>
-            <div class="sort-rail-group">
-              <span class="sort-rail-label">盯一下</span>
-              <div
-                class="mode-switch pin-sort-switch"
-                id="pinSortSwitch"
-                role="group"
-                aria-label="盯一下排序"
-                title="盯幅：相对盯住价；爬升：近2h/1h信号；24h：24小时涨幅降序"
-              >
-                <button type="button" data-pin-sort="pin" class="is-active">盯幅</button>
-                <button type="button" data-pin-sort="momentum">爬升</button>
-                <button
-                  type="button"
-                  data-pin-sort="change24h"
-                  title="按 24h 涨幅从高到低"
-                >
-                  24h
-                </button>
-              </div>
-            </div>
-          </div>
-        </aside>
-        <div
-          class="mode-switch"
-          id="modeSwitch"
-          role="group"
-          aria-label="页面模式"
-        >
-          <button
-            type="button"
-            id="modeWatchBtn"
-            data-mode="watch"
-            class="is-active"
-            title="币安观察：盯一下 / 窗口上涨 / 收藏"
-          >
-            观察
-          </button>
-          <button
-            type="button"
-            id="modeNotesBtn"
-            data-mode="notes"
-            title="只显示已记一笔的 K 线卡片（前端过滤，不重拉）"
-          >
-            记一笔
-          </button>
-        </div>
-      </div>
-      <div class="app-chrome-right">
-        <select
-          id="rangeSelect"
-          class="range-select"
-          title="切换 K 线范围与周期（观察池/窗口涨跌仍按 4h）"
-        >
-          <option value="3d-4h">近3天 · 4h</option>
-          <option value="10d-4h">近10天 · 4h</option>
-          <option value="10d-1d">近10天 · 1天</option>
-        </select>
-        <button
-          id="refreshBtn"
-          type="button"
-          class="chrome-btn"
-          title="轻刷新：币安现价/K线 + 动态/企微/日志（不拉观察池快照）"
-        >
-          刷新
-        </button>
-        <button
-          id="syncPoolBtn"
-          type="button"
-          class="chrome-btn is-secondary"
-          title="重同步：强制拉观察池快照（GitHub 热库）+ GitHub 状态"
-        >
-          <span class="chrome-btn-label">同步池</span>
-          <span class="chrome-btn-icon" aria-hidden="true">⇄</span>
-        </button>
-        <span class="chrome-divider" aria-hidden="true"></span>
-        <button
-          id="reloadPageBtn"
-          type="button"
-          class="chrome-btn is-secondary is-reload"
-          title="整页重载：等同浏览器刷新并绕过缓存，重新加载最新代码（会重置当前分栏与浮层）"
-          aria-label="整页重载"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 12a8 8 0 1 1-2.34-5.66" />
-            <path d="M20 4v5h-5" />
-          </svg>
-        </button>
-      </div>
-    </div>
-    <div class="page">
-      <div class="page-header">
-          <h1>币安观察</h1>
-        <div class="page-header-actions">
-          <div
-            class="theme-switch"
-            id="themeSwitch"
-            role="group"
-            aria-label="换肤预览"
-          >
-            <button
-              type="button"
-              data-theme="terminal"
-              title="01 深色终端"
-            >
-              终
-          </button>
-            <button type="button" data-theme="daylight" title="02 浅色日间">
-              日
-            </button>
-            <button type="button" data-theme="night" title="03 高对比夜盘">
-              夜
-            </button>
-          </div>
-          <div
-            class="ui-style-switch"
-            id="uiStyleSwitch"
-            role="group"
-            aria-label="界面风格"
-            title="切换经典或 iOS 风格"
-          >
-            <button
-              type="button"
-              data-ui-style="classic"
-              aria-pressed="false"
-            >经典</button>
-            <button type="button" data-ui-style="ios" aria-pressed="false">
-              iOS
-            </button>
-          </div>
-          <details class="friend-links">
-            <summary>友情链接</summary>
-            <div class="friend-links-panel">
-              <a href="./index.html">总导航</a>
-              <a href="./watch.html">冲榜雷达</a>
-              <a href="./kline-long.html">周月 K 线</a>
-              <a href="./range100.html">Range100 潜伏</a>
-              <a href="./okx/kline.html">OKX 自选</a>
-              <a href="https://betterma.github.io/">蚂蚱导航</a>
-            </div>
-          </details>
-        </div>
-      </div>
-      <div class="status">
-        <span id="statusDot" class="dot"></span>
-        <span id="statusText">等待启动...</span>
-        <span
-          id="dataAsOf"
-          class="data-as-of"
-          title="行情与 K 线最近一次成功刷新的本地时间。轻刷新会同步动态/企微/日志，但不强制拉观察池；「同步池」才强制更新观察池快照"
-        ></span>
-      </div>
-      <nav id="sectionJumpNav" class="section-jump" aria-label="分区跳转">
-        <button type="button" data-jump="recentAutoPinSection">置顶</button>
-        <button type="button" data-jump="resumePinSection">转强</button>
-        <button type="button" data-jump="pinMainSection">盯一下</button>
-        <button type="button" data-jump="risingSection">窗口上涨</button>
-        <button type="button" data-jump="favSection">收藏</button>
-      </nav>
-      <!-- 指引已隐藏：熟悉操作后收起，需要时再解开
-      <p class="hint">长按选 盯/购买/卖出/收藏/拉黑 · 盯一下展示当前窗口上涨（可低于盯住价）· 右侧看窗口回落 · 企微同步</p>
-      -->
 
-      <div class="section-title-row">
-        <h2 class="section-title" id="pinSectionTitle">盯一下</h2>
-        <button
-          id="pinSelectBtn"
-          class="ghost-action"
-          type="button"
-          aria-pressed="false"
-          title="多选后可批量取消盯住或按现价续盯"
-        >
-          多选
-        </button>
-        <button
-          id="maintToggleBtn"
-          class="ghost-action maint-toggle"
-          type="button"
-          aria-expanded="false"
-          aria-controls="maintPanel"
-          title="展开低频清理操作"
-        >
-          清理
-        </button>
-      </div>
-      <div class="pin-meta-row">
-        <div id="pinMeta" class="meta"></div>
-      </div>
-      <div id="maintPanel" class="maint-panel" hidden>
-        <span id="maintEmptyHint" class="maint-empty" hidden>暂无可清理项</span>
-        <button id="clearExpiredPinsBtn" type="button" hidden>
-          清除全部过期
-        </button>
-        <button
-          id="clearAllPositionsBtn"
-          class="is-danger"
-          type="button"
-          hidden
-          title="清空 GitHub 上全部持仓记录（不影响盯一下）"
-        >
-          清除全部持仓
-        </button>
-      </div>
-      <div id="recentAutoPinSection" class="recent-auto-pin" hidden>
-        <div class="recent-auto-pin-head">
-          <span id="recentAutoPinMeta">新加入</span>
-          <button
-            type="button"
-            id="recentAutoPinToggle"
-            class="recent-auto-pin-toggle"
-            aria-expanded="true"
-            title="折叠/展开新自动盯"
-          >
-            收起
-          </button>
-        </div>
-        <div id="recentAutoPinGrid" class="kline-grid"></div>
-      </div>
-      <div id="resumePinSection" class="resume-pin" hidden>
-        <div class="resume-pin-head">
-          <span id="resumePinMeta">再启动</span>
-        </div>
-        <div id="resumePinGrid" class="kline-grid"></div>
-      </div>
-      <div id="pinMainSection" class="pin-main">
-        <div id="pinMainHead" class="pin-main-head" hidden>还在涨</div>
-        <div id="pinGrid" class="kline-grid"></div>
-      </div>
-
-      <div id="risingSection" class="page-section">
-      <h2 class="section-title">窗口上涨</h2>
-      <div id="risingMeta" class="meta"></div>
-      <div id="risingGrid" class="kline-grid"></div>
-      </div>
-
-      <div id="favSection" class="page-section">
-      <h2 class="section-title">我的收藏</h2>
-      <div id="favMeta" class="meta"></div>
-      <div id="favGrid" class="kline-grid"></div>
-      </div>
-    </div>
-
-    <button
-      type="button"
-      id="nailTab"
-      class="nail-tab"
-      data-count="0"
-      title="钉子抽屉"
-      aria-label="钉子抽屉"
-    >
-      <svg viewBox="0 0 16 16" aria-hidden="true">
-        <path
-          fill="currentColor"
-          d="M8.8 1.4 14.6 7.2l-1.1 1.1-1.3-1.3-2.2 6.2-.9.9-2.5-2.5-2.8 2.8-.8-.8 2.8-2.8-2.5-2.5.9-.9 6.2-2.2-1.3-1.3 1.1-1.1z"
-        />
-      </svg>
-      <span class="tab-count" id="nailTabCount">0</span>
-    </button>
     <div id="nailDrawer" class="nail-drawer" aria-hidden="true">
       <div class="nail-mask" data-close-nails></div>
       <aside class="nail-panel" role="dialog" aria-label="钉子">
@@ -11324,7 +10867,7 @@
                 aria-label="当前窗口上涨"
               ></button>
             </div>
-            <div class="nail-rising-row nail-home-row">
+            <div class="nail-rising-row nail-home-row" hidden title="Phase B：行情主页已减负下线">
               <span>系统首页</span>
               <div
                 class="mode-switch pin-sort-switch"
@@ -11958,38 +11501,6 @@
       </div>
     </div>
 
-    <button
-      type="button"
-      id="hiddenPinTab"
-      class="hidden-pin-tab"
-      data-count="0"
-      title="隐藏盯一下"
-      aria-label="隐藏盯一下"
-    >
-      <svg viewBox="0 0 16 16" aria-hidden="true">
-        <path
-          fill="currentColor"
-          d="M2.1 2.1 1 3.2l2.3 2.3C2 6.4 1.2 7.6 1 8c.6 1.2 3.4 5 7 5 1.3 0 2.5-.4 3.6-1l2.2 2.2 1.1-1.1L2.1 2.1zM8 11.5A3.5 3.5 0 0 1 5.1 7.3l1.1 1.1A2.2 2.2 0 0 0 8 10.2c.3 0 .6-.1.8-.2l1.1 1.1A3.5 3.5 0 0 1 8 11.5zm7-3.5c-.2.4-.8 1.3-1.8 2.2l-1-1c.7-.6 1.3-1.2 1.6-1.7C12.4 6.3 10.4 4.5 8 4.5c-.5 0-1 .1-1.5.2L5.4 3.6C6.2 3.2 7.1 3 8 3c3.6 0 6.4 3.8 7 5z"
-        />
-      </svg>
-      <span class="tab-count" id="hiddenPinTabCount">0</span>
-    </button>
-    <div id="hiddenPinDrawer" class="hidden-pin-drawer" aria-hidden="true">
-      <div class="hidden-pin-mask" data-close-hidden-pins></div>
-      <aside class="hidden-pin-panel" role="dialog" aria-label="隐藏的盯一下">
-        <div class="hidden-pin-head">
-          <div>
-            <h3>隐藏的盯一下</h3>
-            <!-- <p id="hiddenPinMeta">当前窗口未涨 · 长按可取消/续盯 · 企微不推送</p> -->
-            <p id="hiddenPinMeta"></p>
-          </div>
-          <button type="button" data-close-hidden-pins>关闭</button>
-        </div>
-        <div class="hidden-pin-body">
-          <div id="hiddenPinGrid" class="kline-grid"></div>
-        </div>
-      </aside>
-    </div>
 
     <div id="notifyFloat" class="notify-float" hidden>
       <div class="notify-float-head">
@@ -12648,53 +12159,6 @@
       </button>
     </div>
 
-    <div id="pinBatchBar" class="pin-batch-bar" hidden>
-      <span class="pin-batch-count" id="pinBatchCount">0</span>
-      <button type="button" id="pinBatchSelectAllBtn" title="全选当前展示的盯一下">
-        全选
-      </button>
-      <button
-        type="button"
-        id="pinBatchRenewBtn"
-        class="is-primary"
-        title="按现价续盯"
-      >
-        续盯
-      </button>
-      <button
-        type="button"
-        id="pinBatchNailBtn"
-        title="加入钉子，便签自动备注当前价"
-      >
-        钉
-      </button>
-      <button
-        type="button"
-        id="pinBatchUnpinBtn"
-        class="is-danger"
-        title="取消盯住"
-      >
-        取消
-      </button>
-      <button
-        type="button"
-        id="pinBatchClearEggFireBtn"
-        hidden
-        title="卡片彩蛋已下线"
-      >
-        去礼花
-      </button>
-      <button
-        type="button"
-        id="pinBatchClearEggNewBtn"
-        hidden
-        title="卡片彩蛋已下线"
-      >
-        去 NEW
-      </button>
-      <button type="button" id="pinBatchClearBtn" title="清空选择">清空</button>
-      <button type="button" id="pinBatchExitBtn" title="退出多选">×</button>
-    </div>
 
     <script src="./github-token-vault.js"></script>
     <script src="./watch-favorites.js?v=20261125always"></script>
@@ -12716,9 +12180,11 @@
        * 页面减负开关：关掉重逻辑（不删代码，改 true 可恢复）。
        * - 捕捉精选：全屏精选页 / 底栏 Tab / 相关拉取
        * - 破点高：10 分钟检测、GitHub 读写、动态浮层右栏
+       * - 记一笔：行情过滤 / 捕捉精选排序 / mom-notes 写入（钉子便签不受影响）
        */
       const FEATURE_CAPTURE_PICK = false;
       const FEATURE_BREAK_HIGH = false;
+      const MOM_NOTES_FEATURE = false;
 
       const CONFIG = {
         HISTORY_DURATION: 3 * 24 * 60 * 60 * 1000,
@@ -14158,15 +13624,18 @@
       let klineViewKey = "3d-4h";
       let notesViewMode = false;
       try {
-        const viewParam = new URLSearchParams(window.location.search).get(
-          "view",
-        );
-        notesViewMode = viewParam === "notes";
+        if (MOM_NOTES_FEATURE) {
+          const viewParam = new URLSearchParams(window.location.search).get(
+            "view",
+          );
+          notesViewMode = viewParam === "notes";
+        }
       } catch (error) {
         notesViewMode = false;
       }
 
       function isNotesView() {
+        if (!MOM_NOTES_FEATURE) return false;
         return !!notesViewMode;
       }
 
@@ -14256,6 +13725,16 @@
       }
 
       async function setNotesView(on, options) {
+        if (!MOM_NOTES_FEATURE) {
+          if (on && !(options && options.silent)) {
+            showToast("记一笔已减负下线");
+          }
+          notesViewMode = false;
+          syncNotesViewUrl();
+          applyPageChrome();
+          applyNotesFilter();
+          return;
+        }
         const next = !!on;
         if (next === notesViewMode && !(options && options.force)) return;
         notesViewMode = next;
@@ -14664,9 +14143,10 @@
       }
 
       function setStatus(ok, text) {
-        document.getElementById("statusDot").className =
-          `dot ${ok ? "online" : "offline"}`;
-        document.getElementById("statusText").textContent = text;
+        const dot = document.getElementById("statusDot");
+        const statusText = document.getElementById("statusText");
+        if (dot) dot.className = `dot ${ok ? "online" : "offline"}`;
+        if (statusText) statusText.textContent = text;
       }
 
       function formatClock(ts) {
@@ -15130,6 +14610,7 @@
 
       /** 清盯 / 触底退出时同步去掉该币全部记一笔。 */
       async function removeMomNotesForSymbols(symbols, message) {
+        if (!MOM_NOTES_FEATURE) return false;
         const keySet = new Set(
           (symbols || [])
             .map((symbol) => String(symbol || "").trim().toUpperCase())
@@ -15263,6 +14744,7 @@
       }
 
       async function removeNotesForSymbol(symbol) {
+        if (!MOM_NOTES_FEATURE) return false;
         if (!symbol || momNotesSaving) return false;
         momNotesSaving = true;
         const key = String(symbol).trim().toUpperCase();
@@ -24612,6 +24094,7 @@
       }
 
       async function migrateLocalMomNotesIfNeeded() {
+        if (!MOM_NOTES_FEATURE) return [];
         let local = [];
         try {
           const raw = localStorage.getItem(MOM_NOTES_LOCAL_KEY);
@@ -26335,6 +25818,10 @@
       }
 
       async function addMomNoteFromRow(row) {
+        if (!MOM_NOTES_FEATURE) {
+          showToast("记一笔已减负下线");
+          return;
+        }
         if (!row || !row.symbol || momNotesSaving) return;
         const trend = row.trend || {};
         const notes = loadMomNotes();
@@ -26418,6 +25905,7 @@
       }
 
       async function removeMomNote(id) {
+        if (!MOM_NOTES_FEATURE) return;
         if (!id || momNotesSaving) return;
         const note = (momNoteItems || []).find((item) => item && item.id === id);
         const label =
@@ -26445,6 +25933,10 @@
       }
 
       async function clearMomNotes() {
+        if (!MOM_NOTES_FEATURE) {
+          showToast("记一笔已减负下线");
+          return;
+        }
         if (momNotesSaving) return;
         const n = (momNoteItems || []).length;
         if (!n) {
@@ -27887,6 +27379,10 @@
       }
 
       async function openNotesRankOverlay(options) {
+        if (!MOM_NOTES_FEATURE && !FEATURE_CAPTURE_PICK) {
+          showToast("记一笔 / 捕捉精选已减负下线");
+          return;
+        }
         const opts = options || {};
         const force = !!opts.force;
         const section =
@@ -27895,6 +27391,10 @@
           opts.section === "breakthrough"
             ? opts.section
             : "all";
+        if (!MOM_NOTES_FEATURE && section === "notes") {
+          showToast("记一笔已减负下线");
+          return;
+        }
         if (section === "capture" && !FEATURE_CAPTURE_PICK) {
           showToast("捕捉精选已暂时关闭");
           return;
@@ -31512,6 +31012,10 @@
       }
 
       async function batchRemoveNotesSelected() {
+        if (!MOM_NOTES_FEATURE) {
+          showToast("记一笔已减负下线");
+          return;
+        }
         if (momNotesSaving || !selectedPinSymbols.size) return;
         const symbols = [...selectedPinSymbols];
         const keySet = new Set(symbols);
@@ -32285,6 +31789,7 @@
         pinMap,
         onBatchDone,
       ) {
+        if (!grid) return;
         const favSet = favoriteSymbols();
         const pairs = pairSet || new Set();
         const pins = pinMap || new Map();
@@ -32608,7 +32113,9 @@
       let nailDailyResetPromptKind = null; // pre | post
       let nailDailyResetPromptBusy = false;
       let nailDailyResetCountdownTimer = 0;
-      // 减负 Phase A：默认钉子；有本地/GitHub 首页偏好时仍尊重记录。
+      // 减负 Phase A：默认钉子。
+      // Phase B step1：NAILS_ONLY_UI=true → 行情主页不可进，只留钉子页。
+      const NAILS_ONLY_UI = true;
       let activeView = "nails"; // market | nails（会话当前屏）
       let homePref = "nails"; // market | nails（启动首页，GitHub）
       let homePrefUpdatedAt = 0;
@@ -32736,10 +32243,18 @@
             /* ignore */
           }
         }
-        // 首屏与偏好对齐：有本地 market 记录时才切行情（body 已默认 nails，避免无记录时闪行情）。
-        activeView = homePref === "nails" ? "nails" : "market";
+        // 首屏与偏好对齐；NAILS_ONLY 时强制钉子，忽略旧的 market 本地记录。
+        if (NAILS_ONLY_UI) {
+          homePref = "nails";
+          activeView = "nails";
+        } else {
+          activeView = homePref === "nails" ? "nails" : "market";
+        }
       }
       document.body.dataset.activeView = activeView;
+      if (NAILS_ONLY_UI) {
+        document.body.dataset.nailsOnly = "1";
+      }
 
       function nailGreenUnreadCount() {
         let count;
@@ -35362,12 +34877,13 @@
       }
 
       function getHomePref() {
+        if (NAILS_ONLY_UI) return "nails";
         return homePref === "nails" ? "nails" : "market";
       }
 
       /** 减负：首页偏好=钉子时跳过 pin/rising/fav 批量 K 线。 */
       function shouldSkipHomeKlineWave() {
-        return getHomePref() === "nails";
+        return NAILS_ONLY_UI || getHomePref() === "nails";
       }
 
       /**
@@ -35418,6 +34934,7 @@
           String(next || "").trim().toLowerCase() === "nails"
             ? "nails"
             : "market";
+        if (NAILS_ONLY_UI) homePref = "nails";
         homePrefUpdatedAt =
           Number.isFinite(Number(updatedAt)) && Number(updatedAt) > 0
             ? Number(updatedAt)
@@ -35583,11 +35100,18 @@
 
       function setActiveView(view, options) {
         const opts = options || {};
-        const next = view === "nails" ? "nails" : "market";
+        let next = view === "nails" ? "nails" : "market";
+        if (NAILS_ONLY_UI && next === "market") {
+          if (!opts.silent) {
+            showToast("行情主页已减负下线，仅保留钉子页");
+          }
+          next = "nails";
+        }
         const drawer = document.getElementById("nailDrawer");
         const tab = document.getElementById("nailTab");
         if (!drawer) return;
         const was = activeView;
+        // 已在钉子且仍要钉子：无切换，仍走下方渲染分支。
         const entering = next === "nails" && was !== "nails";
         const leaving = next === "market" && was === "nails";
         activeView = next;
@@ -35650,6 +35174,11 @@
       }
 
       function setNailDrawerOpen(open) {
+        // NAILS_ONLY：不允许「关掉抽屉回到行情」；关抽屉请求视为留在钉子。
+        if (NAILS_ONLY_UI && !open) {
+          setActiveView("nails", { silent: true, persistHome: false });
+          return;
+        }
         setActiveView(open ? "nails" : "market");
       }
 
@@ -40715,6 +40244,10 @@
       }
 
       async function renderKlines(options) {
+        // Phase B step3：行情主页网格已拆除；池/自动盯仍由 updateWatchPool + 云函数负责。
+        if (typeof NAILS_ONLY_UI !== "undefined" && NAILS_ONLY_UI) {
+          return;
+        }
         const onProgress = options && options.onProgress;
         markEggChromeSeenFromDom();
         const interval = CONFIG.KLINE_INTERVAL;
@@ -40828,9 +40361,12 @@
         // 先按盯幅出卡片；爬升排序 / 浮窗所需动量放到后台。
         lastScoreUniverse = scoreUniverse.slice();
 
-        document.getElementById("risingMeta").textContent = rising.length
-          ? `窗口上涨 ${rising.length} / 观察池 ${watchPool.size} · ${rangeText} · ${bars} 根`
-          : `当前没有窗口上涨的观察池币种 · 观察池 ${watchPool.size} 个`;
+        const risingMetaEl = document.getElementById("risingMeta");
+        if (risingMetaEl) {
+          risingMetaEl.textContent = rising.length
+            ? `窗口上涨 ${rising.length} / 观察池 ${watchPool.size} · ${rangeText} · ${bars} 根`
+            : `当前没有窗口上涨的观察池币种 · 观察池 ${watchPool.size} 个`;
+        }
 
         const clearExpiredBtn = document.getElementById("clearExpiredPinsBtn");
         const clearPositionsBtn = document.getElementById("clearAllPositionsBtn");
@@ -40846,7 +40382,8 @@
         }
 
         if (!pinItems.length) {
-          document.getElementById("pinMeta").textContent = "";
+          const pinMetaEmpty = document.getElementById("pinMeta");
+          if (pinMetaEmpty) pinMetaEmpty.textContent = "";
           updatePinMomentumMeta(new Map(), []);
         } else {
           const heldInPins = pinItems.filter((item) =>
@@ -40893,7 +40430,8 @@
           if (isNotesView()) {
             parts.push(`记一笔过滤 ${noteSymbolList().length} 币`);
           }
-          document.getElementById("pinMeta").textContent = parts.join(" · ");
+          const pinMetaEl = document.getElementById("pinMeta");
+          if (pinMetaEl) pinMetaEl.textContent = parts.join(" · ");
         }
 
         updateHiddenPinTab(pinHiddenDown);
@@ -40906,9 +40444,8 @@
         }
 
         if (!favoriteItems.length) {
-          // document.getElementById("favMeta").textContent =
-          //   "还没有收藏 · 长按卡片选「收藏」即可加入";
-          document.getElementById("favMeta").textContent = "";
+          const favMetaEmpty = document.getElementById("favMeta");
+          if (favMetaEmpty) favMetaEmpty.textContent = "";
         } else {
           const parts = [
             `收藏 ${favoriteItems.length}`,
@@ -40921,7 +40458,8 @@
             parts.push(`另有 ${overlap} 个在上方 · 黑色边框标记`);
           }
           if (fallingHidden > 0) parts.push(`已隐藏下跌 ${fallingHidden}`);
-          document.getElementById("favMeta").textContent = parts.join(" · ");
+          const favMetaEl = document.getElementById("favMeta");
+          if (favMetaEl) favMetaEl.textContent = parts.join(" · ");
         }
 
         klineTotal =
@@ -41673,7 +41211,7 @@
         const btn = document.getElementById("refreshBtn");
         const syncBtn = document.getElementById("syncPoolBtn");
         const rangeSelect = document.getElementById("rangeSelect");
-        btn.disabled = true;
+        if (btn) btn.disabled = true;
         if (syncBtn) syncBtn.disabled = true;
         if (rangeSelect) rangeSelect.disabled = true;
         const progressLabel =
@@ -41885,19 +41423,28 @@
           console.error(error);
           setStatus(false, error.message || "刷新失败");
           if (!isJijiView()) {
-            document.getElementById("risingMeta").textContent = "";
-            document.getElementById("pinMeta").textContent = "";
-            document.getElementById("favMeta").textContent = "";
+            const risingMetaErr = document.getElementById("risingMeta");
+            const pinMetaErr = document.getElementById("pinMeta");
+            const favMetaErr = document.getElementById("favMeta");
+            if (risingMetaErr) risingMetaErr.textContent = "";
+            if (pinMetaErr) pinMetaErr.textContent = "";
+            if (favMetaErr) favMetaErr.textContent = "";
             const pinMom = document.getElementById("pinMomentumMeta");
             if (pinMom) {
               pinMom.hidden = true;
               pinMom.innerHTML = "";
             }
-            document.getElementById("risingGrid").innerHTML =
-              `<div class="empty">${error.message || "加载失败"}</div>`;
-            document.getElementById("pinGrid").innerHTML = "";
-            document.getElementById("favGrid").innerHTML = "";
-            document.getElementById("hiddenPinGrid").innerHTML = "";
+            const risingGridErr = document.getElementById("risingGrid");
+            const pinGridErr = document.getElementById("pinGrid");
+            const favGridErr = document.getElementById("favGrid");
+            const hiddenPinGridErr = document.getElementById("hiddenPinGrid");
+            if (risingGridErr) {
+              risingGridErr.innerHTML =
+                `<div class="empty">${error.message || "加载失败"}</div>`;
+            }
+            if (pinGridErr) pinGridErr.innerHTML = "";
+            if (favGridErr) favGridErr.innerHTML = "";
+            if (hiddenPinGridErr) hiddenPinGridErr.innerHTML = "";
             const resumeGridErr = document.getElementById("resumePinGrid");
             const resumeSectionErr = document.getElementById("resumePinSection");
             if (resumeGridErr) resumeGridErr.innerHTML = "";
@@ -41939,7 +41486,7 @@
           }
           setTopProgress(false);
           loading = false;
-          btn.disabled = false;
+          if (btn) btn.disabled = false;
           if (syncBtn) syncBtn.disabled = false;
           if (rangeSelect) rangeSelect.disabled = false;
           // 主加载结束后若后台还在算动量，接上顶部进度。
@@ -41968,10 +41515,13 @@
         refreshAll({ reason: "focus", mode: "light" });
       }
 
-      document.getElementById("refreshBtn").addEventListener("click", () => {
-        closeCardActions();
-        refreshAll({ reason: "manual", mode: "light" });
-      });
+      const refreshBtnEl = document.getElementById("refreshBtn");
+      if (refreshBtnEl) {
+        refreshBtnEl.addEventListener("click", () => {
+          closeCardActions();
+          refreshAll({ reason: "manual", mode: "light" });
+        });
+      }
       const syncPoolBtn = document.getElementById("syncPoolBtn");
       if (syncPoolBtn) {
         syncPoolBtn.addEventListener("click", () => {
@@ -42027,17 +41577,20 @@
         if (!open) return;
         if (!open.contains(event.target)) open.removeAttribute("open");
       });
-      document
-        .getElementById("notifyFloatClose")
-        .addEventListener("click", () => {
+      const notifyFloatCloseEl = document.getElementById("notifyFloatClose");
+      if (notifyFloatCloseEl) {
+        notifyFloatCloseEl.addEventListener("click", () => {
           dismissNotifyFloat();
         });
-      document
-        .getElementById("notifyFloatRefresh")
-        .addEventListener("click", () => {
+      }
+      const notifyFloatRefreshEl = document.getElementById("notifyFloatRefresh");
+      if (notifyFloatRefreshEl) {
+        notifyFloatRefreshEl.addEventListener("click", () => {
           refreshNotifyFloat();
         });
-      document.querySelector(".float-tabs").addEventListener("click", (event) => {
+      }
+      const floatTabsEl = document.querySelector(".float-tabs");
+      if (floatTabsEl) floatTabsEl.addEventListener("click", (event) => {
         const btn = event.target.closest("button[data-float]");
         if (!btn || btn.disabled) return;
         dismissCardSelectionChrome();
@@ -42210,95 +41763,131 @@
         markEggChromeSeenFromDom();
       });
       startNotifyPoll();
-      document
-        .getElementById("clearExpiredPinsBtn")
-        .addEventListener("click", () => {
-          closeCardActions();
-          clearAllExpiredPins();
-        });
-      document
-        .getElementById("clearAllPositionsBtn")
-        .addEventListener("click", () => {
-          closeCardActions();
-          clearAllPositions();
-        });
-      document.getElementById("maintToggleBtn").addEventListener("click", () => {
-        closeCardActions();
-        const panel = document.getElementById("maintPanel");
-        setMaintPanelOpen(panel && panel.hidden);
-      });
-      document.getElementById("pinSelectBtn").addEventListener("click", () => {
-        closeCardActions();
-        setPinSelectMode(!pinSelectMode);
-      });
+      {
+        const clearExpiredPinsBtn = document.getElementById("clearExpiredPinsBtn");
+        if (clearExpiredPinsBtn) {
+          clearExpiredPinsBtn.addEventListener("click", () => {
+            closeCardActions();
+            clearAllExpiredPins();
+          });
+        }
+        const clearAllPositionsBtn = document.getElementById("clearAllPositionsBtn");
+        if (clearAllPositionsBtn) {
+          clearAllPositionsBtn.addEventListener("click", () => {
+            closeCardActions();
+            clearAllPositions();
+          });
+        }
+        const maintToggleBtn = document.getElementById("maintToggleBtn");
+        if (maintToggleBtn) {
+          maintToggleBtn.addEventListener("click", () => {
+            closeCardActions();
+            const panel = document.getElementById("maintPanel");
+            setMaintPanelOpen(panel && panel.hidden);
+          });
+        }
+        const pinSelectBtn = document.getElementById("pinSelectBtn");
+        if (pinSelectBtn) {
+          pinSelectBtn.addEventListener("click", () => {
+            closeCardActions();
+            setPinSelectMode(!pinSelectMode);
+          });
+        }
+      }
       bindPinSelectDelegation();
       bindSectionJumpNav();
       syncSectionJumpNav();
-      document.getElementById("pinBatchExitBtn").addEventListener("click", () => {
-        setPinSelectMode(false);
-      });
-      document.getElementById("pinBatchClearBtn").addEventListener("click", () => {
-        selectedPinSymbols.clear();
-        document.querySelectorAll(".kline-card.is-selected").forEach((card) => {
-          card.classList.remove("is-selected");
-          const check = card.querySelector(".pin-check");
-          if (check) check.checked = false;
-        });
-        updatePinSelectUi();
-      });
-      document
-        .getElementById("pinBatchSelectAllBtn")
-        .addEventListener("click", () => {
-          const allowed = pinSymbols();
-            document
-            .querySelectorAll(PIN_CARD_ROOT_SELECTOR)
-            .forEach((card) => {
-              if (card.classList.contains("is-notes-filtered-out")) return;
-              const symbol = String(card.dataset.symbol || "").toUpperCase();
-              if (!symbol || !allowed.has(symbol)) return;
-              selectedPinSymbols.add(symbol);
-              card.classList.add("is-selected");
-              const check = card.querySelector(".pin-check");
-              if (check) check.checked = true;
-            });
-          updatePinSelectUi();
-        });
-      document
-        .getElementById("pinBatchUnpinBtn")
-        .addEventListener("click", () => {
-          batchUnpinSelected();
-        });
-      document
-        .getElementById("pinBatchRenewBtn")
-        .addEventListener("click", () => {
-          batchRenewSelected();
-        });
-      const pinBatchNailBtn = document.getElementById("pinBatchNailBtn");
-      if (pinBatchNailBtn) {
-        pinBatchNailBtn.addEventListener("click", () => {
-          void batchNailSelected();
-        });
-      }
-      document
-        .getElementById("pinBatchClearEggFireBtn")
-        .addEventListener("click", () => {
-          batchClearEggFireSelected();
-        });
-      document
-        .getElementById("pinBatchClearEggNewBtn")
-        .addEventListener("click", () => {
-          batchClearEggNewSelected();
-        });
-      document.getElementById("hiddenPinTab").addEventListener("click", () => {
-        closeCardActions();
-        setHiddenPinDrawerOpen(true);
-      });
-      document.getElementById("hiddenPinDrawer").addEventListener("click", (event) => {
-        if (event.target && event.target.hasAttribute("data-close-hidden-pins")) {
-          closeCardActions();
-          setHiddenPinDrawerOpen(false);
+      {
+        const pinBatchExitBtn = document.getElementById("pinBatchExitBtn");
+        if (pinBatchExitBtn) {
+          pinBatchExitBtn.addEventListener("click", () => {
+            setPinSelectMode(false);
+          });
         }
-      });
+        const pinBatchClearBtn = document.getElementById("pinBatchClearBtn");
+        if (pinBatchClearBtn) {
+          pinBatchClearBtn.addEventListener("click", () => {
+            selectedPinSymbols.clear();
+            document.querySelectorAll(".kline-card.is-selected").forEach((card) => {
+              card.classList.remove("is-selected");
+              const check = card.querySelector(".pin-check");
+              if (check) check.checked = false;
+            });
+            updatePinSelectUi();
+          });
+        }
+        const pinBatchSelectAllBtn = document.getElementById("pinBatchSelectAllBtn");
+        if (pinBatchSelectAllBtn) {
+          pinBatchSelectAllBtn.addEventListener("click", () => {
+            const allowed = pinSymbols();
+            document
+              .querySelectorAll(PIN_CARD_ROOT_SELECTOR)
+              .forEach((card) => {
+                if (card.classList.contains("is-notes-filtered-out")) return;
+                const symbol = String(card.dataset.symbol || "").toUpperCase();
+                if (!symbol || !allowed.has(symbol)) return;
+                selectedPinSymbols.add(symbol);
+                card.classList.add("is-selected");
+                const check = card.querySelector(".pin-check");
+                if (check) check.checked = true;
+              });
+            updatePinSelectUi();
+          });
+        }
+        const pinBatchUnpinBtn = document.getElementById("pinBatchUnpinBtn");
+        if (pinBatchUnpinBtn) {
+          pinBatchUnpinBtn.addEventListener("click", () => {
+            batchUnpinSelected();
+          });
+        }
+        const pinBatchRenewBtn = document.getElementById("pinBatchRenewBtn");
+        if (pinBatchRenewBtn) {
+          pinBatchRenewBtn.addEventListener("click", () => {
+            batchRenewSelected();
+          });
+        }
+        const pinBatchNailBtn = document.getElementById("pinBatchNailBtn");
+        if (pinBatchNailBtn) {
+          pinBatchNailBtn.addEventListener("click", () => {
+            void batchNailSelected();
+          });
+        }
+        const pinBatchClearEggFireBtn = document.getElementById(
+          "pinBatchClearEggFireBtn",
+        );
+        if (pinBatchClearEggFireBtn) {
+          pinBatchClearEggFireBtn.addEventListener("click", () => {
+            batchClearEggFireSelected();
+          });
+        }
+        const pinBatchClearEggNewBtn = document.getElementById(
+          "pinBatchClearEggNewBtn",
+        );
+        if (pinBatchClearEggNewBtn) {
+          pinBatchClearEggNewBtn.addEventListener("click", () => {
+            batchClearEggNewSelected();
+          });
+        }
+        const hiddenPinTab = document.getElementById("hiddenPinTab");
+        if (hiddenPinTab) {
+          hiddenPinTab.addEventListener("click", () => {
+            closeCardActions();
+            setHiddenPinDrawerOpen(true);
+          });
+        }
+        const hiddenPinDrawer = document.getElementById("hiddenPinDrawer");
+        if (hiddenPinDrawer) {
+          hiddenPinDrawer.addEventListener("click", (event) => {
+            if (
+              event.target &&
+              event.target.hasAttribute("data-close-hidden-pins")
+            ) {
+              closeCardActions();
+              setHiddenPinDrawerOpen(false);
+            }
+          });
+        }
+      }
       const nailTab = document.getElementById("nailTab");
       if (nailTab) {
         nailTab.addEventListener("click", () => {
@@ -42685,6 +42274,11 @@
           if (!btn) return;
           const next = btn.getAttribute("data-home-pref");
           if (next !== "nails" && next !== "market") return;
+          if (NAILS_ONLY_UI && next === "market") {
+            showToast("行情主页已减负下线，仅保留钉子页");
+            setActiveView("nails", { silent: true });
+            return;
+          }
           setActiveView(next);
           showToast(
             next === "nails" ? "启动首页：钉子" : "启动首页：行情",
@@ -44332,9 +43926,8 @@
         }
       });
       renderActionLogBody();
-      document
-        .getElementById("rangeSelect")
-        .addEventListener("change", async (event) => {
+      const rangeSelectEl = document.getElementById("rangeSelect");
+      if (rangeSelectEl) rangeSelectEl.addEventListener("change", async (event) => {
         closeCardActions();
           const select = event.target;
           if (loading) {
@@ -44377,20 +43970,26 @@
             select.disabled = false;
           }
         });
-      document.getElementById("modeSwitch").addEventListener("click", (event) => {
-        const btn = event.target.closest("button[data-mode]");
-        if (!btn || btn.disabled) return;
-        const nextNotes = btn.dataset.mode === "notes";
-        if (nextNotes === isNotesView()) return;
-        closeCardActions();
-        setNotesView(nextNotes);
-      });
-      document.getElementById("pinSortSwitch").addEventListener("click", (event) => {
-        const btn = event.target.closest("button[data-pin-sort]");
-        if (!btn || loading || btn.disabled) return;
-        closeCardActions();
-        setPinSortMode(btn.dataset.pinSort);
-      });
+      const modeSwitchEl = document.getElementById("modeSwitch");
+      if (modeSwitchEl) {
+        modeSwitchEl.addEventListener("click", (event) => {
+          const btn = event.target.closest("button[data-mode]");
+          if (!btn || btn.disabled) return;
+          const nextNotes = btn.dataset.mode === "notes";
+          if (nextNotes === isNotesView()) return;
+          closeCardActions();
+          setNotesView(nextNotes);
+        });
+      }
+      const pinSortSwitchEl = document.getElementById("pinSortSwitch");
+      if (pinSortSwitchEl) {
+        pinSortSwitchEl.addEventListener("click", (event) => {
+          const btn = event.target.closest("button[data-pin-sort]");
+          if (!btn || loading || btn.disabled) return;
+          closeCardActions();
+          setPinSortMode(btn.dataset.pinSort);
+        });
+      }
       syncPinSortUi();
       const recentSortSwitch = document.getElementById("recentAutoSortSwitch");
       if (recentSortSwitch) {

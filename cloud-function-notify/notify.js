@@ -1006,6 +1006,16 @@ async function saveAutoPinNails(now, newcomers, pins, options) {
 }
 
 async function saveAutoPinMomNotes(now, newcomers, pins, options) {
+  // Phase B step2：记一笔旁路默认关闭；设 MOM_NOTES_AUTO_WRITE=1 可临时恢复自动写入。
+  if (
+    String(
+      process.env.MOM_NOTES_AUTO_WRITE === undefined
+        ? '0'
+        : process.env.MOM_NOTES_AUTO_WRITE,
+    ) !== '1'
+  ) {
+    return [];
+  }
   const opts = options || {};
   const momNotesPath = opts.momNotesPath || CONFIG.MOM_NOTES_PATH;
   const symbols = (newcomers || [])
