@@ -1,49 +1,52 @@
 {
-  "updatedAt": 1795881949315,
-  "lastRunAt": 1795881901024,
-  "ok": true,
-  "error": null,
-  "durationMs": 48291,
+  "updatedAt": 1795882241550,
+  "lastRunAt": 1795882200629,
+  "ok": false,
+  "error": "balance×1:batch-notices:GitHub PUT watch-balance-notices.json failed: 409 {\"message\":\"is at 343fe34e1992d81396f9b1a32128bdf367034aef but expected 710ee6487b28d1b91191860f371ac00698bb02cc\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":",
+  "durationMs": 40921,
   "autoPins": 229,
   "balance": {
     "skipped": false,
     "reason": null,
     "autoPins": 229,
-    "due": 211,
-    "checked": 211,
-    "hits": 44,
-    "sent": 15,
-    "wecomDue": 15,
-    "wecomQueued": 15,
+    "due": 196,
+    "checked": 196,
+    "hits": 27,
+    "sent": 0,
+    "wecomDue": 2,
+    "wecomQueued": 2,
     "wecomDeferred": 0,
-    "skippedWecomWindow": 29,
+    "skippedWecomWindow": 25,
     "checkMax": 0,
     "sendMax": 0,
     "checkCursor": 0,
     "cooldownMs": 1800000,
-    "cooldownSkipped": 18,
-    "errorCount": 0,
-    "errors": []
+    "cooldownSkipped": 33,
+    "errorCount": 1,
+    "errors": [
+      "batch-notices:GitHub PUT watch-balance-notices.json failed: 409 {\"message\":\"is at 343fe34e1992d81396f9b1a32128bdf367034aef but expected 710ee6487b28d1b91191860f371ac00698bb02cc\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":"
+    ]
   },
   "nailGreen": {
     "skipped": false,
     "reason": null,
     "nails": 246,
-    "pending": 206,
-    "checked": 206,
-    "hits": 28,
+    "pending": 178,
+    "checked": 178,
+    "hits": 9,
     "sent": 0,
     "checkMax": 0,
     "checkCursor": 0,
-    "bucketSkipped": 40,
+    "bucketSkipped": 68,
     "errorCount": 0,
     "errors": []
   },
   "staleNailPrune": {
     "skipped": false,
-    "reason": null,
+    "reason": "none-stale",
     "checked": 12,
-    "candidate": 81,
-    "removed": 1
-  }
+    "candidate": 80,
+    "removed": 0
+  },
+  "degraded": true
 }
