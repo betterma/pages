@@ -76,6 +76,29 @@
       a {
         font: inherit;
       }
+      /* 长按只走页面手势：全站禁掉文字选择与长按 callout（安卓 Chrome 长按
+         也会弹「复制/全选/网页搜索/分享」）。输入类元素仍可正常选中/编辑。
+         对齐钉子页 kline.html 的同款规则。 */
+      html,
+      body {
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        user-select: none;
+      }
+      body * {
+        -webkit-user-select: none;
+        -webkit-touch-callout: none;
+        user-select: none;
+      }
+      input,
+      textarea,
+      select,
+      [contenteditable="true"],
+      [contenteditable=""] {
+        -webkit-user-select: text;
+        -webkit-touch-callout: default;
+        user-select: text;
+      }
       /* 全屏钉子壳（合约无行情底页） */
       .fut-shell {
         position: fixed;
@@ -183,39 +206,41 @@
         opacity: 0.45;
         cursor: wait;
       }
+      /* 对齐钉子 .nail-form */
       .fut-add-form {
         flex: 0 0 auto;
         display: grid;
         gap: 8px;
-        padding: 10px 12px;
+        padding: 10px 14px;
         border-bottom: 0.5px solid var(--separator);
-        background: var(--elevated);
       }
       .fut-add-form[hidden] {
         display: none !important;
       }
       .fut-add-form input {
         width: 100%;
-        height: 34px;
+        height: 36px;
         border: 0.5px solid var(--separator);
         border-radius: 8px;
-        background: var(--bg);
+        background: var(--elevated);
         color: var(--label);
         padding: 0 10px;
+        font-size: 14px;
       }
       .fut-add-form-row {
         display: flex;
         gap: 8px;
       }
       .fut-add-form-row button {
-        border: 0.5px solid var(--separator);
+        flex: 1;
+        border: none;
         background: var(--fill);
         color: var(--label);
-        height: 30px;
-        padding: 0 12px;
+        height: 32px;
+        padding: 0 10px;
         border-radius: 8px;
-        font-size: 12px;
-        font-weight: 650;
+        font-size: 13px;
+        font-weight: 600;
         cursor: pointer;
       }
       .fut-err {
@@ -658,9 +683,23 @@
         border-bottom: none;
       }
       .fut-prow-row.is-selected,
-      .fut-prow-row.is-focus {
+      #pinList .fut-prow-row.is-focus {
         background: color-mix(in srgb, var(--accent) 12%, transparent);
         outline: none;
+      }
+      #pinList .fut-prow-row.is-selected + .fut-sub td,
+      #pinList .fut-prow-row.is-focus + .fut-sub td {
+        background: color-mix(in srgb, var(--accent) 12%, transparent);
+      }
+      /* 对齐钉子自动盯行：inset 描边，不用铺底 */
+      #autoList .fut-prow-row.is-focus {
+        background: transparent;
+        outline: none;
+        box-shadow: inset 0 0 0 2px
+          color-mix(in srgb, var(--accent) 55%, transparent);
+      }
+      #autoList .fut-prow-row {
+        cursor: pointer;
       }
       .fut-prow-row.is-jump-target,
       .fut-kline-cell.is-jump-target {
@@ -693,31 +732,43 @@
       }
       .fut-pin-wrap {
         position: relative;
+        flex: 0 0 auto;
         display: inline-flex;
       }
       .fut-pin {
-        border: 0;
+        flex: 0 0 auto;
+        border: none;
         background: var(--fill);
         color: var(--secondary);
-        border-radius: 6px;
-        min-width: 22px;
-        height: 22px;
-        padding: 0 5px;
-        font-size: 11px;
+        height: 26px;
+        min-width: 26px;
+        padding: 0 6px;
+        border-radius: 8px;
+        font-size: 12px;
         font-weight: 700;
         cursor: pointer;
       }
       .fut-pin.is-on {
         color: var(--accent);
-        background: color-mix(in srgb, var(--accent) 18%, var(--fill));
+        background: color-mix(in srgb, var(--accent) 18%, transparent);
       }
+      /* 对齐钉子 .nail-name */
       .fut-name {
-        border: 0;
-        background: transparent;
-        color: var(--label);
-        font-weight: 650;
+        flex: 1 1 auto;
+        min-width: 0;
+        border: none;
+        background: none;
         padding: 0;
-        cursor: pointer;
+        color: var(--accent);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 700;
+        text-align: left;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        cursor: copy;
+        text-decoration: none;
       }
       @keyframes fut-name-refresh-flash {
         0%,
@@ -754,6 +805,9 @@
         }
         82% {
           transform: translateX(1px);
+        }
+        92% {
+          transform: translateX(-0.4px);
         }
       }
       .fut-name.is-refresh-flash {
@@ -792,6 +846,12 @@
         width: 16px;
         height: 16px;
         margin: 0 2px 0 0;
+        accent-color: var(--accent, #2f8f6e);
+        cursor: pointer;
+        vertical-align: middle;
+      }
+      #pinList.is-selecting .fut-prow-row {
+        cursor: pointer;
       }
       .fut-kline-cell canvas.fut-kline {
         width: 168px;
@@ -841,9 +901,9 @@
       }
       .fut-prow-ops button.fut-del {
         color: var(--down);
-        background: color-mix(in srgb, var(--down) 12%, transparent);
-        height: 22px;
-        min-width: 22px;
+        height: 26px;
+        padding: 0 8px;
+        font-size: 12px;
       }
       /* 对齐钉子 nail-prow-row.is-focus：只铺底，不用 inset 描边 */
       .fut-chg {
@@ -896,8 +956,10 @@
         font-weight: 650;
         cursor: pointer;
       }
+      /* 对齐钉子 .nail-empty */
       .fut-empty {
-        padding: 20px 12px;
+        padding: 28px 16px;
+        text-align: center;
         color: var(--secondary);
         font-size: 13px;
       }
@@ -1236,11 +1298,9 @@
       .fut-batch-bar[hidden] {
         display: none !important;
       }
-      .fut-batch-bar .fut-batch-count,
-      .fut-batch-bar .count {
+      .fut-batch-bar .fut-batch-count {
         font-size: 12px;
         color: var(--secondary);
-        margin-right: auto;
         font-variant-numeric: tabular-nums;
       }
       .fut-batch-bar button {
@@ -1311,9 +1371,6 @@
       }
       .fut-row-float-menu button:hover {
         background: color-mix(in srgb, var(--fill) 55%, transparent);
-      }
-      .fut-row-float-menu button.is-danger {
-        color: var(--down, #c45c5c);
       }
       .fut-row-float-menu button:disabled {
         opacity: 0.45;
@@ -1428,11 +1485,14 @@
         background: color-mix(in srgb, var(--accent) 18%, transparent);
         color: var(--accent);
       }
+      .fut-focus-bar button.is-loading {
+        opacity: 0.9;
+        position: relative;
+      }
       .fut-focus-bar button.is-already-pinned,
       .fut-focus-bar button:disabled {
         opacity: 0.5;
       }
-      body.has-fut-focus .fut-toast,
       body.has-fut-focus #toast {
         bottom: calc(90px + env(safe-area-inset-bottom, 0px));
       }
@@ -1958,7 +2018,7 @@
               id="futAddNote"
               type="text"
               autocomplete="off"
-              placeholder="备注（可选，默认现价）"
+              placeholder="备注（可选）"
               aria-label="便签"
             />
             <div class="fut-add-form-row">
@@ -1978,22 +2038,32 @@
           <!-- 对齐钉子：多选栏贴列表底流式，不 fixed 盖全屏 -->
           <div class="fut-batch-bar" id="futBatchBar" hidden>
             <span class="fut-batch-count" id="futBatchCount">0</span>
-            <button type="button" id="futBatchSelectAllBtn">全选</button>
+            <button
+              type="button"
+              id="futBatchSelectAllBtn"
+              title="全选当前列表可见行"
+            >
+              全选
+            </button>
             <button
               type="button"
               class="is-primary"
               id="futBatchPinBtn"
-              title="置顶选中"
+              title="置顶选中的钉子"
             >
               置顶
             </button>
-            <button type="button" id="futBatchUnpinBtn" title="取消置顶选中">
+            <button
+              type="button"
+              id="futBatchUnpinBtn"
+              title="取消置顶选中的钉子"
+            >
               取消置顶
             </button>
             <button
               type="button"
               id="futBatchNoteBtn"
-              title="以当前现价写入便签"
+              title="以当前现价写入便签（荧光绿从此刻起算）"
             >
               便签现价
             </button>
@@ -2001,7 +2071,7 @@
               type="button"
               class="is-danger"
               id="futBatchDeleteBtn"
-              title="删除选中"
+              title="删除选中的钉子"
             >
               删除
             </button>
@@ -2094,9 +2164,6 @@
       >
         —
       </button>
-      <button type="button" id="futFocusNoteBtn" data-fut-focus="note" hidden>
-        便签
-      </button>
       <button type="button" id="futFocusPinBtn" data-fut-focus="pin">置顶</button>
       <button type="button" id="futFocusRefreshBtn" data-fut-focus="refresh">
         刷新
@@ -2178,18 +2245,8 @@
       >
         ×
       </button>
-      <!-- 合约无买卖：便签 / 置顶 / 常看；放大仍走行内按钮 -->
+      <!-- 对齐钉子长按浮层：× / 便签（无买卖）；置顶/常看/取消置顶走钉钮菜单 -->
       <button type="button" data-fut-float="note" role="menuitem">便签</button>
-      <button type="button" data-fut-float="pin" role="menuitem">置顶</button>
-      <button type="button" data-fut-float="always" role="menuitem">常看</button>
-      <button
-        type="button"
-        data-fut-float="unpin"
-        class="is-danger"
-        role="menuitem"
-      >
-        取消置顶
-      </button>
     </div>
 
     <div

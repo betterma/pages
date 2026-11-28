@@ -31277,6 +31277,14 @@
 
       let nailRowFloatMenuSymbol = null;
 
+      /**
+       * 重绘 / 关闭浮层时取消「尚未触发」的长按 timer。
+       * 由 bindNailFocusSelect 绑定后注入；否则 renderNailDrawer 开头
+       * unmountNailRowActionBar() 只关浮层不清 timer，450ms 到点浮层又会
+       * 被长按回调弹出来（表现为刷新期间浮层自己冒出来）。
+       */
+      let cancelPendingNailLongPress = null;
+
       function isNailRowFloatMenuOpen() {
         const menu = document.getElementById("nailRowFloatMenu");
         return !!(menu && !menu.hidden);
@@ -31287,6 +31295,8 @@
       }
 
       function closeNailRowFloatMenu() {
+        // 浮层被关（含重绘 unmount）时一并作废待触发长按，避免 450ms 后自行弹出
+        if (cancelPendingNailLongPress) cancelPendingNailLongPress();
         const mask = document.getElementById("nailRowFloatMask");
         const menu = document.getElementById("nailRowFloatMenu");
         if (mask) mask.hidden = true;
@@ -31354,6 +31364,8 @@
           closeNailRowFloatMenu();
           return;
         }
+        // 出行内浮层前先收起钉钮菜单，避免两个浮层叠加互相遮挡
+        closeNailPinMenus();
         const tradeReady = isManualTradeConfigured();
         const canSell = nailSymbolCanSell(key);
         menu.querySelectorAll("[data-nail-trade]").forEach((btn) => {
@@ -38323,6 +38335,8 @@
           }
           longPressKey = "";
         };
+        // 注入取消钩子：closeNailRowFloatMenu / 重绘 unmount 时一并作废待触发长按
+        cancelPendingNailLongPress = clearLongPress;
         // 捕获阶段优先处理名称复制，避免被其它冒泡逻辑抢走。
         listEl.addEventListener(
           "click",
@@ -38350,7 +38364,7 @@
             if (event.pointerType === "mouse" && event.button !== 0) return;
             if (
               event.target.closest(
-                "button, a, input, label, .nail-row-float-menu",
+                "button, a, input, label, .nail-pin-menu, .nail-row-float-menu",
               )
             ) {
               clearLongPress();
@@ -38414,7 +38428,7 @@
           if (nailSelectMode) return;
           if (
             event.target.closest(
-              "button, a, input, label, .nail-row-float-menu, .nail-row-float-mask",
+              "button, a, input, label, .nail-pin-menu, .nail-row-float-menu, .nail-row-float-mask",
             )
           ) {
             return;
