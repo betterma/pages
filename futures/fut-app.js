@@ -26,6 +26,10 @@
     "https://fapi2.binance.com",
     "https://fapi3.binance.com",
   ];
+  /** 单 host 超时，避免首跳卡死拖长整链（对齐钉子快失败换端点） */
+  const FAPI_HOST_TIMEOUT_MS = 5000;
+  /** 对齐钉子 KLINE_FETCH_CACHE_TTL_MS */
+  const KLINE_FETCH_CACHE_TTL_MS = 90 * 1000;
   const RADAR_TOP = 80;
   const KLINE_INTERVAL = "4h";
   /** 对齐钉子页默认 3d·4h ≈ 18 根 */
@@ -74,6 +78,8 @@
     autoPinSeenAt: 0,
     marketMap: {},
     klineCache: {},
+    /** symbol|iv|lim → fetchedAt；对齐钉子 90s TTL */
+    klineCacheAt: {},
     showAllKlines: false,
     radarGroupOn: false,
     radarTickerAt: 0,
@@ -932,12 +938,50 @@
     );
   }
 
-  async function fapiGetJson(pathWithQuery) {
+  function mergeAbortSignals(a, b) {
+    if (!a) return b || undefined;
+    if (!b) return a;
+    if (typeof AbortSignal !== "undefined" && AbortSignal.any) {
+      return AbortSignal.any([a, b]);
+    }
+    const ctrl = new AbortController();
+    const onAbort = () => {
+      try {
+        ctrl.abort();
+      } catch (_) {
+        /* ignore */
+      }
+    };
+    if (a.aborted || b.aborted) {
+      onAbort();
+      return ctrl.signal;
+    }
+    a.addEventListener("abort", onAbort, { once: true });
+    b.addEventListener("abort", onAbort, { once: true });
+    return ctrl.signal;
+  }
+
+  async function fapiGetJson(pathWithQuery, signal) {
     let lastError = null;
     for (const host of FAPI_HOSTS) {
+      if (signal && signal.aborted) {
+        const err = new Error("aborted");
+        err.name = "AbortError";
+        throw err;
+      }
+      const hostCtrl = new AbortController();
+      const hostTimer = window.setTimeout(() => {
+        try {
+          hostCtrl.abort();
+        } catch (_) {
+          /* ignore */
+        }
+      }, FAPI_HOST_TIMEOUT_MS);
+      const hostSignal = mergeAbortSignals(signal, hostCtrl.signal);
       try {
         const response = await fetch(`${host}${pathWithQuery}`, {
           cache: "no-store",
+          signal: hostSignal,
         });
         if (!response.ok) {
           lastError = new Error(`fapi ${response.status}`);
@@ -945,68 +989,149 @@
         }
         return await response.json();
       } catch (error) {
+        // 外层用户 abort 才抛；单 host 超时则换下一个
+        if (error && error.name === "AbortError" && signal && signal.aborted) {
+          throw error;
+        }
         lastError = error;
+      } finally {
+        window.clearTimeout(hostTimer);
       }
     }
     throw lastError || new Error("fapi failed");
   }
 
-  async function refreshTickers(symbols) {
-    const want = new Set((symbols || []).map(symKey).filter(Boolean));
-    const full = !want.size || state.tab === "radar";
-    const list = await fapiGetJson("/fapi/v1/ticker/24hr");
-    const map = {};
-    (Array.isArray(list) ? list : []).forEach((item) => {
-      const key = symKey(item && item.symbol);
-      if (!key.endsWith("USDT")) return;
-      if (!full && !want.has(key)) return;
-      const price = Number(item.lastPrice);
-      const change24h = Number(item.priceChangePercent);
-      if (!Number.isFinite(price) || price <= 0) return;
-      map[key] = {
-        price,
-        change24h: Number.isFinite(change24h) ? change24h : null,
-      };
-    });
-    state.marketMap = full ? map : { ...state.marketMap, ...map };
-    if (full || state.tab === "radar") state.radarTickerAt = Date.now();
+  function applyTickerItem(map, item) {
+    const key = symKey(item && item.symbol);
+    if (!key.endsWith("USDT")) return;
+    const price = Number(item.lastPrice);
+    const change24h = Number(item.priceChangePercent);
+    if (!Number.isFinite(price) || price <= 0) return;
+    map[key] = {
+      price,
+      change24h: Number.isFinite(change24h) ? change24h : null,
+    };
   }
 
-  async function fetchKlines(symbol, interval, limit) {
+  /**
+   * 雷达 / 空名单：全表一次。
+   * 置顶·自动盯：fapi 无 symbols 批量，改为并发 ?symbol=（对齐钉子「只拉名单」）。
+   */
+  async function refreshTickers(symbols) {
+    const want = [...new Set((symbols || []).map(symKey).filter(Boolean))];
+    const full = !want.length || state.tab === "radar";
+    if (full) {
+      const list = await fapiGetJson("/fapi/v1/ticker/24hr");
+      const map = {};
+      (Array.isArray(list) ? list : []).forEach((item) => applyTickerItem(map, item));
+      state.marketMap = map;
+      state.radarTickerAt = Date.now();
+      return;
+    }
+    // 名单过大时全表更省（避免上百次单币请求）
+    if (want.length > 40) {
+      const list = await fapiGetJson("/fapi/v1/ticker/24hr");
+      const map = {};
+      const wantSet = new Set(want);
+      (Array.isArray(list) ? list : []).forEach((item) => {
+        const key = symKey(item && item.symbol);
+        if (!wantSet.has(key)) return;
+        applyTickerItem(map, item);
+      });
+      state.marketMap = { ...state.marketMap, ...map };
+      return;
+    }
+    const map = {};
+    let cursor = 0;
+    const concurrency = Math.min(8, want.length);
+    async function worker() {
+      while (cursor < want.length) {
+        const i = cursor;
+        cursor += 1;
+        const key = want[i];
+        try {
+          const item = await fapiGetJson(
+            `/fapi/v1/ticker/24hr?symbol=${encodeURIComponent(key)}`,
+          );
+          applyTickerItem(map, item);
+        } catch (error) {
+          console.warn("fut ticker", key, error);
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: concurrency }, () => worker()));
+    state.marketMap = { ...state.marketMap, ...map };
+  }
+
+  const klineInflight = new Map();
+
+  function readKlineCache(cacheKey, shortKey, iv, lim) {
+    const fresh = (key) => {
+      const candles = state.klineCache[key];
+      if (!Array.isArray(candles) || !candles.length) return null;
+      const at = Number(state.klineCacheAt[key]) || 0;
+      if (Date.now() - at > KLINE_FETCH_CACHE_TTL_MS) return null;
+      return candles;
+    };
+    return (
+      fresh(cacheKey) ||
+      (iv === KLINE_INTERVAL && lim === KLINE_LIMIT ? fresh(shortKey) : null)
+    );
+  }
+
+  function writeKlineCache(cacheKey, shortKey, iv, lim, candles) {
+    const at = Date.now();
+    state.klineCache[cacheKey] = candles;
+    state.klineCacheAt[cacheKey] = at;
+    if (iv === KLINE_INTERVAL && lim === KLINE_LIMIT) {
+      state.klineCache[shortKey] = candles;
+      state.klineCacheAt[shortKey] = at;
+    }
+  }
+
+  async function fetchKlines(symbol, interval, limit, signal) {
     const key = symKey(symbol);
     const iv = String(interval || KLINE_INTERVAL);
     const lim = Math.max(12, Number(limit) || KLINE_LIMIT);
     const cacheKey = `${key}|${iv}|${lim}`;
-    if (
-      Array.isArray(state.klineCache[cacheKey]) &&
-      state.klineCache[cacheKey].length
-    ) {
-      return state.klineCache[cacheKey];
+    const cached = readKlineCache(cacheKey, key, iv, lim);
+    if (cached) return cached;
+
+    const existing = klineInflight.get(cacheKey);
+    if (existing) {
+      return existing;
     }
-    const q =
-      `/fapi/v1/klines?symbol=${encodeURIComponent(key)}` +
-      `&interval=${encodeURIComponent(iv)}&limit=${lim}`;
-    const raw = await fapiGetJson(q);
-    const candles = (Array.isArray(raw) ? raw : [])
-      .map((row) => ({
-        time: Number(row[0]) || 0,
-        open: Number(row[1]),
-        high: Number(row[2]),
-        low: Number(row[3]),
-        close: Number(row[4]),
-      }))
-      .filter(
-        (c) =>
-          Number.isFinite(c.open) &&
-          Number.isFinite(c.high) &&
-          Number.isFinite(c.low) &&
-          Number.isFinite(c.close),
-      );
-    state.klineCache[cacheKey] = candles;
-    if (iv === KLINE_INTERVAL && lim === KLINE_LIMIT) {
-      state.klineCache[key] = candles;
+
+    const task = (async () => {
+      const q =
+        `/fapi/v1/klines?symbol=${encodeURIComponent(key)}` +
+        `&interval=${encodeURIComponent(iv)}&limit=${lim}`;
+      const raw = await fapiGetJson(q, signal);
+      const candles = (Array.isArray(raw) ? raw : [])
+        .map((row) => ({
+          time: Number(row[0]) || 0,
+          open: Number(row[1]),
+          high: Number(row[2]),
+          low: Number(row[3]),
+          close: Number(row[4]),
+        }))
+        .filter(
+          (c) =>
+            Number.isFinite(c.open) &&
+            Number.isFinite(c.high) &&
+            Number.isFinite(c.low) &&
+            Number.isFinite(c.close),
+        );
+      writeKlineCache(cacheKey, key, iv, lim, candles);
+      return candles;
+    })();
+
+    klineInflight.set(cacheKey, task);
+    try {
+      return await task;
+    } finally {
+      klineInflight.delete(cacheKey);
     }
-    return candles;
   }
 
   function paintMiniKline(canvas, candles, opts) {
@@ -1229,24 +1354,50 @@
     return { key: "week", interval: "1w", limit: 52, label: "周 K · 一根一周" };
   }
 
-  async function ensureKlines(symbols) {
+  let klinePaintController = null;
+  let klinePaintToken = 0;
+  let klineChartObserver = null;
+
+  function abortKlinePaint() {
+    klinePaintToken += 1;
+    if (klinePaintController) {
+      try {
+        klinePaintController.abort();
+      } catch (_) {
+        /* ignore */
+      }
+      klinePaintController = null;
+    }
+    if (klineChartObserver) {
+      klineChartObserver.disconnect();
+      klineChartObserver = null;
+    }
+  }
+
+  async function ensureKlines(symbols, signal) {
     const list = [...new Set((symbols || []).map(symKey).filter(Boolean))];
-    const missing = list.filter((s) => !state.klineCache[s]);
-    const concurrency = 4;
+    const missing = list.filter(
+      (s) => !readKlineCache(`${s}|${KLINE_INTERVAL}|${KLINE_LIMIT}`, s, KLINE_INTERVAL, KLINE_LIMIT),
+    );
+    if (!missing.length) return;
+    // 对齐钉子：冷拉并发 6；量大时 8
+    const concurrency = missing.length > 16 ? 8 : 6;
     let i = 0;
     async function worker() {
       while (i < missing.length) {
+        if (signal && signal.aborted) return;
         const idx = i;
         i += 1;
         try {
-          await fetchKlines(missing[idx]);
+          await fetchKlines(missing[idx], null, null, signal);
         } catch (error) {
+          if (error && error.name === "AbortError") return;
           console.warn("fut kline", missing[idx], error);
         }
       }
     }
     await Promise.all(
-      Array.from({ length: Math.min(concurrency, missing.length || 1) }, () =>
+      Array.from({ length: Math.min(concurrency, missing.length) }, () =>
         worker(),
       ),
     );
@@ -1258,32 +1409,105 @@
     Object.keys(state.klineCache).forEach((cacheKey) => {
       if (cacheKey === key || cacheKey.startsWith(`${key}|`)) {
         delete state.klineCache[cacheKey];
+        delete state.klineCacheAt[cacheKey];
       }
     });
   }
 
+  function drawKlineCanvas(canvas) {
+    if (!canvas || !canvas.isConnected) return;
+    const sym = canvas.getAttribute("data-kline");
+    if (!sym) return;
+    paintMiniKline(canvas, state.klineCache[sym] || [], {
+      pinPrice: notePinPrice(sym),
+      noteAt: noteAtOf(sym),
+      priceLabel: canvas.getAttribute("data-price-label") === "1",
+      livePrice: Number(liveOf(sym).price),
+    });
+    canvas.classList.remove("is-loading");
+  }
+
+  /**
+   * 对齐钉子 paintNailKlines：每币 fetch 完立刻画；可 Abort；雷达多图懒画。
+   */
   async function paintVisibleKlines() {
+    abortKlinePaint();
+    const token = klinePaintToken;
     const nodes = [...document.querySelectorAll("canvas.fut-kline[data-kline]")];
-    nodes.forEach((canvas) => canvas.classList.add("is-loading"));
-    const symbols = nodes.map((n) => n.getAttribute("data-kline"));
-    try {
-      await ensureKlines(symbols);
-    } finally {
-      const draw = () => {
-        nodes.forEach((canvas) => {
-          if (!canvas.isConnected) return;
-          const sym = canvas.getAttribute("data-kline");
-          paintMiniKline(canvas, state.klineCache[sym] || [], {
-            pinPrice: notePinPrice(sym),
-            noteAt: noteAtOf(sym),
-            priceLabel: canvas.getAttribute("data-price-label") === "1",
-            livePrice: Number(liveOf(sym).price),
+    if (!nodes.length) return;
+    const controller = new AbortController();
+    klinePaintController = controller;
+    const signal = controller.signal;
+
+    const paintOne = async (canvas) => {
+      if (token !== klinePaintToken || !canvas || !canvas.isConnected) return;
+      const sym = symKey(canvas.getAttribute("data-kline"));
+      if (!sym) return;
+      canvas.classList.add("is-loading");
+      try {
+        // 90s 内缓存：立刻画
+        if (
+          readKlineCache(
+            `${sym}|${KLINE_INTERVAL}|${KLINE_LIMIT}`,
+            sym,
+            KLINE_INTERVAL,
+            KLINE_LIMIT,
+          )
+        ) {
+          drawKlineCanvas(canvas);
+          return;
+        }
+        await fetchKlines(sym, null, null, signal);
+        if (token !== klinePaintToken || signal.aborted) return;
+        drawKlineCanvas(canvas);
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+        console.warn("fut paint kline", sym, error);
+        if (canvas.isConnected) canvas.classList.remove("is-loading");
+      }
+    };
+
+    // 雷达「全部 K 线」等大量图：视口懒画（对齐钉子自动盯 IO）
+    if (
+      state.tab === "radar" &&
+      typeof IntersectionObserver === "function" &&
+      nodes.length > 16
+    ) {
+      nodes.forEach((canvas) => canvas.classList.add("is-loading"));
+      const scrollRoot = $("radarTableWrap") || null;
+      const io = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            const canvas = entry.target;
+            io.unobserve(canvas);
+            if (token !== klinePaintToken) return;
+            void paintOne(canvas);
           });
-          canvas.classList.remove("is-loading");
-        });
-      };
-      draw();
-      requestAnimationFrame(draw);
+        },
+        { root: scrollRoot, rootMargin: "240px 0px" },
+      );
+      klineChartObserver = io;
+      nodes.forEach((canvas) => io.observe(canvas));
+      return;
+    }
+
+    const concurrency = nodes.length > 16 ? 8 : 6;
+    let cursor = 0;
+    const workers = Array.from(
+      { length: Math.min(concurrency, nodes.length) },
+      async () => {
+        while (cursor < nodes.length) {
+          if (token !== klinePaintToken || signal.aborted) return;
+          const index = cursor;
+          cursor += 1;
+          await paintOne(nodes[index]);
+        }
+      },
+    );
+    await Promise.all(workers);
+    if (token === klinePaintToken && klinePaintController === controller) {
+      klinePaintController = null;
     }
   }
 
@@ -1685,6 +1909,8 @@
   }
 
   function setTab(tab) {
+    // 切栏先作废上一栏 K 线请求，避免抢带宽
+    abortKlinePaint();
     state.tab = tab;
     if (tab !== "pin" && state.selectMode) setSelectMode(false);
     // 换分栏就收焦点栏（置顶单击便签 / 自动盯·雷达置顶刷新）
@@ -2223,7 +2449,7 @@
       <tr class="fut-prow-row${selected ? " is-selected" : ""}${alwaysOrphan ? " is-always-orphan" : ""}${isReveal ? " is-jump-reveal" : ""}${isGuest ? " is-jump-guest" : ""}" data-symbol="${escapeHtml(key)}" data-fut-row="1"${alwaysOrphan ? ' data-fut-always-orphan="1"' : ""}${isGuest ? ' data-fut-jump-guest="1"' : ""}>
         <td class="fut-name-cell">${check}${pinBtn}<button type="button" class="fut-name" data-fut-copy="${escapeHtml(labelOf(key))}">${escapeHtml(n.label || labelOf(key))}${tag}</button></td>
         <td class="fut-kline-cell">${kHtml}</td>
-        <td class="fut-chg ${pctClass(ch)}">${escapeHtml(fmtPct(ch))}</td>
+        <td class="fut-chg ${pctClass(ch)}" data-fut-chg="${escapeHtml(key)}">${escapeHtml(fmtPct(ch))}</td>
         ${opsCell}
       </tr>
       <tr class="fut-sub" data-symbol="${escapeHtml(key)}"><td></td><td colspan="3">${infoCell}</td></tr>`;
@@ -2342,7 +2568,7 @@
         <button type="button" class="fut-name" data-fut-jump-pin="${escapeHtml(sym)}" title="进置顶并定位（未在名单则临时查看）">${escapeHtml(labelOf(sym))}</button>
       </td>
       <td class="fut-kline-cell">${kHtml}</td>
-      <td class="fut-chg ${pctClass(ch)}">${escapeHtml(fmtPct(ch))}</td>
+      <td class="fut-chg ${pctClass(ch)}" data-fut-chg="${escapeHtml(sym)}">${escapeHtml(fmtPct(ch))}</td>
     </tr>
     <tr class="fut-sub" data-symbol="${escapeHtml(sym)}"><td></td><td colspan="2"><div class="fut-info"><span class="fut-info-meta">${escapeHtml(timeShort)}</span></div></td></tr>`;
   }
@@ -2502,7 +2728,7 @@
         ? `<button type="button" class="fut-radar-act is-danger" data-fut-act="unpin" data-symbol="${escapeHtml(key)}" title="取消置顶该币">取消置顶</button>`
         : "";
       const markHtml = `<button type="button" class="fut-radar-act${isMarked ? " is-fixed" : ""}" data-radar-fixed-toggle="${escapeHtml(key)}" title="${isMarked ? "不归集" : "归集"}">${isMarked ? "不归集" : "归集"}</button>`;
-      return `<tr class="${rowClass}" data-symbol="${escapeHtml(key)}" data-fut-radar-row="1"><td><span class="fut-radar-rank-mini">${rank ? `#${rank}` : "—"}</span><button type="button" class="fut-radar-symbol" data-fut-jump-pin="${escapeHtml(key)}" data-fut-radar-sym="${escapeHtml(key)}" title="进置顶并定位（未在名单则临时查看）">${escapeHtml(labelOf(key))}</button></td><td class="fut-kline-cell">${kHtml}</td><td class="${radarPctClass(change24h)}">${escapeHtml(fmtPct(change24h))}</td><td>${markHtml}${unpinHtml}</td></tr>`;
+      return `<tr class="${rowClass}" data-symbol="${escapeHtml(key)}" data-fut-radar-row="1"><td><span class="fut-radar-rank-mini">${rank ? `#${rank}` : "—"}</span><button type="button" class="fut-radar-symbol" data-fut-jump-pin="${escapeHtml(key)}" data-fut-radar-sym="${escapeHtml(key)}" title="进置顶并定位（未在名单则临时查看）">${escapeHtml(labelOf(key))}</button></td><td class="fut-kline-cell">${kHtml}</td><td class="${radarPctClass(change24h)}" data-fut-chg="${escapeHtml(key)}">${escapeHtml(fmtPct(change24h))}</td><td>${markHtml}${unpinHtml}</td></tr>`;
     };
 
     const rows = [];
@@ -2805,6 +3031,43 @@
     });
   }
 
+  /** ticker 回来后只改 24h 数字，不整表重渲（避免打断渐进画 K）。 */
+  function syncLivePctCells() {
+    document.querySelectorAll("[data-fut-chg]").forEach((cell) => {
+      const key = symKey(cell.getAttribute("data-fut-chg"));
+      if (!key) return;
+      const ch = Number(liveOf(key).change24h);
+      if (cell.closest("#radarBody")) {
+        cell.className = radarPctClass(ch);
+        cell.setAttribute("data-fut-chg", key);
+      } else {
+        cell.classList.remove("is-up", "is-down");
+        const cls = pctClass(ch);
+        if (cls) cell.classList.add(cls);
+      }
+      cell.textContent = fmtPct(ch);
+    });
+  }
+
+  /** 已缓存的图只重画角标现价，不重新请求。 */
+  function softRedrawCachedKlines() {
+    document.querySelectorAll("canvas.fut-kline[data-kline]").forEach((canvas) => {
+      const sym = symKey(canvas.getAttribute("data-kline"));
+      if (
+        !sym ||
+        !readKlineCache(
+          `${sym}|${KLINE_INTERVAL}|${KLINE_LIMIT}`,
+          sym,
+          KLINE_INTERVAL,
+          KLINE_LIMIT,
+        )
+      ) {
+        return;
+      }
+      drawKlineCanvas(canvas);
+    });
+  }
+
   async function refreshView(opts) {
     const options = opts || {};
     if (state.refreshing) {
@@ -2825,12 +3088,22 @@
         ...state.pool,
       ]);
       if (state.tab === "radar") {
+        // 雷达榜序吃 24h：先 ticker 再渲（K 仍渐进 + 多图懒画）
         await refreshTickers([]);
+        render();
+        flashListRefresh();
       } else {
-        await refreshTickers([...focus]);
+        // 置顶/自动盯：先开画 K，ticker 并行补 24h，不整表重渲打断作画
+        render();
+        flashListRefresh();
+        try {
+          await refreshTickers([...focus]);
+          syncLivePctCells();
+          softRedrawCachedKlines();
+        } catch (tickerErr) {
+          console.warn("fut ticker", tickerErr);
+        }
       }
-      render();
-      flashListRefresh();
       if (status) {
         status.textContent = updated
           ? "数据 " + fmtTime(updated)
@@ -3556,6 +3829,16 @@
         void dismissDailyResetPrompt();
       });
     }
+
+    // 对齐钉子：后台不白跑 K 线；回前台再画
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        abortKlinePaint();
+        return;
+      }
+      if (state.booting || state.refreshing) return;
+      void paintVisibleKlines();
+    });
 
     syncSettingsChrome();
     applyAutoRefresh();
