@@ -5,8 +5,8 @@
 ## 行为
 
 1. 拉 U 本位 `exchangeInfo`（永续 + TRADING）+ `/fapi/v1/ticker/24hr`
-2. 按 24h 涨幅取前 N（默认 35）→ `futures/fut-watch-pool.json`
-3. 相对上轮 zone 快照的**新进**写入 `futures/fut-auto-pins.json`（首次只播种，不整池钉满）
+2. 按 24h 涨幅取前 N（默认 35）→ `futures/fut-watch-pool.json`（集合+rank 未变则跳过写，避免刷 commit）
+3. 相对上轮 zone 快照的**新进**写入 `futures/fut-auto-pins.json`（首次只播种，不整池钉满）；`fut-notify-state` 同理：snap 集合与 events 未变不写
 4. **自动盯 → 写入 `futures/fut-nails.json`（`pinned: false`）**，进合约置顶分栏「其余」；补齐历史漏钉；尊重 `dismissedNails`（对齐现货 `saveAutoPinNails`）
 5. **每日便签重置（北京 0:00）**：非置顶钉子批量写便签现价 → `futures/fut-nails.json`；状态 `futures/fut-nail-daily-reset.json`（页面前后 2h 提示）
 6. **自动盯过期清退**：未置顶且 `auto-fut` 的盯点已滚到当前 18 根 4h 图最旧前 1/3 → 从 `fut-nails` / `fut-auto-pins` 去掉（用户置顶保留）

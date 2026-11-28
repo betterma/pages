@@ -393,6 +393,67 @@ async function withConflictRetry(path, mutate, message) {
   throw lastError || new Error(`save ${path} failed`);
 }
 
+function sameSymbolList(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i += 1) {
+    if (
+      String(a[i] || '')
+        .trim()
+        .toUpperCase() !==
+      String(b[i] || '')
+        .trim()
+        .toUpperCase()
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** 边沿检测只看集合，顺序变化不必写 Git（否则每 5 分钟刷一串 commit）。 */
+function sameSymbolSet(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+    return false;
+  }
+  const left = a
+    .map((s) =>
+      String(s || '')
+        .trim()
+        .toUpperCase(),
+    )
+    .filter(Boolean)
+    .sort();
+  const right = b
+    .map((s) =>
+      String(s || '')
+        .trim()
+        .toUpperCase(),
+    )
+    .filter(Boolean)
+    .sort();
+  return sameSymbolList(left, right);
+}
+
+function eventsFingerprint(list) {
+  return JSON.stringify(
+    (Array.isArray(list) ? list : []).map((entry) => ({
+      at: Number(entry && entry.at) || 0,
+      kind: String((entry && entry.kind) || ''),
+      source: String((entry && entry.source) || ''),
+      symbols: (Array.isArray(entry && entry.symbols)
+        ? entry.symbols
+        : []
+      ).map((s) =>
+        String(s || '')
+          .trim()
+          .toUpperCase(),
+      ),
+    })),
+  );
+}
+
 /**
  * 一轮合约自动盯。
  */
@@ -596,34 +657,78 @@ async function runFutAutoPin(options) {
     console.log('fut-auto-pin nails', JSON.stringify(nailsWrite));
   }
 
-  // 池 + 状态并行写，避免串行 GitHub 在 3s 超时配额里叠爆
+  // 池 + 状态：内容没变就 skipWrite，避免每轮 updatedAt 刷 commit / Pages
   console.log('fut-auto-pin write pool+state');
-  await Promise.all([
+  const [poolWrite, stateWrite] = await Promise.all([
     withConflictRetry(
       CONFIG.POOL_PATH,
-      () => ({
-        data: {
-          watchPool: pool.slice(),
-          rank,
-          updatedAt: now,
-          market: 'usdt-perp',
-        },
-      }),
+      (prev) => {
+        const prevPool = Array.isArray(prev && prev.watchPool)
+          ? prev.watchPool
+          : [];
+        const prevRank = Number(prev && prev.rank);
+        // 展示序：同集合+同 rank 就跳过（24h 名次抖动不写库）
+        if (
+          sameSymbolSet(prevPool, pool) &&
+          prevRank === rank
+        ) {
+          return {
+            skipWrite: true,
+            data: prev || {
+              watchPool: pool.slice(),
+              rank,
+              updatedAt: now,
+              market: 'usdt-perp',
+            },
+          };
+        }
+        return {
+          data: {
+            watchPool: pool.slice(),
+            rank,
+            updatedAt: now,
+            market: 'usdt-perp',
+          },
+        };
+      },
       `Fut watch pool ${pool.length}`,
     ),
     withConflictRetry(
       CONFIG.STATE_PATH,
-      () => ({
-        data: {
-          risingZoneSnap: pool.slice(),
-          risingZoneSnapSeeded: true,
-          autoPinEvents: events,
-          updatedAt: now,
-        },
-      }),
+      (prev) => {
+        const prevData =
+          prev && typeof prev === 'object' ? prev : {};
+        const prevSnap = Array.isArray(prevData.risingZoneSnap)
+          ? prevData.risingZoneSnap
+          : [];
+        const prevEvents = Array.isArray(prevData.autoPinEvents)
+          ? prevData.autoPinEvents
+          : [];
+        const snapSame = sameSymbolSet(prevSnap, pool);
+        const eventsSame =
+          eventsFingerprint(prevEvents) === eventsFingerprint(events);
+        if (snapSame && eventsSame && prevData.risingZoneSnapSeeded) {
+          return { skipWrite: true, data: prevData };
+        }
+        return {
+          data: {
+            risingZoneSnap: pool.slice(),
+            risingZoneSnapSeeded: true,
+            autoPinEvents: events,
+            updatedAt: now,
+          },
+        };
+      },
       `Fut notify state zone=${pool.length}`,
     ),
   ]);
+  console.log(
+    'fut-auto-pin write pool+state done',
+    JSON.stringify({
+      poolSkipped: !!(poolWrite && poolWrite.skipped),
+      stateSkipped: !!(stateWrite && stateWrite.skipped),
+    }),
+  );
 
   return {
     skipped: false,
@@ -636,6 +741,8 @@ async function runFutAutoPin(options) {
     dropped: dropped.length,
     pins: normalizePinList(pins).length,
     pinsChanged,
+    poolSkipped: !!(poolWrite && poolWrite.skipped),
+    stateSkipped: !!(stateWrite && stateWrite.skipped),
     nailsAdded: nailsWrite.added || 0,
     nailsUpdated: nailsWrite.updated || 0,
     nailsBackfill: nailsWrite.backfill || 0,
