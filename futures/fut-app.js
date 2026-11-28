@@ -69,6 +69,11 @@
     alwaysCollapsed: false,
     focusSymbol: null,
     addOpen: false,
+    zoomSymbol: null,
+    zoomLongRange: "week",
+    zoomPaintToken: 0,
+    refreshing: false,
+    booting: true,
   };
 
   function readLocalFlag(key, fallback) {
@@ -115,6 +120,54 @@
     toast._t = setTimeout(() => {
       el.hidden = true;
     }, 2200);
+  }
+
+  function setSaving(on, text) {
+    const el = $("futSaving");
+    const label = $("futSavingText");
+    if (label && text) label.textContent = String(text);
+    if (el) el.hidden = !on;
+    document.body.classList.toggle("is-fut-saving", !!on);
+  }
+
+  function setButtonLoading(btn, on, opts) {
+    if (!btn) return;
+    const keepDisabled = !!(opts && opts.keepDisabled);
+    btn.classList.toggle("is-loading", !!on);
+    if (on) {
+      btn.setAttribute("aria-busy", "true");
+      btn.disabled = true;
+    } else {
+      btn.removeAttribute("aria-busy");
+      if (!keepDisabled) btn.disabled = false;
+    }
+  }
+
+  function flashListRefresh() {
+    const nodes = [
+      $("pinList"),
+      $("autoList"),
+      $("radarTableWrap"),
+    ].filter(Boolean);
+    nodes.forEach((el) => {
+      el.classList.remove("is-refreshing");
+      // reflow so animation restarts
+      void el.offsetWidth;
+      el.classList.add("is-refreshing");
+      clearTimeout(el._flashT);
+      el._flashT = setTimeout(() => el.classList.remove("is-refreshing"), 600);
+    });
+  }
+
+  function setRefreshingUi(on) {
+    state.refreshing = !!on;
+    const meta = $("futMeta");
+    if (meta) meta.classList.toggle("is-busy", !!on);
+    setButtonLoading($("refreshBtn"), on);
+    setButtonLoading($("radarRefreshBtn"), on);
+    setButtonLoading($("futFocusRefreshBtn"), on);
+    if (on) setSaving(true, state.booting ? "加载中…" : "刷新中…");
+    else if (!state.saving && !state.booting) setSaving(false);
   }
 
   function escapeHtml(value) {
@@ -578,14 +631,24 @@
     if (full || state.tab === "radar") state.radarTickerAt = Date.now();
   }
 
-  async function fetchKlines(symbol) {
+  async function fetchKlines(symbol, interval, limit) {
     const key = symKey(symbol);
+    const iv = String(interval || KLINE_INTERVAL);
+    const lim = Math.max(12, Number(limit) || KLINE_LIMIT);
+    const cacheKey = `${key}|${iv}|${lim}`;
+    if (
+      Array.isArray(state.klineCache[cacheKey]) &&
+      state.klineCache[cacheKey].length
+    ) {
+      return state.klineCache[cacheKey];
+    }
     const q =
       `/fapi/v1/klines?symbol=${encodeURIComponent(key)}` +
-      `&interval=${KLINE_INTERVAL}&limit=${KLINE_LIMIT}`;
+      `&interval=${encodeURIComponent(iv)}&limit=${lim}`;
     const raw = await fapiGetJson(q);
     const candles = (Array.isArray(raw) ? raw : [])
       .map((row) => ({
+        time: Number(row[0]) || 0,
         open: Number(row[1]),
         high: Number(row[2]),
         low: Number(row[3]),
@@ -598,12 +661,16 @@
           Number.isFinite(c.low) &&
           Number.isFinite(c.close),
       );
-    state.klineCache[key] = candles;
+    state.klineCache[cacheKey] = candles;
+    if (iv === KLINE_INTERVAL && lim === KLINE_LIMIT) {
+      state.klineCache[key] = candles;
+    }
     return candles;
   }
 
-  function paintMiniKline(canvas, candles) {
+  function paintMiniKline(canvas, candles, opts) {
     if (!canvas || !candles || !candles.length) return;
+    const options = opts || {};
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const cssW =
       canvas.clientWidth ||
@@ -620,27 +687,46 @@
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
+    const pin = Number(options.pinPrice);
+    const hasPin = Number.isFinite(pin) && pin > 0;
     let min = Infinity;
     let max = -Infinity;
     candles.forEach((c) => {
       if (c.low < min) min = c.low;
       if (c.high > max) max = c.high;
     });
+    if (hasPin) {
+      if (pin < min) min = pin;
+      if (pin > max) max = pin;
+    }
     if (!(max > min)) {
       max = min + 1e-9;
     }
     const upColor = KLINE_UP;
     const downColor = KLINE_DOWN;
-    const pad = 2;
+    const pad = options.pad != null ? Number(options.pad) : 2;
     const n = candles.length;
     const slot = (cssW - pad * 2) / n;
     const bodyW = Math.max(1.2, slot * 0.62);
+    const yOf = (price) => pad + ((max - price) / (max - min)) * (cssH - pad * 2);
+    if (hasPin) {
+      const y = yOf(pin);
+      ctx.save();
+      ctx.strokeStyle = "rgba(120, 130, 126, 0.75)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(pad, y);
+      ctx.lineTo(cssW - pad, y);
+      ctx.stroke();
+      ctx.restore();
+    }
     candles.forEach((c, i) => {
       const x = pad + i * slot + slot / 2;
-      const yHigh = pad + ((max - c.high) / (max - min)) * (cssH - pad * 2);
-      const yLow = pad + ((max - c.low) / (max - min)) * (cssH - pad * 2);
-      const yOpen = pad + ((max - c.open) / (max - min)) * (cssH - pad * 2);
-      const yClose = pad + ((max - c.close) / (max - min)) * (cssH - pad * 2);
+      const yHigh = yOf(c.high);
+      const yLow = yOf(c.low);
+      const yOpen = yOf(c.open);
+      const yClose = yOf(c.close);
       const up = c.close >= c.open;
       ctx.strokeStyle = up ? upColor : downColor;
       ctx.fillStyle = up ? upColor : downColor;
@@ -653,6 +739,23 @@
       const h = Math.max(1, Math.abs(yClose - yOpen));
       ctx.fillRect(x - bodyW / 2, top, bodyW, h);
     });
+  }
+
+  function notePinPrice(symbol) {
+    const n = nailMap().get(symKey(symbol));
+    if (!n) return 0;
+    const note = Number(String(n.note || "").replace(/,/g, ""));
+    return Number.isFinite(note) && note > 0 ? note : 0;
+  }
+
+  function zoomLongRangeConfig(range) {
+    if (range === "month") {
+      return { key: "month", interval: "1M", limit: 36, label: "月 K · 一根一月" };
+    }
+    if (range === "day") {
+      return { key: "day", interval: "1d", limit: 90, label: "日 K · 一根一天" };
+    }
+    return { key: "week", interval: "1w", limit: 52, label: "周 K · 一根一周" };
   }
 
   async function ensureKlines(symbols) {
@@ -678,19 +781,36 @@
     );
   }
 
+  function clearKlineCacheFor(symbol) {
+    const key = symKey(symbol);
+    if (!key) return;
+    Object.keys(state.klineCache).forEach((cacheKey) => {
+      if (cacheKey === key || cacheKey.startsWith(`${key}|`)) {
+        delete state.klineCache[cacheKey];
+      }
+    });
+  }
+
   async function paintVisibleKlines() {
     const nodes = [...document.querySelectorAll("canvas.fut-kline[data-kline]")];
+    nodes.forEach((canvas) => canvas.classList.add("is-loading"));
     const symbols = nodes.map((n) => n.getAttribute("data-kline"));
-    await ensureKlines(symbols);
-    const draw = () => {
-      nodes.forEach((canvas) => {
-        if (!canvas.isConnected) return;
-        const sym = canvas.getAttribute("data-kline");
-        paintMiniKline(canvas, state.klineCache[sym] || []);
-      });
-    };
-    draw();
-    requestAnimationFrame(draw);
+    try {
+      await ensureKlines(symbols);
+    } finally {
+      const draw = () => {
+        nodes.forEach((canvas) => {
+          if (!canvas.isConnected) return;
+          const sym = canvas.getAttribute("data-kline");
+          paintMiniKline(canvas, state.klineCache[sym] || [], {
+            pinPrice: notePinPrice(sym),
+          });
+          canvas.classList.remove("is-loading");
+        });
+      };
+      draw();
+      requestAnimationFrame(draw);
+    }
   }
 
   async function persistNails(mutator, message) {
@@ -699,6 +819,8 @@
       return false;
     }
     state.saving = true;
+    setSaving(true, "保存中…");
+    syncSelectUi();
     try {
       const result = await window.FutStore.patchJson(
         PATHS.nails,
@@ -731,9 +853,14 @@
       state.nails = normalizeNails(result.data.nails);
       state.alwaysWatch = normalizeAlways(result.data.alwaysWatch);
       render();
+      flashListRefresh();
       return true;
+    } catch (error) {
+      toast((error && error.message) || "保存失败");
+      throw error;
     } finally {
       state.saving = false;
+      if (!state.refreshing) setSaving(false);
       syncSelectUi();
     }
   }
@@ -831,6 +958,7 @@
         ),
       };
     }, `Fut pin first ${key}`);
+    if (ok) toast(`已排到置顶第一 · ${labelOf(key)}`);
     return ok;
   }
 
@@ -869,9 +997,10 @@
     const key = symKey(symbol);
     if (!isUserPinned(key) && force !== true) {
       toast("仅已置顶的可加常看");
-      return;
+      return false;
     }
-    await persistNails((ctx) => {
+    const wasOn = isAlways(key);
+    const ok = await persistNails((ctx) => {
       const set = new Set(ctx.alwaysWatch);
       if (force === true) set.add(key);
       else if (force === false) set.delete(key);
@@ -879,6 +1008,12 @@
       else set.add(key);
       return { ...ctx, alwaysWatch: [...set] };
     }, `Fut always ${key}`);
+    if (ok) {
+      const on =
+        force === true ? true : force === false ? false : !wasOn;
+      toast(on ? `${labelOf(key)} 已加常看` : `${labelOf(key)} 已取消常看`);
+    }
+    return ok;
   }
 
   async function deleteNails(symbols) {
@@ -954,9 +1089,9 @@
   function updateHeadMeta() {
     const meta = $("futMeta");
     if (!meta) return;
-    const { always, pinned, rest } = splitPinSections();
+    const { alwaysEligible, pinned, rest } = splitPinSections();
     const n = state.nails.length;
-    meta.textContent = `${n} 个 · 置顶 ${pinned.length} · 常看 ${always.length} · 其余 ${rest.length}`;
+    meta.textContent = `${n} 个 · 置顶 ${pinned.length} · 常看 ${alwaysEligible || 0} · 其余 ${rest.length}`;
   }
 
   function setTab(tab) {
@@ -973,7 +1108,7 @@
       pane.hidden = pane.getAttribute("data-fut-pane") !== tab;
     });
     if (tab === "auto") syncFutAutoPinBadge();
-    void refreshView();
+    void refreshView({ quiet: true });
   }
 
   function closeFocusBar() {
@@ -1046,16 +1181,36 @@
     const always = [];
     const pinned = [];
     const rest = [];
+    // 对齐钉子：常看展开=独立段；折叠=并入置顶/其余，标题仍保留可再展开。
+    const alwaysExpanded = !state.alwaysCollapsed;
+    let alwaysEligible = 0;
     state.nails.forEach((n) => {
-      if (alwaysSet.has(n.symbol) && n.pinned) {
+      const inAlways = alwaysSet.has(n.symbol);
+      if (inAlways) alwaysEligible += 1;
+      if (inAlways && alwaysExpanded) {
         always.push(n);
+        return;
+      }
+      if (inAlways && !alwaysExpanded) {
+        if (n.pinned) pinned.push(n);
+        else rest.push(n);
         return;
       }
       if (n.pinned) pinned.push(n);
       else rest.push(n);
     });
+    // 常看独立段固定按 24h，不受全局排序开关影响（同钉子页）
+    const alwaysSorted = always.slice().sort((a, b) => {
+      const ca = Number(liveOf(a.symbol).change24h);
+      const cb = Number(liveOf(b.symbol).change24h);
+      const va = Number.isFinite(ca) ? ca : -Infinity;
+      const vb = Number.isFinite(cb) ? cb : -Infinity;
+      if (vb !== va) return vb - va;
+      return (a.order || 0) - (b.order || 0);
+    });
     return {
-      always: sortNailRows(always),
+      always: alwaysSorted,
+      alwaysEligible,
       pinned: sortNailRows(pinned),
       rest: sortNailRows(rest),
     };
@@ -1241,23 +1396,32 @@
           ? "is-pin"
           : "is-rest";
     const collapsed = kind === "always" && state.alwaysCollapsed;
+    const count =
+      kind === "always" && Number.isFinite(Number(opts && opts.count))
+        ? Number(opts.count)
+        : rows.length;
     const caret =
       kind === "always"
         ? `<span class="fut-sec-caret" aria-hidden="true">▾</span>`
         : "";
     const labelAttrs =
       kind === "always"
-        ? ` data-fut-sec-toggle="always" role="button" aria-expanded="${collapsed ? "false" : "true"}"`
+        ? ` data-fut-sec-toggle="always" role="button" tabindex="0" aria-expanded="${collapsed ? "false" : "true"}" title="点击展开/收起常看"`
         : "";
-    const label = `<div class="fut-section-label ${cls}${collapsed ? " is-collapsed" : ""}"${labelAttrs}>${caret}<span>${escapeHtml(title)}</span> <span class="fut-section-count">${rows.length}</span></div>`;
-    if (!rows.length) {
-      return `<tbody data-fut-sec="${escapeHtml(kind)}"><tr class="fut-section-row"><td colspan="4">${label}</td></tr></tbody>`;
+    const label = `<div class="fut-section-label ${cls}${collapsed ? " is-collapsed" : ""}"${labelAttrs}>${caret}<span>${escapeHtml(title)}</span> <span class="fut-section-count">${count}</span></div>`;
+    // 折叠时仍画标题（角标用 eligible），行并入置顶/其余，不在此段渲染
+    if (kind === "always" && collapsed) {
+      return `<tbody data-fut-sec="always"><tr class="fut-section-row"><td colspan="4">${label}</td></tr></tbody>`;
     }
-    if (collapsed) {
-      return `<tbody data-fut-sec="${escapeHtml(kind)}"><tr class="fut-section-row"><td colspan="4">${label}</td></tr></tbody>`;
+    if (!rows.length) {
+      if (kind === "always" && count > 0) {
+        return `<tbody data-fut-sec="always"><tr class="fut-section-row"><td colspan="4">${label}</td></tr></tbody>`;
+      }
+      if (kind !== "always") return "";
+      return `<tbody data-fut-sec="always"><tr class="fut-section-row"><td colspan="4">${label}</td></tr></tbody>`;
     }
     const body = rows.map((n) => pinRowHtml(n, opts)).join("");
-    return `<tbody data-fut-sec="${escapeHtml(kind)}">
+    return `<tbody data-fut-sec="${escapeHtml(kind)}"${kind === "always" ? ' data-fut-in-section="always"' : ""}>
       <tr class="fut-section-row"><td colspan="4">${label}</td></tr>
       ${body}
     </tbody>`;
@@ -1266,16 +1430,25 @@
   function renderPinPane() {
     const root = $("pinList");
     if (!root) return;
-    const { always, pinned, rest } = splitPinSections();
+    const { always, alwaysEligible, pinned, rest } = splitPinSections();
+    root.classList.toggle("is-always-collapsed", !!state.alwaysCollapsed);
     let html = `<table class="fut-prow-table">
       <thead><tr><th>币</th><th>K线</th><th>24h</th><th>操作</th></tr></thead>
-      ${sectionHtml("常看", always, { kline: true, kind: "always" })}
+      ${sectionHtml("常看", always, {
+        kline: true,
+        kind: "always",
+        count: alwaysEligible,
+      })}
       ${sectionHtml("置顶", pinned, { kline: true, kind: "pin" })}`;
     if (!state.pinnedOnly) {
       html += sectionHtml("其余", rest, { kline: true, kind: "rest" });
     }
     html += "</table>";
-    if (!always.length && !pinned.length && (state.pinnedOnly || !rest.length)) {
+    if (
+      !alwaysEligible &&
+      !pinned.length &&
+      (state.pinnedOnly || !rest.length)
+    ) {
       html =
         '<div class="fut-empty">暂无置顶。点「新增」，或从自动盯 / 雷达置顶；云函数写入后会出现在「其余」。</div>';
     }
@@ -1553,33 +1726,131 @@
     void paintVisibleKlines();
   }
 
+  function syncFutZoomRangeUi() {
+    document.querySelectorAll("[data-fut-zoom-range]").forEach((btn) => {
+      const on = btn.getAttribute("data-fut-zoom-range") === state.zoomLongRange;
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+
+  async function paintFutZoomMain(symbol) {
+    const canvas = $("futZoomCanvas");
+    const meta = $("futZoomMeta");
+    if (!canvas || !symbol) return;
+    const candles = await fetchKlines(symbol, KLINE_INTERVAL, KLINE_LIMIT);
+    if (state.zoomSymbol !== symbol) return;
+    const pin = notePinPrice(symbol);
+    paintMiniKline(canvas, candles, { pinPrice: pin, pad: 6 });
+    const live = liveOf(symbol);
+    if (meta) {
+      meta.textContent = [
+        "4h",
+        Number.isFinite(live.price) ? `现价 ${fmtPrice(live.price)}` : "",
+        Number.isFinite(live.change24h) ? `24h ${fmtPct(live.change24h)}` : "",
+        pin > 0 ? `便签 ${fmtPrice(pin)}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
+  }
+
+  async function paintFutZoomLong(symbol) {
+    const canvas = $("futZoomLongCanvas");
+    const meta = $("futZoomLongMeta");
+    if (!canvas || !symbol) return;
+    const range = zoomLongRangeConfig(state.zoomLongRange);
+    if (meta) meta.textContent = `加载${range.label}…`;
+    try {
+      const candles = await fetchKlines(symbol, range.interval, range.limit);
+      if (
+        state.zoomSymbol !== symbol ||
+        state.zoomLongRange !== range.key
+      ) {
+        return;
+      }
+      paintMiniKline(canvas, candles, {
+        pinPrice: notePinPrice(symbol),
+        pad: 6,
+      });
+      if (meta) meta.textContent = `${range.label} · ${candles.length} 根`;
+    } catch (error) {
+      if (state.zoomSymbol === symbol && meta) {
+        meta.textContent = (error && error.message) || `${range.label}加载失败`;
+      }
+    }
+  }
+
   async function openZoom(symbol) {
     const key = symKey(symbol);
     if (!key) return;
     const overlay = $("futZoomOverlay");
     const title = $("futZoomTitle");
-    const canvas = $("futZoomCanvas");
-    if (!overlay || !canvas) return;
+    const meta = $("futZoomMeta");
+    const mainWrap = document.querySelector(".fut-zoom-chart");
+    const longWrap = document.querySelector(".fut-zoom-long-chart");
+    if (!overlay) return;
+    state.zoomSymbol = key;
+    state.zoomPaintToken += 1;
+    const token = state.zoomPaintToken;
     if (title) title.textContent = labelOf(key);
+    if (meta) meta.textContent = "加载 K 线…";
+    if (mainWrap) mainWrap.classList.add("is-loading");
+    if (longWrap) longWrap.classList.add("is-loading");
+    syncFutZoomRangeUi();
     overlay.hidden = false;
+    document.body.classList.add("is-fut-zoom");
     try {
-      await ensureKlines([key]);
-      paintMiniKline(canvas, state.klineCache[key] || []);
+      await refreshTickers([key]);
+      if (token !== state.zoomPaintToken || state.zoomSymbol !== key) return;
+      await Promise.all([paintFutZoomMain(key), paintFutZoomLong(key)]);
+      requestAnimationFrame(() => {
+        if (state.zoomSymbol === key) {
+          void paintFutZoomMain(key);
+          void paintFutZoomLong(key);
+        }
+      });
     } catch (error) {
-      toast((error && error.message) || "K 线加载失败");
+      if (meta) meta.textContent = (error && error.message) || "K 线加载失败";
+      toast((error && error.message) || "放大 K 线失败");
+    } finally {
+      if (mainWrap) mainWrap.classList.remove("is-loading");
+      if (longWrap) longWrap.classList.remove("is-loading");
     }
   }
 
   function closeZoom() {
+    state.zoomSymbol = null;
+    state.zoomPaintToken += 1;
     const overlay = $("futZoomOverlay");
     if (overlay) overlay.hidden = true;
+    document.body.classList.remove("is-fut-zoom");
   }
 
-  async function refreshView() {
+  function setFutZoomLongRange(range) {
+    const next =
+      range === "day" || range === "month" || range === "week" ? range : "week";
+    if (next === state.zoomLongRange) return;
+    state.zoomLongRange = next;
+    syncFutZoomRangeUi();
+    if (!state.zoomSymbol) return;
+    const longWrap = document.querySelector(".fut-zoom-long-chart");
+    if (longWrap) longWrap.classList.add("is-loading");
+    void paintFutZoomLong(state.zoomSymbol).finally(() => {
+      if (longWrap) longWrap.classList.remove("is-loading");
+    });
+  }
+
+  async function refreshView(opts) {
+    const options = opts || {};
+    if (state.refreshing) {
+      toast("刷新中…");
+      return;
+    }
+    const quiet = !!options.quiet;
     const status = $("statusMeta");
     const errBox = $("errBox");
-    const btn = $("refreshBtn");
-    if (btn) btn.disabled = true;
+    setRefreshingUi(true);
     if (errBox) errBox.hidden = true;
     if (status) status.textContent = "刷新中…";
     try {
@@ -1595,12 +1866,14 @@
         await refreshTickers([...focus]);
       }
       render();
+      flashListRefresh();
       if (status) {
         status.textContent = updated
           ? "数据 " + fmtTime(updated)
           : "已刷新 · 等云函数写入池/自动盯";
       }
       updateHeadMeta();
+      if (!quiet) toast("已刷新");
     } catch (error) {
       console.warn(error);
       if (errBox) {
@@ -1609,8 +1882,9 @@
       }
       if (status) status.textContent = "刷新失败";
       updateHeadMeta();
+      toast((error && error.message) || "刷新失败");
     } finally {
-      if (btn) btn.disabled = false;
+      setRefreshingUi(false);
     }
   }
 
@@ -1649,30 +1923,41 @@
     }
     if (!state.autoRefresh) return;
     state.autoRefreshTimer = setInterval(() => {
-      if (document.hidden) return;
-      void refreshView();
+      if (document.hidden || state.refreshing || state.saving) return;
+      void refreshView({ quiet: true });
     }, AUTO_REFRESH_MS);
   }
 
   async function saveWatchPoolRank() {
     const input = $("futWatchPoolRankInput");
+    const btn = $("futWatchPoolRankSave");
     const rank = clampPoolRank(input && input.value);
     if (input) input.value = String(rank);
-    await window.FutStore.patchJson(
-      PATHS.prefs,
-      (data) => ({
-        data: {
-          ...data,
-          watchPoolRank: rank,
-          updatedAt: Date.now(),
-          market: "usdt-perp",
-        },
-      }),
-      `Fut prefs pool rank ${rank}`,
-    );
-    state.poolRank = rank;
-    toast(`观察池前 N 已存为 ${rank}`);
-    setSettingsOpen(false);
+    setButtonLoading(btn, true);
+    setSaving(true, "保存设置…");
+    try {
+      await window.FutStore.patchJson(
+        PATHS.prefs,
+        (data) => ({
+          data: {
+            ...data,
+            watchPoolRank: rank,
+            updatedAt: Date.now(),
+            market: "usdt-perp",
+          },
+        }),
+        `Fut prefs pool rank ${rank}`,
+      );
+      state.poolRank = rank;
+      toast(`观察池前 N 已存为 ${rank}`);
+      setSettingsOpen(false);
+    } catch (error) {
+      toast((error && error.message) || "保存失败");
+      throw error;
+    } finally {
+      setButtonLoading(btn, false);
+      if (!state.refreshing) setSaving(false);
+    }
   }
 
   function bindLongPress(root) {
@@ -1752,36 +2037,35 @@
     if (batchExit) {
       batchExit.addEventListener("click", () => setSelectMode(false));
     }
+    const runBatch = (btn, job) => {
+      setButtonLoading(btn, true);
+      void job()
+        .then(() => setSelectMode(false))
+        .catch((e) => toast(e.message || "失败"))
+        .finally(() => setButtonLoading(btn, false));
+    };
     const batchPin = $("futBatchPinBtn");
     if (batchPin) {
       batchPin.addEventListener("click", () => {
-        void pinToBoard([...state.selected])
-          .then(() => setSelectMode(false))
-          .catch((e) => toast(e.message || "失败"));
+        runBatch(batchPin, () => pinToBoard([...state.selected]));
       });
     }
     const batchUnpin = $("futBatchUnpinBtn");
     if (batchUnpin) {
       batchUnpin.addEventListener("click", () => {
-        void unpinFromBoard([...state.selected])
-          .then(() => setSelectMode(false))
-          .catch((e) => toast(e.message || "失败"));
+        runBatch(batchUnpin, () => unpinFromBoard([...state.selected]));
       });
     }
     const batchNote = $("futBatchNoteBtn");
     if (batchNote) {
       batchNote.addEventListener("click", () => {
-        void setNoteNow([...state.selected])
-          .then(() => setSelectMode(false))
-          .catch((e) => toast(e.message || "失败"));
+        runBatch(batchNote, () => setNoteNow([...state.selected]));
       });
     }
     const batchDelete = $("futBatchDeleteBtn");
     if (batchDelete) {
       batchDelete.addEventListener("click", () => {
-        void deleteNails([...state.selected])
-          .then(() => setSelectMode(false))
-          .catch((e) => toast(e.message || "失败"));
+        runBatch(batchDelete, () => deleteNails([...state.selected]));
       });
     }
 
@@ -1799,9 +2083,11 @@
         ev.preventDefault();
         const name = ($("futAddSymbol") && $("futAddSymbol").value) || "";
         const note = ($("futAddNote") && $("futAddNote").value) || "";
-        void addNailByInput(name, note).catch((e) =>
-          toast(e.message || "新增失败"),
-        );
+        const submitBtn = addForm.querySelector('button[type="submit"]');
+        setButtonLoading(submitBtn, true);
+        void addNailByInput(name, note)
+          .catch((e) => toast(e.message || "新增失败"))
+          .finally(() => setButtonLoading(submitBtn, false));
       });
     }
 
@@ -1813,24 +2099,42 @@
     if (focusPin) {
       focusPin.addEventListener("click", () => {
         if (!state.focusSymbol || isUserPinned(state.focusSymbol)) return;
+        const bar = $("futFocusBar");
+        if (bar) bar.classList.add("is-busy");
+        setButtonLoading(focusPin, true);
         void pinToBoard([state.focusSymbol])
-          .then(() => openFocusBar(state.focusSymbol))
-          .catch((e) => toast(e.message || "失败"));
+          .then(() => {
+            if (state.focusSymbol) openFocusBar(state.focusSymbol);
+          })
+          .catch((e) => toast(e.message || "失败"))
+          .finally(() => {
+            setButtonLoading(focusPin, false, {
+              keepDisabled: isUserPinned(state.focusSymbol),
+            });
+            if (bar) bar.classList.remove("is-busy");
+          });
       });
     }
     const focusRefresh = $("futFocusRefreshBtn");
     if (focusRefresh) {
       focusRefresh.addEventListener("click", () => {
         if (!state.focusSymbol) return;
+        const bar = $("futFocusBar");
+        if (bar) bar.classList.add("is-busy");
+        setButtonLoading(focusRefresh, true);
         void (async () => {
           try {
             await refreshTickers([state.focusSymbol]);
-            delete state.klineCache[state.focusSymbol];
+            clearKlineCacheFor(state.focusSymbol);
             await ensureKlines([state.focusSymbol]);
             render();
+            flashListRefresh();
             toast(`已刷新 ${labelOf(state.focusSymbol)}`);
           } catch (error) {
             toast((error && error.message) || "刷新失败");
+          } finally {
+            setButtonLoading(focusRefresh, false);
+            if (bar) bar.classList.remove("is-busy");
           }
         })();
       });
@@ -1843,6 +2147,14 @@
         if (ev.target === zoomOverlay) closeZoom();
       });
     }
+    document.querySelectorAll("[data-fut-zoom-range]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        setFutZoomLongRange(btn.getAttribute("data-fut-zoom-range"));
+      });
+    });
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Escape" && state.zoomSymbol) closeZoom();
+    });
 
     document.body.addEventListener("click", (ev) => {
       const secToggle = ev.target.closest("[data-fut-sec-toggle='always']");
@@ -2080,9 +2392,15 @@
       flatBtn.addEventListener("click", () => {
         const { always, pinned } = splitPinSections();
         const keys = [...always, ...pinned].map((n) => n.symbol);
+        if (!keys.length) {
+          toast("没有可平简的置顶/常看");
+          return;
+        }
+        setButtonLoading(flatBtn, true);
         void setNoteNow(keys)
           .then(() => setSettingsOpen(false))
-          .catch((error) => toast(error.message || "平简失败"));
+          .catch((error) => toast(error.message || "平简失败"))
+          .finally(() => setButtonLoading(flatBtn, false));
       });
     }
 
@@ -2092,13 +2410,34 @@
 
   bind();
   void (async () => {
-    if (window.FutStore && typeof window.FutStore.tryWarmUnlock === "function") {
-      try {
-        await window.FutStore.tryWarmUnlock();
-      } catch (_) {
-        /* ignore */
+    const shell = $("futShell");
+    if (shell) shell.classList.add("is-booting");
+    setSaving(true, "加载中…");
+    try {
+      if (window.FutStore && typeof window.FutStore.tryWarmUnlock === "function") {
+        try {
+          await window.FutStore.tryWarmUnlock();
+        } catch (_) {
+          /* ignore */
+        }
       }
+      // 同步分栏 UI，再 quiet 拉数（避免 setTab 再套一层 toast）
+      state.tab = "pin";
+      document.querySelectorAll("[data-fut-tab]").forEach((btn) => {
+        const on = btn.getAttribute("data-fut-tab") === "pin";
+        btn.classList.toggle("is-active", on);
+        btn.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      document.querySelectorAll("[data-fut-pane]").forEach((pane) => {
+        pane.hidden = pane.getAttribute("data-fut-pane") !== "pin";
+      });
+      await refreshView({ quiet: true });
+    } catch (error) {
+      toast((error && error.message) || "加载失败");
+    } finally {
+      state.booting = false;
+      if (shell) shell.classList.remove("is-booting");
+      if (!state.refreshing && !state.saving) setSaving(false);
     }
-    setTab("pin");
   })();
 })();

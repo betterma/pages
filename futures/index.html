@@ -408,6 +408,103 @@
         display: flex;
         position: relative;
       }
+      /* 保存 / 刷新全局反馈 */
+      .fut-saving {
+        position: absolute;
+        inset: 0;
+        z-index: 12;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        background: color-mix(in srgb, var(--bg) 62%, transparent);
+        color: var(--label);
+        font-size: 14px;
+        font-weight: 650;
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
+        pointer-events: all;
+      }
+      .fut-saving[hidden] {
+        display: none !important;
+      }
+      .fut-saving-spin,
+      button.is-loading::after {
+        content: "";
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border: 2px solid color-mix(in srgb, var(--label) 28%, transparent);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: fut-spin 0.7s linear infinite;
+        vertical-align: -2px;
+      }
+      button.is-loading {
+        position: relative;
+        opacity: 0.85;
+        pointer-events: none;
+      }
+      button.is-loading::after {
+        margin-left: 8px;
+        width: 12px;
+        height: 12px;
+      }
+      @keyframes fut-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .fut-list.is-refreshing,
+      .fut-radar-wrap.is-refreshing {
+        animation: fut-list-flash 0.55s ease;
+      }
+      @keyframes fut-list-flash {
+        0% {
+          opacity: 0.55;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+      .fut-kline.is-loading,
+      .fut-radar-kline.is-loading,
+      .fut-zoom-chart.is-loading canvas,
+      .fut-zoom-long-chart.is-loading canvas {
+        background: linear-gradient(
+            100deg,
+            transparent 25%,
+            color-mix(in srgb, var(--label, #808080) 16%, transparent) 50%,
+            transparent 75%
+          ),
+          color-mix(in srgb, var(--label, #808080) 4%, transparent);
+        background-size:
+          220% 100%,
+          100% 100%;
+        animation: fut-kline-shimmer 1.2s linear infinite;
+      }
+      @keyframes fut-kline-shimmer {
+        from {
+          background-position:
+            130% 0,
+            0 0;
+        }
+        to {
+          background-position:
+            -90% 0,
+            0 0;
+        }
+      }
+      .fut-focus-bar.is-busy button:not(.fut-focus-close) {
+        pointer-events: none;
+        opacity: 0.7;
+      }
+      .fut-shell.is-booting .fut-seg-host {
+        opacity: 0.55;
+      }
+      .fut-head-meta.is-busy {
+        color: var(--accent);
+      }
       .fut-seg-panel {
         flex: 1 1 auto;
         min-width: 0;
@@ -1033,31 +1130,53 @@
       .fut-focus-bar button:disabled {
         opacity: 0.5;
       }
+      /* 放大：对齐钉子 kline-zoom-gate（全屏门 + 主图 + 长周期） */
       .fut-zoom-overlay {
         position: fixed;
         inset: 0;
-        z-index: 160;
-        background: color-mix(in srgb, var(--bg) 55%, transparent);
+        z-index: 180;
         display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 16px;
+        flex-direction: column;
+        background: color-mix(in srgb, var(--bg) 78%, transparent);
+        backdrop-filter: blur(10px) saturate(140%);
+        -webkit-backdrop-filter: blur(10px) saturate(140%);
+        padding: max(8px, env(safe-area-inset-top, 0px)) 8px
+          max(8px, env(safe-area-inset-bottom, 0px));
+        box-sizing: border-box;
+        overflow: hidden;
       }
       .fut-zoom-overlay[hidden] {
         display: none !important;
       }
       .fut-zoom-card {
-        width: min(420px, 100%);
-        background: var(--elevated);
+        flex: 1 1 auto;
+        min-height: 0;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
         border: 0.5px solid var(--separator);
-        border-radius: 12px;
-        padding: 12px;
+        border-radius: 14px;
+        background: color-mix(in srgb, var(--elevated) 92%, transparent);
+        overflow: hidden;
       }
       .fut-zoom-head {
         display: flex;
         justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 12px 8px;
+        border-bottom: 0.5px solid var(--separator);
+        flex: 0 0 auto;
+      }
+      .fut-zoom-head h2 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .fut-zoom-meta {
+        margin: 4px 0 0;
+        color: var(--secondary);
+        font-size: 11px;
       }
       .fut-zoom-head button {
         border: 0.5px solid var(--separator);
@@ -1067,13 +1186,100 @@
         padding: 4px 10px;
         font-size: 12px;
         cursor: pointer;
+        flex: 0 0 auto;
       }
-      #futZoomCanvas {
-        width: 100%;
-        height: auto;
+      .fut-zoom-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 10px 12px 14px;
+      }
+      .fut-zoom-chart {
+        position: relative;
+        height: 220px;
+        border-radius: 10px;
+        border: 0.5px solid var(--separator);
+        background: color-mix(in srgb, var(--bg) 55%, transparent);
+        overflow: hidden;
+      }
+      .fut-zoom-chart canvas {
         display: block;
-        background: color-mix(in srgb, var(--label) 4%, transparent);
-        border-radius: 6px;
+        width: 100%;
+        height: 100%;
+      }
+      .fut-zoom-hint {
+        margin: 8px 0 0;
+        color: var(--secondary);
+        font-size: 11px;
+      }
+      .fut-zoom-long {
+        margin-top: 14px;
+      }
+      .fut-zoom-long-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .fut-zoom-long-head h3 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .fut-zoom-range {
+        display: inline-flex;
+        gap: 4px;
+      }
+      .fut-zoom-range button {
+        border: 0.5px solid var(--separator);
+        background: transparent;
+        color: var(--secondary);
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: 11px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      .fut-zoom-range button.is-active {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+      }
+      .fut-zoom-long-meta {
+        margin: 0 0 6px;
+        color: var(--secondary);
+        font-size: 11px;
+      }
+      .fut-zoom-long-chart {
+        position: relative;
+        height: 180px;
+        border-radius: 10px;
+        border: 0.5px solid var(--separator);
+        background: color-mix(in srgb, var(--bg) 55%, transparent);
+        overflow: hidden;
+      }
+      .fut-zoom-long-chart canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      @media (min-width: 900px) {
+        .fut-zoom-chart {
+          height: 280px;
+        }
+        .fut-zoom-long-chart {
+          height: 220px;
+        }
+      }
+      #pinList.is-always-collapsed tbody[data-fut-sec="always"] .fut-prow-row,
+      #pinList.is-always-collapsed tbody[data-fut-sec="always"] .fut-sub {
+        display: none !important;
+      }
+      tbody[data-fut-in-section="always"] .fut-prow-row,
+      tbody[data-fut-in-section="always"] .fut-sub td {
+        background: color-mix(in srgb, var(--elevated, var(--bg)) 38%, transparent);
       }
       #toast {
         position: fixed;
@@ -1253,6 +1459,10 @@
       </nav>
 
       <div class="fut-seg-host">
+        <div class="fut-saving" id="futSaving" hidden aria-live="polite">
+          <span class="fut-saving-spin" aria-hidden="true"></span>
+          <span id="futSavingText">保存中…</span>
+        </div>
         <section
           class="fut-seg-panel"
           data-fut-pane="pin"
@@ -1384,13 +1594,61 @@
       </button>
     </div>
 
-    <div id="futZoomOverlay" class="fut-zoom-overlay" hidden>
+    <div
+      id="futZoomOverlay"
+      class="fut-zoom-overlay"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="futZoomTitle"
+    >
       <div class="fut-zoom-card">
         <div class="fut-zoom-head">
-          <strong id="futZoomTitle">K 线</strong>
+          <div>
+            <h2 id="futZoomTitle">K 线</h2>
+            <p class="fut-zoom-meta" id="futZoomMeta">按住滑动查看价格</p>
+          </div>
           <button type="button" id="futZoomClose">关闭</button>
         </div>
-        <canvas id="futZoomCanvas" width="360" height="200"></canvas>
+        <div class="fut-zoom-body">
+          <div class="fut-zoom-chart">
+            <canvas id="futZoomCanvas" width="720" height="280"></canvas>
+          </div>
+          <p class="fut-zoom-hint">主图为 4h · 与钉子页同色墨线；下方可切长周期</p>
+          <section class="fut-zoom-long" aria-label="长周期 K 线">
+            <div class="fut-zoom-long-head">
+              <h3>长周期走势</h3>
+              <div class="fut-zoom-range" role="group" aria-label="长周期范围">
+                <button
+                  type="button"
+                  data-fut-zoom-range="day"
+                  aria-pressed="false"
+                >
+                  一天
+                </button>
+                <button
+                  type="button"
+                  data-fut-zoom-range="week"
+                  class="is-active"
+                  aria-pressed="true"
+                >
+                  一周
+                </button>
+                <button
+                  type="button"
+                  data-fut-zoom-range="month"
+                  aria-pressed="false"
+                >
+                  一月
+                </button>
+              </div>
+            </div>
+            <p class="fut-zoom-long-meta" id="futZoomLongMeta">加载周 K…</p>
+            <div class="fut-zoom-long-chart">
+              <canvas id="futZoomLongCanvas" width="720" height="220"></canvas>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
 
