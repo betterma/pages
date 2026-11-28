@@ -512,6 +512,7 @@
         display: flex;
         flex-direction: column;
         overflow: hidden;
+        position: relative;
       }
       .fut-seg-panel[hidden] {
         display: none !important;
@@ -527,6 +528,39 @@
         -webkit-user-select: none;
         user-select: none;
         -webkit-touch-callout: none;
+      }
+      .fut-scroll-pct {
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%) scale(0.96);
+        z-index: 6;
+        min-width: 3.2em;
+        max-width: 5.5em;
+        padding: 10px 9px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--label) 82%, transparent);
+        color: var(--bg);
+        font-size: 11px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.01em;
+        text-align: center;
+        line-height: 1.15;
+        white-space: pre-line;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transition:
+          opacity 0.18s ease,
+          transform 0.18s ease,
+          visibility 0.18s;
+        box-shadow: 0 6px 18px color-mix(in srgb, #000 18%, transparent);
+      }
+      .fut-scroll-pct.is-visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(-50%) scale(1);
       }
 
       /* 列表表（对齐钉子 nail-prow） */
@@ -550,13 +584,17 @@
       }
       .fut-section-row td {
         padding: 0;
+        position: sticky;
+        top: 0;
+        z-index: 3;
+        background: var(--elevated, var(--grouped, var(--bg)));
       }
       .fut-section-label {
         display: flex;
         align-items: baseline;
         justify-content: space-between;
         gap: 8px;
-        margin: 6px 0 2px;
+        margin: 4px 0 2px;
         padding: 10px 10px 9px;
         border-radius: 8px;
         border: 0.5px solid var(--separator);
@@ -565,6 +603,7 @@
         font-size: 11px;
         font-weight: 700;
         letter-spacing: 0.04em;
+        line-height: 1.2;
       }
       .fut-section-label.is-pin {
         border-color: color-mix(in srgb, var(--accent) 42%, var(--separator));
@@ -602,10 +641,9 @@
         opacity: 0.85;
       }
       .fut-prow-row td {
-        padding: 6px;
+        padding: 4px 6px;
         vertical-align: middle;
-        border-bottom: 0.5px solid
-          color-mix(in srgb, var(--separator) 55%, transparent);
+        border-bottom: none;
       }
       .fut-prow-row.is-selected,
       .fut-prow-row.is-focus {
@@ -648,13 +686,65 @@
         padding: 0;
         cursor: pointer;
       }
+      @keyframes fut-name-refresh-flash {
+        0%,
+        100% {
+          background: transparent;
+          box-shadow: none;
+        }
+        18%,
+        55% {
+          background: color-mix(in srgb, var(--accent, #2f8f6e) 28%, transparent);
+          box-shadow: 0 0 0 1px
+            color-mix(in srgb, var(--accent, #2f8f6e) 45%, transparent);
+        }
+      }
+      @keyframes fut-name-refresh-shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        12% {
+          transform: translateX(-2px);
+        }
+        26% {
+          transform: translateX(2px);
+        }
+        40% {
+          transform: translateX(-1.6px);
+        }
+        54% {
+          transform: translateX(1.6px);
+        }
+        68% {
+          transform: translateX(-1px);
+        }
+        82% {
+          transform: translateX(1px);
+        }
+      }
+      .fut-name.is-refresh-flash {
+        border-radius: 4px;
+        animation:
+          fut-name-refresh-flash 0.85s ease-in-out 1,
+          fut-name-refresh-shake 0.62s cubic-bezier(0.36, 0.07, 0.19, 0.97) 1;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .fut-name.is-refresh-flash {
+          animation: fut-name-refresh-flash 0.85s ease-in-out 1;
+        }
+      }
       .fut-tag {
+        display: inline-block;
         margin-left: 4px;
-        font-size: 10px;
-        color: var(--accent);
-        border: 0.5px solid color-mix(in srgb, var(--accent) 45%, transparent);
-        border-radius: 999px;
         padding: 0 5px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        color: color-mix(in srgb, var(--accent, #2f8f6e) 85%, var(--label));
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 14%, transparent);
+        vertical-align: middle;
       }
       .fut-check {
         width: 16px;
@@ -709,16 +799,29 @@
         color: var(--down);
       }
       .fut-sub td {
-        padding: 0 6px 8px;
+        padding-top: 0;
+        padding-bottom: 5px;
+        padding-left: 6px;
+        padding-right: 6px;
         border-bottom: 0.5px solid
           color-mix(in srgb, var(--separator) 55%, transparent);
-        color: var(--secondary);
-        font-size: 11px;
+        vertical-align: top;
       }
       .fut-info {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        align-items: center;
+        gap: 2px 10px;
+        font-size: 10.5px;
+        color: var(--secondary);
+        line-height: 1.4;
+      }
+      .fut-info-note {
+        font-variant-numeric: tabular-nums;
+      }
+      .fut-info-meta {
+        color: var(--secondary);
+        opacity: 0.9;
       }
       .fut-ops {
         white-space: nowrap;
@@ -759,8 +862,16 @@
         gap: 8px;
         flex-wrap: wrap;
         flex: 0 0 auto;
-        padding: 8px 10px;
+        padding: 6px 10px;
         border-bottom: 0.5px solid var(--separator);
+      }
+      .fut-radar-title {
+        flex: 0 1 auto;
+        min-width: 0;
+        color: var(--secondary);
+        font-size: 12px;
+        font-weight: 650;
+        white-space: nowrap;
       }
       .fut-radar-updated {
         flex: 0 0 auto;
@@ -770,6 +881,10 @@
       }
       .fut-radar-updated.is-stale {
         color: var(--warn, #b07030);
+      }
+      /* 对齐钉子：第一个开关起把按钮组推到右侧 */
+      .fut-radar-head .fut-radar-toggle:first-of-type {
+        margin-left: auto;
       }
       .fut-radar-toggle {
         flex: 0 0 auto;
@@ -869,6 +984,52 @@
         text-align: left;
         padding-left: 4px;
         padding-right: 4px;
+      }
+      /* 对齐钉子：横滑时冻结币 + K 线两列 */
+      .fut-radar-table tr:not(.is-radar-sep) td:nth-child(-n + 2),
+      .fut-radar-table th:nth-child(-n + 2) {
+        position: sticky;
+        background: var(--elevated, var(--grouped, var(--bg)));
+        z-index: 2;
+      }
+      .fut-radar-table th:nth-child(-n + 2) {
+        z-index: 4;
+      }
+      .fut-radar-table th:nth-child(1),
+      .fut-radar-table tr:not(.is-radar-sep) td:nth-child(1) {
+        left: 0;
+      }
+      .fut-radar-table th:nth-child(2),
+      .fut-radar-table tr:not(.is-radar-sep) td:nth-child(2) {
+        left: 52px;
+      }
+      .fut-radar-table tr.is-pool td:nth-child(-n + 2) {
+        background: color-mix(
+          in srgb,
+          var(--accent, #2f8f6e) 8%,
+          var(--elevated, #fff)
+        );
+      }
+      .fut-radar-table tr.is-radar-extra td:nth-child(-n + 2) {
+        background: color-mix(
+          in srgb,
+          var(--warn, #b07030) 5%,
+          var(--elevated, #fff)
+        );
+      }
+      .fut-radar-table tr.is-radar-fixed td:nth-child(-n + 2) {
+        background: color-mix(
+          in srgb,
+          var(--accent, #2f8f6e) 18%,
+          var(--elevated, #fff)
+        );
+      }
+      .fut-radar-table tr.is-radar-selected td:nth-child(-n + 2) {
+        background: color-mix(
+          in srgb,
+          var(--accent) 12%,
+          var(--elevated, #fff)
+        );
       }
       .fut-radar-table tr.is-pool {
         background: color-mix(in srgb, var(--accent, #2f8f6e) 8%, transparent);
@@ -1298,6 +1459,142 @@
       #toast[hidden] {
         display: none !important;
       }
+      .fut-note-editor {
+        position: fixed;
+        inset: 0;
+        z-index: 240;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(0, 0, 0, 0.58);
+      }
+      .fut-note-editor[hidden] {
+        display: none !important;
+      }
+      .fut-note-editor-panel {
+        width: min(420px, 100%);
+        padding: 18px;
+        border: 1px solid var(--separator);
+        border-radius: 16px;
+        background: var(--grouped);
+        color: var(--label);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+      }
+      .fut-note-editor-panel h3 {
+        margin: 0 0 12px;
+        font-size: 16px;
+      }
+      .fut-note-editor-panel textarea {
+        display: block;
+        width: 100%;
+        min-height: 96px;
+        padding: 10px;
+        border: 1px solid var(--separator);
+        border-radius: 10px;
+        background: var(--bg);
+        color: var(--label);
+        font: inherit;
+        font-size: 14px;
+        resize: vertical;
+      }
+      .fut-note-editor-panel textarea:focus {
+        outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+      }
+      .fut-note-time-options {
+        display: grid;
+        gap: 8px;
+        margin: 14px 0;
+        padding: 0;
+        border: 0;
+        color: var(--secondary);
+        font-size: 13px;
+      }
+      .fut-note-time-options legend {
+        margin-bottom: 8px;
+        color: var(--label);
+        font-weight: 650;
+      }
+      .fut-note-time-options label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .fut-note-editor-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .fut-note-editor-actions button {
+        min-height: 36px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 9px;
+        background: var(--fill);
+        color: var(--label);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .fut-note-editor-actions button.is-primary {
+        background: var(--accent);
+        color: #fff;
+      }
+      .fut-note-editor-actions button:disabled {
+        opacity: 0.55;
+      }
+      .fut-daily-reset-dialog {
+        position: fixed;
+        inset: 0;
+        z-index: 220;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: color-mix(in srgb, #000 42%, transparent);
+      }
+      .fut-daily-reset-dialog[hidden] {
+        display: none !important;
+      }
+      .fut-daily-reset-panel {
+        width: min(360px, 100%);
+        border-radius: 14px;
+        border: 0.5px solid var(--separator);
+        background: var(--elevated, var(--bg));
+        padding: 16px 16px 14px;
+        box-shadow: 0 12px 36px color-mix(in srgb, #000 28%, transparent);
+      }
+      .fut-daily-reset-panel h3 {
+        margin: 0 0 10px;
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .fut-daily-reset-panel p {
+        margin: 0 0 10px;
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--label);
+      }
+      .fut-daily-reset-panel .fut-daily-reset-count {
+        font-size: 12px;
+        color: var(--secondary);
+      }
+      .fut-daily-reset-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .fut-daily-reset-actions button {
+        border: none;
+        border-radius: 8px;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 650;
+        cursor: pointer;
+        background: color-mix(in srgb, var(--accent, #2f8f6e) 78%, #1a5c45);
+        color: #fff;
+      }
     </style>
   </head>
   <body>
@@ -1345,11 +1642,28 @@
           <div class="fut-set-row">
             <span>排序</span>
             <div class="fut-mode-switch" id="futSortSwitch" role="group">
-              <button type="button" data-fut-sort="order">默认</button>
-              <button type="button" data-fut-sort="noteGain" class="is-active">
+              <button
+                type="button"
+                data-fut-sort="order"
+                title="置顶/列表顺序"
+              >
+                默认
+              </button>
+              <button
+                type="button"
+                data-fut-sort="noteGain"
+                class="is-active"
+                title="置顶与其余都按便签涨幅排；无便签沉底"
+              >
                 便签涨幅
               </button>
-              <button type="button" data-fut-sort="change24h">24h</button>
+              <button
+                type="button"
+                data-fut-sort="change24h"
+                title="置顶保持手动序；其余按 24h 涨幅排"
+              >
+                24h
+              </button>
             </div>
           </div>
           <div class="fut-set-row">
@@ -1508,6 +1822,14 @@
             </div>
           </form>
           <div class="fut-list" id="pinList"></div>
+          <div
+            class="fut-scroll-pct"
+            id="futScrollPct"
+            hidden
+            aria-hidden="true"
+          >
+            0%
+          </div>
         </section>
         <section
           class="fut-seg-panel"
@@ -1526,15 +1848,8 @@
           hidden
         >
           <div class="fut-radar-head" id="radarHead">
+            <span class="fut-radar-title">冲榜雷达</span>
             <span id="radarUpdated" class="fut-radar-updated"></span>
-            <button
-              type="button"
-              id="radarMainstreamBtn"
-              class="fut-radar-toggle"
-              title="合约暂无主流放大"
-            >
-              主流
-            </button>
             <button
               type="button"
               id="radarAllKlineBtn"
@@ -1588,6 +1903,7 @@
         ×
       </button>
       <strong id="futFocusSym">—</strong>
+      <!-- 对齐钉子自动盯：只要置顶 / 刷新；便签走置顶列表长按，放大走行内按钮 -->
       <button type="button" id="futFocusPinBtn" data-fut-focus="pin">置顶</button>
       <button type="button" id="futFocusRefreshBtn" data-fut-focus="refresh">
         刷新
@@ -1670,12 +1986,71 @@
       aria-label="行操作"
     >
       <button type="button" class="close" data-fut-row-close>×</button>
+      <!-- 对齐钉子长按浮层：便签为主；放大走行内按钮，不放浮层 -->
       <button type="button" data-fut-float="note">便签</button>
       <button type="button" data-fut-float="pin">置顶</button>
       <button type="button" data-fut-float="always">常看</button>
       <button type="button" data-fut-float="unpin" class="is-danger">
         取消置顶
       </button>
+    </div>
+
+    <div
+      id="futNoteEditor"
+      class="fut-note-editor"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="futNoteEditorTitle"
+      hidden
+    >
+      <form class="fut-note-editor-panel" id="futNoteEditorForm">
+        <h3 id="futNoteEditorTitle">编辑便签</h3>
+        <textarea
+          id="futNoteEditorText"
+          maxlength="60"
+          placeholder="价格和备注，例如 0.01 到位观察"
+          aria-label="便签内容"
+        ></textarea>
+        <fieldset class="fut-note-time-options">
+          <legend>修改后 K 线便签起始时间</legend>
+          <label>
+            <input type="radio" name="futNoteTimeMode" value="original" />
+            保留原时间（默认）
+          </label>
+          <label>
+            <input type="radio" name="futNoteTimeMode" value="current" />
+            按照此刻时间
+          </label>
+        </fieldset>
+        <div class="fut-note-editor-actions">
+          <button type="button" id="futNoteEditorCancel">取消</button>
+          <button type="submit" id="futNoteEditorSave" class="is-primary">
+            保存
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div
+      id="futDailyResetDialog"
+      class="fut-daily-reset-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="futDailyResetTitle"
+      hidden
+    >
+      <div class="fut-daily-reset-panel">
+        <h3 id="futDailyResetTitle">即将重置便签</h3>
+        <p id="futDailyResetBody">
+          请将需要保留的币先置顶。北京时间 0:00 将对非置顶合约钉子写入便签现价。
+        </p>
+        <p class="fut-daily-reset-count" id="futDailyResetCountdown">
+          还有 — 分钟后重置
+        </p>
+        <div class="fut-daily-reset-actions">
+          <button type="button" id="futDailyResetAck">确定</button>
+        </div>
+      </div>
     </div>
 
     <div id="toast" hidden></div>

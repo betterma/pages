@@ -8,12 +8,14 @@
 2. 按 24h 涨幅取前 N（默认 35）→ `futures/fut-watch-pool.json`
 3. 相对上轮 zone 快照的**新进**写入 `futures/fut-auto-pins.json`（首次只播种，不整池钉满）
 4. **自动盯 → 写入 `futures/fut-nails.json`（`pinned: false`）**，进合约置顶分栏「其余」；补齐历史漏钉；尊重 `dismissedNails`（对齐现货 `saveAutoPinNails`）
-5. 状态：`futures/fut-notify-state.json`；黑名单：`futures/fut-blacklist.json`
-6. **不**下单、**不**读持仓、**不**写根目录 `watch-*.json`
+5. **每日便签重置（北京 0:00）**：非置顶钉子批量写便签现价 → `futures/fut-nails.json`；状态 `futures/fut-nail-daily-reset.json`（页面前后 2h 提示）
+6. **自动盯过期清退**：未置顶且 `auto-fut` 的盯点已滚到当前 18 根 4h 图最旧前 1/3 → 从 `fut-nails` / `fut-auto-pins` 去掉（用户置顶保留）
+7. 状态：`futures/fut-notify-state.json`；黑名单：`futures/fut-blacklist.json`
+8. **不**下单、**不**读持仓、**不**写根目录 `watch-*.json`
 
 ## 部署（华为云事件函数）
 
-1. **整包上传**本目录（`index.js` + `auto-pin.js` + `binance-fapi.js` + `github.js`）
+1. **整包上传**本目录（`index.js` + `auto-pin.js` + `daily-reset.js` + `prune-stale-fut-auto-pin-nails.js` + `binance-fapi.js` + `github.js`）
 2. Handler：`index.handler`，Node.js 18+
 3. **超时务必 ≥ 60s**（华为云新建默认常是 3s，不够一轮 GitHub 读写；日志里 `invoke Timeout` / `call invoke timeout 3s` 就是这个）。内存 256MB 即可
 4. 环境变量：
@@ -27,6 +29,10 @@
 | `FUT_AUTO_PIN_NAILS_ENABLED` | 默认开；`0` 关闭「自动盯→未置顶钉子」写入 |
 | `FUT_NAILS_IDLE_BACKFILL` | 默认关；`1` 时无 newcomers 也扫一遍漏钉（更慢） |
 | `FUT_NAILS_PATH` | 默认 `futures/fut-nails.json` |
+| `FUT_NAIL_DAILY_RESET_ENABLED` | 默认开；`0` 关闭每日便签重置 |
+| `FUT_NAIL_DAILY_RESET_PATH` | 默认 `futures/fut-nail-daily-reset.json` |
+| `FUT_STALE_AUTO_PIN_NAILS` | 默认开；`0` 关闭过期清退 |
+| `FUT_STALE_NAIL_CHECK_MAX` | 单轮最多检查几只，默认 `12`；`0`=候选全查 |
 | `FAPI_BASE_URLS` | 可选，逗号分隔 fapi 根地址 |
 
 5. **定时触发器**：建议 **5 分钟**（与现货那套分开建函数，不要挂到现货函数上）
@@ -40,5 +46,5 @@
 
 | 动作 | 谁做 |
 |------|------|
-| 扫市场 / 写池 / 写自动盯 / 写未置顶钉子 | 本云函数 |
-| 展示列表（置顶/其余/自动盯/雷达）/ 补拉现价 | `futures/index.html` |
+| 扫市场 / 写池 / 写自动盯 / 写未置顶钉子 / 每日便签重置 / 过期清退 | 本云函数 |
+| 展示列表（置顶/其余/自动盯/雷达）/ 补拉现价 / 重置前后提示 | `futures/index.html` |

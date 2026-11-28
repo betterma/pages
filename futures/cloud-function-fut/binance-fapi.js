@@ -137,8 +137,34 @@ async function fetchFutTickers(tradingSet) {
   return map;
 }
 
+/**
+ * U 本位 K 线（公开接口）。返回 { time, open, high, low, close, closeTime }[]。
+ */
+async function fetchFutKlines(symbol, interval, limit) {
+  const key = String(symbol || '')
+    .trim()
+    .toUpperCase();
+  if (!key) throw new Error('fetchFutKlines: empty symbol');
+  const iv = String(interval || '4h').trim() || '4h';
+  const lim = Math.max(1, Math.min(1500, Number(limit) || 18));
+  const path = `/fapi/v1/klines?symbol=${encodeURIComponent(key)}&interval=${encodeURIComponent(iv)}&limit=${lim}`;
+  const raw = await fapiGet(path);
+  if (!Array.isArray(raw)) {
+    throw new Error(`fetchFutKlines: unexpected payload for ${key}`);
+  }
+  return raw.map((item) => ({
+    time: Number(item[0]),
+    open: Number(item[1]),
+    high: Number(item[2]),
+    low: Number(item[3]),
+    close: Number(item[4]),
+    closeTime: Number(item[6]),
+  }));
+}
+
 module.exports = {
   fapiGet,
   fetchUsdtPerpTradingSet,
   fetchFutTickers,
+  fetchFutKlines,
 };
