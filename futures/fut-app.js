@@ -28,12 +28,17 @@
   const SHOW_ALL_KEY = "fut_radar_show_all_klines";
   const RADAR_FIXED_KEY = "fut_radar_fixed_v1";
   const RADAR_GROUP_KEY = "fut_radar_group_on";
+  const AUTO_PIN_SEEN_KEY = "fut_autopin_seen_v1";
+  const AUTO_PIN_BADGE_MS = 24 * 60 * 60 * 1000;
   const SORT_KEY = "fut_pin_sort";
   const PINNED_ONLY_KEY = "fut_pinned_only";
   const AUTO_REFRESH_KEY = "fut_auto_refresh";
   const AUTO_REFRESH_MS = 15 * 1000;
   const LONG_PRESS_MS = 480;
   const ALWAYS_COLLAPSE_KEY = "fut_always_collapsed";
+  /* 对齐钉子页 drawKline 默认（normal 皮肤）：涨灰绿 / 跌灰褐，非行情红绿 */
+  const KLINE_UP = "#8a9a96";
+  const KLINE_DOWN = "#9a8e88";
   const ZOOM_ICON =
     '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>';
 
@@ -44,7 +49,8 @@
     autoPins: [],
     pool: [],
     poolRank: 35,
-    events: [],
+    autoPinEvents: [],
+    autoPinSeenAt: 0,
     marketMap: {},
     klineCache: {},
     showAllKlines: false,
@@ -295,6 +301,134 @@
     radarFixedState = { symbols: [], at: 0 };
   }
 
+  function readLocalAutoPinSeen() {
+    try {
+      const n = Number(localStorage.getItem(AUTO_PIN_SEEN_KEY));
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function writeLocalAutoPinSeen(at) {
+    const n = Number(at) > 0 ? Number(at) : Date.now();
+    state.autoPinSeenAt = n;
+    try {
+      localStorage.setItem(AUTO_PIN_SEEN_KEY, String(n));
+    } catch (_) {
+      /* ignore */
+    }
+    return n;
+  }
+
+  let autoPinSeenSyncing = false;
+
+  async function patchAutoPinSeenPrefs(at) {
+    if (autoPinSeenSyncing) return;
+    if (!window.FutStore || typeof window.FutStore.patchJson !== "function") {
+      return;
+    }
+    autoPinSeenSyncing = true;
+    try {
+      await window.FutStore.patchJson(
+        PATHS.prefs,
+        (data) => {
+          const cloudAt = Number(data && data.autoPinSeenAt) || 0;
+          if (cloudAt >= at) return { data };
+          return {
+            data: {
+              ...data,
+              autoPinSeenAt: at,
+              updatedAt: Date.now(),
+              market: "usdt-perp",
+            },
+          };
+        },
+        `Fut autoPinSeenAt ${at}`,
+      );
+    } catch (error) {
+      console.warn("patchAutoPinSeenPrefs failed", error);
+    } finally {
+      autoPinSeenSyncing = false;
+    }
+  }
+
+  function mergeAutoPinSeenFromPrefs(prefsData) {
+    const cloudAt = Number(prefsData && prefsData.autoPinSeenAt) || 0;
+    const localAt = readLocalAutoPinSeen();
+    const next = Math.max(cloudAt, localAt, Number(state.autoPinSeenAt) || 0);
+    writeLocalAutoPinSeen(next || 0);
+    if (localAt > cloudAt && localAt > 0) {
+      void patchAutoPinSeenPrefs(localAt);
+    }
+  }
+
+  function futAutoPinBadgeEntries() {
+    return (Array.isArray(state.autoPinEvents) ? state.autoPinEvents : [])
+      .filter((entry) => {
+        if (!entry || typeof entry !== "object") return false;
+        const kind = String(entry.kind || "");
+        // 新进 / 补漏算未读；出池 zone-drop 不亮红点
+        if (kind !== "new" && kind !== "catch-up") return false;
+        return Array.isArray(entry.symbols) && entry.symbols.length > 0;
+      })
+      .sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+  }
+
+  function futAutoPinLatestAtWithin(windowMs) {
+    const cutoff = Date.now() - (Number(windowMs) || 0);
+    const hit = futAutoPinBadgeEntries().find((entry) => {
+      const at = Number(entry.at) || 0;
+      return at >= cutoff;
+    });
+    return hit ? Number(hit.at) || 0 : 0;
+  }
+
+  function futAutoPinUnreadCount() {
+    const seen = Number(state.autoPinSeenAt) || readLocalAutoPinSeen() || 0;
+    const cutoff = Date.now() - AUTO_PIN_BADGE_MS;
+    return futAutoPinBadgeEntries().filter((entry) => {
+      const at = Number(entry.at) || 0;
+      return at > seen && at >= cutoff;
+    }).length;
+  }
+
+  function setFutSegBadge(el, count) {
+    if (!el) return;
+    const n = Math.max(0, Math.floor(Number(count) || 0));
+    el.hidden = !(n > 0);
+    el.textContent = n > 99 ? "99+" : String(n);
+  }
+
+  function writeFutAutoPinSeenAt(at) {
+    const n = writeLocalAutoPinSeen(at);
+    void patchAutoPinSeenPrefs(n);
+    return n;
+  }
+
+  function syncFutAutoPinBadge() {
+    const badge = $("futAutoPinBadge");
+    if (!badge) return;
+    const seen = Number(state.autoPinSeenAt) || readLocalAutoPinSeen() || 0;
+    // 正在看自动盯分栏 = 记已读，不给自己亮角标
+    if (state.tab === "auto") {
+      const latest = futAutoPinLatestAtWithin(AUTO_PIN_BADGE_MS);
+      if (latest > seen || !(seen > 0)) {
+        writeFutAutoPinSeenAt(latest || Date.now());
+      }
+      setFutSegBadge(badge, 0);
+      return;
+    }
+    if (!(seen > 0)) {
+      // 首次：基线拉到最新，避免一进页面就爆红点
+      const latest = futAutoPinLatestAtWithin(AUTO_PIN_BADGE_MS);
+      writeFutAutoPinSeenAt(latest || Date.now());
+      setFutSegBadge(badge, 0);
+      return;
+    }
+    setFutSegBadge(badge, futAutoPinUnreadCount());
+  }
+
   function normalizeNails(raw) {
     const list = Array.isArray(raw) ? raw : [];
     return list
@@ -388,9 +522,13 @@
     const rankInput = $("futWatchPoolRankInput");
     if (rankInput) rankInput.value = String(prefRank);
     mergeRadarFixedFromPrefs(prefsFile.data || {});
-    state.events = Array.isArray(stateFile.data && stateFile.data.events)
-      ? stateFile.data.events
+    state.autoPinEvents = Array.isArray(
+      stateFile.data && stateFile.data.autoPinEvents,
+    )
+      ? stateFile.data.autoPinEvents
       : [];
+    mergeAutoPinSeenFromPrefs(prefsFile.data || {});
+    syncFutAutoPinBadge();
     return Math.max(
       Number(nailsFile.data && nailsFile.data.updatedAt) || 0,
       Number(pinsFile.data && pinsFile.data.updatedAt) || 0,
@@ -491,9 +629,8 @@
     if (!(max > min)) {
       max = min + 1e-9;
     }
-    /* 与钉子雷达一致：固定绿/红，不跟主题 --up/--down 漂移 */
-    const upColor = "#2f8f6e";
-    const downColor = "#c04545";
+    const upColor = KLINE_UP;
+    const downColor = KLINE_DOWN;
     const pad = 2;
     const n = candles.length;
     const slot = (cssW - pad * 2) / n;
@@ -835,6 +972,7 @@
     document.querySelectorAll("[data-fut-pane]").forEach((pane) => {
       pane.hidden = pane.getAttribute("data-fut-pane") !== tab;
     });
+    if (tab === "auto") syncFutAutoPinBadge();
     void refreshView();
   }
 
@@ -1411,6 +1549,7 @@
     else renderRadarPane();
     syncSelectUi();
     updateHeadMeta();
+    syncFutAutoPinBadge();
     void paintVisibleKlines();
   }
 
