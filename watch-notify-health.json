@@ -1,30 +1,30 @@
 {
-  "updatedAt": 1795860339332,
-  "lastRunAt": 1795860300492,
+  "updatedAt": 1795860642306,
+  "lastRunAt": 1795860600842,
   "ok": false,
-  "error": "GitHub PUT watch-balance-alert.json failed: 409 {\"message\":\"is at ad408356b268067936b73c59f0fdbcf65208e95d but expected e422f862b7170fcec81dbd713a99f17df445cf18\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\": · balance×1:GitHub PUT watch-balance-alert.json failed: 409 {\"message\":\"is at ad408356b268067936b73c59f0fdbcf65208e95d but expected e422f862b7170fcec81dbd713a99f17df445cf18\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":",
-  "durationMs": 38840,
-  "autoPins": 0,
+  "error": "balance×1:batch-notices:GitHub PUT watch-balance-notices.json failed: 409 {\"message\":\"is at 363ad2e0ca847a47d1f0072a74aaecb611dc8d00 but expected 7a4f7016abdbfc7bbae55499400671d64a29885a\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":",
+  "durationMs": 41464,
+  "autoPins": 210,
   "balance": {
-    "skipped": true,
-    "reason": "error",
-    "autoPins": 0,
-    "due": 0,
-    "checked": 0,
-    "hits": 0,
+    "skipped": false,
+    "reason": null,
+    "autoPins": 210,
+    "due": 187,
+    "checked": 187,
+    "hits": 50,
     "sent": 0,
-    "wecomDue": 0,
-    "wecomQueued": 0,
+    "wecomDue": 11,
+    "wecomQueued": 11,
     "wecomDeferred": 0,
-    "skippedWecomWindow": 0,
+    "skippedWecomWindow": 39,
     "checkMax": 0,
     "sendMax": 0,
     "checkCursor": 0,
-    "cooldownMs": 0,
-    "cooldownSkipped": 0,
+    "cooldownMs": 1800000,
+    "cooldownSkipped": 23,
     "errorCount": 1,
     "errors": [
-      "GitHub PUT watch-balance-alert.json failed: 409 {\"message\":\"is at ad408356b268067936b73c59f0fdbcf65208e95d but expected e422f862b7170fcec81dbd713a99f17df445cf18\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":"
+      "batch-notices:GitHub PUT watch-balance-notices.json failed: 409 {\"message\":\"is at 363ad2e0ca847a47d1f0072a74aaecb611dc8d00 but expected 7a4f7016abdbfc7bbae55499400671d64a29885a\",\"documentation_url\":\"https://docs.github.com/rest/repos/contents#create-or-update-file-contents\",\"status\":"
     ]
   },
   "nailGreen": {
@@ -47,5 +47,6 @@
     "checked": 12,
     "candidate": 67,
     "removed": 0
-  }
+  },
+  "degraded": true
 }
